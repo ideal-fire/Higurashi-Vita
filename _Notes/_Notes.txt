@@ -1,0 +1,2 @@
+"-" and "/" are swapped because "//" is comment in the script files and not "--" like Lua.
+The file I modified to do that is llex.c. You can find the modified file in this directory.
