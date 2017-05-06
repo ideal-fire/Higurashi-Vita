@@ -52,3 +52,11 @@ Temporary Items
 # ========================
 copyrite/
 build/
+
+# Build
+*.o
+*.vpk
+*.elf
+*.sfo
+eboot.bin
+*.velf
