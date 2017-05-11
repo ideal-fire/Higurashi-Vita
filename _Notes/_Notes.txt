@@ -1,2 +1,14 @@
 "-" and "/" are swapped because "//" is comment in the script files and not "--" like Lua.
 The file I modified to do that is llex.c. You can find the modified file in this directory.
+
+Portraits are scaled by a factor of .5 on width and height to fit 640x480 backgrounds.
+
+When you forget the argument order for calloc and end up allocating 56 one byte blocks instead of 1 56 byte block of memory.
+
+Multithreaded -> Single threaded
+	All current problems solved
+	Tons of new problems
+
+**********************
+** STAR CHARACTER REMOVED
+**********************

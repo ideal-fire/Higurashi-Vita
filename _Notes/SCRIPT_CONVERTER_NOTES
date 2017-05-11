@@ -1,0 +1,21 @@
+Remove
+	main(){
+	
+	}
+
+Fix function calls.
+	Look at title script for exmples
+
+Fix ShakeScreen. It looks like
+	ShakeScreen( 1, 50, 20, 7, 0, );
+	It's missing an argument! >:(
+Also fix SetSpeedOfMessage. It looks like
+	SetSpeedOfMessage( TRUE, 0, );
+
+Fix black.png
+	Just replacing it with a 640x480 image I made in paint will do.
+	For some reason, the one strait from Higurashi won't load.
+
+Fix white.png for VITA
+
+(All images need fixing for WINDOWS)

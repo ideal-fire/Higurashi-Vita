@@ -120,7 +120,7 @@
 	void FreeTexture(CrossTexture* passedTexture){
 		#if RENDERER == REND_VITA2D
 			vita2d_wait_rendering_done();
-			sceDisplayWaitVblankStart();
+			//sceDisplayWaitVblankStart();
 			vita2d_free_texture(passedTexture);
 			passedTexture=NULL;
 		#elif RENDERER == REND_SDL
@@ -189,6 +189,61 @@
 		#endif
 	}
 	
+	////////////////// ALPHA
+		void DrawTextureAlpha(CrossTexture* passedTexture, int _destX, int _destY, unsigned char alpha){
+			#if RENDERER == REND_VITA2D
+				vita2d_draw_texture_tint(passedTexture,_destX,_destY,RGBA8(255,255,255,alpha));
+			#elif RENDERER == REND_SDL
+				unsigned char oldAlpha;
+				SDL_GetTextureAlphaMod(passedTexture, &oldAlpha);
+				SDL_SetTextureAlphaMod(passedTexture, alpha);
+				SDL_Rect _srcRect;
+				SDL_Rect _destRect;
+		
+				SDL_QueryTexture(passedTexture, NULL, NULL, &(_srcRect.w), &(_srcRect.h));
+		
+				_destRect.w=_srcRect.w;
+				_destRect.h=_srcRect.h;
+		
+				_destRect.x=_destX;
+				_destRect.y=_destY;
+				
+				_srcRect.x=0;
+				_srcRect.y=0;
+			
+				SDL_RenderCopy(mainWindowRenderer, passedTexture, &_srcRect, &_destRect );
+				SDL_SetTextureAlphaMod(passedTexture, oldAlpha);
+			#elif RENDERER == REND_SF2D
+				sf2d_draw_texture(passedTexture,_destX,_destY);
+			#endif
+		}
+		void DrawTextureScaleAlpha(CrossTexture* passedTexture, int destX, int destY, float texXScale, float texYScale, unsigned char alpha){
+			#if RENDERER == REND_VITA2D
+				vita2d_draw_texture_tint_scale(passedTexture,destX,destY,texXScale,texYScale,RGBA8(255,255,255,alpha));
+			#elif RENDERER == REND_SDL
+				unsigned char oldAlpha;
+				SDL_GetTextureAlphaMod(passedTexture, &oldAlpha);
+				SDL_SetTextureAlphaMod(passedTexture, alpha);
+				SDL_Rect _srcRect;
+				SDL_Rect _destRect;
+				SDL_QueryTexture(passedTexture, NULL, NULL, &(_srcRect.w), &(_srcRect.h));
+				
+				_srcRect.x=0;
+				_srcRect.y=0;
+			
+				_destRect.w=(_srcRect.w*texXScale);
+				_destRect.h=(_srcRect.h*texYScale);
+		
+				_destRect.x=destX;
+				_destRect.y=destY;
+		
+				SDL_RenderCopy(mainWindowRenderer, passedTexture, &_srcRect, &_destRect );
+				SDL_SetTextureAlphaMod(passedTexture, oldAlpha);
+			#elif RENDERER == REND_SF2D
+				sf2d_draw_texture_scale(passedTexture,destX,destY,texXScale,texYScale);
+			#endif
+		}
+
 	void DrawTexturePartScale(CrossTexture* passedTexture, int destX, int destY, int texX, int texY, int texW, int texH, float texXScale, float texYScale){
 		#if RENDERER == REND_VITA2D
 			vita2d_draw_texture_part_scale(passedTexture,destX,destY,texX,texY,texW, texH, texXScale, texYScale);
