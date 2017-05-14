@@ -3,7 +3,7 @@ Remove
 	
 	}
 
-Fix function calls.
+Fix calls to functions made in a script
 	Look at title script for exmples
 
 Fix ShakeScreen. It looks like
@@ -17,5 +17,9 @@ Fix black.png
 	For some reason, the one strait from Higurashi won't load.
 
 Fix white.png for VITA
+
+Convert anything not 640x480 in CG folder to 640x480.
+	Those files are
+		cinema.png
 
 (All images need fixing for WINDOWS)

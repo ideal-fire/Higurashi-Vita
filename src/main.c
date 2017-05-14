@@ -10,18 +10,20 @@
 #define SND_SDL 1
 
 #define REZ_UNDEFINED 0
-#define REZ_480P 1
-#define REZ_720P 2
+#define REZ_OLD 1
+#define REZ_UPDATED 2
+#define REZ_PS3_BACKGROUND 3
+#define REZ_PS3_BUST 4
 
-#define LOCATION_UNDEFINED "/CG/"
-#define LOCATION_CG "/CG/"
-#define LOCATION_CGALT "/CGAlt/"
+#define LOCATION_UNDEFINED 0
+#define LOCATION_CG 1
+#define LOCATION_CGALT 2
 
 // Change these depending on the target platform
 #define RENDERER REND_SDL
 #define PLATFORM PLAT_WINDOWS
 #define SOUNDPLAYER SND_SDL
-#define SILENTMODE 1
+#define SILENTMODE 0
 
 // Change these depending on old art, new art, or PS3 art.
 	// Old art (UNSCALED) is REZ_480P for both
@@ -33,16 +35,16 @@
 	// !!!!!!!!!!!!!!!!!!!!!!!
 	// This is the resolution of the image. I will resize the characters for 480p for the PS VITA
 	// If images are resized, account for that in these variables.
-#define BACKGROUNDREZ REZ_480P
-#define BUSTREZ REZ_480P
-#define WINDOWREZ REZ_480P
+unsigned char currentBackgroundRez;
 
-#define BACKGROUNDLOCATION LOCATION_CG
-#define BUSTLOCATION LOCATION_CGALT
+unsigned char graphicsLocation = LOCATION_CG;
+
+#define MAXBUSTS 7
 
 void Draw();
 void Controls();
 void YeOlMainLoop();
+void RecalculateBustOrder();
 
 // Libraries all need
 #include <math.h>
@@ -200,9 +202,10 @@ typedef struct hauighrehrge{
 	unsigned int statusVariable2;
 	unsigned int statusVariable3;
 	unsigned int lineCreatedOn;
+	unsigned char rez;
 }bust;
 
-bust Busts[6];
+bust Busts[7];
 
 lua_State* L;
 /*
@@ -226,8 +229,6 @@ CrossTexture* currentBackground = NULL;
 CROSSMUSIC* currentMusic = NULL;
 CROSSSFX* lastSoundEffect = NULL;
 
-int TextSpeed=10;
-
 // Alpha of black rectangle over screen
 int MessageBoxAlpha = 100;
 
@@ -236,6 +237,14 @@ char MessageBoxEnabled=1;
 char InputValidity = 1;
 
 unsigned int currentScriptLine=0;
+
+// Order of busts drawn as organized by layer
+// element in array is their bust slot
+// first element in array is highest up
+// so, when drawing, start from the end and go backwards to draw the first element last
+unsigned char bustOrder[MAXBUSTS];
+
+char* locationStrings[3] = {"/CG/","/CG/","/CGAlt/"};
 
 /*
 ====================================================
@@ -305,14 +314,13 @@ u64 waitwithCodeTarget;
 void WaitWithCodeStart(int amount){
 	waitwithCodeTarget = GetTicks()+amount;
 }
+
 void WaitWithCodeEnd(int amount){
 	if (GetTicks()<waitwithCodeTarget){
 		Wait(waitwithCodeTarget-GetTicks());
 	}
 }
 
-/*
-*/
 void WriteSDLError(){
 	FILE *fp;
 	fp = fopen("ux0:data/HIGURASHI/a.txt", "a");
@@ -467,7 +475,6 @@ void WriteDebugInfo(){
 	fclose(fp);
 }
 
-
 void ResetBustStruct(bust* passedBust){
 	passedBust->image=NULL;
 	passedBust->xOffset=0;
@@ -476,11 +483,13 @@ void ResetBustStruct(bust* passedBust){
 	passedBust->isInvisible=0;
 	passedBust->alpha=255;
 	passedBust->bustStatus = BUST_STATUS_NORMAL;
+	passedBust->lineCreatedOn=0;
 }
 
-char* CombineStringsPLEASEFREE(const char* first, const char* second, const char* third){
-	char* tempstringconcat = calloc(1,strlen(first)+strlen(second)+strlen(third)+1);
+char* CombineStringsPLEASEFREE(const char* first, const char* firstpointfive, const char* second, const char* third){
+	char* tempstringconcat = calloc(1,strlen(first)+strlen(firstpointfive)+strlen(second)+strlen(third)+1);
 	strcat(tempstringconcat, first);
+	strcat(tempstringconcat, firstpointfive);
 	strcat(tempstringconcat, second);
 	strcat(tempstringconcat, third);
 	return tempstringconcat;
@@ -506,7 +515,7 @@ char WaitCanSkip(int amount){
 
 void Update(){
 	int i=0;
-	for (i = 0; i < 6; i++){
+	for (i = 0; i < MAXBUSTS; i++){
 		if (Busts[i].bustStatus == BUST_STATUS_FADEIN){
 			if (Busts[i].statusVariable2>0){
 				Busts[i].statusVariable2-=17;
@@ -529,9 +538,22 @@ void Update(){
 				Busts[i].isActive=0;
 				ResetBustStruct(&(Busts[i]));
 				Busts[i].bustStatus = BUST_STATUS_NORMAL;
+				RecalculateBustOrder();
 			}
 			
 		}
+	}
+}
+
+int GetRezFromImage(CrossTexture* passedImage){
+	int _width = GetTextureWidth(passedImage);
+	int _height = GetTextureHeight(passedImage);
+	if (_width==640 && _height==480){ // Old background, old bust, or updated bust
+		return REZ_OLD;
+	}else if (_width==960 && _height==540){ // PS3 background
+		return REZ_PS3_BACKGROUND;
+	}else if (_width==725 && _height==544){ // PS3 bust
+		return REZ_PS3_BUST;
 	}
 }
 
@@ -544,26 +566,62 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 		Draw();
 		Controls();
 		if (WasJustPressed(SCE_CTRL_CROSS)){
-			endType = Line_ContinueAfterTyping;
+			if (MessageBoxEnabled==1){
+				endType = Line_ContinueAfterTyping;
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_CIRCLE)){
+			if (MessageBoxEnabled==0){
+				MessageBoxEnabled=1;
+			}else{
+				MessageBoxEnabled=0;
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_TRIANGLE)){
+			printf("MENU\n");
 		}
 		ControlsEnd();
 		FpsCapWait();
 	}while(endType==Line_Normal || endType == Line_WaitForInput);
 }
 
+void DrawBackground(CrossTexture* passedBackground, unsigned char passedRez){
+	if (passedRez == REZ_OLD){
+		DrawTexture(passedBackground,160,32);
+	}else if (passedRez == REZ_PS3_BACKGROUND){
+		DrawTexture(passedBackground,0,2);
+	}else if (passedRez == REZ_UPDATED){
+		printf("There are no updated background sprites in the original version. Perhaps you meant ps3?");
+	}
+}
+
+void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedRez, unsigned char passedAlpha){
+	if (passedRez == REZ_OLD){
+		DrawTextureAlpha(passedBackground,160,32,passedAlpha);
+	}else if (passedRez == REZ_PS3_BACKGROUND){
+		DrawTextureAlpha(passedBackground,0,2,passedAlpha);
+	}else if (passedRez == REZ_UPDATED){
+		printf("There are no updated background sprites in the original version. Perhaps you meant ps3?");
+	}
+}
+
 void DrawBust(bust* passedBust){
 	if (passedBust->alpha==255){
-		#if BUSTREZ == REZ_480P
+		if (passedBust->rez==REZ_OLD || passedBust->rez == REZ_UPDATED){
 			DrawTexture(passedBust->image,160+passedBust->xOffset,passedBust->yOffset+32);
-		#elif BUSTREZ == REZ_720P
-			DrawTextureScale(passedBust->image,160+passedBust->xOffset,passedBust->yOffset+32,.5,.5);
-		#endif	
+		}else if (passedBust->rez == REZ_PS3_BUST){
+			DrawTexture(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset);
+		}else if (passedBust->rez == REZ_PS3_BACKGROUND){
+			DrawBackground(passedBust->image,passedBust->rez);
+		}
 	}else{
-		#if BUSTREZ == REZ_480P
+		if (passedBust->rez==REZ_OLD || passedBust->rez == REZ_UPDATED){
 			DrawTextureAlpha(passedBust->image,160+passedBust->xOffset,passedBust->yOffset+32,passedBust->alpha);
-		#elif BUSTREZ == REZ_720P
-			DrawTextureScaleAlpha(passedBust->image,160+passedBust->xOffset,passedBust->yOffset+32,.5,.5,passedBust->alpha);
-		#endif
+		}else if (passedBust->rez == REZ_PS3_BUST){
+			DrawTextureAlpha(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset,passedBust->alpha);
+		}else if (passedBust->rez == REZ_PS3_BACKGROUND){
+			DrawBackgroundAlpha(passedBust->image,passedBust->rez,passedBust->alpha);
+		}
 	}
 }
 
@@ -583,6 +641,38 @@ char CheckFileExist(char* location){
 		    return 0;
 		}
 	#endif
+}
+
+// TODO - Make this.
+// THIS CAN BE FOLLOWED AS A GUIDE
+// Example code from Happy Land, I mean
+void RecalculateBustOrder(){
+	int i, j, k;
+
+	for (i=0;i<MAXBUSTS;i++){
+		bustOrder[i]=255;
+	}
+
+	// This generates the orderOfAction list
+	// i is the the current orderOfAction slot.
+	for (i=0;i<MAXBUSTS;i++){
+		// j is the current fighter we're testig
+		for (j=0;j<MAXBUSTS;j++){
+			// If current entity speed greater than
+			if (bustOrder[i]==255 || Busts[j].layer>Busts[bustOrder[i]].layer){
+				// Loops through all of orderOfAction to make sure you're not already in orderOfAction
+				for (k=0;k<MAXBUSTS;k++){
+					if (bustOrder[k]==j){
+						break;
+					}else{
+						if (k==MAXBUSTS-1){
+							bustOrder[i]=j;
+						}
+					}
+				}
+			}
+		}
+	}
 }
 
 //===================
@@ -622,7 +712,7 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 
 void FadeAllBustshots(int _time, char _wait){
 	int i=0;
-	for (i=0;i<6;i++){
+	for (i=0;i<MAXBUSTS;i++){
 		if (Busts[i].isActive==1){
 			FadeBustshot(i,_time,0);
 		}
@@ -631,7 +721,7 @@ void FadeAllBustshots(int _time, char _wait){
 		char _isDone=0;
 		while (_isDone==0){
 			_isDone=1;
-			for (i=0;i<6;i++){
+			for (i=0;i<MAXBUSTS;i++){
 				if (Busts[i].isActive==1){
 					if (Busts[i].alpha>0){
 						_isDone=0;
@@ -644,7 +734,7 @@ void FadeAllBustshots(int _time, char _wait){
 			Update();
 			Draw();
 			if (WasJustPressed(SCE_CTRL_CROSS)){
-				for (i=0;i<6;i++){
+				for (i=0;i<MAXBUSTS;i++){
 					if (Busts[i].isActive==1){
 						Busts[i].alpha=1;
 					}
@@ -659,6 +749,12 @@ void FadeAllBustshots(int _time, char _wait){
 void DrawScene(const char* filename, int time){
 	int _alphaPerFrame=255;
 	//FadeAllBustshots(time,0);
+	int i=0;
+	for (i=0;i<MAXBUSTS;i++){
+		if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
+			FadeBustshot(i,time,0);
+		}
+	}
 
 	signed short _backgroundAlpha=255;
 
@@ -674,41 +770,45 @@ void DrawScene(const char* filename, int time){
 		}
 	}
 
-	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS BACKGROUNDLOCATION,filename,".png");
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[graphicsLocation],filename,".png");
+	
+	unsigned char newBackgroundRez;
+
+	if (CheckFileExist(tempstringconcat)==0){
+		free(tempstringconcat);
+		if (graphicsLocation == LOCATION_CGALT){
+			printf("Switching to cg\n");
+			tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[LOCATION_CG],filename,".png");
+		}else if (graphicsLocation == LOCATION_CG){
+			printf("Falling back on cgalt.\n");
+			tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[LOCATION_CGALT],filename,".png");
+		}
+	}
+
 	CrossTexture* newBackground = LoadPNG(tempstringconcat);
 	free(tempstringconcat);
+
+	newBackgroundRez = GetRezFromImage(newBackground);
 
 	while (_backgroundAlpha>0){
 		FpsCapStart();
 
 		Update();
 		_backgroundAlpha-=_alphaPerFrame;
-		int i;
+		//int i;
 		StartDrawingA();
 		if (currentBackground!=NULL){
 			if (currentBackground!=NULL){
-				#if BACKGROUNDREZ == REZ_480P
-					DrawTexture(newBackground,160,32);
-				#elif BACKGROUNDREZ == REZ_720P
-					DrawTextureScale(newBackground,160,32,.5,.5);
-				#endif
-			
-				#if BACKGROUNDREZ == REZ_480P
-					DrawTextureAlpha(currentBackground,160,32,_backgroundAlpha);
-				#elif BACKGROUNDREZ == REZ_720P
-					DrawTextureScaleAlpha(currentBackground,160,32,.5,.5,_backgroundAlpha);
-				#endif
+				DrawBackground(newBackground,newBackgroundRez);
+
+				DrawBackgroundAlpha(currentBackground,currentBackgroundRez,_backgroundAlpha);
 			}else{
-				#if BACKGROUNDREZ == REZ_480P
-					DrawTextureAlpha(newBackground,160,32,_backgroundAlpha);
-				#elif BACKGROUNDREZ == REZ_720P
-					DrawTextureScaleAlpha(newBackground,160,32,.5,.5,_backgroundAlpha);
-				#endif
+				DrawBackgroundAlpha(newBackground,newBackgroundRez,_backgroundAlpha);
 			}
 		}
-		for (i = 0; i < 6; i++){
-			if (Busts[i].isActive==1){
-				DrawBust(&(Busts[i]));
+		for (i = MAXBUSTS-1; i != -1; i--){
+			if (Busts[bustOrder[i]].isActive==1){
+				DrawBust(&(Busts[bustOrder[i]]));
 			}
 		}
 		if (MessageBoxEnabled==1){
@@ -721,8 +821,10 @@ void DrawScene(const char* filename, int time){
 
 		ControlsStart();
 		if (WasJustPressed(SCE_CTRL_CROSS)){
-			for (i=0;i<6;i++){
-				Busts[i].alpha=1;
+			for (i=0;i<MAXBUSTS;i++){
+				if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
+					Busts[i].alpha=1;
+				}
 			}
 			_backgroundAlpha=1;
 		}
@@ -732,20 +834,101 @@ void DrawScene(const char* filename, int time){
 	}
 
 	if (currentBackground!=NULL){
-		printf("Dispose old background\n");
 		FreeTexture(currentBackground);
 		currentBackground=NULL;
 	}
+	currentBackgroundRez = newBackgroundRez;
 	currentBackground=newBackground;
 }
 
+void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
+	Draw();
+	int i;
+	unsigned char skippedInitialWait=0;
+	WaitWithCodeStart(_fadeintime);
+
+	// Don't draw while loading.
+	if (Busts[passedSlot].image!=NULL){
+		printf("Free old bust\n");
+		FreeTexture(Busts[passedSlot].image);
+		Busts[passedSlot].image=NULL;
+		ResetBustStruct(&(Busts[passedSlot]));
+	}
+
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[graphicsLocation],_filename,".png");
+
+	if (CheckFileExist(tempstringconcat)==0){
+		free(tempstringconcat);
+		if (graphicsLocation == LOCATION_CGALT){
+			printf("Switching to cg\n");
+			tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[LOCATION_CG],_filename,".png");
+		}else{
+			printf("Falling back on cgalt\n");
+			tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[LOCATION_CGALT],_filename,".png");
+		}
+	}
+
+	Busts[passedSlot].image = LoadPNG(tempstringconcat);
+	free(tempstringconcat);
+
+	Busts[passedSlot].rez = GetRezFromImage(Busts[passedSlot].image);
+
+	Busts[passedSlot].xOffset = _xoffset;
+	Busts[passedSlot].yOffset = _yoffset;
+
+	if (_isinvisible!=0){
+		Busts[passedSlot].isInvisible=1;
+	}else{
+		Busts[passedSlot].isInvisible=0;
+	}
+	Busts[passedSlot].layer = _layer;
+	Busts[passedSlot].lineCreatedOn = currentScriptLine;
+
+	Busts[passedSlot].isActive=1;
+	RecalculateBustOrder();
+	if ((int)_fadeintime!=0){
+		Busts[passedSlot].alpha=0;
+		int _timeTotal = _fadeintime;
+		int _time = floor(_fadeintime/2);
+		int _totalFrames = floor(60*(_time/(double)1000));
+		int _alphaPerFrame=floor(255/_totalFrames);
+		if (_alphaPerFrame==0){
+			_alphaPerFrame=1;
+		}
+		Busts[passedSlot].statusVariable=_alphaPerFrame;
+		Busts[passedSlot].statusVariable2 = _timeTotal -_time;
+		Busts[passedSlot].bustStatus = BUST_STATUS_FADEIN;
+	}
+
+	i=1;
+	if (_waitforfadein==1){
+		while (Busts[passedSlot].alpha<255){
+			FpsCapStart();
+			ControlsStart();
+			Update();
+			if (Busts[passedSlot].alpha>255){
+				Busts[passedSlot].alpha=255;
+			}
+			Draw();
+			if (WasJustPressed(SCE_CTRL_CROSS) || skippedInitialWait==1){
+				Busts[passedSlot].alpha = 255;
+				Busts[passedSlot].bustStatus = BUST_STATUS_NORMAL;
+				ControlsEnd();
+				FpsCapWait();
+				break;
+			}
+			ControlsEnd();
+			i++;
+			FpsCapWait();
+		}
+	}
+}
 
 /*
 =================================================
 */
 
 int L_ClearMessage(lua_State* passedState){
-	printf("clearing messages\n");
 	//system("cls");
 	currentLine=0;
 	ClearMessageArray();
@@ -941,7 +1124,7 @@ int L_PlayBGM(lua_State* passedState){
 		currentMusic=NULL;
 	}
 	
-	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS"/BGM/", lua_tostring(passedState,2), ".ogg");
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/BGM/", lua_tostring(passedState,2), ".ogg");
 	currentMusic = LoadMusic(tempstringconcat);
 	free(tempstringconcat);
 
@@ -967,102 +1150,23 @@ int L_FadeoutBGM(lua_State* passedState){
 	return 0;
 }
 
-void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	Draw();
-	int i;
-	unsigned char skippedInitialWait=0;
-
-	WaitWithCodeStart(_fadeintime);
-
-	// Don't draw while loading.
-	if (Busts[passedSlot].image!=NULL){
-		printf("Free old bust\n");
-		FreeTexture(Busts[passedSlot].image);
-		Busts[passedSlot].image=NULL;
-		ResetBustStruct(&(Busts[passedSlot]));
-	}
-
-	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS BUSTLOCATION,_filename,".png");
-
-	if (CheckFileExist(tempstringconcat)==0){
-		free(tempstringconcat);
-		if (strlen(BUSTLOCATION) == 7){
-			printf("Switching to cg\n");
-			tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS "/CG/",_filename,".png");
-		}else{
-			tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS "/CGAlt/",_filename,".png");
-		}
-	}
-
-	Busts[passedSlot].image = LoadPNG(tempstringconcat);
-	free(tempstringconcat);
-
-	Busts[passedSlot].xOffset = _xoffset;
-	Busts[passedSlot].yOffset = _yoffset;
-
-	if (_isinvisible!=0){
-		Busts[passedSlot].isInvisible=1;
-	}else{
-		Busts[passedSlot].isInvisible=0;
-	}
-	Busts[passedSlot].layer = _layer;
-
-	Busts[passedSlot].isActive=1;
-	if ((int)_fadeintime!=0){
-		Busts[passedSlot].alpha=0;
-		int _timeTotal = _fadeintime;
-		int _time = floor(_fadeintime/2);
-		int _totalFrames = floor(60*(_time/(double)1000));
-		int _alphaPerFrame=floor(255/_totalFrames);
-		if (_alphaPerFrame==0){
-			_alphaPerFrame=1;
-		}
-		Busts[passedSlot].statusVariable=_alphaPerFrame;
-		Busts[passedSlot].statusVariable2 = _timeTotal -_time;
-		Busts[passedSlot].bustStatus = BUST_STATUS_FADEIN;
-	}
-
-	i=1;
-	if (_waitforfadein==1){
-		while (Busts[passedSlot].alpha<255){
-			FpsCapStart();
-			ControlsStart();
-			Update();
-			if (Busts[passedSlot].alpha>255){
-				Busts[passedSlot].alpha=255;
-			}
-			Draw();
-			if (WasJustPressed(SCE_CTRL_CROSS) || skippedInitialWait==1){
-				Busts[passedSlot].alpha = 255;
-				Busts[passedSlot].bustStatus = BUST_STATUS_NORMAL;
-				ControlsEnd();
-				FpsCapWait();
-				break;
-			}
-			ControlsEnd();
-			i++;
-			FpsCapWait();
-		}
-	}
-}
-
-// Bustshot slot? (Normally 1-3 used, 5 for black, 6 for cinema)
-// Filename
-// Filter filename
-// ???
-// x offset (Character starts in the middle, screen is 640x480)
-// y offset (Character starts in the middle, screen is 640x480)
-// If the art starts in the middle of the screen and moves to its x and y offset
-// ???
-// ???
-// ???
-// ???
-// Some transparency argument? Nonzero makes the bust invisible
-// Layer. If one bust's layer is greater than another's, it's drawn above it. If it's the same layer number, more recent ones are on top
+// Bustshot slot? (Normally 1-3 used, 5 for black, 6 for cinema 7 for title)
+	// Filename
+	// Filter filename
+	// ???
+	// x offset (Character starts in the middle, screen is 640x480)
+	// y offset (Character starts in the middle, screen is 640x480)
+	// If the art starts in the middle of the screen and moves to its x and y offset
+	// ???
+	// ???
+	// ???
+	// ???
+	// Some transparency argument? Nonzero makes the bust invisible
+	// Layer. If one bust's layer is greater than another's, it's drawn above it. If it's the same layer number, more recent ones are on top
 	// SPECIAL LAYERS -
 	// Textbox's layer is 31. >31 layer shows a not darkened sprite.
-// Fadein time
-// (bool) wait for fadein? (15)
+	// Fadein time
+	// (bool) wait for fadein? (15)
 int L_DrawBustshotWithFiltering(lua_State* passedState){
 	int i;
 	for (i=8;i!=12;i++){
@@ -1072,30 +1176,30 @@ int L_DrawBustshotWithFiltering(lua_State* passedState){
 	}
 
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(lua_tonumber(passedState,1), lua_tostring(passedState,2), lua_tonumber(passedState,5), lua_tonumber(passedState,6), lua_tonumber(passedState,13), lua_tonumber(passedState,14), lua_toboolean(passedState,15), lua_tonumber(passedState,12));
+	DrawBustshot(lua_tonumber(passedState,1)-1, lua_tostring(passedState,2), lua_tonumber(passedState,5), lua_tonumber(passedState,6), lua_tonumber(passedState,13), lua_tonumber(passedState,14), lua_toboolean(passedState,15), lua_tonumber(passedState,12));
 
 	////SDL_SetTextureAlphaMod(Busts[passedSlot].image, 255);
 	return 0;
 }
 
 // Butshot slot
-// Filename
-// x offset (Character starts in the middle, screen is 640x480)
-// y offset (Character starts in the middle, screen is 640x480)
-// Some sort of scaling thing. 400 makes it invisible, 200 is half size. (scale applies to width and height) 1 is normal
-// If the art starts in the middle of the screen and moves to its x and y offset
-// ???
-// ???
-// ???
-// ???
-// ???
-// ???
-// Some transparency argument? Nonzero makes the bust invisible
-// Layer. If one bust's layer is greater than another's, it's drawn above it. If it's the same layer number, more recent ones are on top
-// 	// SPECIAL LAYERS -
-// 	// Textbox's layer is 31. >31 layer shows a not darkened sprite.
-// Fadein time
-// (bool) wait for fadein? (16)
+	// Filename
+	// x offset (Character starts in the middle, screen is 640x480)
+	// y offset (Character starts in the middle, screen is 640x480)
+	// Some sort of scaling thing. 400 makes it invisible, 200 is half size. (scale applies to width and height) 1 is normal
+	// If the art starts in the middle of the screen and moves to its x and y offset
+	// ???
+	// ???
+	// ???
+	// ???
+	// ???
+	// ???
+	// Some transparency argument? Nonzero makes the bust invisible
+	// Layer. If one bust's layer is greater than another's, it's drawn above it. If it's the same layer number, more recent ones are on top
+	// 	// SPECIAL LAYERS -
+	// 	// Textbox's layer is 31. >31 layer shows a not darkened sprite.
+	// Fadein time
+	// (bool) wait for fadein? (16)
 int L_DrawBustshot(lua_State* passedState){
 	Draw();
 
@@ -1107,7 +1211,7 @@ int L_DrawBustshot(lua_State* passedState){
 	}
 	
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(lua_tonumber(passedState,1), lua_tostring(passedState,2), lua_tonumber(passedState,3), lua_tonumber(passedState,4), lua_tonumber(passedState,14), lua_tonumber(passedState,15), lua_toboolean(passedState,16), lua_tonumber(passedState,13));
+	DrawBustshot(lua_tonumber(passedState,1)-1, lua_tostring(passedState,2), lua_tonumber(passedState,3), lua_tonumber(passedState,4), lua_tonumber(passedState,14), lua_tonumber(passedState,15), lua_toboolean(passedState,16), lua_tonumber(passedState,13));
 	return 0;
 }
 
@@ -1125,7 +1229,7 @@ int L_SetValidityOfInput(lua_State* passedState){
 int L_FadeAllBustshots(lua_State* passedState){
 	FadeAllBustshots(lua_tonumber(passedState,1),lua_toboolean(passedState,2));
 	//int i;
-	//for (i=0;i<6;i++){
+	//for (i=0;i<MAXBUSTS;i++){
 	//	if (Busts[i].isActive==1){
 	//		FreeTexture(Busts[i].image);
 	//		ResetBustStruct(&(Busts[i]));
@@ -1140,11 +1244,7 @@ int L_DisableWindow(lua_State* passedState){
 }
 
 int L_FadeBustshotWithFiltering(lua_State* passedState){
-	int passedSlot = lua_tonumber(passedState,1)-1;
-	if (Busts[passedSlot].image!=NULL){
-		FreeTexture(Busts[passedSlot].image);
-	}
-	ResetBustStruct(&(Busts[passedSlot]));
+	FadeBustshot(lua_tonumber(passedState,1)-1,lua_tonumber(passedState,7),lua_toboolean(passedState,8));
 	return 0;
 }
 
@@ -1161,7 +1261,7 @@ int L_PlaySE(lua_State* passedState){
 			FreeSound(lastSoundEffect);
 			lastSoundEffect=NULL;
 		}
-		char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS "/SE/",lua_tostring(passedState,2),".ogg");
+		char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/",lua_tostring(passedState,2),".ogg");
 		lastSoundEffect = LoadSound(tempstringconcat);
 		free(tempstringconcat);
 		PlaySound(lastSoundEffect,1);
@@ -1170,33 +1270,8 @@ int L_PlaySE(lua_State* passedState){
 }
 
 /*
-TODO - For some reason, this doesn't clear the portrait
-
-	OutputLine(NULL, "　そう言って倒れこむ魅音。",
-		   NULL, "Mion said before collapsing.", Line_Normal);
-	ClearMessage();
-
-	DisableWindow();
-	DrawBustshot( 3, "sa_se_aw_a1", 160, 0, 0, FALSE, 0, 0, 0, 0, 0, 0, 0, 20, 0, FALSE );
-	DrawScene( "bg_108", 400 );
+TODO - Remove music note ♪
 */
-/*
-THIS CRASHES
-	DisableWindow();
-	DrawBustshotWithFiltering( 5, "black", "down", 0, 0, 0, FALSE, 0, 0, 0, 0, 0, 25, 300, TRUE );
-	FadeBustshot( 1, FALSE, 0, 0, 0, 0, 0, TRUE );
-	DrawBG( "bg_109", 0, TRUE );
-	DrawBustshot( 2, "me_se_th_a1", 0, 0, 0, FALSE, 0, 0, 0, 0, 0, 0, 0, 0, 0, TRUE );
-	FadeBustshotWithFiltering( 5, "down", 0, FALSE, 0, 0, 300, TRUE );
-*/
-// TODO - Don't clear the bustshot if it was the last command ONLY IF IT'S THE LAST COMMAND
-// EVEN IF THERES TWO BUSTSHOTS SHOWN before scene change, only recent one stays
-//look here
-
-////「取り合えず生きてますわね＠ゲーム続行は可能でございますわぁ！！＠
-//	OutputLine(NULL, "「取り合えず生きてますわね。",
-//		   NULL, "\"She's alive, at least.", Line_WaitForInput);
-
 void MakeLuaUseful(){
 	LUAREGISTER(L_OutputLine,"OutputLine")
 	LUAREGISTER(L_ClearMessage,"ClearMessage")
@@ -1216,9 +1291,24 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_DrawScene,"DrawBG")
 	LUAREGISTER(L_PlaySE,"PlaySE")
 
+	// Functions that do nothing
+	LUAREGISTER(L_NotYet,"SetFontId")
+	LUAREGISTER(L_NotYet,"SetCharSpacing")
+	LUAREGISTER(L_NotYet,"SetLineSpacing")
+	LUAREGISTER(L_NotYet,"SetFontSize")
+	LUAREGISTER(L_NotYet,"SetNameFormat")
+	LUAREGISTER(L_NotYet,"SetScreenAspect")
+	LUAREGISTER(L_NotYet,"SetWindowPos")
+	LUAREGISTER(L_NotYet,"SetWindowSize")
+	LUAREGISTER(L_NotYet,"SetWindowMargins")
+	LUAREGISTER(L_NotYet,"SetGUIPosition")
+	LUAREGISTER(L_NotYet,"FadeFilm")
+	LUAREGISTER(L_NotYet,"Negative")
+
 	//  TEMP
 	LUAREGISTER(L_NotYet,"SetSpeedOfMessage")
 	LUAREGISTER(L_NotYet,"ShakeScreen")
+	LUAREGISTER(L_NotYet,"ShakeScreenSx")
 }
 //======================================================
 void Draw(){
@@ -1227,22 +1317,18 @@ void Draw(){
 	StartDrawingA();
 
 	if (currentBackground!=NULL){
-		#if BACKGROUNDREZ == REZ_480P
-			DrawTexture(currentBackground,160,32);
-		#elif BACKGROUNDREZ == REZ_720P
-			DrawTextureScale(currentBackground,160,32,.5,.5);
-		#endif
+		DrawBackground(currentBackground,currentBackgroundRez);
 	}
 
-	for (i = 0; i < 6; i++){
-		if (Busts[i].isActive==1){
-			DrawBust(&(Busts[i]));
+	for (i = MAXBUSTS-1; i != -1; i--){
+		if (Busts[bustOrder[i]].isActive==1){
+			DrawBust(&(Busts[bustOrder[i]]));
 		}
 	}
 
 	if (MessageBoxEnabled==1){
 		// This is the message box
-		DrawRectangle(160,32,640,480,0,0,0,MessageBoxAlpha);
+		DrawRectangle(0,0,960,544,0,0,0,MessageBoxAlpha);
 	}
 
 	if (MessageBoxEnabled==1){
@@ -1264,7 +1350,7 @@ void LuaThread(){
 	#elif PLATFORM == PLAT_WINDOWS
 		luaL_dofile(L,"./happy.lua");
 		lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
-		luaL_dofile(L,"./test3.lua");
+		luaL_dofile(L,"./StreamingAssets/Scripts/onik_009.txt");
 	#endif
 }
 
@@ -1315,14 +1401,20 @@ void init(){
 		Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, 2, 2048 );
 	#endif
 	int i=0;
-	for (i=0;i<6;i++){
+	for (i=0;i<MAXBUSTS;i++){
 		ResetBustStruct(&(Busts[i]));
 	}
+}
+
+void DetectGraphicsType(){
 }
 
 int main(int argc, char *argv[]){
 	/* code */
 	init();
+	
+	DetectGraphicsType();
+
 	// Fill with null char
 	ClearMessageArray();
 

@@ -1,0 +1,7 @@
+Ps3 backgrounds are 1280x720 by default
+They are resized to 960x540 (1.5 more width than normal)
+
+Ps3 busts are 960x720. They are resized to 725x544 (1.13 more width than normal)
+
+
+640x=960

@@ -153,6 +153,11 @@
 		#if RENDERER == REND_VITA2D
 			vita2d_draw_rectangle(x,y,w,h,RGBA8(r,g,b,a));
 		#elif RENDERER == REND_SDL
+			unsigned char oldr;
+			unsigned char oldg;
+			unsigned char oldb;
+			unsigned char olda;
+			SDL_GetRenderDrawColor(mainWindowRenderer,&oldr,&oldg,&oldb,&olda);
 			SDL_SetRenderDrawColor(mainWindowRenderer,r,g,b,a);
 			SDL_Rect tempRect;
 			tempRect.x=x;
@@ -160,6 +165,7 @@
 			tempRect.w=w;
 			tempRect.h=h;
 			SDL_RenderFillRect(mainWindowRenderer,&tempRect);
+			SDL_SetRenderDrawColor(mainWindowRenderer,oldr,oldg,oldb,olda);
 		#elif RENDERER == REND_SF2D
 			sf2d_draw_rectangle(x,y,w,h,RGBA8(r,g,b,a));
 		#endif
