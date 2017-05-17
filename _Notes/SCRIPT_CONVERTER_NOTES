@@ -12,6 +12,9 @@ Fix ShakeScreen. It looks like
 Also fix SetSpeedOfMessage. It looks like
 	SetSpeedOfMessage( TRUE, 0, );
 
+
+Missing args at the end for those functions are present in some script files.
+
 Fix black.png
 	Just replacing it with a 640x480 image I made in paint will do.
 	For some reason, the one strait from Higurashi won't load.
@@ -23,3 +26,8 @@ Convert anything not 640x480 in CG folder to 640x480.
 		cinema.png
 
 (All images need fixing for WINDOWS)
+
+
+From line 3779 in wata_001
+DrawBustshot( 1, "tomita1_Def, -160, 0, 0, FALSE, 0, 0, 0, 0, 0, 0, 0, 0, 200, FALSE );
+MISING QUOTATION MARK! I NEED TO MAKE MY CONVERTER FIX THIS

@@ -131,11 +131,11 @@
 			passedTexture=NULL;
 		#endif
 	}
-/*
-/////////////////////////////////////////////////////
-////// CROSS PLATFORM DRAW FUNCTIONS
-////////////////////////////////////////////////////
-*/
+	/*
+	/////////////////////////////////////////////////////
+	////// CROSS PLATFORM DRAW FUNCTIONS
+	////////////////////////////////////////////////////
+	*/
 	void SetClearColor(int r, int g, int b, int a){
 		if (a!=255){
 			printf("You're a moron\n");
@@ -329,6 +329,66 @@
 			return h;
 		#elif RENDERER == REND_SF2D
 			return passedTexture->height;
+		#endif
+	}
+
+	/*
+	================================================
+	== ETC
+	=================================================
+	*/
+
+	#if PLATFORM == PLAT_WINDOWS
+		#define CROSSDIR DIR*
+		#define CROSSDIRSTORAGE struct dirent*
+	#elif PLATFORM == PLAT_VITA
+		#define CROSSDIR SceUID
+		#define CROSSDIRSTORAGE SceIoDirent
+	#endif
+
+
+	CROSSDIR OpenDirectory(char* filepath){
+		#if PLATFORM == PLAT_WINDOWS
+			return opendir(filepath);
+		#elif PLATFORM == PLAT_VITA
+			return (sceIoDopen(filepath));
+		#endif
+	}
+
+	char* GetDirectoryResultName(CROSSDIRSTORAGE* passedStorage){
+		#if PLATFORM == PLAT_WINDOWS
+			return ((*passedStorage)->d_name);
+		#elif PLATFORM == PLAT_VITA
+			//WriteToDebugFile
+			return ((passedStorage)->d_name);
+		#endif
+	}
+
+	int DirectoryRead(CROSSDIR* passedir, CROSSDIRSTORAGE* passedStorage){
+		#if PLATFORM == PLAT_WINDOWS
+			*passedStorage = readdir (*passedir);
+			if (*passedStorage != NULL){
+				if (strcmp((*passedStorage)->d_name,".")==0 || strcmp((*passedStorage)->d_name,"..")==0){
+					return DirectoryRead(passedir,passedStorage);
+				}
+			}
+			if (*passedStorage == NULL){
+				return 0;
+			}else{
+				return 1;
+			}
+		#elif PLATFORM == PLAT_VITA
+			int _a = sceIoDread(*passedir,passedStorage);
+			return _a;
+			
+		#endif
+	}
+
+	void DirectoryClose(CROSSDIR passedir){
+		#if PLATFORM == PLAT_WINDOWS
+			closedir(passedir);
+		#elif PLATFORM == PLAT_VITA
+			sceIoDclose(passedir);
 		#endif
 	}
 

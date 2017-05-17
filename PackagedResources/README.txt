@@ -1,0 +1,1 @@
+A modified version of SDL and SDL_mixer are compiled with this software.

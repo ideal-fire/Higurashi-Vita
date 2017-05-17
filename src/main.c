@@ -1,3 +1,23 @@
+/*
+	TODO - Remove music note ♪
+	TODO - Add saving current script
+		TODO - Knowing which script the user last played, we can know which tips they have by using their preset file
+	TODO - I want the flow to be
+		Load preset
+		(The user is now on the main menu)
+		Load savefile option appears
+		They load a save file
+		They can view tips or read the next chapter
+
+	TODO - After chapter
+		They get notified if they unlock more than 0 tips.
+		It asks the user if they want to save
+		They go back to the menu that they see after loading a save file
+			The one that lets them view tips or read next chapter
+
+	TODO - Skipping. This'll be critical when you can't save in the middle of a chapter
+*/
+
 #define PLAT_WINDOWS 1
 #define PLAT_VITA 2
 #define PLAT_3DS 3
@@ -23,7 +43,7 @@
 #define RENDERER REND_SDL
 #define PLATFORM PLAT_WINDOWS
 #define SOUNDPLAYER SND_SDL
-#define SILENTMODE 0
+#define SILENTMODE 1
 
 // Change these depending on old art, new art, or PS3 art.
 	// Old art (UNSCALED) is REZ_480P for both
@@ -73,6 +93,7 @@ wa_038 is menu sound
 	#define u64 unsigned long
 	#include <time.h>
 	#include <conio.h>
+	#include <dirent.h>
 #endif
 
 #if PLATFORM == PLAT_VITA
@@ -82,6 +103,7 @@ wa_038 is menu sound
 	#include <psp2/types.h>
 	#include <psp2/touch.h>
 	#include <psp2/io/fcntl.h>
+	#include <psp2/io/dirent.h>
 
 
 	#define getch(); nothing();
@@ -246,12 +268,44 @@ unsigned char bustOrder[MAXBUSTS];
 
 char* locationStrings[3] = {"/CG/","/CG/","/CGAlt/"};
 
+typedef struct grhuighruei{
+	char** theArray;
+	unsigned char length;
+}goodStringMallocArray;
+typedef struct grejgrkew{
+	unsigned char* theArray;
+	unsigned char length;
+}goodu8MallocArray;
+
+goodStringMallocArray currentPresetFileList;
+goodStringMallocArray currentPresentTipList;
+goodu8MallocArray currentPresetTipUnlockList;
+// Made with malloc
+char* currentPresetFilename;
+
+/*
+0 - title
+1 - Load preset from currentPresetFilename
+2 - Open file selector for preset file selection
+3 - Start Lua thread
+*/
+char currentGameStatus=0;
+
 /*
 ====================================================
 */
 
 /*
 */
+
+int TextHeight(float scale){
+	#if RENDERER == REND_SDL
+		return (8*scale);
+	#elif RENDERER == REND_VITA2D
+		return vita2d_font_text_height(fontImage,scale,"a");
+	#endif
+}
+
 #if RENDERER == REND_SDL
 	void DrawLetterUnscaled(int letterId, int _x, int _y, float size){
 		DrawTexturePartScale(fontImage,_x,_y,(letterId-32)*(8),0,8,8,size,size);
@@ -259,7 +313,7 @@ char* locationStrings[3] = {"/CG/","/CG/","/CGAlt/"};
 #endif
 void DrawText(int x, int y, const char* text, float size){
 	#if RENDERER == REND_VITA2D
-		vita2d_font_draw_text(fontImage,x,y, RGBA8(255,255,255,255),floor(size),text);
+		vita2d_font_draw_text(fontImage,x,y+TextHeight(size), RGBA8(255,255,255,255),floor(size),text);
 	#endif
 	#if RENDERER == REND_SDL
 		int i=0;
@@ -349,13 +403,6 @@ void ClearMessageArray(){
 	}
 }
 
-int TextHeight(float scale){
-	#if RENDERER == REND_SDL
-		return (8*scale);
-	#elif RENDERER == REND_VITA2D
-		return vita2d_font_text_height(fontImage,scale,"a");
-	#endif
-}
 
 void DrawMessageText(){
 	//system("cls");
@@ -386,8 +433,17 @@ void ControlsStart(){
 		SDL_Event e;
 		while( SDL_PollEvent( &e ) != 0 ){
 			if( e.type == SDL_QUIT ){
-				place=2;
-				luaL_error(L,"game stopped\n");
+				if (currentGameStatus==3){
+					//luaL_error(L,"game stopped\n");
+					// Adds function to stack
+					lua_getglobal(L,"quitxfunction");
+					// Call funciton. Removes function from stack.
+					lua_call(L, 0, 0);
+				}else{
+					printf("normalquit\n");
+					currentGameStatus=99;
+				}
+
 			}
 			#if PLATFORM == PLAT_WINDOWS
 				if( e.type == SDL_KEYDOWN ){
@@ -468,11 +524,30 @@ void ControlsEnd(){
 	#endif
 }
 
-void WriteDebugInfo(){
+void WriteDebugInfo(int a){
+	#if PLATFORM == PLAT_VITA
 	FILE *fp;
 	fp = fopen("ux0:data/HIGURASHI/a.txt", "a");
-	fprintf(fp,"There are %d music deocoders available\n", Mix_GetNumMusicDecoders());
+	fprintf(fp,"%d\n", a);
 	fclose(fp);
+	#endif
+}
+
+void ClearDebugFile(){
+	#if PLATFORM == PLAT_VITA
+	FILE *fp;
+	fp = fopen("ux0:data/HIGURASHI/a.txt", "w");
+	fclose(fp);
+	#endif
+}
+
+void WriteToDebugFile(char* stuff){
+	#if PLATFORM == PLAT_VITA
+	FILE *fp;
+	fp = fopen("ux0:data/HIGURASHI/a.txt", "a");
+	fprintf(fp,"%s\n",stuff);
+	fclose(fp);
+	#endif
 }
 
 void ResetBustStruct(bust* passedBust){
@@ -484,6 +559,15 @@ void ResetBustStruct(bust* passedBust){
 	passedBust->alpha=255;
 	passedBust->bustStatus = BUST_STATUS_NORMAL;
 	passedBust->lineCreatedOn=0;
+}
+
+void RunScript(char* filepath){
+	luaL_dofile(L,filepath);
+	
+	// Adds function to stack
+	lua_getglobal(L,"main");
+	// Call funciton. Removes function from stack.
+	lua_call(L, 0, 0);
 }
 
 char* CombineStringsPLEASEFREE(const char* first, const char* firstpointfive, const char* second, const char* third){
@@ -643,9 +727,6 @@ char CheckFileExist(char* location){
 	#endif
 }
 
-// TODO - Make this.
-// THIS CAN BE FOLLOWED AS A GUIDE
-// Example code from Happy Land, I mean
 void RecalculateBustOrder(){
 	int i, j, k;
 
@@ -674,6 +755,106 @@ void RecalculateBustOrder(){
 		}
 	}
 }
+
+// LAST ARG IS WHERE THE LENGTH IS STORED
+char* ReadNumberStringList(FILE *fp, unsigned char* arraysize){
+	int numScripts;
+	char currentReadNumber[4];
+	// Add null for atoi
+	currentReadNumber[3]=0;
+
+	fread(&currentReadNumber,3,1,fp);
+	numScripts = atoi(currentReadNumber);
+	printf("We have %d number elements\n",numScripts);
+	// Ignore the WINDOWS newline (\r\n)
+	fseek(fp,2,SEEK_CUR);
+
+	char* _thelist;
+	
+	_thelist = (char*)calloc(numScripts,sizeof(char));
+
+	int i=0;
+	for (i=0;i<numScripts;i++){
+		fread(&currentReadNumber,3,1,fp);
+		_thelist[i]=atoi(currentReadNumber);
+		fseek(fp,2,SEEK_CUR);
+	}
+
+	(*arraysize) = numScripts;
+	return _thelist;
+}
+char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
+	char currentReadLine[200];
+	char currentReadNumber[4];
+	// Add null for atoi
+	currentReadNumber[3]=0;
+	int linePosition=0;
+	int numScripts;
+
+	fread(&currentReadNumber,3,1,fp);
+	numScripts = atoi(currentReadNumber);
+	printf("We have %d elements\n",numScripts);
+	// Ignore the WINDOWS newline (\r\n)
+	fseek(fp,2,SEEK_CUR);
+
+	char** _thelist;
+	
+	_thelist = (char**)calloc(numScripts,sizeof(char*));
+	unsigned char justreadbyte=00;
+
+	int i=0;
+	for (i=0;i<numScripts;i++){
+		while (1){
+			fread(&justreadbyte,1,1,fp);
+			// Newline char
+			// By some black magic, even though newline is two bytes, I can still detect it?
+			if (justreadbyte=='\n'){
+				// It seems like the other newline char is skipped for me?
+				//fseek(fp,1,SEEK_CUR);
+				break;
+			}
+			currentReadLine[linePosition]=justreadbyte;
+			linePosition++;
+		}
+		// Add null character
+		currentReadLine[linePosition]=0;
+		//_thelist[i] = 
+		
+		_thelist[i] = (char*)calloc(1,linePosition+1);
+		memcpy((_thelist[i]),currentReadLine,linePosition+1);
+		
+		linePosition=0;
+	}
+
+	(*arraysize) = numScripts;
+	return _thelist;
+}
+
+void LoadPreset(char* filename){
+	//currentPresetFileList
+	FILE *fp;
+	fp = fopen(filename, "r");
+	//fprintf(fp,"There are %d music deocoders available\n", Mix_GetNumMusicDecoders());
+	int i;
+	
+	currentPresetFileList.theArray = ReadFileStringList(fp,&currentPresetFileList.length);
+	for (i=0;i<currentPresetFileList.length;i++){
+		printf("%s\n",currentPresetFileList.theArray[i]);
+	}
+	currentPresentTipList.theArray = ReadFileStringList(fp,&currentPresentTipList.length);
+	for (i=0;i<currentPresentTipList.length;i++){
+		printf("%s\n",currentPresentTipList.theArray[i]);
+	}
+	//printf("Is %s\n",currentReadNumber);
+
+	currentPresetTipUnlockList.theArray = ReadNumberStringList(fp,&(currentPresetTipUnlockList.length));
+	for (i=0;i<currentPresetTipUnlockList.length;i++){
+		printf("%d\n",currentPresetTipUnlockList.theArray[i]);
+	}
+
+	fclose(fp);
+}
+
 
 //===================
 
@@ -795,24 +976,27 @@ void DrawScene(const char* filename, int time){
 
 		Update();
 		_backgroundAlpha-=_alphaPerFrame;
+		if (_backgroundAlpha<0){
+			_backgroundAlpha=0;
+		}
 		//int i;
 		StartDrawingA();
+		
 		if (currentBackground!=NULL){
-			if (currentBackground!=NULL){
-				DrawBackground(newBackground,newBackgroundRez);
+			DrawBackground(newBackground,newBackgroundRez);
 
-				DrawBackgroundAlpha(currentBackground,currentBackgroundRez,_backgroundAlpha);
-			}else{
-				DrawBackgroundAlpha(newBackground,newBackgroundRez,_backgroundAlpha);
-			}
+			DrawBackgroundAlpha(currentBackground,currentBackgroundRez,_backgroundAlpha);
+		}else{
+			DrawBackgroundAlpha(newBackground,newBackgroundRez,255-_backgroundAlpha);
 		}
+		
 		for (i = MAXBUSTS-1; i != -1; i--){
 			if (Busts[bustOrder[i]].isActive==1){
 				DrawBust(&(Busts[bustOrder[i]]));
 			}
 		}
 		if (MessageBoxEnabled==1){
-			DrawRectangle(160,32,640,480,0,0,0,MessageBoxAlpha);
+			DrawRectangle(0,0,960,544,0,0,0,MessageBoxAlpha);
 		}
 		if (MessageBoxEnabled==1){
 			DrawMessageText();
@@ -847,7 +1031,6 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	unsigned char skippedInitialWait=0;
 	WaitWithCodeStart(_fadeintime);
 
-	// Don't draw while loading.
 	if (Busts[passedSlot].image!=NULL){
 		printf("Free old bust\n");
 		FreeTexture(Busts[passedSlot].image);
@@ -1140,6 +1323,20 @@ int L_PlayBGM(lua_State* passedState){
 	return 0;
 }
 
+// Some int argument
+// Maybe music slot
+int L_StopBGM(lua_State* passedState){
+	#if SILENTMODE == 1
+		return 0;
+	#endif
+	StopMusic();
+	if (currentMusic!=NULL){
+		FreeMusic(currentMusic);
+		currentMusic=NULL;
+	}
+	return 0;
+}
+
 // Last arg, I was right. Bool for if wait for fadeoutr
 int L_FadeoutBGM(lua_State* passedState){
 	// I BET THE SECOND ARGUMENT IS IF IT WAITS OR NOT
@@ -1269,9 +1466,42 @@ int L_PlaySE(lua_State* passedState){
 	return 0;
 }
 
-/*
-TODO - Remove music note ♪
-*/
+int L_CallScript(lua_State* passedState){
+	const char* filename = lua_tostring(passedState,1);
+
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/Scripts/",filename,".txt");
+	char tempstring2[strlen(tempstringconcat)+1];
+	strcpy(tempstring2,tempstringconcat);
+	free(tempstringconcat);
+
+	if (CheckFileExist(tempstring2)==1){
+		printf("Do script %s\n",tempstring2);
+		RunScript(tempstring2);
+	}else{
+		printf("Failed to find script\n");
+	}
+}
+
+int L_GetGlobalFlag(lua_State* passedState){
+	// GLanguage
+	// This is some thingie for the script to check the current language
+	if (lua_tonumber(passedState,1)==1){
+		// English
+		lua_pushnumber(passedState,1);
+		// Japanese
+		//lua_pushnumber(passedState,0);
+		return 1;
+	}
+	printf("Unknown GetGlobalFlag.\n");
+	return 0;
+}
+
+// "bg_166", 7, 200, 0
+int L_ChangeScene(lua_State* passedState){
+	DrawScene(lua_tostring(passedState,1),0);
+	return 0;
+}
+
 void MakeLuaUseful(){
 	LUAREGISTER(L_OutputLine,"OutputLine")
 	LUAREGISTER(L_ClearMessage,"ClearMessage")
@@ -1290,6 +1520,10 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_FadeBustshot,"FadeBustshot")
 	LUAREGISTER(L_DrawScene,"DrawBG")
 	LUAREGISTER(L_PlaySE,"PlaySE")
+	LUAREGISTER(L_StopBGM,"StopBGM")
+	LUAREGISTER(L_CallScript,"CallScript")
+	LUAREGISTER(L_GetGlobalFlag,"GetGlobalFlag")
+	LUAREGISTER(L_ChangeScene,"ChangeScene")
 
 	// Functions that do nothing
 	LUAREGISTER(L_NotYet,"SetFontId")
@@ -1309,7 +1543,24 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_NotYet,"SetSpeedOfMessage")
 	LUAREGISTER(L_NotYet,"ShakeScreen")
 	LUAREGISTER(L_NotYet,"ShakeScreenSx")
+	LUAREGISTER(L_NotYet,"SetDrawingPointOfMessage")
+	LUAREGISTER(L_NotYet,"SetStyleOfMessageSwinging")
+	LUAREGISTER(L_NotYet,"SetValidityOfWindowDisablingWhenGraphicsControl")
+	LUAREGISTER(L_NotYet,"DrawFilm")
+	LUAREGISTER(L_NotYet,"EnableJumpingOfReturnIcon")
+	LUAREGISTER(L_NotYet,"StopSE")
+	LUAREGISTER(L_NotYet,"FadeBG")
+	LUAREGISTER(L_NotYet,"SetValidityOfTextFade")
+	LUAREGISTER(L_NotYet,"SetValidityOfSaving")
+	LUAREGISTER(L_NotYet,"SetValidityOfSkipping")
+	LUAREGISTER(L_NotYet,"GetAchievement")
+	LUAREGISTER(L_NotYet,"CallSection")
+	LUAREGISTER(L_NotYet,"SetFontOfMessage")
+	LUAREGISTER(L_NotYet,"SetValidityOfLoading")
+	LUAREGISTER(L_NotYet,"ActivateScreenEffectForcedly")
+	
 }
+
 //======================================================
 void Draw(){
 	int i;
@@ -1346,12 +1597,152 @@ void LuaThread(){
 	#if PLATFORM == PLAT_VITA
 		luaL_dofile(L,"app0:a/happy.lua");
 		lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
-		luaL_dofile(L,"app0:a/test3.lua");
+		RunScript("app0:a/test3.lua");
 	#elif PLATFORM == PLAT_WINDOWS
 		luaL_dofile(L,"./happy.lua");
 		lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
-		luaL_dofile(L,"./StreamingAssets/Scripts/onik_009.txt");
+		RunScript("./StreamingAssets/Scripts/wata_005.txt");
 	#endif
+}
+
+void FileSelector(char* directorylocation, char** _chosenfile){
+	int i=0;
+	int totalFiles=0;
+	
+	ClearDebugFile();
+
+	// Can hold 50 filenames
+	// Each with no more than 50 characters (51 char block of memory. extra one for null char)
+	char** filenameholder;
+	filenameholder = calloc(50,sizeof(char*));
+	for (i=0;i<50;i++){
+		filenameholder[i]=calloc(1,51);
+	}
+
+	CROSSDIR dir;
+	CROSSDIRSTORAGE lastStorage;
+	dir = OpenDirectory (directorylocation);
+	for (i=0;i<50;i++){
+		if (DirectoryRead(&dir,&lastStorage) == 0){
+			break;
+		}
+		memcpy((filenameholder[i]),GetDirectoryResultName(&lastStorage),strlen(GetDirectoryResultName(&lastStorage))+1);
+	}
+	DirectoryClose (dir);
+	
+	totalFiles = i;
+	printf("%d files in total\n",totalFiles);
+
+	printf("bout to draw\n");
+	
+	if (totalFiles==0){
+		StartDrawingA();
+		//DrawText(20,20+TextHeight(fontSize)+i*(TextHeight(fontSize)),currentMessages[i],fontSize);
+		DrawText(32,5,"No presets found.",fontSize);
+		DrawText(32,TextHeight(fontSize)+5,"If you ran the converter, you should've gotten some.",fontSize);
+		DrawText(32,TextHeight(fontSize)*2+10,"You can manually put presets in:",fontSize);
+		DrawText(32,TextHeight(fontSize)*3+15,"ux0:data/HIGURASHI/StreamingAssets/Presets/",fontSize);
+		DrawText(32,200,"Press X to return",fontSize);
+		EndDrawingA();
+		
+		while (1){
+			FpsCapStart();
+			ControlsStart();
+			if (WasJustPressed(SCE_CTRL_CROSS)){
+				ControlsEnd();
+				break;
+			}
+			ControlsEnd();
+			FpsCapWait();
+		}
+
+		*_chosenfile=NULL;
+		
+	}else{
+		int _textheight = TextHeight(fontSize);
+		int _choice=0;
+		while (1){
+			FpsCapStart();
+			ControlsStart();
+	
+			if (WasJustPressed(SCE_CTRL_UP)){
+				_choice--;
+				if (_choice<0){
+					_choice=0;
+				}
+			}
+			if (WasJustPressed(SCE_CTRL_DOWN)){
+				_choice++;
+				if (_choice>=totalFiles){
+					_choice=totalFiles-1;
+				}
+			}
+			if (WasJustPressed(SCE_CTRL_CROSS)){
+				(*_chosenfile) = malloc(strlen(filenameholder[_choice])+1);
+				memcpy(*_chosenfile,filenameholder[_choice],strlen(filenameholder[_choice])+1);
+				break;		
+			}
+			if (WasJustPressed(SCE_CTRL_CIRCLE)){
+				(*_chosenfile) = NULL;
+				break;		
+			}
+	
+			StartDrawingA();
+			//DrawText(20,20+TextHeight(fontSize)+i*(TextHeight(fontSize)),currentMessages[i],fontSize);
+			DrawText(32,5,"Please select a preset.",fontSize);
+			for (i=0;i<totalFiles;i++){
+				DrawText(32,5+_textheight*(i+2),filenameholder[i],fontSize);
+			}
+			DrawText(5,5+_textheight*(_choice+2),">",fontSize);
+			EndDrawingA();
+			ControlsEnd();
+			FpsCapWait();
+		}
+	}
+
+	// Free memori
+	for (i=0;i<50;i++){
+		free(filenameholder[i]);
+	}
+	free(filenameholder);
+}
+
+void TitleScreen(){
+	signed char _choice=0;
+	int _textheight = TextHeight(fontSize);
+	//SetClearColor(255,255,255,255);
+	while (currentGameStatus!=99){
+		FpsCapStart();
+		ControlsStart();
+
+		if (WasJustPressed(SCE_CTRL_DOWN)){
+			_choice++;
+		}
+		if (WasJustPressed(SCE_CTRL_UP)){
+			_choice--;
+		}
+		if (WasJustPressed(SCE_CTRL_CROSS)){
+			if (_choice==0){
+				ControlsEnd();
+				currentGameStatus=2;
+				break;
+			}else if (_choice==1){
+				currentGameStatus=99;
+				break;
+			}else{
+				_choice=0;
+			}
+		}
+
+		StartDrawingA();
+		DrawText(32,5+_textheight*(0+2),"Load preset",fontSize);
+		DrawText(32,5+_textheight*(1+2),"Exit",fontSize);
+
+		DrawText(5,5+_textheight*(_choice+2),">",fontSize);
+		EndDrawingA();
+		ControlsEnd();
+		FpsCapWait();
+	}
 }
 
 // =====================================================
@@ -1406,14 +1797,9 @@ void init(){
 	}
 }
 
-void DetectGraphicsType(){
-}
-
 int main(int argc, char *argv[]){
 	/* code */
 	init();
-	
-	DetectGraphicsType();
 
 	// Fill with null char
 	ClearMessageArray();
@@ -1444,11 +1830,46 @@ int main(int argc, char *argv[]){
 	//	vita2d_draw_texture(testTex,32,32);
 	//	EndDrawingA();
 	//}
+
 	
 	
+
+	//printf("%s\n",currentPresetFilename);
 	
+
+	//fread
+	//LoadPreset("./StreamingAssets/Presets/Watanagashi.txt");
+	//return 1;
 	
-	LuaThread();
+	currentGameStatus=3;
+
+	while (currentGameStatus!=99){
+		switch (currentGameStatus){
+			case 0:
+				TitleScreen();
+				break;
+			case 1:
+				LoadPreset(currentPresetFilename);
+				break;
+			case 2:
+				#if PLATFORM == PLAT_WINDOWS
+					FileSelector("C:\\Users\\knoob\\Desktop\\Nathan\\Programing\\C\\Higurashi\\build\\StreamingAssets\\Presets\\",&currentPresetFilename);
+				#elif PLATFORM == PLAT_VITA
+					FileSelector("ux0:data/HIGURASHI/StreamingAssets/Presets/",&currentPresetFilename);
+				#endif
+				if (currentPresetFilename==NULL){
+					printf("No files were found, or user quit\n");
+					currentGameStatus=0;
+				}else{
+					currentGameStatus=3;
+				}
+				break;
+			case 3:
+				LuaThread();
+				currentGameStatus=0;
+				break;
+		}
+	}
 	printf("ENDGAME\n");
 	return 0;
 }
