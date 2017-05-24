@@ -12,7 +12,7 @@ LIBS = -lSDL2_mixer -lvorbisfile -lvorbis -logg -lpthread -lSDL2 -lvita2d -lSceD
 PREFIX  = arm-vita-eabi
 CC      = $(PREFIX)-gcc
 CXX = $(PREFIX)-g++
-CFLAGS  = -Wl,-q -Wall -O3 
+CFLAGS  = -Wl,-q -Wall -O3 -g
 CXXFLAGS = $(CFLAGS)
 ASFLAGS = $(CFLAGS)
 
@@ -44,6 +44,5 @@ vpksend: $(TARGET).vpk
 	@echo "Sent."
 
 send: eboot.bin
-	@echo "The environment variable for the IP is VITAIP. Make sure to set it."
 	curl -T eboot.bin ftp://192.168.1.171:1337/ux0:/app/$(TITLE_ID)/
 	@echo "Sent."

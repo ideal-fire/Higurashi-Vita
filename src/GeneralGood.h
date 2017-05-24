@@ -40,6 +40,14 @@
 		#endif
 	}
 
+	void MakeDirectory(char* path){
+		#if PLATFORM == PLAT_VITA
+			sceIoMkdir(path,0777);
+		#elif PLATFORM == PLAT_WINDOWS
+			mkdir(path);
+		#endif
+	}
+
 	/*
 	================================================
 	== SOUND
@@ -269,6 +277,65 @@
 			_destRect.y=destY;
 	
 			SDL_RenderCopy(mainWindowRenderer, passedTexture, &_srcRect, &_destRect );
+		#elif RENDERER==REND_SF2D
+			sf2d_draw_texture_part_scale(passedTexture,destX,destY,texX,texY,texW, texH, texXScale, texYScale);
+		#endif
+	}
+
+	void DrawTextureScaleTint(CrossTexture* passedTexture, int destX, int destY, float texXScale, float texYScale, unsigned char r, unsigned char g, unsigned char b){
+		#if RENDERER == REND_VITA2D
+			vita2d_draw_texture_tint_scale(passedTexture,destX,destY,texXScale,texYScale,RGBA8(r,g,b,255));
+		#elif RENDERER == REND_SDL
+			unsigned char oldr;
+			unsigned char oldg;
+			unsigned char oldb;
+			SDL_GetTextureColorMod(passedTexture,&oldr,&oldg,&oldb);
+			SDL_SetTextureColorMod(passedTexture, r,g,b);
+			SDL_Rect _srcRect;
+			SDL_Rect _destRect;
+			SDL_QueryTexture(passedTexture, NULL, NULL, &(_srcRect.w), &(_srcRect.h));
+			
+			_srcRect.x=0;
+			_srcRect.y=0;
+		
+			_destRect.w=(_srcRect.w*texXScale);
+			_destRect.h=(_srcRect.h*texYScale);
+	
+			_destRect.x=destX;
+			_destRect.y=destY;
+	
+			SDL_RenderCopy(mainWindowRenderer, passedTexture, &_srcRect, &_destRect );
+			SDL_SetTextureColorMod(passedTexture, oldr, oldg, oldb);
+		#elif RENDERER == REND_SF2D
+			sf2d_draw_texture_tint_scale(passedTexture,destX,destY,texXScale,texYScale);
+		#endif
+	}
+
+	void DrawTexturePartScaleTint(CrossTexture* passedTexture, int destX, int destY, int texX, int texY, int texW, int texH, float texXScale, float texYScale, unsigned char r, unsigned char g, unsigned b){
+		#if RENDERER == REND_VITA2D
+			vita2d_draw_texture_tint_part_scale(passedTexture,destX,destY,texX,texY,texW, texH, texXScale, texYScale,RGBA8(r,g,b,255));
+		#elif RENDERER == REND_SDL
+			unsigned char oldr;
+			unsigned char oldg;
+			unsigned char oldb;
+			SDL_GetTextureColorMod(passedTexture,&oldr,&oldg,&oldb);
+			SDL_SetTextureColorMod(passedTexture, r,g,b);
+			SDL_Rect _srcRect;
+			SDL_Rect _destRect;
+			_srcRect.w=texW;
+			_srcRect.h=texH;
+			
+			_srcRect.x=texX;
+			_srcRect.y=texY;
+		
+			_destRect.w=_srcRect.w*texXScale;
+			_destRect.h=_srcRect.h*texYScale;
+	
+			_destRect.x=destX;
+			_destRect.y=destY;
+	
+			SDL_RenderCopy(mainWindowRenderer, passedTexture, &_srcRect, &_destRect );
+			SDL_SetTextureColorMod(passedTexture, oldr, oldg, oldb);
 		#elif RENDERER==REND_SF2D
 			sf2d_draw_texture_part_scale(passedTexture,destX,destY,texX,texY,texW, texH, texXScale, texYScale);
 		#endif

@@ -27,7 +27,4 @@ Convert anything not 640x480 in CG folder to 640x480.
 
 (All images need fixing for WINDOWS)
 
-
-From line 3779 in wata_001
-DrawBustshot( 1, "tomita1_Def, -160, 0, 0, FALSE, 0, 0, 0, 0, 0, 0, 0, 0, 200, FALSE );
-MISING QUOTATION MARK! I NEED TO MAKE MY CONVERTER FIX THIS
+PS3 patches are manmade and have errors, I can fix them myself and commit the changes to the Github.
