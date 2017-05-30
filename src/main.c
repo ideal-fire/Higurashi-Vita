@@ -1,10 +1,39 @@
 /*
+
 	TODO - Remove music note ♪
 
-	TODO - Improve skipping. It doesn't go fast enough
 	TODO - Italics
 		OutputLine(NULL, "　……知レバ、…巻キ込マレテシマウ…。",
 		   NULL, "...<i>If she found out... she would become involved</i>...", Line_Normal);
+
+		So, here's my idea, I take whatever char it is and add 100 if it's italics
+
+	TODO - FIx hima_tips_09
+		THis is important. This was very significant to me, as I didn't expect a choice.
+		I want everyone to have that experience
+		(SEE SCRIPT CONVERTER FIXES BELOW)
+	TODO - Test Himaburashi and Tatoregashi ps3 scripts
+		ACTUALLY RUN THE FUNCTION WHEN TESTING, PLEASE
+	TODO - Complete preset files for question arcs
+		All that's left is to fix the tip unlocks, which is the most tedious thing
+
+	TODO - Big script converter fix for hima_tips_09
+		Convert char Item[2];
+			to Item = {};
+
+		For GetGlobalFlag and SetGlobalFlag, make the first argument a string.
+			These functions will them become Lua functions in happy.lua which will return the value that is in an array using a string index
+				See hima_tips_09.txt for examples
+		For a right squiggily bracket, don't turn it into "end" if the next line is "else"
+			If the next line is "else", just remove the squiggily bracket
+				This is for if then else statements
+					With my current setup, it's if then end else 
+			If it isn't change the bracked to "end", as usual.
+
+
+	TODO - Make CallSection actually call a global function
+	TODO - Garbage collector won't collect functions made in script files??? i.e: function hima_tips_09_b()
+
 */
 
 #define PLAT_WINDOWS 1
@@ -29,8 +58,8 @@
 #define LOCATION_CGALT 2
 
 // Change these depending on the target platform
-#define RENDERER REND_VITA2D
-#define PLATFORM PLAT_VITA
+#define RENDERER REND_SDL
+#define PLATFORM PLAT_WINDOWS
 #define SOUNDPLAYER SND_SDL
 #define SILENTMODE 0
 
@@ -59,9 +88,6 @@ void RecalculateBustOrder();
 
 //
 
-/*
-wa_038 is menu sound
-*/
 
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
 	lua_setglobal(L,y);
@@ -193,6 +219,7 @@ CUSTOM INCLUDES
 #define BUST_STATUS_FADEIN 1 // var 1 is alpha per frame. var 2 is time where 0 alpha
 #define BUST_STATUS_FADEOUT 2 // var 1 is alpha per frame
 #define BUST_STATUS_FADEOUT_MOVE 3 // var 1 is alpha per frame. var 2 is x per frame. var 3 is y per frame
+#define BUST_STATUS_SPRITE_MOVE 4 // var 1 is x per frame, var 2 is y per frame
 
 typedef struct hauighrehrge{
 	CrossTexture* image;
@@ -203,14 +230,15 @@ typedef struct hauighrehrge{
 	int layer;
 	signed short alpha;
 	unsigned char bustStatus;
-	unsigned int statusVariable;
-	unsigned int statusVariable2;
-	unsigned int statusVariable3;
+	int statusVariable;
+	int statusVariable2;
+	int statusVariable3;
+	int statusVariable4;
 	unsigned int lineCreatedOn;
 	unsigned char rez;
 }bust;
 
-bust Busts[7];
+bust Busts[MAXBUSTS];
 
 lua_State* L;
 /*
@@ -234,6 +262,9 @@ CrossTexture* currentBackground = NULL;
 CROSSMUSIC* currentMusic = NULL;
 CROSSSFX* soundEffects[10];
 
+CROSSSFX* menuSound;
+char menuSoundLoaded=0;
+
 // Alpha of black rectangle over screen
 int MessageBoxAlpha = 100;
 
@@ -249,6 +280,8 @@ unsigned int currentScriptLine=0;
 // so, when drawing, start from the end and go backwards to draw the first element last
 unsigned char bustOrder[MAXBUSTS];
 
+unsigned char bustOrderOverBox[MAXBUSTS];
+
 char* locationStrings[3] = {"CG/","CG/","CGAlt/"};
 
 typedef struct grhuighruei{
@@ -262,6 +295,7 @@ typedef struct grejgrkew{
 
 goodStringMallocArray currentPresetFileList;
 goodStringMallocArray currentPresentTipList;
+goodStringMallocArray currentPresentTipNameList;
 goodu8MallocArray currentPresetTipUnlockList;
 int16_t currentPresetChapter=0;
 // Made with malloc
@@ -280,6 +314,8 @@ char nextScriptToLoad[256] = {0};
 char globalTempConcat[256] = {0};
 
 unsigned char isSkipping=0;
+
+char tipNamesLoaded=0;
 
 /*
 ====================================================
@@ -546,6 +582,7 @@ void WriteIntToDebugFile(int a){
 	#endif
 }
 
+// Does not clear the debug file at ux0:data/HIGURASHI/a.txt  , I promise.
 void ClearDebugFile(){
 	#if PLATFORM == PLAT_VITA
 	FILE *fp;
@@ -597,9 +634,11 @@ void RunScript(char* _scriptfolderlocation,char* filename, char addTxt){
 	DisposeOldScript();
 
 	luaL_dofile(L,tempstringconcat);
-	//// Adds function to stack
+	
+	
+	// Adds function to stack
 	lua_getglobal(L,"main");
-	//// Call funciton. Removes function from stack.
+	// Call funciton. Removes function from stack.
 	lua_call(L, 0, 0);
 }
 
@@ -656,8 +695,27 @@ void Update(){
 				ResetBustStruct(&(Busts[i]),1);
 				Busts[i].bustStatus = BUST_STATUS_NORMAL;
 				RecalculateBustOrder();
+			}	
+		}
+		if (Busts[i].bustStatus == BUST_STATUS_SPRITE_MOVE){
+			if (abs(Busts[i].statusVariable3-(Busts[i].xOffset+Busts[i].statusVariable))<abs(Busts[i].statusVariable3-Busts[i].xOffset)){
+				Busts[i].xOffset+=Busts[i].statusVariable;
+			}else{
+				Busts[i].xOffset=Busts[i].statusVariable3;
 			}
-			
+
+			if (abs(Busts[i].statusVariable4-(Busts[i].yOffset+Busts[i].statusVariable2))<abs(Busts[i].statusVariable4-Busts[i].yOffset)){
+				Busts[i].yOffset+=Busts[i].statusVariable2;
+			}else{
+				Busts[i].yOffset=Busts[i].statusVariable4;
+			}
+
+
+			if ((Busts[i].xOffset == Busts[i].statusVariable3) && (Busts[i].yOffset==Busts[i].statusVariable4)){
+				Busts[i].bustStatus = BUST_STATUS_NORMAL;
+				printf("DONE!\n");
+			}
+
 		}
 	}
 }
@@ -785,6 +843,7 @@ void RecalculateBustOrder(){
 
 	for (i=0;i<MAXBUSTS;i++){
 		bustOrder[i]=255;
+		bustOrderOverBox[i]=255;
 	}
 
 	// This generates the orderOfAction list
@@ -793,7 +852,7 @@ void RecalculateBustOrder(){
 		// j is the current fighter we're testig
 		for (j=0;j<MAXBUSTS;j++){
 			// If current entity speed greater than
-			if (bustOrder[i]==255 || Busts[j].layer>Busts[bustOrder[i]].layer){
+			if ((bustOrder[i]==255 || Busts[j].layer>Busts[bustOrder[i]].layer) && (Busts[j].layer<=31)){
 				// Loops through all of orderOfAction to make sure you're not already in orderOfAction
 				for (k=0;k<MAXBUSTS;k++){
 					if (bustOrder[k]==j){
@@ -807,7 +866,49 @@ void RecalculateBustOrder(){
 			}
 		}
 	}
+
+	// Do another calculation for busts that have a layer greater than 31 and therefor are over the message box
+	for (i=0;i<MAXBUSTS;i++){
+		// j is the current fighter we're testig
+		for (j=0;j<MAXBUSTS;j++){
+			// If current entity speed greater than
+			if ((bustOrderOverBox[i]==255 || Busts[j].layer>Busts[bustOrderOverBox[i]].layer) && (Busts[j].layer>31)){
+				// Loops through all of orderOfAction to make sure you're not already in orderOfAction
+				for (k=0;k<MAXBUSTS;k++){
+					if (bustOrderOverBox[k]==j){
+						break;
+					}else{
+						if (k==MAXBUSTS-1){
+							bustOrderOverBox[i]=j;
+						}
+					}
+				}
+			}
+		}
+	}
 }
+
+void MoveFilePointerPastNewline(FILE* fp){
+	unsigned char _temp;
+	fread(&_temp,1,1,fp);
+	if (_temp==13){
+		fseek(fp,1,SEEK_CUR);
+	}
+}
+
+// Checks if the byte is the one for a newline
+// If it's 0D, it seeks past 0A
+char IsNewLine(FILE* fp, unsigned char _temp){
+	if (_temp==13){
+		fseek(fp,1,SEEK_CUR);
+		return 1;
+	}
+	if (_temp=='\n' || _temp==10){
+		// It seems like the other newline char is skipped for me?
+		return 1;
+	}
+}
+
 
 // LAST ARG IS WHERE THE LENGTH IS STORED
 unsigned char* ReadNumberStringList(FILE *fp, unsigned char* arraysize){
@@ -818,10 +919,11 @@ unsigned char* ReadNumberStringList(FILE *fp, unsigned char* arraysize){
 
 	fread(&currentReadNumber,3,1,fp);
 	numScripts = atoi(currentReadNumber);
-	//printf("We have %d number elements\n",numScripts);
-	// Ignore the WINDOWS newline (\r\n)
-	fseek(fp,2,SEEK_CUR);
+	MoveFilePointerPastNewline(fp);
 
+	//fseek(fp,2,SEEK_CUR);
+
+	
 	unsigned char* _thelist;
 	
 	_thelist = (unsigned char*)calloc(numScripts,sizeof(char));
@@ -830,12 +932,16 @@ unsigned char* ReadNumberStringList(FILE *fp, unsigned char* arraysize){
 	for (i=0;i<numScripts;i++){
 		fread(&currentReadNumber,3,1,fp);
 		_thelist[i]=atoi(currentReadNumber);
-		fseek(fp,2,SEEK_CUR);
+
+
+
+		MoveFilePointerPastNewline(fp);
 	}
 
 	(*arraysize) = numScripts;
 	return _thelist;
 }
+
 char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 	char currentReadLine[200];
 	char currentReadNumber[4];
@@ -844,11 +950,11 @@ char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 	int linePosition=0;
 	int numScripts;
 
+	currentReadNumber[3]='\0';
 	fread(&currentReadNumber,3,1,fp);
 	numScripts = atoi(currentReadNumber);
-	//printf("We have %d elements\n",numScripts);
-	// Ignore the WINDOWS newline (\r\n)
-	fseek(fp,2,SEEK_CUR);
+	MoveFilePointerPastNewline(fp);
+	
 
 	char** _thelist;
 	
@@ -858,18 +964,13 @@ char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 	int i=0;
 	for (i=0;i<numScripts;i++){
 		while (currentGameStatus!=99){
-			fread(&justreadbyte,1,1,fp);
+			if (fread(&justreadbyte,1,1,fp)!=1){
+				break;
+			}
 			// Newline char
 			// By some black magic, even though newline is two bytes, I can still detect it?
 			
-			// Code for non windows platforms
-			if (justreadbyte==13){
-				fread(&justreadbyte,1,1,fp);
-				break;
-			}
-			if (justreadbyte=='\n'){
-				// It seems like the other newline char is skipped for me?
-				//fseek(fp,1,SEEK_CUR);
+			if (IsNewLine(fp,justreadbyte)==1){
 				break;
 			}
 			currentReadLine[linePosition]=justreadbyte;
@@ -878,7 +979,7 @@ char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 		// Add null character
 		currentReadLine[linePosition]='\0';
 		//_thelist[i] = 
-		
+
 		_thelist[i] = (char*)calloc(1,linePosition+1);
 		memcpy((_thelist[i]),currentReadLine,linePosition+1);
 		
@@ -889,12 +990,13 @@ char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 	return _thelist;
 }
 
+
 void LoadPreset(char* filename){
 	//currentPresetFileList
 	FILE *fp;
 	fp = fopen(filename, "r");
 	//fprintf(fp,"There are %d music deocoders available\n", Mix_GetNumMusicDecoders());
-	//int i;
+	int i;
 	
 	currentPresetFileList.theArray = ReadFileStringList(fp,&currentPresetFileList.length);
 	//for (i=0;i<currentPresetFileList.length;i++){
@@ -910,6 +1012,25 @@ void LoadPreset(char* filename){
 	//for (i=0;i<currentPresetTipUnlockList.length;i++){
 	//	printf("%d\n",currentPresetTipUnlockList.theArray[i]);
 	//}
+	char tempreadstring[9];
+	tempreadstring[8]='\0';
+
+	// Check for the
+	// tipnames
+	// string
+	// If it exists, read the tip's names
+	if (fread(tempreadstring,8,1,fp)==1){
+		if (strcmp(tempreadstring,"tipnames")==0){
+			MoveFilePointerPastNewline(fp);
+			currentPresentTipNameList.theArray = ReadFileStringList(fp,&currentPresentTipNameList.length);
+			tipNamesLoaded=1;
+		}else{
+			tipNamesLoaded=0;
+		}
+	}else{
+		tipNamesLoaded=0;
+	}
+
 
 	fclose(fp);
 }
@@ -1128,6 +1249,11 @@ void DrawScene(const char* filename, int time){
 		if (MessageBoxEnabled==1){
 			DrawRectangle(0,0,960,544,0,0,0,MessageBoxAlpha);
 		}
+		for (i = MAXBUSTS-1; i != -1; i--){
+			if (Busts[bustOrderOverBox[i]].isActive==1){
+				DrawBust(&(Busts[bustOrderOverBox[i]]));
+			}
+		}
 		if (MessageBoxEnabled==1){
 			DrawMessageText();
 		}
@@ -1213,6 +1339,9 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 		int _timeTotal = _fadeintime;
 		int _time = floor(_fadeintime/2);
 		int _totalFrames = floor(60*(_time/(double)1000));
+		if (_totalFrames==0){
+			_totalFrames=0;
+		}
 		int _alphaPerFrame=floor(255/_totalFrames);
 		if (_alphaPerFrame==0){
 			_alphaPerFrame=1;
@@ -1243,6 +1372,12 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 			i++;
 			FpsCapWait();
 		}
+	}
+}
+
+void PlayMenuSound(){
+	if (menuSoundLoaded==1){
+		PlaySound(menuSound,1);
 	}
 }
 
@@ -1650,6 +1785,81 @@ int L_ChangeScene(lua_State* passedState){
 	return 0;
 }
 
+// DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
+// x is relative to 320
+	// y is relative to 240???
+	// DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
+int L_DrawSprite(lua_State* passedState){
+	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
+	DrawBustshot(lua_tonumber(passedState,1)-1,lua_tostring(passedState,2),320+lua_tonumber(passedState,4),240+lua_tonumber(passedState,5),lua_tonumber(passedState,14), lua_tonumber(passedState,15),lua_toboolean(passedState,16),0);
+	//DrawBustshot(lua_tonumber(passedState,1)-1, lua_tostring(passedState,2), lua_tonumber(passedState,3), lua_tonumber(passedState,4), lua_tonumber(passedState,14), lua_tonumber(passedState,15), lua_toboolean(passedState,16), lua_tonumber(passedState,13));
+}
+
+//MoveSprite(slot, destinationx, destinationy, ?, ?, ?, ?, ?, timeittakes, waitforcompletion)
+	// MoveSprite(5,-320,-4500,0,0,0,0,0,101400, TRUE)
+int L_MoveSprite(lua_State* passedState){
+	int _totalTime = lua_tonumber(passedState,9);
+	int _passedSlot = lua_tonumber(passedState,1);
+	_passedSlot--;
+	// Number of x pixles the sprite has to move by the end
+
+	printf("arg2:%d\n",(int)lua_tonumber(passedState,2));
+	printf("x:%d\n",Busts[_passedSlot].xOffset);
+
+	int _xTengoQue = lua_tonumber(passedState,2)-(Busts[_passedSlot].xOffset-320);
+	int _yTengoQue = lua_tonumber(passedState,3)-(Busts[_passedSlot].yOffset-240);
+	char _waitforcompletion = lua_toboolean(passedState,10);
+
+	Busts[_passedSlot].statusVariable3 = lua_tonumber(passedState,2)+320;
+	Busts[_passedSlot].statusVariable4 = lua_tonumber(passedState,3)+240;
+
+	if (_totalTime!=0){
+		unsigned int _totalFrames = floor(60*(_totalTime/(double)1000));
+		int _xPerFrame = floor(_xTengoQue/_totalFrames);
+		if (_xPerFrame==0){
+			_xPerFrame=1;
+		}
+		printf("xtq: %d\n",_xTengoQue);
+		printf("xprf: %d\n",_xPerFrame);
+		printf("ytq: %d\n",_yTengoQue);
+		printf("tf: %d\n",_totalFrames);
+		int _yPerFrame = floor(_yTengoQue/(double)_totalFrames);
+		if (_yPerFrame==0){
+			_yPerFrame=1;
+		}
+
+		Busts[_passedSlot].statusVariable = _xPerFrame;
+		printf("yperfraeme: %d\n",_yPerFrame);
+		Busts[_passedSlot].statusVariable2 = _yPerFrame;
+		Busts[_passedSlot].bustStatus = BUST_STATUS_SPRITE_MOVE;
+
+	}else{
+		Busts[_passedSlot].xOffset=lua_tonumber(passedState,2)+320;
+		Busts[_passedSlot].yOffset=lua_tonumber(passedState,3)+240;
+	}
+
+	if (_waitforcompletion==1){
+		while(Busts[_passedSlot].bustStatus!=BUST_STATUS_NORMAL){
+			FpsCapStart();
+			ControlsStart();
+			if (WasJustPressed(SCE_CTRL_CROSS)){
+				Busts[_passedSlot].xOffset=lua_tonumber(passedState,2)+320;
+				Busts[_passedSlot].yOffset=lua_tonumber(passedState,3)+240;
+			}
+			ControlsEnd();
+			Update();
+			Draw();
+			FpsCapWait();
+		}
+	}
+}
+
+//FadeSprite(slot, time, waitfrocompletion)
+		// FadeSprite(5,700,FALSE)
+int L_FadeSprite(lua_State* passedState){
+	FadeBustshot(lua_tonumber(passedState,1)-1,lua_tonumber(passedState,2),lua_toboolean(passedState,3));	
+}
+
 void MakeLuaUseful(){
 	LUAREGISTER(L_OutputLine,"OutputLine")
 	LUAREGISTER(L_ClearMessage,"ClearMessage")
@@ -1672,6 +1882,9 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_CallScript,"CallScript")
 	LUAREGISTER(L_GetGlobalFlag,"GetGlobalFlag")
 	LUAREGISTER(L_ChangeScene,"ChangeScene")
+	LUAREGISTER(L_DrawSprite,"DrawSprite")
+	LUAREGISTER(L_MoveSprite,"MoveSprite")
+	LUAREGISTER(L_FadeSprite,"FadeSprite")
 
 	// Functions that do nothing
 	LUAREGISTER(L_NotYet,"SetFontId")
@@ -1684,12 +1897,14 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_NotYet,"SetWindowSize")
 	LUAREGISTER(L_NotYet,"SetWindowMargins")
 	LUAREGISTER(L_NotYet,"SetGUIPosition")
-	LUAREGISTER(L_NotYet,"FadeFilm")
+	
+	LUAREGISTER(L_NotYet,"FadeFilm") // Used for fixing negative???
 	LUAREGISTER(L_NotYet,"Negative") // Command for color inversion
 									// Negative( 1000, TRUE ); is inveted
 									// FadeFilm( 200, TRUE ); fixes it??!
 									// Name provably means to negate the colors, or replace the colors with their complementary ones on the other side of the color wheel
 									// First arg is maybe time when it fades to inverted and argument is proably if it's inverted
+
 
 	//  TEMP
 	LUAREGISTER(L_NotYet,"SetSpeedOfMessage")
@@ -1710,6 +1925,7 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_NotYet,"SetFontOfMessage")
 	LUAREGISTER(L_NotYet,"SetValidityOfLoading")
 	LUAREGISTER(L_NotYet,"ActivateScreenEffectForcedly")
+	LUAREGISTER(L_NotYet,"SetValidityOfUserEffectSpeed")
 }
 
 //======================================================
@@ -1731,6 +1947,12 @@ void Draw(){
 	if (MessageBoxEnabled==1){
 		// This is the message box
 		DrawRectangle(0,0,960,544,0,0,0,MessageBoxAlpha);
+	}
+
+	for (i = MAXBUSTS-1; i != -1; i--){
+		if (Busts[bustOrderOverBox[i]].isActive==1){
+			DrawBust(&(Busts[bustOrderOverBox[i]]));
+		}
 	}
 
 	if (MessageBoxEnabled==1){
@@ -1903,7 +2125,7 @@ void TitleScreen(){
 			_choice--;
 		}
 		// Left and right to change bust location
-		if (WasJustPressed(SCE_CTRL_RIGHT) || WasJustPressed(SCE_CTRL_LEFT)){
+		if (WasJustPressed(SCE_CTRL_RIGHT) || WasJustPressed(SCE_CTRL_LEFT) || (_choice==2 && WasJustPressed(SCE_CTRL_CROSS))){
 			if (_choice==2){
 				if (graphicsLocation == LOCATION_CG){
 					graphicsLocation = LOCATION_CGALT;
@@ -1917,29 +2139,31 @@ void TitleScreen(){
 					free(_temppath);
 				}
 			}
-		}
-		if (WasJustPressed(SCE_CTRL_CROSS)){
-			if (_choice==0){
-				if (currentPresetFilename==NULL){
-					currentPresetChapter=0;
+		}else{
+			if (WasJustPressed(SCE_CTRL_CROSS)){
+				PlayMenuSound();
+				if (_choice==0){
+					if (currentPresetFilename==NULL){
+						currentPresetChapter=0;
+						ControlsEnd();
+						currentGameStatus=2;
+					}
+					break;
+				}else if (_choice==1){
+					printf("Manual script selection\n");
 					ControlsEnd();
-					currentGameStatus=2;
+					FileSelector(SCRIPTFOLDER,&currentPresetFilename,"Select a script");
+					if (currentPresetFilename!=NULL){
+						currentGameStatus=3;
+						RunScript(SCRIPTFOLDER,currentPresetFilename,0);
+						currentGameStatus=0;
+					}
+				}else if (_choice==3){
+					currentGameStatus=99;
+					break;
+				}else{
+					_choice=0;
 				}
-				break;
-			}else if (_choice==1){
-				printf("Manual script selection\n");
-				ControlsEnd();
-				FileSelector(SCRIPTFOLDER,&currentPresetFilename,"Select a script");
-				if (currentPresetFilename!=NULL){
-					currentGameStatus=3;
-					RunScript(SCRIPTFOLDER,currentPresetFilename,0);
-					currentGameStatus=0;
-				}
-			}else if (_choice==3){
-				currentGameStatus=99;
-				break;
-			}else{
-				_choice=0;
 			}
 		}
 
@@ -1987,10 +2211,18 @@ void TipMenu(){
 	unsigned char _chosenTip=1;
 	char _chosenTipString[4]={48,0,0,0};
 	char _chosenTipStringMax[4]={48,0,0,0};
-	char _totalSelectedString[7]={0,0,0,0,0,0,0};
+	char _totalSelectedString[256]={0};
 	itoa(currentPresetTipUnlockList.theArray[currentPresetChapter],&(_chosenTipStringMax[0]),10);
-	strcpy(_totalSelectedString,"1/");
-	strcat(_totalSelectedString,_chosenTipStringMax);
+	
+	if (tipNamesLoaded==1){
+		strcpy(_totalSelectedString,currentPresentTipNameList.theArray[0]);
+		strcat(_totalSelectedString," (1/");
+		strcat(_totalSelectedString,_chosenTipStringMax);
+		strcat(_totalSelectedString,")");
+	}else{
+		strcpy(_totalSelectedString,"1/");
+		strcat(_totalSelectedString,_chosenTipStringMax);
+	}
 
 	while (currentGameStatus!=99){
 		FpsCapStart();
@@ -2012,22 +2244,42 @@ void TipMenu(){
 			if (_chosenTip>currentPresetTipUnlockList.theArray[currentPresetChapter]){
 				_chosenTip=1;
 			}
-			// Make the string
-			itoa(_chosenTip,&(_chosenTipString[0]),10);
-			strcpy(_totalSelectedString,_chosenTipString);
-			strcat(_totalSelectedString,"/");
-			strcat(_totalSelectedString,_chosenTipStringMax);
+			// Update the string that is used to show what tip is selected
+			if (tipNamesLoaded==1){
+				itoa(_chosenTip,&(_chosenTipString[0]),10);
+				strcpy(_totalSelectedString,currentPresentTipNameList.theArray[_chosenTip-1]);
+				strcat(_totalSelectedString," (");
+				strcat(_totalSelectedString,_chosenTipString);
+				strcat(_totalSelectedString,"/");
+				strcat(_totalSelectedString,_chosenTipStringMax);
+				strcat(_totalSelectedString,")");
+			}else{
+				itoa(_chosenTip,&(_chosenTipString[0]),10);
+				strcpy(_totalSelectedString,_chosenTipString);
+				strcat(_totalSelectedString,"/");
+				strcat(_totalSelectedString,_chosenTipStringMax);
+			}
 		}
 		if (WasJustPressed(SCE_CTRL_LEFT)){
 			_chosenTip--;
 			if (_chosenTip<1){
 				_chosenTip=currentPresetTipUnlockList.theArray[currentPresetChapter];
 			}
-			// Make the string
-			itoa(_chosenTip,&(_chosenTipString[0]),10);
-			strcpy(_totalSelectedString,_chosenTipString);
-			strcat(_totalSelectedString,"/");
-			strcat(_totalSelectedString,_chosenTipStringMax);
+			// Update the string that is used to show what tip is selected
+			if (tipNamesLoaded==1){
+				itoa(_chosenTip,&(_chosenTipString[0]),10);
+				strcpy(_totalSelectedString,currentPresentTipNameList.theArray[_chosenTip-1]);
+				strcat(_totalSelectedString," (");
+				strcat(_totalSelectedString,_chosenTipString);
+				strcat(_totalSelectedString,"/");
+				strcat(_totalSelectedString,_chosenTipStringMax);
+				strcat(_totalSelectedString,")");
+			}else{
+				itoa(_chosenTip,&(_chosenTipString[0]),10);
+				strcpy(_totalSelectedString,_chosenTipString);
+				strcat(_totalSelectedString,"/");
+				strcat(_totalSelectedString,_chosenTipStringMax);
+			}
 		}
 		if (WasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
@@ -2055,7 +2307,7 @@ void TipMenu(){
 		DrawText(5,5+_textheight*(_choice+2),">",fontSize);
 
 
-		DrawText(5,544-5-_textheight*2,"Left and Right - Change chapter",fontSize);
+		DrawText(5,544-5-_textheight*2,"Left and Right - Change TIP",fontSize);
 		DrawText(5,544-5-_textheight,"X - Select",fontSize);
 
 		EndDrawingA();
@@ -2271,11 +2523,20 @@ void init(){
 
 	// Make the save files directory
 	MakeDirectory(SAVEFOLDER);
+
+	// Load the menu sound effect if it's present
+	//char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/","wa_038",".ogg");
+	//if (CheckFileExist(tempstringconcat)){
+	//	menuSoundLoaded=1;
+	//	menuSound = LoadSound(tempstringconcat);
+	//}
+	//free(tempstringconcat);
 }
 
 int main(int argc, char *argv[]){
 	/* code */
 	init();
+
 
 	ClearDebugFile();
 
@@ -2302,7 +2563,7 @@ int main(int argc, char *argv[]){
 	//PlayMusic(testsong);
 	//WriteSDLError();
 	//
-	//FILE *fp;z
+	//FILE *fp;
 	//fp = fopen("ux0:data/HIGURASHI/a.txt", "a");
 	//fprintf(fp,"There are %d music deocoders available\n", Mix_GetNumMusicDecoders());
 	//fclose(fp);
@@ -2324,22 +2585,24 @@ int main(int argc, char *argv[]){
 
 	//currentGameStatus=3;
 	//strcpy(nextScriptToLoad,"wata_001");
-
+int i=0;
 	while (currentGameStatus!=99){
 		switch (currentGameStatus){
 			case 0:
 				TitleScreen();
 				break;
 			case 1:
+				// Create the string for the full path of the preset file and load it
 				memset(&globalTempConcat,0,sizeof(globalTempConcat));
 				strcpy(globalTempConcat,PRESETFOLDER);
 				strcat(globalTempConcat,currentPresetFilename);
-				
 				LoadPreset(globalTempConcat);
-				
+
+				// Does not load the savefile, I promise.
 				LoadGame();
 				
-				// No save game
+				// If there is no save game, start a new one at chapter 0
+				// Otherwise, go to the navigation menu
 				if (currentPresetChapter==-1){
 					currentPresetChapter=0;
 					SetNextScriptName();
@@ -2361,8 +2624,8 @@ int main(int argc, char *argv[]){
 				break;
 			case 3:
 				LuaThread(nextScriptToLoad);
-			//	RunScript(SCRIPTFOLDER,nextScriptToLoad,1);
 
+				// If a preset is loaded, save the game. Otherwise, go to title
 				if (currentPresetFileList.length!=0){
 					currentGameStatus=4;
 					SaveGame();
@@ -2371,10 +2634,11 @@ int main(int argc, char *argv[]){
 				}
 				break;
 			case 4:
-				printf("NAVIGATION MENU\n");
+				// Menu for chapter jump, tip selection, and going to the next chapter
 				NavigationMenu();
 				break;
 			case 5:
+				// Menu for selecting tip to view
 				TipMenu();
 				break;
 		}
