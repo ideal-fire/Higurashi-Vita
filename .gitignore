@@ -52,6 +52,7 @@ Temporary Items
 # ========================
 copyrite/
 build/
+lib-custom/
 
 # Build
 *.o
@@ -60,3 +61,4 @@ build/
 *.sfo
 eboot.bin
 *.velf
+*.bin
