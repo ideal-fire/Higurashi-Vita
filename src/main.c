@@ -8,32 +8,19 @@
 
 		So, here's my idea, I take whatever char it is and add 100 if it's italics
 
-	TODO - FIx hima_tips_09
-		THis is important. This was very significant to me, as I didn't expect a choice.
-		I want everyone to have that experience
-		(SEE SCRIPT CONVERTER FIXES BELOW)
 	TODO - Test Himaburashi and Tatoregashi ps3 scripts
 		ACTUALLY RUN THE FUNCTION WHEN TESTING, PLEASE
 	TODO - Complete preset files for question arcs
 		All that's left is to fix the tip unlocks, which is the most tedious thing
 
-	TODO - Big script converter fix for hima_tips_09
-		Convert char Item[2];
-			to Item = {};
-
-		For GetGlobalFlag and SetGlobalFlag, make the first argument a string.
-			These functions will them become Lua functions in happy.lua which will return the value that is in an array using a string index
-				See hima_tips_09.txt for examples
-		For a right squiggily bracket, don't turn it into "end" if the next line is "else"
-			If the next line is "else", just remove the squiggily bracket
-				This is for if then else statements
-					With my current setup, it's if then end else 
-			If it isn't change the bracked to "end", as usual.
-
-
-	TODO - Make CallSection actually call a global function
+	
 	TODO - Garbage collector won't collect functions made in script files??? i.e: function hima_tips_09_b()
+		Maybe I can make a system similar to the one I made in MrDude that tracks all the global variables made between two points of time.
+			If I could do that, I could dispose of the variables properly.
+				Or I could just not do this. That's always an option.
 
+
+	TODO - (optional) play the TIP music when you go to the TIP selection menu
 */
 
 #define PLAT_WINDOWS 1
@@ -61,7 +48,7 @@
 #define RENDERER REND_SDL
 #define PLATFORM PLAT_WINDOWS
 #define SOUNDPLAYER SND_SDL
-#define SILENTMODE 0
+char SILENTMODE = 0;
 
 unsigned char currentBackgroundRez;
 
@@ -316,6 +303,8 @@ char globalTempConcat[256] = {0};
 unsigned char isSkipping=0;
 
 char tipNamesLoaded=0;
+
+unsigned char lastSelectionAnswer=0;
 
 /*
 ====================================================
@@ -634,8 +623,7 @@ void RunScript(char* _scriptfolderlocation,char* filename, char addTxt){
 	DisposeOldScript();
 
 	luaL_dofile(L,tempstringconcat);
-	
-	
+		
 	// Adds function to stack
 	lua_getglobal(L,"main");
 	// Call funciton. Removes function from stack.
@@ -800,8 +788,8 @@ void DrawBust(bust* passedBust){
 	if (passedBust->alpha==255){
 		if (passedBust->rez == REZ_PS3_BUST){
 			DrawTexture(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset);
-		}else if (passedBust->rez == REZ_OLD && currentBackgroundRez == REZ_PS3_BACKGROUND){ // In this case, the Steam busts should be bigger, but I'm too lazy to do that.
-			DrawTexture(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset+64);
+		}else if (passedBust->rez == REZ_OLD && currentBackgroundRez == REZ_PS3_BACKGROUND){ // In this case, the Steam busts should be bigger, but I'm too lazy to do that. Actually, all busts should be bigger. They look a little small
+			DrawTexture(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset+62);
 		}else if (passedBust->rez==REZ_OLD || passedBust->rez == REZ_UPDATED){
 			DrawTexture(passedBust->image,160+passedBust->xOffset,passedBust->yOffset+32);
 		}else if (passedBust->rez == REZ_PS3_BACKGROUND){
@@ -1577,9 +1565,10 @@ int L_NotYet(lua_State* passedState){
 // Third arg is volume. 128 seems to be average. I can hardly hear 8 with computer volume on 10.
 // Fourth arg is unknown
 int L_PlayBGM(lua_State* passedState){
-	#if SILENTMODE == 1
+	if (SILENTMODE==1){
 		return 0;
-	#endif
+	}
+
 	StopMusic();
 	if (currentMusic!=NULL){
 		FreeMusic(currentMusic);
@@ -1596,9 +1585,7 @@ int L_PlayBGM(lua_State* passedState){
 		printf("*************** VERY IMPORTANT *******************\nThe last PlayBGM call didn't have 0 for the fourth argument! This is a good place to investigate!\n");
 	}
 
-	#if SILENTMODE == 0
-		PlayMusic(currentMusic);
-	#endif
+	PlayMusic(currentMusic);
 	return 0;
 }
 
@@ -1734,7 +1721,7 @@ int L_FadeBustshot(lua_State* passedState){
 // Slot, file, volume
 int L_PlaySE(lua_State* passedState){
 	int passedSlot = lua_tonumber(passedState,1);
-	#if SILENTMODE != 1
+	if (SILENTMODE!=1){
 		if (soundEffects[passedSlot]!=NULL){
 			FreeSound(soundEffects[passedSlot]);
 			soundEffects[passedSlot]=NULL;
@@ -1744,7 +1731,7 @@ int L_PlaySE(lua_State* passedState){
 		Mix_VolumeChunk(soundEffects[passedSlot],lua_tonumber(passedState,3));
 		free(tempstringconcat);
 		PlaySound(soundEffects[passedSlot],1);
-	#endif
+	}
 	return 0;
 }
 
@@ -1860,6 +1847,82 @@ int L_FadeSprite(lua_State* passedState){
 	FadeBustshot(lua_tonumber(passedState,1)-1,lua_tonumber(passedState,2),lua_toboolean(passedState,3));	
 }
 
+// Select(numoptions, arrayofstring)
+//		Let's the user make a choice and have this not be a sound novel anymore. :/
+//		First arg is the number of options and the second arg is a string of the names of the options
+//		Result can be found in LoadValueFromLocalWork("SelectResult")
+//			Choice result is zero based
+//				First choice is zero, second is one
+int L_Select(lua_State* passedState){
+	int _totalOptions = lua_tonumber(passedState,1);
+	char* noobOptions[_totalOptions];
+	int i;
+	for (i=0;i<_totalOptions;i++){
+		lua_rawgeti(passedState,2,i+1);
+		noobOptions[i] = calloc(1,strlen(lua_tostring(passedState,-1))+1);
+		strcpy(noobOptions[i],lua_tostring(passedState,-1));
+	}
+
+	// This is the actual loop for choosing the choice
+	int _textheight = TextHeight(fontSize);
+	signed char _choice=0;
+	while (1){
+		FpsCapStart();
+		ControlsStart();
+		if (WasJustPressed(SCE_CTRL_DOWN)){
+			_choice++;
+			if (_choice>=_totalOptions){
+				_choice=0;
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_UP)){
+			_choice--;
+			if (_choice<0){
+				_choice=_totalOptions-1;
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_CROSS)){
+			lastSelectionAnswer = _choice;
+			break;
+		}
+		ControlsEnd();
+		StartDrawingA();
+		for (i=0;i<_totalOptions;i++){
+			DrawText(32,i*_textheight,noobOptions[i],fontSize);
+		}
+		DrawText(0,_choice*_textheight,">",fontSize);
+
+		EndDrawingA();
+		FpsCapWait();
+	}
+
+	// Free strings that we're made with calloc earlier
+	for (i=0;i<_totalOptions;i++){
+		free(noobOptions[i]);
+	}
+
+	return 0;
+}
+
+int L_LoadValueFromLocalWork(lua_State* passedState){
+	const char* _wordWant = lua_tostring(passedState,1);
+	printf("%s\n",_wordWant);
+	if ( strcmp(_wordWant,"SelectResult")==0){
+		lua_pushnumber(passedState,lastSelectionAnswer);
+	}else{
+		printf("Unknown LoadValueFromLocalWork arg!");
+	}
+	return 1;
+}
+
+int L_CallSection(lua_State* passedState){
+char buf[256];
+strcpy(buf, lua_tostring(passedState,1));
+strcat(buf,"()");
+printf("%s\n",buf);
+	luaL_dostring(L,buf);
+}
+
 void MakeLuaUseful(){
 	LUAREGISTER(L_OutputLine,"OutputLine")
 	LUAREGISTER(L_ClearMessage,"ClearMessage")
@@ -1880,7 +1943,9 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_PlaySE,"PlaySE")
 	LUAREGISTER(L_StopBGM,"StopBGM")
 	LUAREGISTER(L_CallScript,"CallScript")
-	LUAREGISTER(L_GetGlobalFlag,"GetGlobalFlag")
+	LUAREGISTER(L_Select,"Select") // That's right, I programmed selection for the one time in the question arcs where it's used
+	LUAREGISTER(L_LoadValueFromLocalWork,"LoadValueFromLocalWork")
+	LUAREGISTER(L_CallSection,"CallSection")
 	LUAREGISTER(L_ChangeScene,"ChangeScene")
 	LUAREGISTER(L_DrawSprite,"DrawSprite")
 	LUAREGISTER(L_MoveSprite,"MoveSprite")
@@ -1921,7 +1986,6 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_NotYet,"SetValidityOfSaving")
 	LUAREGISTER(L_NotYet,"SetValidityOfSkipping")
 	LUAREGISTER(L_NotYet,"GetAchievement")
-	LUAREGISTER(L_NotYet,"CallSection")
 	LUAREGISTER(L_NotYet,"SetFontOfMessage")
 	LUAREGISTER(L_NotYet,"SetValidityOfLoading")
 	LUAREGISTER(L_NotYet,"ActivateScreenEffectForcedly")
@@ -2575,7 +2639,7 @@ int main(int argc, char *argv[]){
 	//	vita2d_draw_texture(testTex,32,32);
 	//	EndDrawingA();
 	//}
-
+	SILENTMODE=1;
 	//printf("%s\n",currentPresetFilename);
 
 	//fread
@@ -2585,7 +2649,7 @@ int main(int argc, char *argv[]){
 
 	//currentGameStatus=3;
 	//strcpy(nextScriptToLoad,"wata_001");
-int i=0;
+	int i=0;
 	while (currentGameStatus!=99){
 		switch (currentGameStatus){
 			case 0:
