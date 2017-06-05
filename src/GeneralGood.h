@@ -86,17 +86,25 @@
 	}
 	
 	void PlaySound(CROSSSFX* toPlay, int timesToPlay){
-		Mix_PlayChannel( -1, toPlay, timesToPlay-1 );
+		#if SOUNDPLAYER == SND_SDL
+			Mix_PlayChannel( -1, toPlay, timesToPlay-1 );
+		#endif
 	}
 	void PlayMusic(CROSSMUSIC* toPlay){
-		Mix_PlayMusic(toPlay,-1);
+		#if SOUNDPLAYER == SND_SDL
+			Mix_PlayMusic(toPlay,-1);
+		#endif
 	}
 	
 	void FreeSound(CROSSSFX* toFree){
-		Mix_FreeChunk(toFree);
+		#if SOUNDPLAYER == SND_SDL
+			Mix_FreeChunk(toFree);
+		#endif
 	}
 	void FreeMusic(CROSSMUSIC* toFree){
-		Mix_FreeMusic(toFree);
+		#if SOUNDPLAYER == SND_SDL
+			Mix_FreeMusic(toFree);
+		#endif
 	}
 
 	/*
@@ -405,6 +413,8 @@
 	=================================================
 	*/
 
+	// PLEASE MAKE DIR PATHS END IN A SLASH
+
 	#if PLATFORM == PLAT_WINDOWS
 		#define CROSSDIR DIR*
 		#define CROSSDIRSTORAGE struct dirent*
@@ -413,6 +423,18 @@
 		#define CROSSDIRSTORAGE SceIoDirent
 	#endif
 
+	char DirOpenWorked(CROSSDIR passedir){
+		#if PLATFORM == PLAT_WINDOWS
+			if (passedir==NULL){
+				return 0;
+			}
+		#elif PLATFORM == PLAT_VITA
+			if (passedir<0){
+				return 0;
+			}
+		#endif
+		return 1;
+	}
 
 	CROSSDIR OpenDirectory(char* filepath){
 		#if PLATFORM == PLAT_WINDOWS
@@ -458,5 +480,16 @@
 			sceIoDclose(passedir);
 		#endif
 	}
+
+	char DirectoryExists(char* filepath){
+		CROSSDIR _tempdir = OpenDirectory(filepath);
+		if (DirOpenWorked(_tempdir)==1){
+			DirectoryClose(_tempdir);
+			return 1;
+		}else{
+			return 0;
+		}
+	}
+
 
 #endif

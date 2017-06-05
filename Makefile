@@ -12,7 +12,46 @@ LIBS = -lSDL2_mixer -lvorbisfile -lvorbis -logg -lpthread -lSDL2 -lvita2d -lSceD
 PREFIX  = arm-vita-eabi
 CC      = $(PREFIX)-gcc
 CXX = $(PREFIX)-g++
-CFLAGS  = -Wl,-q -Wall -O3 -g
+CFLAGS  = -Wl,-q -O3 -g -Waddress \
+-Warray-bounds=1 \
+-Wbool-compare \
+-Wc++11-compat  -Wc++14-compat  \
+-Wchar-subscripts  \
+-Wcomment  \
+-Wenum-compare \
+-Wformat   \
+-Wimplicit \
+-Wimplicit-int \
+-Wimplicit-function-declaration \
+-Winit-self \
+-Wlogical-not-parentheses \
+-Wmain \
+-Wmaybe-uninitialized \
+-Wmemset-transposed-args \
+-Wmisleading-indentation \
+-Wmissing-braces \
+-Wnarrowing \
+-Wnonnull  \
+-Wnonnull-compare  \
+-Wopenmp-simd \
+-Wparentheses  \
+-Wreorder   \
+-Wreturn-type  \
+-Wsequence-point  \
+-Wsign-compare \
+-Wsizeof-pointer-memaccess \
+-Wstrict-aliasing  \
+-Wstrict-overflow=1  \
+-Wswitch  \
+-Wtautological-compare  \
+-Wtrigraphs  \
+-Wuninitialized  \
+-Wunknown-pragmas  \
+-Wunused-function  \
+-Wunused-label     \
+-Wunused-value     \
+-Wunused-variable  \
+-Wvolatile-register-var
 CXXFLAGS = $(CFLAGS)
 ASFLAGS = $(CFLAGS)
 
@@ -21,7 +60,11 @@ all: $(TARGET).vpk
 %.vpk: eboot.bin
 	vita-mksfoex -s TITLE_ID=$(TITLE_ID) "$(TARGET)" param.sfo
 	vita-pack-vpk -s param.sfo -b eboot.bin \
-	Higurahsi.vpk
+	--add sce_sys/icon0.png=sce_sys/icon0.png \
+	--add sce_sys/livearea/contents/bg.png=sce_sys/livearea/contents/bg.png \
+	--add sce_sys/livearea/contents/startup.png=sce_sys/livearea/contents/startup.png \
+	--add sce_sys/livearea/contents/template.xml=sce_sys/livearea/contents/template.xml \
+	Higurashi.vpk
 
 eboot.bin: $(TARGET).velf
 	vita-make-fself -s $< $@
@@ -44,5 +87,5 @@ vpksend: $(TARGET).vpk
 	@echo "Sent."
 
 send: eboot.bin
-	curl -T eboot.bin ftp://192.168.1.171:1337/ux0:/app/$(TITLE_ID)/
+	curl -T eboot.bin ftp://192.168.1.229:1337/ux0:/app/$(TITLE_ID)/
 	@echo "Sent."
