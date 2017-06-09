@@ -1,0 +1,92 @@
+[b]THIS THREAD SHOULD STAY [u]COMPLETELY [/u]SPOILER-FREE! If you're in doubt if something's a spoiler, don't say it. If you have to, for a bug report, put it in spoiler tags! [code][spoiler][/spoiler][/code]  [/b]
+
+This is an unofficial port of the [u][b]Steam version[/b][/u] of the Higurashi: When They Cry series, a series of visual novels.
+There was already a port of Higurashi that worked on VNDS, but that wasn't of the Steam version.
+The advantage of the Steam version over the original version or the original Manga Gamer release is that you can use the PS3 graphics & voice patch made by [url=https://github.com/07th-mod]07th Modding organization[/url]. In my opinion, the better backgrounds and the added voices make the game a lot better.
+You can still use the original graphics or updated Steam ones, if you want.
+
+[b]So far, I've only tested the question arcs. Chapters 1 through 4. [/b][b][u]Don't bother telling me problems you have with chapter 5. I'll ignore you.
+[/u][/b]
+You need to be on Windows to run the script converter because it's made with C#. [url=http://www.mono-project.com/]You may be able to get it to work with Mono[/url] because it's a simple program [url=https://github.com/MyLegGuy/HigurashiVitaCovnerter]with its source code available[/url].
+This requires the files from the Steam versions of any of the Higurashi question arcs.
+[spoiler=Setup (text tutorial)]
+You need to actually own the games on Steam. [url=http://store.steampowered.com/app/310360/Higurashi_When_They_Cry_Hou__Ch1_Onikakushi/]Link to the first chapter on Steam for $5.99.[/url]
+
+Step 0 - If you want to use the [url=https://github.com/07th-mod]PS3 voice and graphics patch[/url], install it normally before proceeding.
+Step 1 - [url=https://github.com/MyLegGuy/HigurashiVitaCovnerter/releases]Download the script and image converter[/url].
+Step 2 - Extract the ZIP file.
+Step 3 - The next step is to get the files from the Higurashi game you want. Right click on of the Higurashi games on Steam and click "Properties" at the bottom of the menu.
+Step 4 - Click "LOCAL FILES" in the top bar and then click "BROWSE LOCAL FILES".
+Step 5 - A folder will be opened showing the game's files. Look inside the folder called HigurashiEpXX_Data. Copy the folder called "StreamingAssets".
+Step 6 - Paste StreamingAssets in the same directory as the extracted script converter program.
+Step 7 - Run HigurashiVitaCovnerter.exe.
+Step 7.5 - As a quick way to check if the conversion worked, look for a folder named "Presets" in StreamingAssets.
+Step 8 - When it's finished, take the StreamingAssets folder and put it at ux0:data/HIGURASHI/StreamingAssets/.[/spoiler]
+[spoiler=Setup (video tutorial)]This tutorial has a small error. It says that you need to enter the path for the data folder manually, you actually don't have to. [youtube]0T8cxjXwwww[/youtube][/spoiler]
+
+[spoiler=Usage]On the title screen, you can load a preset file to play the game in an elegant, user friendly way. If it says that no preset files were found, you've done something wrong. You either forgot to convert the StreamingAssets folder, or didn't put the StreamingAssets folder there at all.
+You can manually select a script to load from the "scripts" directory.
+You can also change the bust (character art) location. The options are "CG" or "CGAlt". Normally, "CG" is the original graphics and "CGAlt" is the Steam graphics. If you have the PS3 patch then "CG" is the PS3 character sprites.
+(When changing the bust location, a sample image will be shown.)
+
+After loading a preset, a new game will start if that's the first time you've loaded that preset. Otherwise, you'll be brought to a menu. From there, you can go to the next chapter, go to a previous chapter, view TIPS, and exit.
+TIPS are like mini scenarios you unlock as you play.
+
+While in game, you can press circle to toggle the text box, hold square to fast forward, press triangle to exit, and press X to advance.
+
+On the menu, after loading a preset, press up, down, left, right in that order to get to a menu that you can use to edit your last COMPLETED script ID. 
+[/spoiler]
+
+[spoiler=About "preset" files](Most users don't need to worry about this)
+I can't figure out how Higurashi games know the order for the script files, order for TIP files, order TIPS are unlocked, and the TIP's names. I've come to the conclusion that it's hard coded or something for each chapter.
+I've created a system called "preset" files.
+They're just files that list the scripts, tips, tip's names, and tip's unlock order. In order to play in a user friendly way, you need a preset file for each game. Luckily, I've already made preset files for chapters 1 through 4. When you run the script converter, the preset files located in ./PackagedPresets/ will be put in the correct location in the StreamingAssets folder, ./StreamingAssets/Presets/. If you make your own preset files, put them in ux0:data/HIGURASHI/StreamingAssets/Presets/. Feel free to send a pull request on Github to add your preset files to the ones packaged with the converter.
+
+==FORMAT OF A PRESET FILE==
+Use Windows or Unix newlines.
+ALL NUMBERS SHOULD BE WRITTEN WITH 3 DIGITS. IF IT'S NOT THREE DIGITS, ADD ZEROES BEFORE IT!
+The first line is the number of main game script files.
+The lines after it are the names of the script files, without the ".txt" extension.
+After the last script file's name, put a new line and then put the number of TIP script files.
+Write them the same way as you did the chapter files.
+After that, write the number of main game script files.
+Next, write the number of TIPS that are unlocked AFTER the user finishes the first main game script file.
+Next, write the number of TIPS that are unlocked AFTER the user finishes the second main game script file.
+Repeat until you have one number for each main game script file.
+(The following steps are optional)
+Write "tipnames" without quotation marks on its own new line.
+Write the number of TIPS.
+Write the name of the first TIP.
+Write the name of the second TIP.
+Continue for all tips.
+
+[url=https://pastebin.com/Cp5AeDu2]Here's an example with comments[/url]. In an actual preset file, you can't have comments. Everything must be just right.[/spoiler]
+
+Please report any crashes or things that don't work in chapters 1-4. I will ignore bug reports from chapter 5.
+[spoiler=Known issues and bugs]* Color inversion commands do nothing. This isn't used too often.
+* "Films" are used to tint the screen colors. My implementation doesn't work well. This shouldn't be too big of a problem
+* "Filters" are used when drawing backgrounds and busts to give them a fancy entrance. I don't know how to program this well, so backgrounds and busts have simple fade in and fade out transitions. It still looks good.
+* Music stops if you press the PS button or go into sleep mode. This is an SDL_Mixer-Vita problem.
+* The voices load kinda slow. Maybe a half of a second to load each? It's bearable.[/spoiler]
+
+Depicts two of the main characters and one of the game's settings.
+So, almost no spoilers. I just thought I'd point it out because this is a completely spoiler free thread.
+[spoiler=Screenshots]
+Normal graphics. Only takes up part of the screen.
+[IMG]http://i.imgur.com/x3061nM.jpg[/IMG]
+PS3 graphics. Takes up most of the screen.
+[IMG]http://i.imgur.com/cj0KokZ.jpg[/IMG]
+Sexy main menu
+[IMG]http://i.imgur.com/ZBqT1oP.jpg[/IMG]
+[/spoiler]
+
+Credits -
+xerpi - libvita2d and SDL-Vita
+enriquesomolinos - SDL_Mixer-Vita
+Lua
+
+
+Download:
+https://github.com/MyLegGuy/Higurashi-Vita/releases
+Script converter download:
+https://github.com/MyLegGuy/HigurashiVitaCovnerter/releases

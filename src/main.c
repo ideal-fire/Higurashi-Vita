@@ -7,9 +7,8 @@
 
 	TODO - Inversion
 
-	TODO - Investigate onik_014_02 - It has Rena busts, but tinted different colors
-		TODO - These are films. Look at the DrawFilm function please.
-			TODO - The functions I made don't work well for some reason.
+	TODO - These are films. Look at the DrawFilm function please.
+		TODO - The functions I made don't work well for some reason.
 
 	(OPTIONAL TODO)
 		TODO - (optional) Garbage collector won't collect functions made in script files??? i.e: function hima_tips_09_b()
@@ -23,7 +22,9 @@
 			   NULL, "...<i>If she found out... she would become involved</i>...", Line_Normal);
 	
 			(Here's the problem, It'll be hard to draw non italics text and italics in the same line)
-	
+			(A possible solution is to store x cordinates to start italics text)
+				// Here's the plan.
+				// Make another message array, but store text that is in italics in it
 			So, here's my idea, I take whatever char it is and add 100 if it's italics
 */
 
@@ -63,7 +64,6 @@ unsigned char graphicsLocation = LOCATION_CGALT;
 #define MESSAGETEXTXOFFSET 20
 
 void Draw();
-void YeOlMainLoop();
 void RecalculateBustOrder();
 
 
@@ -1180,10 +1180,11 @@ signed char CheckForUserStuff(){
 	if (DirectoryExists("ux0:data/HIGURASHI/")==0){
 		LazyMessage("ux0:data/HIGURASHI/","does not exist. Please make it and","put the converted StreamingAssets","folder in it.");
 		_oneMissing=1;
-	}
-	if (DirectoryExists("ux0:data/HIGURASHI/StreamingAssets/")==0){
-		LazyMessage("ux0:data/HIGURASHI/StreamingAssets/","does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the Vita. Refer to thread for tutorial.");
-		_oneMissing=1;
+	}else{
+		if (DirectoryExists("ux0:data/HIGURASHI/StreamingAssets/")==0){
+			LazyMessage("ux0:data/HIGURASHI/StreamingAssets/","does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the Vita. Refer to thread for tutorial.");
+			_oneMissing=1;
+		}
 	}
 	if (CheckFileExist("app0:a/LiberationSans-Regular.ttf")==0){
 		LazyMessage("app0:a/LiberationSans-Regular.ttf", "is missing. This should've been in the VPK.","Please download the VPK again.",NULL);
@@ -1195,6 +1196,11 @@ signed char CheckForUserStuff(){
 	return 0;
 }
 
+void PlayMenuSound(){
+	if (menuSoundLoaded==1){
+		PlaySound(menuSound,1);
+	}
+}
 
 //===================
 
@@ -1483,12 +1489,6 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	}
 }
 
-void PlayMenuSound(){
-	if (menuSoundLoaded==1){
-		PlaySound(menuSound,1);
-	}
-}
-
 /*
 =================================================
 */
@@ -1508,7 +1508,7 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 	}
 
 	MessageBoxEnabled=1;
-	int i,j;
+	unsigned int i,j;
 	int currentChar = GetNextCharOnLine(currentLine);
 	//unsigned const char* message = (unsigned const char*)lua_tostring(passedState,4);
 	//endType = lua_tonumber(passedState,5);
@@ -1828,6 +1828,7 @@ int L_PlaySE(lua_State* passedState){
 	return 0;
 }
 
+// Loads a script file
 int L_CallScript(lua_State* passedState){
 	const char* filename = lua_tostring(passedState,1);
 
@@ -1842,20 +1843,6 @@ int L_CallScript(lua_State* passedState){
 	}else{
 		printf("Failed to find script\n");
 	}
-	return 0;
-}
-
-int L_GetGlobalFlag(lua_State* passedState){
-	// GLanguage
-	// This is some thingie for the script to check the current language
-	if (lua_tonumber(passedState,1)==1){
-		// English
-		lua_pushnumber(passedState,1);
-		// Japanese
-		//lua_pushnumber(passedState,0);
-		return 1;
-	}
-	printf("Unknown GetGlobalFlag.\n");
 	return 0;
 }
 
@@ -2004,6 +1991,7 @@ int L_Select(lua_State* passedState){
 	return 0;
 }
 
+// Loads a special variable
 int L_LoadValueFromLocalWork(lua_State* passedState){
 	const char* _wordWant = lua_tostring(passedState,1);
 	printf("%s\n",_wordWant);
@@ -2015,6 +2003,7 @@ int L_LoadValueFromLocalWork(lua_State* passedState){
 	return 1;
 }
 
+// Calls a function that was made in a script
 int L_CallSection(lua_State* passedState){
 	char buf[256];
 	strcpy(buf, lua_tostring(passedState,1));

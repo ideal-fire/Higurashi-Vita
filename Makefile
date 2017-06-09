@@ -5,7 +5,7 @@ TITLE_ID = HIGURASHI
 TARGET   = Higurahsi
 OBJS     = ./src/main.o
 
-LIBS = -lSDL2_mixer -lvorbisfile -lvorbis -logg -lpthread -lSDL2 -lvita2d -lSceDisplay_stub -lSceGxm_stub \
+LIBS = -lSDL2_mixer -lvorbisfile -lvorbis -logg -lSDL2 -lvita2d -lSceDisplay_stub -lSceGxm_stub \
 	-lSceSysmodule_stub -lSceCtrl_stub -lScePgf_stub \
 	-lSceCommonDialog_stub -lSceAudio_stub -lSceTouch_stub -lfreetype -lpng -ljpeg -lz -lm -lc -llua -lm
 
@@ -15,7 +15,6 @@ CXX = $(PREFIX)-g++
 CFLAGS  = -Wl,-q -O3 -g -Waddress \
 -Warray-bounds=1 \
 -Wbool-compare \
--Wc++11-compat  -Wc++14-compat  \
 -Wchar-subscripts  \
 -Wcomment  \
 -Wenum-compare \
@@ -35,7 +34,6 @@ CFLAGS  = -Wl,-q -O3 -g -Waddress \
 -Wnonnull-compare  \
 -Wopenmp-simd \
 -Wparentheses  \
--Wreorder   \
 -Wreturn-type  \
 -Wsequence-point  \
 -Wsign-compare \
@@ -61,9 +59,9 @@ all: $(TARGET).vpk
 	vita-mksfoex -s TITLE_ID=$(TITLE_ID) "$(TARGET)" param.sfo
 	vita-pack-vpk -s param.sfo -b eboot.bin \
 	--add sce_sys/icon0.png=sce_sys/icon0.png \
-	--add sce_sys/livearea/contents/bg.png=sce_sys/livearea/contents/bg.png \
-	--add sce_sys/livearea/contents/startup.png=sce_sys/livearea/contents/startup.png \
-	--add sce_sys/livearea/contents/template.xml=sce_sys/livearea/contents/template.xml \
+	--add sce_sys/livearea/contents/bg.png=VpkContents/sce_sys/livearea/contents/bg.png \
+	--add sce_sys/livearea/contents/startup.png=VpkContents/sce_sys/livearea/contents/startup.png \
+	--add sce_sys/livearea/contents/template.xml=VpkContents/sce_sys/livearea/contents/template.xml \
 	Higurashi.vpk
 
 eboot.bin: $(TARGET).velf

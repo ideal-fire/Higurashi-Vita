@@ -10,6 +10,11 @@ TRUE=true;
 globalFlags = {};
 globalFlags["GLanguage"]=1;
 
+// You see, Im lazy. When doing text wrap for text, I use OutputLine to make the text array for me. I call this function on the tip menu so I dont have to do a lot for string creation
+function EasyOutputLine(line)
+	OutputLine(nil, nil, nil, line, Line_ContinueAfterTyping);
+end
+
 // This function is called when the user pressed x on the Windows test build
 function quitxfunction()
 	os.exit()
