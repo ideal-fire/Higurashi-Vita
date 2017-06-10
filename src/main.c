@@ -62,6 +62,8 @@ unsigned char graphicsLocation = LOCATION_CGALT;
 #define MAXBUSTS 7
 #define MAXIMAGECHAR 10
 #define MESSAGETEXTXOFFSET 20
+#define MAXFILES 50
+#define MAXFILELENGTH 51
 
 void Draw();
 void RecalculateBustOrder();
@@ -289,8 +291,9 @@ typedef struct grejgrkew{
 }goodu8MallocArray;
 
 goodStringMallocArray currentPresetFileList;
-goodStringMallocArray currentPresentTipList;
-goodStringMallocArray currentPresentTipNameList;
+goodStringMallocArray currentPresetTipList;
+goodStringMallocArray currentPresetTipNameList;
+goodStringMallocArray currentPresetFileFriendlyList;
 goodu8MallocArray currentPresetTipUnlockList;
 int16_t currentPresetChapter=0;
 // Made with malloc
@@ -311,7 +314,7 @@ unsigned char globalTempConcat[256] = {0};
 unsigned char isSkipping=0;
 
 signed char tipNamesLoaded=0;
-
+signed char chapterNamesLoaded=0;
 unsigned char lastSelectionAnswer=0;
 
 // The x position on screen of this image character
@@ -1077,9 +1080,9 @@ void LoadPreset(char* filename){
 	//for (i=0;i<currentPresetFileList.length;i++){
 	//	printf("%s\n",currentPresetFileList.theArray[i]);
 	//}
-	currentPresentTipList.theArray = ReadFileStringList(fp,&currentPresentTipList.length);
-	//for (i=0;i<currentPresentTipList.length;i++){
-	//	printf("%s\n",currentPresentTipList.theArray[i]);
+	currentPresetTipList.theArray = ReadFileStringList(fp,&currentPresetTipList.length);
+	//for (i=0;i<currentPresetTipList.length;i++){
+	//	printf("%s\n",currentPresetTipList.theArray[i]);
 	//}
 	//printf("Is %s\n",currentReadNumber);
 
@@ -1087,24 +1090,40 @@ void LoadPreset(char* filename){
 	//for (i=0;i<currentPresetTipUnlockList.length;i++){
 	//	printf("%d\n",currentPresetTipUnlockList.theArray[i]);
 	//}
-	char tempreadstring[9];
-	tempreadstring[8]='\0';
+	char tempreadstring[15] = {'\0'};
 
 	// Check for the
 	// tipnames
 	// string
 	// If it exists, read the tip's names
 	if (fread(tempreadstring,8,1,fp)==1){
+		MoveFilePointerPastNewline(fp);
 		if (strcmp(tempreadstring,"tipnames")==0){
-			MoveFilePointerPastNewline(fp);
-			currentPresentTipNameList.theArray = ReadFileStringList(fp,&currentPresentTipNameList.length);
+			currentPresetTipNameList.theArray = ReadFileStringList(fp,&currentPresetTipNameList.length);
 			tipNamesLoaded=1;
 		}else{
 			tipNamesLoaded=0;
 		}
 	}else{
+		MoveFilePointerPastNewline(fp);
 		tipNamesLoaded=0;
 	}
+
+	if (fread(tempreadstring,12,1,fp)==1){
+		MoveFilePointerPastNewline(fp);
+		if (strcmp(tempreadstring,"chapternames")==0){
+			currentPresetFileFriendlyList.theArray = ReadFileStringList(fp,&currentPresetFileFriendlyList.length);
+			chapterNamesLoaded=1;
+		}else{
+			chapterNamesLoaded=0;
+		}
+	}else{
+		MoveFilePointerPastNewline(fp);
+		chapterNamesLoaded=0;
+	}
+
+	//chapterNamesLoaded
+	//currentPresetFileFriendlyList
 
 
 	fclose(fp);
@@ -1177,19 +1196,27 @@ signed char CheckForUserStuff(){
 		return 0;
 	#endif
 	char _oneMissing = 0;
-	if (DirectoryExists("ux0:data/HIGURASHI/")==0){
-		LazyMessage("ux0:data/HIGURASHI/","does not exist. Please make it and","put the converted StreamingAssets","folder in it.");
-		_oneMissing=1;
-	}else{
-		if (DirectoryExists("ux0:data/HIGURASHI/StreamingAssets/")==0){
-			LazyMessage("ux0:data/HIGURASHI/StreamingAssets/","does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the Vita. Refer to thread for tutorial.");
-			_oneMissing=1;
-		}
-	}
 	if (CheckFileExist("app0:a/LiberationSans-Regular.ttf")==0){
-		LazyMessage("app0:a/LiberationSans-Regular.ttf", "is missing. This should've been in the VPK.","Please download the VPK again.",NULL);
+		//LazyMessage("app0:a/LiberationSans-Regular.ttf", "is missing. This should've been in the VPK.","Please download the VPK again.",NULL);
+		CrossTexture* _nofonttext = LoadPNG("app0:sce_sys/icon0.png");
+
+		StartDrawingA();
+		DrawTexture(_nofonttext,32,32);
+		EndDrawingA();
+		
+		Wait(3000);
+		FreeTexture(_nofonttext);
 		return 2;
 	}
+	if (DirectoryExists("ux0:data/HIGURASHI/")==0){
+		MakeDirectory("ux0:data/HIGURASHI/");
+		_oneMissing=1;
+	}
+	if (DirectoryExists("ux0:data/HIGURASHI/StreamingAssets/")==0){
+		LazyMessage("ux0:data/HIGURASHI/StreamingAssets/","does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the Vita. Refer to thread for tutorial.");
+		_oneMissing=1;
+	}
+	
 	if (_oneMissing==1){
 		return 1;
 	}
@@ -2161,22 +2188,38 @@ void LuaThread(char* _torun){
 	RunScript(SCRIPTFOLDER, _torun,1);
 }
 
-void FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage){
+// Returns 0 if normal
+// Returns 1 if user quit
+// Returns 2 if no files found
+char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage){
 	int i=0;
 	int totalFiles=0;
 
-	// Can hold 50 filenames
+	int _returnVal=0;
+
+	// Can hold MAXFILES filenames
 	// Each with no more than 50 characters (51 char block of memory. extra one for null char)
 	char** filenameholder;
-	filenameholder = calloc(50,sizeof(char*));
-	for (i=0;i<50;i++){
-		filenameholder[i]=calloc(1,51);
+	filenameholder = calloc(MAXFILES,sizeof(char*));
+	for (i=0;i<MAXFILES;i++){
+		filenameholder[i]=calloc(1,MAXFILELENGTH);
 	}
 
 	CROSSDIR dir;
 	CROSSDIRSTORAGE lastStorage;
 	dir = OpenDirectory (directorylocation);
-	for (i=0;i<50;i++){
+
+	if (DirOpenWorked(dir)==0){
+		LazyMessage("Failed to open directory",directorylocation,NULL,NULL);
+		// Free memori
+		for (i=0;i<MAXFILES;i++){
+			free(filenameholder[i]);
+		}
+		free(filenameholder);
+		return 2;
+	}
+
+	for (i=0;i<MAXFILES;i++){
 		if (DirectoryRead(&dir,&lastStorage) == 0){
 			break;
 		}
@@ -2189,28 +2232,9 @@ void FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 
 
 	if (totalFiles==0){
-		StartDrawingA();
-		//DrawText(20,20+TextHeight(fontSize)+i*(TextHeight(fontSize)),currentMessages[i],fontSize);
-		DrawText(32,5,"No presets found.",fontSize);
-		DrawText(32,TextHeight(fontSize)+5,"If you ran the converter, you should've gotten some.",fontSize);
-		DrawText(32,TextHeight(fontSize)*2+10,"You can manually put presets in:",fontSize);
-		DrawText(32,TextHeight(fontSize)*3+15,"ux0:data/HIGURASHI/StreamingAssets/Presets/",fontSize);
-		DrawText(32,200,"Press X to return",fontSize);
-		EndDrawingA();
-		
-		while (currentGameStatus!=99){
-			FpsCapStart();
-			ControlsStart();
-			if (WasJustPressed(SCE_CTRL_CROSS)){
-				ControlsEnd();
-				break;
-			}
-			ControlsEnd();
-			FpsCapWait();
-		}
-
+		LazyMessage("No files found.",NULL,NULL,NULL);
 		*_chosenfile=NULL;
-		
+		_returnVal=2;
 	}else{
 		int _textheight = TextHeight(fontSize);
 		int _choice=0;
@@ -2254,6 +2278,7 @@ void FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 			}
 			if (WasJustPressed(SCE_CTRL_CIRCLE)){
 				(*_chosenfile) = NULL;
+				_returnVal=1;
 				break;		
 			}
 	
@@ -2278,10 +2303,11 @@ void FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 	}
 
 	// Free memori
-	for (i=0;i<50;i++){
+	for (i=0;i<MAXFILES;i++){
 		free(filenameholder[i]);
 	}
 	free(filenameholder);
+	return _returnVal;
 }
 
 void TitleScreen(){
@@ -2411,7 +2437,7 @@ void TipMenu(){
 	memset(_totalSelectedString,'\0',256);
 	strcpy(_totalSelectedString,"EasyOutputLine(\"");
 	if (tipNamesLoaded==1){
-		strcat(_totalSelectedString,currentPresentTipNameList.theArray[0]);
+		strcat(_totalSelectedString,currentPresetTipNameList.theArray[0]);
 		strcat(_totalSelectedString," (1/");
 		strcat(_totalSelectedString,_chosenTipStringMax);
 		strcat(_totalSelectedString,")");
@@ -2438,7 +2464,7 @@ void TipMenu(){
 			strcpy(_totalSelectedString,"EasyOutputLine(\"");
 			if (tipNamesLoaded==1){
 				itoa(_chosenTip,&(_chosenTipString[0]),10);
-				strcat(_totalSelectedString,currentPresentTipNameList.theArray[_chosenTip-1]);
+				strcat(_totalSelectedString,currentPresetTipNameList.theArray[_chosenTip-1]);
 				strcat(_totalSelectedString," (");
 				strcat(_totalSelectedString,_chosenTipString);
 				strcat(_totalSelectedString,"/");
@@ -2466,7 +2492,7 @@ void TipMenu(){
 			strcpy(_totalSelectedString,"EasyOutputLine(\"");
 			if (tipNamesLoaded==1){
 				itoa(_chosenTip,&(_chosenTipString[0]),10);
-				strcat(_totalSelectedString,currentPresentTipNameList.theArray[_chosenTip-1]);
+				strcat(_totalSelectedString,currentPresetTipNameList.theArray[_chosenTip-1]);
 				strcat(_totalSelectedString," (");
 				strcat(_totalSelectedString,_chosenTipString);
 				strcat(_totalSelectedString,"/");
@@ -2487,7 +2513,7 @@ void TipMenu(){
 			ControlsEnd();
 			// This will trick the in between lines functions into thinking that we're in normal script execution mode and not quit
 			currentGameStatus=3;
-			RunScript(SCRIPTFOLDER, currentPresentTipList.theArray[_chosenTip-1],1);
+			RunScript(SCRIPTFOLDER, currentPresetTipList.theArray[_chosenTip-1],1);
 			ControlsEnd();
 			currentGameStatus=5;
 			break;
@@ -2596,8 +2622,12 @@ void ChapterJump(){
 		ControlsEnd();
 		StartDrawingA();
 		
-		DrawText(32,5+_textheight*(0+2),globalTempConcat,fontSize);
-		
+		if (chapterNamesLoaded==0){
+			DrawText(32,5+_textheight*(0+2),globalTempConcat,fontSize);
+		}else{
+			DrawText(32,5+_textheight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice],fontSize);
+		}
+
 		DrawText(32,5+_textheight*(1+2),"Back",fontSize);
 		DrawText(5,5+_textheight*(_choice+2),">",fontSize);
 
@@ -2614,7 +2644,7 @@ void SaveGameEditor(){
 	char _endOfChapterString[10];
 	itoa(currentPresetChapter,_endOfChapterString,10);
 	int _textheight = TextHeight(fontSize);
-
+	ControlsEnd();
 	while (1){
 		FpsCapStart();
 
@@ -2640,10 +2670,16 @@ void SaveGameEditor(){
 		}
 		ControlsEnd();
 		StartDrawingA();
-		DrawText(32, _textheight, _endOfChapterString, fontSize);
+		if (chapterNamesLoaded==0){
+			DrawText(32, _textheight, _endOfChapterString, fontSize);
+		}else{
+			DrawText(32, _textheight, currentPresetFileFriendlyList.theArray[currentPresetChapter], fontSize);
+		}
+
+		
 		DrawText(32, screenHeight-_textheight*3, "Welcome to the debug save file editor!", fontSize);
 		DrawText(32, screenHeight-_textheight*2, "X - Finish and save", fontSize);
-		DrawText(32, screenHeight-_textheight, "Left and Right -> change last completed chapter", fontSize);
+		DrawText(32, screenHeight-_textheight, "Left and Right - Change last completed chapter", fontSize);
 		EndDrawingA();
 		FpsCapWait();
 	}
@@ -2695,6 +2731,7 @@ void NavigationMenu(){
 				if (_codeProgress==3){
 					SaveGameEditor();
 					itoa(currentPresetChapter,_endOfChapterString,10);
+					_nextChapterExist=1;
 					_codeProgress=0;
 				}else{
 					_codeProgress=0;
@@ -2749,7 +2786,13 @@ void NavigationMenu(){
 		StartDrawingA();
 
 		DrawText(32,0,"End of script: ",fontSize);
-		DrawText(_endofscriptwidth+32,0,_endOfChapterString,fontSize);
+		if (chapterNamesLoaded==0){
+			DrawText(_endofscriptwidth+32,0,_endOfChapterString,fontSize);
+		}else{
+			DrawText(_endofscriptwidth+32,0,currentPresetFileFriendlyList.theArray[currentPresetChapter],fontSize);
+		}
+		
+		
 
 		if (_nextChapterExist==1){
 			DrawText(32,5+_textheight*(0+2),"Next",fontSize);
@@ -2799,8 +2842,6 @@ signed char init(){
 
 		if (CheckFileExist("app0:a/LiberationSans-Regular.ttf")==1){
 			fontImage = vita2d_load_font_file("app0:a/LiberationSans-Regular.ttf");
-		}else{
-			LazyMessage("Font file missing.\n",NULL,NULL,NULL);
 		}
 		//fontImageItalics = vita2d_load_font_file("app0:a/LiberationSans-Italic.ttf");
 	#endif
@@ -2912,7 +2953,7 @@ int main(int argc, char *argv[]){
 	//currentGameStatus=3;
 	//int noob=19;
 	//printf("Bout to print\n");
-	//printf("%s\n",currentPresentTipList.theArray[noob]);
+	//printf("%s\n",currentPresetTipList.theArray[noob]);
 	//strcpy(nextScriptToLoad,"onik_001");
 	//currentGameStatus=3;
 	//// luaL_dofile(L,"ux0:data/HIGURASHI/StreamingAssets/Scripts/onik_001.txt");
@@ -2939,19 +2980,49 @@ int main(int argc, char *argv[]){
 				// If there is no save game, start a new one at chapter 0
 				// Otherwise, go to the navigation menu
 				if (currentPresetChapter==-1){
-					currentPresetChapter=0;
-					SetNextScriptName();
-					currentGameStatus=3;
+					ControlsStart();
+					if (IsDown(SCE_CTRL_RTRIGGER)){
+						LazyMessage("You held R. This is a secret.","You will skip the first chapter.","Exit now if that's not okay.",NULL);
+						currentGameStatus=4;
+						currentPresetChapter=0;
+						SetNextScriptName();
+						ControlsEnd();
+					}else{
+						ControlsEnd();
+						currentPresetChapter=0;
+						SetNextScriptName();
+						currentGameStatus=3;
+					}
 				}else{
 					currentGameStatus=4;
 				}
 				
 				break;
 			case 2:
-				FileSelector(PRESETFOLDER,&currentPresetFilename,"Select a preset");
+				if (FileSelector(PRESETFOLDER,&currentPresetFilename,"Select a preset")==2){
+					ControlsEnd();
+					printf("No files were found\n");
+					StartDrawingA();
+					DrawText(32,5,"No presets found.",fontSize);
+					DrawText(32,TextHeight(fontSize)+5,"If you ran the converter, you should've gotten some.",fontSize);
+					DrawText(32,TextHeight(fontSize)*2+10,"You can manually put presets in:",fontSize);
+					DrawText(32,TextHeight(fontSize)*3+15,"ux0:data/HIGURASHI/StreamingAssets/Presets/",fontSize);
+					DrawText(32,200,"Press X to return",fontSize);
+					EndDrawingA();
+					
+					while (currentGameStatus!=99){
+						FpsCapStart();
+						ControlsStart();
+						if (WasJustPressed(SCE_CTRL_CROSS)){
+							ControlsEnd();
+							break;
+						}
+						ControlsEnd();
+						FpsCapWait();
+					}
+				}
 				ControlsEnd();
 				if (currentPresetFilename==NULL){
-					printf("No files were found, or user quit\n");
 					currentGameStatus=0;
 				}else{
 					currentGameStatus=1;
