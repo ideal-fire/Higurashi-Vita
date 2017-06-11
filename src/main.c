@@ -65,9 +65,11 @@ unsigned char graphicsLocation = LOCATION_CGALT;
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 
-void Draw();
-void RecalculateBustOrder();
-
+// main.h
+	void Draw();
+	void RecalculateBustOrder();
+	void PlayBGM(const char* filename, int _volume);
+	void LazyMessage(char* stra, char* strb, char* strc, char* strd);
 
 // Libraries all need
 #include <math.h>
@@ -311,6 +313,10 @@ signed char currentGameStatus=0;
 unsigned char nextScriptToLoad[256] = {0};
 unsigned char globalTempConcat[256] = {0};
 
+char* lastBGMFilename;
+int lastBGMVolume = -1;
+int lastBGMFilenameStored = 0;
+
 unsigned char isSkipping=0;
 
 signed char tipNamesLoaded=0;
@@ -387,6 +393,15 @@ void DrawTextColored(int x, int y, const char* text, float size, unsigned char r
 			notICounter++;
 		}
 	#endif
+}
+
+
+CrossTexture* SafeLoadPNG(char* path){
+	CrossTexture* _tempTex = LoadPNG(path);
+	if (_tempTex==NULL){
+		LazyMessage("Failed to load image",path,"What will happen now?!",NULL);
+	}
+	return _tempTex;
 }
 
 signed char WasJustPressed(int value){
@@ -489,7 +504,7 @@ void DrawMessageText(){
 	}
 	for (i=0;i<MAXIMAGECHAR;i++){
 		if (imageCharType[i]!=-1){
-			DrawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)TextWidth(fontSize,"  ")/ GetTextureWidth(imageCharImages[imageCharType[i]])),((double)TextHeight(fontSize)/GetTextureHeight(imageCharImages[imageCharType[i]])));
+			DrawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)TextWidth(fontSize,"   ")/ GetTextureWidth(imageCharImages[imageCharType[i]])),((double)TextHeight(fontSize)/GetTextureHeight(imageCharImages[imageCharType[i]])));
 		}
 	}
 }
@@ -763,6 +778,13 @@ int GetRezFromImage(CrossTexture* passedImage){
 	return REZ_OLD;
 }
 
+void RestartBGM(){
+	StopMusic();
+	if (lastBGMFilenameStored==1){
+		PlayBGM(lastBGMFilename,lastBGMVolume);
+	}
+}
+
 void InGameMenu(){
 	signed char _choice=0;
 	short _textheight = TextHeight(fontSize);
@@ -772,7 +794,7 @@ void InGameMenu(){
 		ControlsStart();
 		if (WasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
-			if (_choice>1){
+			if (_choice>2){
 				_choice=0;
 			}
 		}
@@ -785,7 +807,7 @@ void InGameMenu(){
 		if (WasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
 				break;
-			}else if (_choice==1 || _choice==2){
+			}else if (_choice==2){
 				endType = Line_ContinueAfterTyping;
 				
 				if (_choice==99){
@@ -797,6 +819,8 @@ void InGameMenu(){
 				lua_getglobal(L,"quitxfunction");
 				lua_call(L, 0, 0);
 				break;
+			}else if (_choice==1){
+				RestartBGM();
 			}
 		}
 		ControlsEnd();
@@ -804,7 +828,8 @@ void InGameMenu(){
 		DrawText(32,5,"Resume",fontSize);
 		DrawText(0,5+_choice*_textheight,">",fontSize);
 		//DrawText(32,5+_textheight,"Return to navigation menu",fontSize);
-		DrawText(32,5+_textheight,"Quit",fontSize);
+		DrawText(32,5+_textheight,"Restart BGM",fontSize);
+		DrawText(32,5+_textheight*2,"Quit",fontSize);
 		EndDrawingA();
 		FpsCapWait();
 	}
@@ -895,24 +920,6 @@ void DrawBust(bust* passedBust){
 			DrawBackgroundAlpha(passedBust->image,passedBust->rez,passedBust->alpha);
 		}
 	}
-}
-
-signed char CheckFileExist(char* location){
-	#if PLATFORM == PLAT_VITA
-		SceUID fileHandle = sceIoOpen(location, SCE_O_RDONLY, 0777);
-		if (fileHandle < 0){
-			return 0;
-		}else{
-			sceIoClose(fileHandle);
-			return 1;
-		}
-	#elif PLATFORM == PLAT_WINDOWS
-		if( access( location, F_OK ) != -1 ) {
-			return 1;
-		} else {
-		    return 0;
-		}
-	#endif
 }
 
 void RecalculateBustOrder(){
@@ -1198,7 +1205,7 @@ signed char CheckForUserStuff(){
 	char _oneMissing = 0;
 	if (CheckFileExist("app0:a/LiberationSans-Regular.ttf")==0){
 		//LazyMessage("app0:a/LiberationSans-Regular.ttf", "is missing. This should've been in the VPK.","Please download the VPK again.",NULL);
-		CrossTexture* _nofonttext = LoadPNG("app0:sce_sys/icon0.png");
+		CrossTexture* _nofonttext = SafeLoadPNG("app0:sce_sys/icon0.png");
 
 		StartDrawingA();
 		DrawTexture(_nofonttext,32,32);
@@ -1228,6 +1235,19 @@ void PlayMenuSound(){
 		PlaySound(menuSound,1);
 	}
 }
+
+int FixVolumeArg(int _val){
+	if (_val>255){
+		return 255;
+	}else if (_val<0){
+		return 0;
+	}else{
+		return _val;
+	}
+	return 255;
+}
+
+
 
 //===================
 
@@ -1355,7 +1375,7 @@ void DrawScene(const char* filename, int time){
 		}
 	}
 
-	CrossTexture* newBackground = LoadPNG(tempstringconcat);
+	CrossTexture* newBackground = SafeLoadPNG(tempstringconcat);
 	free(tempstringconcat);
 
 	newBackgroundRez = GetRezFromImage(newBackground);
@@ -1449,7 +1469,7 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	}
 
 
-	Busts[passedSlot].image = LoadPNG(tempstringconcat);
+	Busts[passedSlot].image = SafeLoadPNG(tempstringconcat);
 
 	if (Busts[passedSlot].image==NULL){
 		WriteToDebugFile("Failed to load");
@@ -1515,18 +1535,6 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 		}
 	}
 }
-
-/*
-=================================================
-*/
-
-int L_ClearMessage(lua_State* passedState){
-	//system("cls");
-	currentLine=0;
-	ClearMessageArray();
-	return 0;
-}
-
 
 void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip){
 	char waitingIsForShmucks=_autoskip;
@@ -1616,7 +1624,7 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 			}
 			memset(&(currentMessages[currentLine][currentChar]),32,2);
 			i+=2;
-			currentChar+=2;
+			currentChar+=3;
 		}else if (message[i]=='\n'){ // Interpret new line
 			currentLine++;
 			currentChar = GetNextCharOnLine(currentLine);
@@ -1640,6 +1648,47 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 		
 	}
 }
+
+void PlayBGM(const char* filename, int _volume){
+	if (SILENTMODE==1){
+		return;
+	}
+
+	StopMusic();
+	if (currentMusic!=NULL){
+		FreeMusic(currentMusic);
+		currentMusic=NULL;
+	}
+
+	lastBGMFilename = realloc(lastBGMFilename,strlen(filename)+1);
+	strcpy(lastBGMFilename,filename);
+	
+	lastBGMVolume=FixVolumeArg(_volume);
+
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/BGM/", filename, ".ogg");
+	currentMusic = LoadMusic(tempstringconcat);
+	free(tempstringconcat);
+
+	Mix_VolumeMusic(FixVolumeArg(_volume));
+
+	PlayMusic(currentMusic);
+	lastBGMFilenameStored=1;
+	return;
+}
+
+/*
+=================================================
+*/
+
+int L_ClearMessage(lua_State* passedState){
+	//system("cls");
+	currentLine=0;
+	ClearMessageArray();
+	return 0;
+}
+
+
+
 
 int L_OutputLine(lua_State* passedState){
 	OutputLine((unsigned const char*)lua_tostring(passedState,4),lua_tonumber(passedState,5),0);
@@ -1685,27 +1734,12 @@ int L_NotYet(lua_State* passedState){
 // Third arg is volume. 128 seems to be average. I can hardly hear 8 with computer volume on 10.
 // Fourth arg is unknown
 int L_PlayBGM(lua_State* passedState){
-	if (SILENTMODE==1){
-		return 0;
-	}
-
-	StopMusic();
-	if (currentMusic!=NULL){
-		FreeMusic(currentMusic);
-		currentMusic=NULL;
-	}
-	
-	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/BGM/", lua_tostring(passedState,2), ".ogg");
-	currentMusic = LoadMusic(tempstringconcat);
-	free(tempstringconcat);
-
-	Mix_VolumeMusic(lua_tonumber(passedState,3));
+	PlayBGM(lua_tostring(passedState,2),lua_tonumber(passedState,3));
 
 	if (lua_tonumber(passedState,4)!=0){
 		printf("*************** VERY IMPORTANT *******************\nThe last PlayBGM call didn't have 0 for the fourth argument! This is a good place to investigate!\n");
 	}
 
-	PlayMusic(currentMusic);
 	return 0;
 }
 
@@ -1720,6 +1754,8 @@ int L_StopBGM(lua_State* passedState){
 		FreeMusic(currentMusic);
 		currentMusic=NULL;
 	}
+	lastBGMFilename = realloc(lastBGMFilename,1);
+	lastBGMFilenameStored=0;
 	return 0;
 }
 
@@ -1838,6 +1874,8 @@ int L_FadeBustshot(lua_State* passedState){
 	return 0;
 }
 
+
+
 // Slot, file, volume
 int L_PlaySE(lua_State* passedState){
 	int passedSlot = lua_tonumber(passedState,1);
@@ -1848,7 +1886,9 @@ int L_PlaySE(lua_State* passedState){
 		}
 		char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/",lua_tostring(passedState,2),".ogg");
 		soundEffects[passedSlot] = LoadSound(tempstringconcat);
-		Mix_VolumeChunk(soundEffects[passedSlot],lua_tonumber(passedState,3));
+		
+		Mix_VolumeChunk(soundEffects[passedSlot],FixVolumeArg(lua_tonumber(passedState,3)));
+		
 		free(tempstringconcat);
 		PlaySound(soundEffects[passedSlot],1);
 	}
@@ -2330,7 +2370,7 @@ void TitleScreen(){
 	CrossTexture* _renaImage=NULL;
 	if (_canShowRena==1){
 		_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,locationStrings[graphicsLocation],"re_se_de_a1.png","");
-		_renaImage = LoadPNG(_temppath);
+		_renaImage = SafeLoadPNG(_temppath);
 		free(_temppath);
 	}
 
@@ -2357,7 +2397,7 @@ void TitleScreen(){
 				if (_canShowRena==1){
 					FreeTexture(_renaImage);
 					_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,locationStrings[graphicsLocation],"re_se_de_a1.png","");
-					_renaImage = LoadPNG(_temppath);
+					_renaImage = SafeLoadPNG(_temppath);
 					free(_temppath);
 				}
 			}
@@ -2826,7 +2866,7 @@ signed char init(){
 		// Check if this fails?
 		IMG_Init( IMG_INIT_PNG );
 
-		fontImage=LoadPNG("./Font.png");
+		fontImage=SafeLoadPNG("./Font.png");
 
 		SDL_SetRenderDrawBlendMode(mainWindowRenderer,SDL_BLENDMODE_BLEND);
 	#endif
@@ -2879,19 +2919,22 @@ signed char init(){
 	//}
 	//free(tempstringconcat);
 	#if PLATFORM == PLAT_WINDOWS
-		imageCharImages[IMAGECHARUNKNOWN] = LoadPNG("./unknown.png");
-		imageCharImages[IMAGECHARNOTE] = LoadPNG("./note.png");
-		imageCharImages[IMAGECHARSTAR] = LoadPNG("./star.png");
+		imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG("./unknown.png");
+		imageCharImages[IMAGECHARNOTE] = SafeLoadPNG("./note.png");
+		imageCharImages[IMAGECHARSTAR] = SafeLoadPNG("./star.png");
 	#elif PLATFORM == PLAT_VITA
-		imageCharImages[IMAGECHARUNKNOWN] = LoadPNG("app0:a/unknown.png");
-		imageCharImages[IMAGECHARNOTE] = LoadPNG("app0:a/note.png");
-		imageCharImages[IMAGECHARSTAR] = LoadPNG("app0:a/star.png");
+		imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG("app0:a/unknown.png");
+		imageCharImages[IMAGECHARNOTE] = SafeLoadPNG("app0:a/note.png");
+		imageCharImages[IMAGECHARSTAR] = SafeLoadPNG("app0:a/star.png");
 	#endif
 
 	// Zero the image char arrray
 	for (i=0;i<MAXIMAGECHAR;i++){
 		imageCharType[i]=-1;
 	}
+
+
+	lastBGMFilename = malloc(1);
 	return 0;
 }
 
@@ -2933,8 +2976,8 @@ int main(int argc, char *argv[]){
 	//fclose(fp);
 
 	//SetClearColor(255,0,0,255);
-	//CrossTexture* testTex = LoadPNG("ux0:data/HIGURASHI/StreamingAssets/CG/c.png");
-	//CrossTexture* testTex2 = LoadPNG("ux0:data/HIGURASHI/StreamingAssets/CG/bg_080.png");
+	//CrossTexture* testTex = SafeLoadPNG("ux0:data/HIGURASHI/StreamingAssets/CG/c.png");
+	//CrossTexture* testTex2 = SafeLoadPNG("ux0:data/HIGURASHI/StreamingAssets/CG/bg_080.png");
 	//vita2d_texture_set_filters(testTex2,vita2d_texture_get_min_filter(testTex),vita2d_texture_get_mag_filter(testTex));
 	//while (1==1){
 	//	StartDrawingA();

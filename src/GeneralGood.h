@@ -40,6 +40,24 @@
 		#endif
 	}
 
+	signed char CheckFileExist(char* location){
+		#if PLATFORM == PLAT_VITA
+			SceUID fileHandle = sceIoOpen(location, SCE_O_RDONLY, 0777);
+			if (fileHandle < 0){
+				return 0;
+			}else{
+				sceIoClose(fileHandle);
+				return 1;
+			}
+		#elif PLATFORM == PLAT_WINDOWS
+			if( access( location, F_OK ) != -1 ) {
+				return 1;
+			} else {
+			    return 0;
+			}
+		#endif
+	}
+
 	void MakeDirectory(char* path){
 		#if PLATFORM == PLAT_VITA
 			sceIoMkdir(path,0777);
