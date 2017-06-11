@@ -398,6 +398,11 @@ void DrawTextColored(int x, int y, const char* text, float size, unsigned char r
 	#endif
 }
 
+void PlayMenuSound(){
+	if (menuSoundLoaded==1){
+		PlaySound(menuSound,1);
+	}
+}
 
 CrossTexture* SafeLoadPNG(char* path){
 	CrossTexture* _tempTex = LoadPNG(path);
@@ -839,13 +844,24 @@ void InGameMenu(){
 
 		if (WasJustPressed(SCE_CTRL_LEFT)){
 			if (_choice==2){
-				autoModeWait-=500;
+				if (IsDown(SCE_CTRL_LTRIGGER)){
+					autoModeWait-=200;
+				}else{
+					autoModeWait-=500;
+				}
+				if (autoModeWait<=0){
+					autoModeWait=500;
+				}
 				itoa(autoModeWait,_tempAutoModeString,10);
 			}
 		}
 		if (WasJustPressed(SCE_CTRL_RIGHT)){
 			if (_choice==2){
-				autoModeWait+=500;
+				if (IsDown(SCE_CTRL_LTRIGGER)){
+					autoModeWait+=200;
+				}else{
+					autoModeWait+=500;
+				}
 				itoa(autoModeWait,_tempAutoModeString,10);
 			}
 		}
@@ -877,7 +893,7 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 				endType=Line_ContinueAfterTyping;
 			}
 		}
-		int _inBetweenLinesMilisecondsStart = GetTicks();
+		u64 _inBetweenLinesMilisecondsStart = GetTicks();
 		do{
 			FpsCapStart();
 			ControlsStart();
@@ -903,6 +919,7 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 				InGameMenu();
 			}
 			if (WasJustPressed(SCE_CTRL_SELECT)){
+				PlayMenuSound();
 				if (autoModeOn==1){
 					autoModeOn=0;
 				}else{
@@ -1273,11 +1290,7 @@ signed char CheckForUserStuff(){
 	return 0;
 }
 
-void PlayMenuSound(){
-	if (menuSoundLoaded==1){
-		PlaySound(menuSound,1);
-	}
-}
+
 
 int FixVolumeArg(int _val){
 	if (_val>255){
@@ -2357,6 +2370,7 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 			if (WasJustPressed(SCE_CTRL_CROSS)){
 				(*_chosenfile) = calloc(1,strlen(filenameholder[_choice])+1);
 				memcpy(*_chosenfile,filenameholder[_choice],strlen(filenameholder[_choice])+1);
+				PlayMenuSound();
 				break;		
 			}
 			if (WasJustPressed(SCE_CTRL_CIRCLE)){
@@ -2955,12 +2969,14 @@ signed char init(){
 	MakeDirectory(SAVEFOLDER);
 
 	// Load the menu sound effect if it's present
-	//char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/","wa_038",".ogg");
-	//if (CheckFileExist(tempstringconcat)){
-	//	menuSoundLoaded=1;
-	//	menuSound = LoadSound(tempstringconcat);
-	//}
-	//free(tempstringconcat);
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/","wa_038",".ogg");
+	if (CheckFileExist(tempstringconcat)){
+		menuSoundLoaded=1;
+		menuSound = LoadSound(tempstringconcat);
+	}else{
+		menuSoundLoaded=0;
+	}
+	free(tempstringconcat);
 	#if PLATFORM == PLAT_WINDOWS
 		imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG("./unknown.png");
 		imageCharImages[IMAGECHARNOTE] = SafeLoadPNG("./note.png");

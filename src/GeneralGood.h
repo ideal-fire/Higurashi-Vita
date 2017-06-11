@@ -14,9 +14,11 @@
 	
 	u64 GetTicks(){
 		#if PLATFORM == PLAT_VITA
-			SceRtcTick temp;
-			sceRtcGetCurrentTick(&temp);
-			return temp.tick;
+			//SceRtcTick temp;
+			//sceRtcGetCurrentTick(&temp);
+			//return temp.tick;
+			// Convert to milliseconds?
+			return  (sceKernelGetProcessTimeWide() / 1000);
 		#elif PLATFORM == PLAT_WINDOWS
 			return SDL_GetTicks();
 		#elif PLATFORM == PLAT_3DS
