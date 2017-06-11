@@ -340,6 +340,9 @@ unsigned char filterB;
 unsigned char filterA;
 unsigned char filterActive=0;
 
+signed char autoModeOn=0;
+signed int autoModeWait=500;
+
 /*
 ====================================================
 */
@@ -561,6 +564,8 @@ void ControlsStart(){
 						pad[SCE_CTRL_TRIANGLE]=1;
 					}else if (e.key.keysym.sym==SDLK_ESCAPE){ /* Start */
 						pad[SCE_CTRL_START]=1;
+					}else if (e.key.keysym.sym==SDLK_e){ /* Select */
+						pad[SCE_CTRL_SELECT]=1;
 					}
 				}else if (e.type == SDL_KEYUP){
 					if (e.key.keysym.sym==SDLK_z){ /* X */
@@ -581,6 +586,8 @@ void ControlsStart(){
 						pad[SCE_CTRL_TRIANGLE]=0;
 					}else if (e.key.keysym.sym==SDLK_ESCAPE){ /* Start */
 						pad[SCE_CTRL_START]=0;
+					}else if (e.key.keysym.sym==SDLK_e){ /* Select */
+						pad[SCE_CTRL_SELECT]=0;
 					}
 				}
 			#endif
@@ -788,26 +795,29 @@ void RestartBGM(){
 void InGameMenu(){
 	signed char _choice=0;
 	short _textheight = TextHeight(fontSize);
+	char _tempAutoModeString[10] = {'\0'};
+	int _tempStrWidth = TextWidth(fontSize,"Auto Mode Speed: ");
+	itoa(autoModeWait,_tempAutoModeString,10);
 	while (1){
 		
 		FpsCapStart();
 		ControlsStart();
 		if (WasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
-			if (_choice>2){
+			if (_choice>3){
 				_choice=0;
 			}
 		}
 		if (WasJustPressed(SCE_CTRL_UP)){
 			_choice--;
 			if (_choice<0){
-				_choice=1;
+				_choice=3;
 			}
 		}
 		if (WasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
 				break;
-			}else if (_choice==2){
+			}else if (_choice==3){
 				endType = Line_ContinueAfterTyping;
 				
 				if (_choice==99){
@@ -821,15 +831,34 @@ void InGameMenu(){
 				break;
 			}else if (_choice==1){
 				RestartBGM();
+			}else if (_choice==2){
+				LazyMessage("Use left and right to change the","auto mode speed.","Activate auto mode with SELECT in game.",NULL);
+				ControlsEnd();
 			}
 		}
+
+		if (WasJustPressed(SCE_CTRL_LEFT)){
+			if (_choice==2){
+				autoModeWait-=500;
+				itoa(autoModeWait,_tempAutoModeString,10);
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_RIGHT)){
+			if (_choice==2){
+				autoModeWait+=500;
+				itoa(autoModeWait,_tempAutoModeString,10);
+			}
+		}
+
 		ControlsEnd();
 		StartDrawingA();
 		DrawText(32,5,"Resume",fontSize);
 		DrawText(0,5+_choice*_textheight,">",fontSize);
 		//DrawText(32,5+_textheight,"Return to navigation menu",fontSize);
 		DrawText(32,5+_textheight,"Restart BGM",fontSize);
-		DrawText(32,5+_textheight*2,"Quit",fontSize);
+		DrawText(32,5+_textheight*2,"Auto Mode Speed: ",fontSize);
+		DrawText(32+_tempStrWidth,5+_textheight*2,_tempAutoModeString,fontSize);
+		DrawText(32,5+_textheight*3,"Quit",fontSize);
 		EndDrawingA();
 		FpsCapWait();
 	}
@@ -848,6 +877,7 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 				endType=Line_ContinueAfterTyping;
 			}
 		}
+		int _inBetweenLinesMilisecondsStart = GetTicks();
 		do{
 			FpsCapStart();
 			ControlsStart();
@@ -872,8 +902,21 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 				printf("MENU\n");
 				InGameMenu();
 			}
+			if (WasJustPressed(SCE_CTRL_SELECT)){
+				if (autoModeOn==1){
+					autoModeOn=0;
+				}else{
+					autoModeOn=1;
+				}
+			}
 			ControlsEnd();
 			FpsCapWait();
+			if (autoModeOn==1){
+				if (GetTicks()>=_inBetweenLinesMilisecondsStart+autoModeWait){
+					MessageBoxEnabled=1;
+					endType = Line_ContinueAfterTyping;
+				}
+			}
 		}while(endType==Line_Normal || endType == Line_WaitForInput);
 	}
 }
@@ -1501,7 +1544,7 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 		int _time = floor(_fadeintime/2);
 		int _totalFrames = floor(60*(_time/(double)1000));
 		if (_totalFrames==0){
-			_totalFrames=0;
+			_totalFrames=1;
 		}
 		int _alphaPerFrame=floor(255/_totalFrames);
 		if (_alphaPerFrame==0){
