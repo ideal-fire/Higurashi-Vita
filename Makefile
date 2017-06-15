@@ -5,7 +5,7 @@ TITLE_ID = HIGURASHI
 TARGET   = Higurahsi
 OBJS     = ./src/main.o
 
-LIBS = -lSDL2_mixer -lvorbisfile -lvorbis -logg -lSDL2 -lvita2d -lSceDisplay_stub -lSceGxm_stub \
+LIBS = -lScePower_stub -lSDL2_mixer -lvorbisfile -lvorbis -logg -lSDL2 -lvita2d -lSceDisplay_stub -lSceGxm_stub \
 	-lSceSysmodule_stub -lSceCtrl_stub -lScePgf_stub \
 	-lSceCommonDialog_stub -lSceAudio_stub -lSceTouch_stub -lfreetype -lpng -ljpeg -lz -lm -lc -llua -lm
 

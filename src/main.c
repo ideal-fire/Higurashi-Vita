@@ -26,6 +26,9 @@
 				// Here's the plan.
 				// Make another message array, but store text that is in italics in it
 			So, here's my idea, I take whatever char it is and add 100 if it's italics
+
+	In my testing, 444 HZ cpu makes loading and freeing 130 KB sound file take about 200 miliseconds less and loading the biggest image file in Onikakushi PS3 patch take about 50 miliseconds less
+
 */
 
 #define PLAT_WINDOWS 1
@@ -106,6 +109,7 @@ unsigned char graphicsLocation = LOCATION_CGALT;
 	#include <psp2/touch.h>
 	#include <psp2/io/fcntl.h>
 	#include <psp2/io/dirent.h>
+	#include <psp2/power.h>
 
 
 	#define getch(); nothing();
@@ -343,6 +347,8 @@ unsigned char filterActive=0;
 signed char autoModeOn=0;
 signed int autoModeWait=500;
 
+signed int cpuOverclocked=0;
+
 /*
 ====================================================
 */
@@ -437,6 +443,7 @@ void DrawMessageBox(){
 
 void DrawCurrentFilter(){
 	DrawRectangle(0,0,960,544,filterR,filterG,filterB,filterA-100);
+	//DrawRectangle(0,0,960,544,filterR,255-(filterG*filterA*.0011),filterB,255);
 }
 
 signed char IsDown(int value){
@@ -600,6 +607,14 @@ void ControlsStart(){
 	#endif
 }
 
+int Password(int val, int _shouldHave){
+	if (val==_shouldHave){
+		return val+1;
+	}else{
+		return 0;
+	}
+}
+
 void StartDrawingA(){
 	#if RENDERER == REND_VITA2D
 		vita2d_start_drawing();
@@ -679,6 +694,67 @@ void DisposeOldScript(){
 	lua_call(L, 0, 0);
 }
 
+char StringStartWith(const char *a, const char *b){
+	if(strncmp(a, b, strlen(b)) == 0) return 1;
+	return 0;
+}
+
+// Give it a full script file path and it will return 1 if the file was converted beforehand
+int DidActuallyConvert(char* filepath){
+	if (CheckFileExist(filepath)==0){
+		LazyMessage("I was going to check if you converted this file,","but I can't find it!",filepath,"How strange.");
+		return 1;
+	}
+	FILE* file = fopen(filepath, "r");
+	char line[256];
+
+	int _isConverted=0;
+
+	StartDrawingA();
+	DrawText(32,50,"Checking if you actually converted the script...",fontSize);
+	DrawText(32,200,filepath,fontSize);
+	//void DrawText(int x, int y, const char* text, float size){
+	EndDrawingA();
+
+	while (fgets(line, sizeof(line), file)) {
+		printf("%s", line);
+
+		// //MyLegGuyisanoob is put in the first blank line found in converted script files
+		if (StringStartWith(line,"//MyLegGuyisanoob")==1){
+			_isConverted=1;
+			break;
+		}else if (StringStartWith(line,"function main()")==1){ // Every file should have this
+			_isConverted=1;
+			break;
+		}
+	}
+
+	fclose(file);
+	return _isConverted;
+}
+
+
+void DisplaypcallError(int val, char* fourthMessage){
+	switch (val){
+		case LUA_ERRRUN:
+			LazyMessage("lua_pcall failed with error","LUA_ERRSYNTAX, a runtime error.","Please report the bug on the thread.",fourthMessage);
+		break;
+		case LUA_ERRMEM:
+			LazyMessage("lua_pcall failed with error","LUA_ERRMEM, an out of memory error","Please report the bug on the thread.",fourthMessage);
+		break;
+		case LUA_ERRERR:
+			LazyMessage("lua_pcall failed with error","LUA_ERRMEM, a message handler error","Please report the bug on the thread.",fourthMessage);
+		break;
+		case LUA_ERRGCMM:
+			LazyMessage("lua_pcall failed with error","LUA_ERRGCMM, an __gc metamethod error","Please report the bug on the thread.",fourthMessage);
+		break;
+		default:
+			LazyMessage("lua_pcall failed with error","UNKNOWN ERROR, something that shouldn't happen.","Please report the bug on the thread.",fourthMessage);
+		break;
+	}
+}
+
+
 void RunScript(char* _scriptfolderlocation,char* filename, char addTxt){
 	ClearMessageArray();	
 	currentScriptLine=0;
@@ -691,11 +767,49 @@ void RunScript(char* _scriptfolderlocation,char* filename, char addTxt){
 	// Free garbage and old main function if it existed
 	DisposeOldScript();
 
-	luaL_dofile(L,tempstringconcat);
+	int _loadFileResult = luaL_loadfile(L, tempstringconcat);
+	if (_loadFileResult!=LUA_OK){
+		switch (_loadFileResult){
+			case LUA_ERRSYNTAX:
+				if (DidActuallyConvert(tempstringconcat)==1){
+					LazyMessage("luaL_loadfile failed with error","LUA_ERRSYNTAX","You seem to have converted the files correctly...","Please report the bug on the thread.");
+				}else{
+					LazyMessage("luaL_loadfile failed with error","LUA_ERRSYNTAX","You probably forgot to convert the files with the","converter. Please make sure you did.");
+				}
+			break;
+			case LUA_ERRMEM:
+				LazyMessage("luaL_loadfile failed with error","LUA_ERRMEM","This is an out of memory error.","Please report the bug on the thread.");
+			break;
+			case LUA_ERRGCMM:
+				LazyMessage("luaL_loadfile failed with error","LUA_ERRGCMM","This is a __gc metamethod error.","Please report the bug on the thread.");
+			break;
+			default:
+				LazyMessage("luaL_loadfile failed with error","UNKNOWN ERROR!","This is weird and should NEVER HAPPEN!","Please report the bug on the thread.");
+			break;
+		}
+		currentGameStatus=0;
+		return;
+	}
+
+	int _pcallResult = lua_pcall(L, 0, LUA_MULTRET, 0);
+	if (_pcallResult!=LUA_OK){
+		printf("Failed pcall!\n");
+		DisplaypcallError(_pcallResult,"This is the first lua_pcall in RunScript.");
+		currentGameStatus=0;
+		return;
+	}
+
+	//if (luaL_dofile(L,tempstringconcat)==0){
+	//	printf("Failed to load\n");
+	//}
+
 	// Adds function to stack
 	lua_getglobal(L,"main");
 	// Call funciton. Removes function from stack.
-	lua_call(L, 0, 0);
+	_pcallResult = lua_pcall(L, 0, 0, 0);
+	if (_pcallResult!=LUA_OK){
+		DisplaypcallError(_pcallResult,"This is the second lua_pcall in RunScript.");
+	}
 }
 
 char* CombineStringsPLEASEFREE(const char* first, const char* firstpointfive, const char* second, const char* third){
@@ -940,7 +1054,12 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 
 void DrawBackground(CrossTexture* passedBackground, unsigned char passedRez){
 	if (passedRez == REZ_OLD){
+		//if (filterActive==1){
+		//	//void DrawTextureScaleTint(CrossTexture* passedTexture, int destX, int destY, float texXScale, float texYScale, unsigned char r, unsigned char g, unsigned char b){
+		//	DrawTextureScaleTint(passedBackground,160,32,1,1,filterR,filterG,filterB);
+		//}else{
 		DrawTexture(passedBackground,160,32);
+		//}
 	}else if (passedRez == REZ_PS3_BACKGROUND){
 		DrawTexture(passedBackground,0,2);
 	}else if (passedRez == REZ_UPDATED){
@@ -1087,6 +1206,8 @@ unsigned char* ReadNumberStringList(FILE *fp, unsigned char* arraysize){
 	return _thelist;
 }
 
+
+
 char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 	char currentReadLine[200];
 	char currentReadNumber[4];
@@ -1230,6 +1351,56 @@ void LazyMessage(char* stra, char* strb, char* strc, char* strd){
 		EndDrawingA();
 		FpsCapWait();
 	}
+}
+
+// Returns one if they chose yes
+// Returns zero if they chose no
+int LazyChoice(char* stra, char* strb, char* strc, char* strd){
+	int _textheight = TextHeight(fontSize);
+	int _choice=0;
+	ControlsStart();
+	ControlsEnd();
+	while (currentGameStatus!=99){
+		FpsCapStart();
+		ControlsStart();
+		if (WasJustPressed(SCE_CTRL_CROSS)){
+			ControlsStart();
+			ControlsEnd();
+			return _choice;
+		}
+		if (WasJustPressed(SCE_CTRL_DOWN)){
+			_choice++;
+			if (_choice>1){
+				_choice=0;
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_UP)){
+			_choice--;
+			if (_choice<0){
+				_choice=1;
+			}
+		}
+		ControlsEnd();
+		StartDrawingA();
+		if (stra!=NULL){
+			DrawText(32,5+_textheight*(0+2),stra,fontSize);
+		}
+		if (strb!=NULL){
+			DrawText(32,5+_textheight*(1+2),strb,fontSize);
+		}
+		if (strc!=NULL){
+			DrawText(32,5+_textheight*(2+2),strc,fontSize);
+		}
+		if (strd!=NULL){
+			DrawText(32,5+_textheight*(3+2),strd,fontSize);
+		}
+		DrawText(0,544-32-_textheight*(_choice+1),">",fontSize);
+		DrawText(32,544-32-_textheight*2,"Yes",fontSize);
+		DrawText(32,544-32-_textheight,"No",fontSize);
+		EndDrawingA();
+		FpsCapWait();
+	}
+	return 0;
 }
 
 void LoadGame(){
@@ -1417,7 +1588,7 @@ void DrawScene(const char* filename, int time){
 	}
 
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[graphicsLocation],filename,".png");
-	
+
 	unsigned char newBackgroundRez;
 
 	if (CheckFileExist(tempstringconcat)==0){
@@ -1695,7 +1866,7 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 			ControlsEnd();
 		}
 		//
-		if (waitingIsForShmucks!=1){
+		if (waitingIsForShmucks!=1 && capEnabled==1){
 			Draw();
 			Update();
 			ControlsEnd();
@@ -1703,6 +1874,19 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 		}
 		
 	}
+}
+
+void StopBGM(){
+	#if SILENTMODE == 1
+		return 0;
+	#endif
+	StopMusic();
+	if (currentMusic!=NULL){
+		FreeMusic(currentMusic);
+		currentMusic=NULL;
+	}
+	lastBGMFilename = realloc(lastBGMFilename,1);
+	lastBGMFilenameStored=0;
 }
 
 void PlayBGM(const char* filename, int _volume){
@@ -1722,13 +1906,18 @@ void PlayBGM(const char* filename, int _volume){
 	lastBGMVolume=FixVolumeArg(_volume);
 
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/BGM/", filename, ".ogg");
-	currentMusic = LoadMusic(tempstringconcat);
+	if (CheckFileExist(tempstringconcat)==1){
+		currentMusic = LoadMusic(tempstringconcat);
+		
+
+		Mix_VolumeMusic(FixVolumeArg(_volume));
+
+		PlayMusic(currentMusic);
+		lastBGMFilenameStored=1;
+	}else{
+		StopBGM();
+	}
 	free(tempstringconcat);
-
-	Mix_VolumeMusic(FixVolumeArg(_volume));
-
-	PlayMusic(currentMusic);
-	lastBGMFilenameStored=1;
 	return;
 }
 
@@ -1799,19 +1988,12 @@ int L_PlayBGM(lua_State* passedState){
 	return 0;
 }
 
+
+
 // Some int argument
 // Maybe music slot
 int L_StopBGM(lua_State* passedState){
-	#if SILENTMODE == 1
-		return 0;
-	#endif
-	StopMusic();
-	if (currentMusic!=NULL){
-		FreeMusic(currentMusic);
-		currentMusic=NULL;
-	}
-	lastBGMFilename = realloc(lastBGMFilename,1);
-	lastBGMFilenameStored=0;
+	StopBGM();
 	return 0;
 }
 
@@ -1931,7 +2113,6 @@ int L_FadeBustshot(lua_State* passedState){
 }
 
 
-
 // Slot, file, volume
 int L_PlaySE(lua_State* passedState){
 	int passedSlot = lua_tonumber(passedState,1);
@@ -1941,12 +2122,15 @@ int L_PlaySE(lua_State* passedState){
 			soundEffects[passedSlot]=NULL;
 		}
 		char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/",lua_tostring(passedState,2),".ogg");
-		soundEffects[passedSlot] = LoadSound(tempstringconcat);
-		
-		Mix_VolumeChunk(soundEffects[passedSlot],FixVolumeArg(lua_tonumber(passedState,3)));
-		
+		if (CheckFileExist(tempstringconcat)==1){
+			soundEffects[passedSlot] = LoadSound(tempstringconcat);
+			Mix_VolumeChunk(soundEffects[passedSlot],FixVolumeArg(lua_tonumber(passedState,3)));
+			PlaySound(soundEffects[passedSlot],1);
+		}else{
+			WriteToDebugFile("SE file not found");
+			WriteToDebugFile(tempstringconcat);
+		}
 		free(tempstringconcat);
-		PlaySound(soundEffects[passedSlot],1);
 	}
 	return 0;
 }
@@ -2137,6 +2321,8 @@ int L_CallSection(lua_State* passedState){
 }
 
 // I CAN DO THIS EZ-PZ WITH DRAWING RECTANGLES OVER THE SCREEN
+// DrawFilm( 2,  0, 255, 0, 255, 0, 1000, TRUE );
+// DrawFilm (slot?, r, g, b, filer's alpha, ?, fadein time, wait for fadein)
 int L_DrawFilm(lua_State* passedState){
 	filterR = lua_tonumber(passedState,2);
 	filterG = lua_tonumber(passedState,3);
@@ -2146,8 +2332,6 @@ int L_DrawFilm(lua_State* passedState){
 	return 0;
 }
 
-// DrawFilm( 2,  0, 255, 0, 255, 0, 1000, TRUE );
-// DrawFilm (slot?, r, g, b, filer's alpha, ?, fadein time, wait for fadein)
 int L_FadeFilm(lua_State* passedState){
 	filterActive=0;
 	return 1;
@@ -2407,11 +2591,15 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 	return _returnVal;
 }
 
+
+
 void TitleScreen(){
 	signed char _choice=0;
 	int _textheight = TextHeight(fontSize);
 	char _canShowRena=0;
 	int _bustlocationcollinspacewidth = TextWidth(fontSize,"Bust location: ");
+	signed char _titlePassword=0;
+
 
 	// This checks if we have Rena busts in CG AND CGAlt
 	char* _temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,"CG/","re_se_de_a1.png","");
@@ -2437,6 +2625,26 @@ void TitleScreen(){
 		FpsCapStart();
 		ControlsStart();
 
+
+		// Password right left down up square
+			if (WasJustPressed(SCE_CTRL_RIGHT)){
+				_titlePassword=1;
+			}else if (WasJustPressed(SCE_CTRL_LEFT)){
+				_titlePassword = Password(_titlePassword,1);
+			}else if (WasJustPressed(SCE_CTRL_DOWN)){
+				_titlePassword = Password(_titlePassword,2);
+			}else if (WasJustPressed(SCE_CTRL_UP)){
+				_titlePassword = Password(_titlePassword,3);
+			}else if (WasJustPressed(SCE_CTRL_SQUARE)){
+				_titlePassword = Password(_titlePassword,4);
+				if (_titlePassword==5){
+					if (LazyChoice("Would you like to activate top secret","speedy mode for MyLegGuy's testing?",NULL,NULL)==1){
+						capEnabled=0;
+						autoModeWait=50;
+					}
+				}
+			}
+
 		if (WasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
 		}
@@ -2446,6 +2654,7 @@ void TitleScreen(){
 		// Left and right to change bust location
 		if (WasJustPressed(SCE_CTRL_RIGHT) || WasJustPressed(SCE_CTRL_LEFT) || (_choice==2 && WasJustPressed(SCE_CTRL_CROSS))){
 			if (_choice==2){
+				PlayMenuSound();
 				if (graphicsLocation == LOCATION_CG){
 					graphicsLocation = LOCATION_CGALT;
 				}else if (graphicsLocation == LOCATION_CGALT){
@@ -2477,9 +2686,23 @@ void TitleScreen(){
 						RunScript(SCRIPTFOLDER,currentPresetFilename,0);
 						currentGameStatus=0;
 					}
-				}else if (_choice==3){
+				}/*else if (_choice==2){
+					This is not put here. See code above.
+				}*/else if (_choice==4){ // Quit button
 					currentGameStatus=99;
 					break;
+				}else if (_choice==3){ // Overclock CPU
+					if (cpuOverclocked==0){
+						cpuOverclocked=1;
+						#if PLATFORM == PLAT_VITA
+							scePowerSetArmClockFrequency(444);
+						#endif
+					}else if (cpuOverclocked==1){
+						cpuOverclocked=0;
+						#if PLATFORM == PLAT_VITA
+							scePowerSetArmClockFrequency(333);
+						#endif
+					}
 				}else{
 					_choice=0;
 				}
@@ -2503,7 +2726,15 @@ void TitleScreen(){
 			}else if (graphicsLocation==LOCATION_CG){
 				DrawText(32+_bustlocationcollinspacewidth,5+_textheight*(2+2),"CG",fontSize);
 			}
-		DrawText(32,5+_textheight*(3+2),"Exit",fontSize);
+
+		if (cpuOverclocked==1){
+			DrawTextColored(32,5+_textheight*(3+2),"Overclock CPU",fontSize,0,255,0);
+		}else{
+			DrawText(32,5+_textheight*(3+2),"Overclock CPU",fontSize);
+		}
+		DrawText(32,5+_textheight*(4+2),"Exit",fontSize);
+
+		DrawText(850,544-5-_textheight,"v1.3",fontSize);
 
 		DrawText(5,5+_textheight*(_choice+2),">",fontSize);
 		EndDrawingA();
@@ -3050,6 +3281,27 @@ int main(int argc, char *argv[]){
 	//LoadPreset("./StreamingAssets/Presets/Watanagashi.txt");
 	//return 1;
 	
+	// Sound loading test
+	//scePowerSetArmClockFrequency(444);
+	////scePowerSetBusClockFrequency(222);
+	////scePowerSetGpuClockFrequency(222);
+	//u64 startLoadTest = GetTicks();
+	//CROSSSFX* noobSound = LoadSound("ux0:data/HIGURASHI/StreamingAssets/SE/s19/02/990200069.ogg");
+	//FreeSound(noobSound);
+	//u64 testResult = GetTicks()-startLoadTest;
+	//WriteIntToDebugFile(testResult);
+	//return 1;
+	// Graphics loading test
+	//scePowerSetArmClockFrequency(444);
+	////scePowerSetBusClockFrequency(222);
+	////scePowerSetGpuClockFrequency(222);
+	//u64 startLoadTest = GetTicks();
+	//CrossTexture* noobSound = LoadPNG("ux0:data/HIGURASHI/StreamingAssets/CG/haikei-.png");
+	//FreeTexture(noobSound);
+	//u64 testResult = GetTicks()-startLoadTest;
+	//WriteIntToDebugFile(testResult);
+	//return 1;
+
 	//currentGameStatus=0;
 	//LoadPreset("./StreamingAssets/Presets/Onikakushi.txt");
 	//currentGameStatus=3;

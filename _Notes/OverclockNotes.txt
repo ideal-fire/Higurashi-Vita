@@ -1,0 +1,32 @@
+Sound stats
+NO OVERCLOCK
+797
+783
+783
+781
+
+average: 786
+
+CPU OVERCLOCK
+590
+591
+590
+591
+Average: 590.5
+
+==============
+Image stats
+NO OVERCLOCK
+312
+300
+299
+299
+
+Average: 302.5
+CPU OVERCLOCK
+244
+244
+243
+244
+
+Average: 243.75
