@@ -68,11 +68,14 @@ unsigned char graphicsLocation = LOCATION_CGALT;
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 
+#define OPTIONSFILEFORMAT 1
+
 // main.h
 	void Draw();
 	void RecalculateBustOrder();
 	void PlayBGM(const char* filename, int _volume);
 	void LazyMessage(char* stra, char* strb, char* strc, char* strd);
+	void SaveSettings();
 
 // Libraries all need
 #include <math.h>
@@ -345,9 +348,9 @@ unsigned char filterA;
 unsigned char filterActive=0;
 
 signed char autoModeOn=0;
-signed int autoModeWait=500;
+int32_t autoModeWait=500;
 
-signed int cpuOverclocked=0;
+signed char cpuOverclocked=0;
 
 /*
 ====================================================
@@ -897,7 +900,7 @@ int GetRezFromImage(CrossTexture* passedImage){
 		return REZ_OLD;
 	}else if (_width==960 && _height==540){ // PS3 background
 		return REZ_PS3_BACKGROUND;
-	}else if (_width==725 && _height==544){ // PS3 bust
+	}else if (_width==720 && _height==540){ // PS3 bust
 		return REZ_PS3_BUST;
 	}
 	// Default
@@ -917,6 +920,7 @@ void InGameMenu(){
 	char _tempAutoModeString[10] = {'\0'};
 	int _tempStrWidth = TextWidth(fontSize,"Auto Mode Speed: ");
 	itoa(autoModeWait,_tempAutoModeString,10);
+	char _needResave=0;
 	while (1){
 		
 		FpsCapStart();
@@ -935,6 +939,9 @@ void InGameMenu(){
 		}
 		if (WasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
+				if (_needResave==1){
+					SaveSettings();
+				}
 				break;
 			}else if (_choice==3){
 				endType = Line_ContinueAfterTyping;
@@ -967,6 +974,7 @@ void InGameMenu(){
 					autoModeWait=500;
 				}
 				itoa(autoModeWait,_tempAutoModeString,10);
+				_needResave=1;
 			}
 		}
 		if (WasJustPressed(SCE_CTRL_RIGHT)){
@@ -977,6 +985,7 @@ void InGameMenu(){
 					autoModeWait+=500;
 				}
 				itoa(autoModeWait,_tempAutoModeString,10);
+				_needResave=1;
 			}
 		}
 
@@ -1079,23 +1088,24 @@ void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedRez
 
 void DrawBust(bust* passedBust){
 	if (passedBust->alpha==255){
-		if (passedBust->rez == REZ_PS3_BUST){
-			DrawTexture(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset);
-		}else if (passedBust->rez == REZ_OLD && currentBackgroundRez == REZ_PS3_BACKGROUND){ // In this case, the Steam busts should be bigger, but I'm too lazy to do that. Actually, all busts should be bigger. They look a little small
-			DrawTexture(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset+62);
-		}else if (passedBust->rez==REZ_OLD || passedBust->rez == REZ_UPDATED){
+		if (passedBust->rez == REZ_PS3_BUST){ // For ordinary PS3 graphics.
+			//DrawTexture(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset);
+			DrawTexture(passedBust->image,123+passedBust->xOffset*1.3,passedBust->yOffset+2);
+			//}else if (passedBust->rez == REZ_OLD && currentBackgroundRez == REZ_PS3_BACKGROUND){ // In this case, the Steam busts should be bigger, but I'm too lazy to do that. Actually, all busts should be bigger. They look a little small
+			//	DrawTexture(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset+62);
+		}else if (passedBust->rez==REZ_OLD || passedBust->rez == REZ_UPDATED){ // For normal graphics
+			// (960-640)/2=160
+			// (544-480)/2=32
 			DrawTexture(passedBust->image,160+passedBust->xOffset,passedBust->yOffset+32);
-		}else if (passedBust->rez == REZ_PS3_BACKGROUND){
+		}else if (passedBust->rez == REZ_PS3_BACKGROUND){ // For the CG scenes
 			DrawBackground(passedBust->image,passedBust->rez);
 		}
 	}else{
-		if (passedBust->rez == REZ_PS3_BUST){
-			DrawTextureAlpha(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset,passedBust->alpha);
-		}else if (passedBust->rez == REZ_OLD && currentBackgroundRez == REZ_PS3_BACKGROUND){
-			DrawTextureAlpha(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset+62,passedBust->alpha);
-		}else if (passedBust->rez==REZ_OLD || passedBust->rez == REZ_UPDATED){
+		if (passedBust->rez == REZ_PS3_BUST){ // For ordinary PS3 graphics.
+			DrawTextureAlpha(passedBust->image,123+passedBust->xOffset*1.3,passedBust->yOffset+2,passedBust->alpha);
+		}else if (passedBust->rez==REZ_OLD || passedBust->rez == REZ_UPDATED){ // For normal graphics
 			DrawTextureAlpha(passedBust->image,160+passedBust->xOffset,passedBust->yOffset+32,passedBust->alpha);
-		}else if (passedBust->rez == REZ_PS3_BACKGROUND){
+		}else if (passedBust->rez == REZ_PS3_BACKGROUND){ // For the CG scenes
 			DrawBackgroundAlpha(passedBust->image,passedBust->rez,passedBust->alpha);
 		}
 	}
@@ -1921,6 +1931,59 @@ void PlayBGM(const char* filename, int _volume){
 	return;
 }
 
+// Settings file format:
+// OPTIONSFILEFORMAT, 1 byte
+// cpuOverclocked, 1 byte
+// graphicsLocation, 1 byte
+// autoModeWait, 4 bytes
+void SaveSettings(){
+	FILE* fp;
+
+	#if PLATFORM == PLAT_VITA
+	fp = fopen ("ux0:data/HIGURASHI/settings.noob", "w");
+	#elif PLATFORM == PLAT_WINDOWS
+	fp = fopen ("./settings.noob", "w");
+	#endif
+	//graphicsLocation
+
+	unsigned char _tempOptionsFormat = OPTIONSFILEFORMAT;
+	fwrite(&_tempOptionsFormat,1,1,fp);
+	fwrite(&cpuOverclocked,1,1,fp);
+	fwrite(&graphicsLocation,1,1,fp);
+	fwrite(&autoModeWait,4,1,fp);
+	fclose(fp);
+	printf("SAved settings file.\n");
+}
+void LoadSettings(){
+	#if PLATFORM == PLAT_VITA
+	if (CheckFileExist("ux0:data/HIGURASHI/settings.noob")==1)
+	#elif PLATFORM == PLAT_WINDOWS
+	if (CheckFileExist("./settings.noob")==1)
+	#endif
+	{
+		FILE* fp;
+		#if PLATFORM == PLAT_VITA
+		fp = fopen ("ux0:data/HIGURASHI/settings.noob", "r");
+		#elif PLATFORM == PLAT_WINDOWS
+		fp = fopen ("./settings.noob", "r");
+		#endif
+		unsigned char _tempOptionsFormat = 255;
+		// This is the version of the format of the options file.
+		fread(&_tempOptionsFormat,1,1,fp);
+		if (_tempOptionsFormat==1){
+			fread(&cpuOverclocked,1,1,fp);
+			fread(&graphicsLocation,1,1,fp);
+			fread(&autoModeWait,4,1,fp);
+		}
+		fclose(fp);
+
+		if (cpuOverclocked==1){
+			scePowerSetArmClockFrequency(444);
+		}
+		printf("Loaded settings file.\n");
+	}
+}
+
 /*
 =================================================
 */
@@ -2591,8 +2654,6 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 	return _returnVal;
 }
 
-
-
 void TitleScreen(){
 	signed char _choice=0;
 	int _textheight = TextHeight(fontSize);
@@ -2666,6 +2727,7 @@ void TitleScreen(){
 					_renaImage = SafeLoadPNG(_temppath);
 					free(_temppath);
 				}
+				SaveSettings();
 			}
 		}else{
 			if (WasJustPressed(SCE_CTRL_CROSS)){
@@ -2703,6 +2765,7 @@ void TitleScreen(){
 							scePowerSetArmClockFrequency(333);
 						#endif
 					}
+					SaveSettings();
 				}else{
 					_choice=0;
 				}
@@ -2713,7 +2776,7 @@ void TitleScreen(){
 		// Display sample Rena if changing bust location
 		if (_choice==2){
 			if (_canShowRena==1){
-				DrawTexture(_renaImage,480,64);
+				DrawTexture(_renaImage,480,544-GetTextureHeight(_renaImage));
 			}
 		}
 		DrawText(32,5,"Main Menu",fontSize);
@@ -2734,7 +2797,7 @@ void TitleScreen(){
 		}
 		DrawText(32,5+_textheight*(4+2),"Exit",fontSize);
 
-		DrawText(850,544-5-_textheight,"v1.3",fontSize);
+		DrawText(850,544-5-_textheight,"v1.4",fontSize);
 
 		DrawText(5,5+_textheight*(_choice+2),">",fontSize);
 		EndDrawingA();
@@ -3223,8 +3286,21 @@ signed char init(){
 		imageCharType[i]=-1;
 	}
 
-
 	lastBGMFilename = malloc(1);
+
+	LoadSettings();
+
+	// THIS IS A SPECIAL CHECK I'LL ONLY KEEP IN v1.4
+	if (CheckFileExist("ux0:data/HIGURASHI/StreamingAssets/date.xxm0ronslayerxx")==0){
+		if (CheckFileExist("ux0:data/HIGURASHI/StreamingAssets/CG/re_se_bi_a1.png")==1){
+			LazyMessage("Welcome to v1.4 In this version, PS3 patch graphics were","changed. If you were using the PS3 patch, you need to reinstall it","and convert it with the new version of the script converter.","Don't worry, you get higher resolution sprites.");
+			FILE* fp;
+			fp = fopen ("ux0:data/HIGURASHI/StreamingAssets/date.xxm0ronslayerxx", "w");
+			fclose(fp);
+		}
+	}
+
+
 	return 0;
 }
 
