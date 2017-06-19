@@ -28,47 +28,7 @@
 			So, here's my idea, I take whatever char it is and add 100 if it's italics
 
 	In my testing, 444 HZ cpu makes loading and freeing 130 KB sound file take about 200 miliseconds less and loading the biggest image file in Onikakushi PS3 patch take about 50 miliseconds less
-
 */
-
-#define PLAT_WINDOWS 1
-#define PLAT_VITA 2
-#define PLAT_3DS 3
-
-#define REND_SDL 0
-#define REND_VITA2D 1
-#define REND_SF2D 2
-
-#define SND_NONE 0
-#define SND_SDL 1
-
-#define REZ_UNDEFINED 0
-#define REZ_OLD 1
-#define REZ_UPDATED 2
-#define REZ_PS3_BACKGROUND 3
-#define REZ_PS3_BUST 4
-
-#define LOCATION_UNDEFINED 0
-#define LOCATION_CG 1
-#define LOCATION_CGALT 2
-
-// Change these depending on the target platform
-#define RENDERER REND_VITA2D
-#define PLATFORM PLAT_VITA
-#define SOUNDPLAYER SND_SDL
-signed char SILENTMODE = 0;
-
-unsigned char currentBackgroundRez;
-
-unsigned char graphicsLocation = LOCATION_CGALT;
-
-#define MAXBUSTS 7
-#define MAXIMAGECHAR 10
-#define MESSAGETEXTXOFFSET 20
-#define MAXFILES 50
-#define MAXFILELENGTH 51
-
-#define OPTIONSFILEFORMAT 1
 
 // main.h
 	void Draw();
@@ -76,89 +36,55 @@ unsigned char graphicsLocation = LOCATION_CGALT;
 	void PlayBGM(const char* filename, int _volume);
 	void LazyMessage(char* stra, char* strb, char* strc, char* strd);
 	void SaveSettings();
+	void XOutFunction();
 
 // Libraries all need
 #include <math.h>
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
-#include <pthread.h>
 #include <unistd.h>
 //
-
 #include <Lua/lua.h>
 #include <Lua/lualib.h>
 #include <Lua/lauxlib.h>
-
 //
 
+#include "_GeneralGoodConfiguration.h"
+#include "GeneralGoodExtended.h"
+
+#define REZ_UNDEFINED 0
+#define REZ_OLD 1
+#define REZ_PS3_BACKGROUND 3
+#define REZ_PS3_BUST 4
+
+#define LOCATION_UNDEFINED 0
+#define LOCATION_CG 1
+#define LOCATION_CGALT 2
+
+/////////////////////////////////////
+#define MAXBUSTS 7
+#define MAXIMAGECHAR 20
+#define MESSAGETEXTXOFFSET 20
+#define MAXFILES 50
+#define MAXFILELENGTH 51
+#define MAXMESSAGEHISTORY 40
+#define VERSIONSTRING "v1.5"
+/////////////////////////////////////
+
+#define OPTIONSFILEFORMAT 1
 
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
 	lua_setglobal(L,y);
 
 // Platform specific libraries
-#if PLATFORM == PLAT_WINDOWS
-	#define u64 unsigned long
-	#include <time.h>
-	#include <conio.h>
-	#include <dirent.h>
-#endif
-
-#if PLATFORM == PLAT_VITA
-	#include <psp2/ctrl.h>
-	#include <psp2/kernel/processmgr.h>
-	#include <psp2/rtc.h>
-	#include <psp2/types.h>
-	#include <psp2/touch.h>
-	#include <psp2/io/fcntl.h>
-	#include <psp2/io/dirent.h>
-	#include <psp2/power.h>
-
-
-	#define getch(); nothing();
-
-	typedef uint8_t 	u8;
-	typedef uint16_t 	u16;
-	typedef uint32_t	u32;
-	typedef uint64_t	u64;
-	typedef int8_t		s8;
-	typedef int16_t		s16;
-	typedef int32_t		s32;
-	typedef int64_t		s64;
-#endif
-
-#if RENDERER == REND_VITA2D
-	#include <vita2d.h>
-	// CROSS TYPES
-	#define CrossTexture vita2d_texture
-#endif
-
-#if RENDERER == REND_SDL
-	#define CrossTexture SDL_Texture
-	#include <SDL2/SDL.h>
-	#include <SDL2/SDL_image.h>
-#endif
-
-#if SOUNDPLAYER == SND_SDL
-	#include <SDL2/SDL.h>
-	#include <SDL2/SDL_mixer.h>
-
-	#define CROSSSFX Mix_Chunk
-	#define CROSSMUSIC Mix_Music
-#endif
+	// Nothing to see here.
 
 ////////////////////////////////////////
 // PLatform specific variables
 ///////////////////////////////////////
 #if RENDERER == REND_SDL
-	//The window we'll be rendering to
-	SDL_Window* mainWindow;
-	
-	//The window renderer
-	SDL_Renderer* mainWindowRenderer;
-
 	CrossTexture* fontImage;
-
 	float fontSize = 1.7;
 #endif
 
@@ -167,39 +93,10 @@ unsigned char graphicsLocation = LOCATION_CGALT;
 #endif
 
 #if PLATFORM == PLAT_VITA
-	// Controls at start of frame.
-	SceCtrlData pad;
-	// Controls from start of last frame.
-	SceCtrlData lastPad;
-
-	vita2d_font* fontImage;
-	vita2d_font* fontImageItalics;
-#endif
-#if PLATFORM == PLAT_WINDOWS
-	enum SceCtrlPadButtons {
-		SCE_CTRL_SELECT      = 0,	//!< Select button.
-		SCE_CTRL_L3          = 1,	//!< L3 button.
-		SCE_CTRL_R3          = 2,	//!< R3 button.
-		SCE_CTRL_START       = 3,	//!< Start button.
-		SCE_CTRL_UP          = 4,	//!< Up D-Pad button.
-		SCE_CTRL_RIGHT       = 5,	//!< Right D-Pad button.
-		SCE_CTRL_DOWN        = 6,	//!< Down D-Pad button.
-		SCE_CTRL_LEFT        = 7,	//!< Left D-Pad button.
-		SCE_CTRL_LTRIGGER    = 8,	//!< Left trigger.
-		SCE_CTRL_RTRIGGER    = 9,	//!< Right trigger.
-		SCE_CTRL_L1          = 10,	//!< L1 button.
-		SCE_CTRL_R1          = 11,	//!< R1 button.
-		SCE_CTRL_TRIANGLE    = 12,	//!< Triangle button.
-		SCE_CTRL_CIRCLE      = 13,	//!< Circle button.
-		SCE_CTRL_CROSS       = 14,	//!< Cross button.
-		SCE_CTRL_SQUARE      = 15,	//!< Square button.
-		SCE_CTRL_INTERCEPTED = 16,  //!< Input not available because intercepted by another application
-		SCE_CTRL_VOLUP       = 17,	//!< Volume up button.
-		SCE_CTRL_VOLDOWN     = 18	//!< Volume down button.
-	};
-
-	char pad[19]={0};
-	char lastPad[19]={0};
+	#if RENDERER != REND_SDL
+		vita2d_font* fontImage;
+		vita2d_font* fontImageItalics;
+	#endif
 #endif
 
 //////////////
@@ -276,8 +173,6 @@ int MessageBoxAlpha = 100;
 
 signed char MessageBoxEnabled=1;
 
-signed char InputValidity = 1;
-
 unsigned int currentScriptLine=0;
 
 // Order of busts drawn as organized by layer
@@ -324,7 +219,6 @@ char* lastBGMFilename;
 int lastBGMVolume = -1;
 int lastBGMFilenameStored = 0;
 
-unsigned char isSkipping=0;
 
 signed char tipNamesLoaded=0;
 signed char chapterNamesLoaded=0;
@@ -351,6 +245,15 @@ signed char autoModeOn=0;
 int32_t autoModeWait=500;
 
 signed char cpuOverclocked=0;
+
+signed char SILENTMODE = 0;
+
+unsigned char currentBackgroundRez;
+
+unsigned char graphicsLocation = LOCATION_CGALT;
+
+unsigned char messageHistory[MAXMESSAGEHISTORY][61];
+unsigned char oldestMessage=0;
 
 /*
 ====================================================
@@ -421,25 +324,6 @@ CrossTexture* SafeLoadPNG(char* path){
 	return _tempTex;
 }
 
-signed char WasJustPressed(int value){
-	if (InputValidity==1 || isSkipping==1){
-		#if PLATFORM == PLAT_VITA
-			if (pad.buttons & value && !(lastPad.buttons & value)){
-				return 1;
-			}
-		#elif PLATFORM == PLAT_WINDOWS
-			if (pad[value]==1 && lastPad[value]==0){
-				return 1;
-			}
-		#elif PLATFORM==PLAT_3DS
-			if (wasJustPad & value){
-				return 1;
-			}
-		#endif
-	}
-	return 0;
-}
-
 void DrawMessageBox(){
 	DrawRectangle(0,0,960,544,0,0,0,MessageBoxAlpha);
 }
@@ -447,26 +331,6 @@ void DrawMessageBox(){
 void DrawCurrentFilter(){
 	DrawRectangle(0,0,960,544,filterR,filterG,filterB,filterA-100);
 	//DrawRectangle(0,0,960,544,filterR,255-(filterG*filterA*.0011),filterB,255);
-}
-
-signed char IsDown(int value){
-	if (InputValidity==1 || isSkipping==1){
-		#if PLATFORM == PLAT_VITA
-			if (pad.buttons & value){
-				return 1;
-			}
-		#elif PLATFORM == PLAT_WINDOWS
-	
-			if (pad[value]==1){
-				return 1;
-			}
-		#elif PLATFORM == PLAT_3DS
-			if (pad & value){
-				return 1;
-			}
-		#endif
-	}
-	return 0;
 }
 
 u64 waitwithCodeTarget;
@@ -495,14 +359,18 @@ void nothing(){
 	printf("nothing");
 }
 
-int GetNextCharOnLine(int _linenum){
-	return u_strlen(currentMessages[_linenum]);
-}
-
 void ClearMessageArray(){
 	currentLine=0;
 	int i,j;
 	for (i = 0; i < 15; i++){
+		if (currentMessages[i][0]!='\0'){
+			strcpy(messageHistory[oldestMessage],currentMessages[i]);
+			oldestMessage++;
+			if (oldestMessage==MAXMESSAGEHISTORY){
+				oldestMessage=0;
+			}
+		}
+		
 		for (j = 0; j < 61; j++){
 			currentMessages[i][j]='\0';
 		}
@@ -512,6 +380,15 @@ void ClearMessageArray(){
 	}
 }
 
+int GetNextCharOnLine(int _linenum){
+	if (_linenum==15){
+		_linenum=0;
+		currentLine=0;
+		ClearMessageArray();
+		return 0;
+	}
+	return u_strlen(currentMessages[_linenum]);
+}
 
 void DrawMessageText(){
 	//system("cls");
@@ -538,116 +415,12 @@ void PrintScreenValues(){
 	}
 }
 
-void ControlsStart(){
-	#if PLATFORM == PLAT_VITA
-		sceCtrlPeekBufferPositive(0, &pad, 1);
-		//sceTouchPeek(SCE_TOUCH_PORT_FRONT, &currentTouch, 1);
-	#endif
-	#if RENDERER == REND_SDL
-		SDL_Event e;
-		while( SDL_PollEvent( &e ) != 0 ){
-			if( e.type == SDL_QUIT ){
-				if (currentGameStatus==3){
-					//luaL_error(L,"game stopped\n");
-					// Adds function to stack
-					lua_getglobal(L,"quitxfunction");
-					// Call funciton. Removes function from stack.
-					lua_call(L, 0, 0);
-				}else{
-					printf("normalquit\n");
-					currentGameStatus=99;
-				}
-
-			}
-			#if PLATFORM == PLAT_WINDOWS
-				if( e.type == SDL_KEYDOWN ){
-					if (e.key.keysym.sym==SDLK_z){ /* X */
-						pad[SCE_CTRL_CROSS]=1;
-					}else if (e.key.keysym.sym==SDLK_x){/* O */
-						pad[SCE_CTRL_CIRCLE]=1;
-					}else if (e.key.keysym.sym==SDLK_LEFT){/* Left */
-						pad[SCE_CTRL_LEFT]=1;
-					}else if (e.key.keysym.sym==SDLK_RIGHT){ /* Right */
-						pad[SCE_CTRL_RIGHT]=1;
-					}else if (e.key.keysym.sym==SDLK_DOWN){ /* Down */
-						pad[SCE_CTRL_DOWN]=1;
-					}else if (e.key.keysym.sym==SDLK_UP){ /* Up */
-						pad[SCE_CTRL_UP]=1;
-					}else if (e.key.keysym.sym==SDLK_a){ /* Square */
-						pad[SCE_CTRL_SQUARE]=1;
-					}else if (e.key.keysym.sym==SDLK_s){ /* Triangle */
-						pad[SCE_CTRL_TRIANGLE]=1;
-					}else if (e.key.keysym.sym==SDLK_ESCAPE){ /* Start */
-						pad[SCE_CTRL_START]=1;
-					}else if (e.key.keysym.sym==SDLK_e){ /* Select */
-						pad[SCE_CTRL_SELECT]=1;
-					}
-				}else if (e.type == SDL_KEYUP){
-					if (e.key.keysym.sym==SDLK_z){ /* X */
-						pad[SCE_CTRL_CROSS]=0;
-					}else if (e.key.keysym.sym==SDLK_x){/* O */
-						pad[SCE_CTRL_CIRCLE]=0;
-					}else if (e.key.keysym.sym==SDLK_LEFT){/* Left */
-						pad[SCE_CTRL_LEFT]=0;
-					}else if (e.key.keysym.sym==SDLK_RIGHT){ /* Right */
-						pad[SCE_CTRL_RIGHT]=0;
-					}else if (e.key.keysym.sym==SDLK_DOWN){ /* Down */
-						pad[SCE_CTRL_DOWN]=0;
-					}else if (e.key.keysym.sym==SDLK_UP){ /* Up */
-						pad[SCE_CTRL_UP]=0;
-					}else if (e.key.keysym.sym==SDLK_a){ /* Square */
-						pad[SCE_CTRL_SQUARE]=0;
-					}else if (e.key.keysym.sym==SDLK_s){ /* Triangle */
-						pad[SCE_CTRL_TRIANGLE]=0;
-					}else if (e.key.keysym.sym==SDLK_ESCAPE){ /* Start */
-						pad[SCE_CTRL_START]=0;
-					}else if (e.key.keysym.sym==SDLK_e){ /* Select */
-						pad[SCE_CTRL_SELECT]=0;
-					}
-				}
-			#endif
-		}
-	#endif
-}
-
 int Password(int val, int _shouldHave){
 	if (val==_shouldHave){
 		return val+1;
 	}else{
 		return 0;
 	}
-}
-
-void StartDrawingA(){
-	#if RENDERER == REND_VITA2D
-		vita2d_start_drawing();
-		vita2d_clear_screen();
-	#elif RENDERER == REND_SDL
-		SDL_RenderClear(mainWindowRenderer);
-	#elif RENDERER == REND_SF2D
-		sf2d_start_frame(GFX_TOP, GFX_LEFT);
-	#endif
-}
-
-void EndDrawingA(){
-	#if RENDERER == REND_VITA2D
-		vita2d_end_drawing();
-		vita2d_swap_buffers();
-		vita2d_wait_rendering_done();
-	#elif RENDERER == REND_SDL
-		SDL_RenderPresent(mainWindowRenderer);
-	#elif RENDERER == REND_SF2D
-		sf2d_end_frame();
-		sf2d_swapbuffers();
-	#endif
-}
-
-void ControlsEnd(){
-	#if PLATFORM == PLAT_VITA
-		lastPad=pad;
-	#elif PLATFORM == PLAT_WINDOWS
-		memcpy(lastPad,pad,19);
-	#endif
 }
 
 void WriteIntToDebugFile(int a){
@@ -657,6 +430,19 @@ void WriteIntToDebugFile(int a){
 		fprintf(fp,"%d\n", a);
 		fclose(fp);
 	#endif
+}
+
+void XOutFunction(){
+	if (currentGameStatus==3){
+		//luaL_error(L,"game stopped\n");
+		// Adds function to stack
+		lua_getglobal(L,"quitxfunction");
+		// Call funciton. Removes function from stack.
+		lua_call(L, 0, 0);
+	}else{
+		printf("normalquit\n");
+		currentGameStatus=99;
+	}
 }
 
 // Does not clear the debug file at ux0:data/HIGURASHI/a.txt  , I promise.
@@ -736,7 +522,6 @@ int DidActuallyConvert(char* filepath){
 	return _isConverted;
 }
 
-
 void DisplaypcallError(int val, char* fourthMessage){
 	switch (val){
 		case LUA_ERRRUN:
@@ -756,7 +541,6 @@ void DisplaypcallError(int val, char* fourthMessage){
 		break;
 	}
 }
-
 
 void RunScript(char* _scriptfolderlocation,char* filename, char addTxt){
 	ClearMessageArray();	
@@ -785,6 +569,9 @@ void RunScript(char* _scriptfolderlocation,char* filename, char addTxt){
 			break;
 			case LUA_ERRGCMM:
 				LazyMessage("luaL_loadfile failed with error","LUA_ERRGCMM","This is a __gc metamethod error.","Please report the bug on the thread.");
+			break;
+			case LUA_ERRFILE:
+				LazyMessage("luaL_loadfile failed with error","LUA_ERRFILE","This means the file failed to load.","This is probably your fault.");
 			break;
 			default:
 				LazyMessage("luaL_loadfile failed with error","UNKNOWN ERROR!","This is weird and should NEVER HAPPEN!","Please report the bug on the thread.");
@@ -1003,6 +790,128 @@ void InGameMenu(){
 	}
 }
 
+int FixHistoryOldSub(int _val, int _scroll){
+	if (_val+_scroll>=MAXMESSAGEHISTORY){
+		return (_val+_scroll)-MAXMESSAGEHISTORY;
+	}else{
+		return _val+_scroll;
+	}
+}
+
+#define HISTORYONONESCREEN 13
+
+void DrawHistory(unsigned char _textStuffToDraw[][61]){
+	int _noobHeight = TextHeight(fontSize);
+	int _logStringWidth = TextWidth(fontSize,"Log ");
+	char _tempItoaArray[5];
+	int _oldOffset;
+
+	int _scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
+
+	int i;
+	while (1){
+		FpsCapStart();
+
+		ControlsStart();
+		if (WasJustPressed(SCE_CTRL_UP)){
+			_scrollOffset--;
+			if (_scrollOffset<0){
+				_scrollOffset=0;
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_DOWN)){
+			_scrollOffset++;
+			if (_scrollOffset>MAXMESSAGEHISTORY-HISTORYONONESCREEN){
+				_scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_CIRCLE)){
+			ControlsEnd();
+			break;
+		}
+		ControlsEnd();
+
+		StartDrawingA();
+
+		DrawRectangle(0,0,960,544,18,0,138,200);
+
+		for (i = 0; i < HISTORYONONESCREEN; i++){
+			DrawText(MESSAGETEXTXOFFSET,TextHeight(fontSize)+i*(TextHeight(fontSize)),_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize);
+		}
+
+		DrawTextColored(3,screenHeight-_noobHeight,"LOG",fontSize,0,255,0);
+		DrawTextColored(3+_logStringWidth,screenHeight-_noobHeight,_tempItoaArray,fontSize,0,255,0);
+
+		DrawRectangle(955,0,5,544,0,0,0,255);
+		DrawRectangle(955,floor(444*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,100,255,0,0,255);
+
+		EndDrawingA();
+
+
+		FpsCapWait();
+	}
+}
+
+// I don't want all my hard work to go to waste.
+//void DrawHistoryDraft(unsigned char _textStuffToDraw[][61], int _offset){
+//	_offset=MAXMESSAGEHISTORY-(HISTORYONONESCREEN);
+//	int _noobHeight = TextHeight(fontSize);
+//	int _logStringWidth = TextWidth(fontSize,"Log ");
+//	char _tempItoaArray[5];
+//	int _oldOffset;
+//	int _maxPage = ceil((double)MAXMESSAGEHISTORY/HISTORYONONESCREEN)-1;
+//	int _page=_maxPage;
+//	itoa(_page+1,_tempItoaArray,10);
+//	while (1){
+//		FpsCapStart();
+//
+//		ControlsStart();
+//		if (WasJustPressed(SCE_CTRL_RIGHT)){
+//			if (_page<_maxPage){
+//				_page++;
+//				itoa(_page+1,_tempItoaArray,10);
+//			}
+//			printf("Offset is now %d\n",_page);
+//		}
+//		if (WasJustPressed(SCE_CTRL_LEFT)){
+//			if (_page>0){
+//				_page--;
+//				itoa(_page+1,_tempItoaArray,10);
+//			}
+//			printf("Offset is now %d\n",_page);
+//		}
+//		if (WasJustPressed(SCE_CTRL_CIRCLE)){
+//			ControlsEnd();
+//			break;
+//		}
+//		ControlsEnd();
+//
+//		StartDrawingA();
+//
+//		//void DrawRectangle(int x, int y, int w, int h, int r, int g, int b, int a){
+//		DrawRectangle(0,0,960,544,18,0,138,200);
+//
+//		int i;
+//		if (_page!=_maxPage){
+//			for (i = 0; i < HISTORYONONESCREEN; i++){
+//				DrawText(MESSAGETEXTXOFFSET,TextHeight(fontSize)+i*(TextHeight(fontSize)),_textStuffToDraw[i+_page*HISTORYONONESCREEN],fontSize);
+//			}
+//		}else{
+//			for (i = 0; i < MAXMESSAGEHISTORY%HISTORYONONESCREEN; i++){
+//				DrawText(MESSAGETEXTXOFFSET,TextHeight(fontSize)+i*(TextHeight(fontSize)),_textStuffToDraw[i+_page*HISTORYONONESCREEN],fontSize);
+//			}
+//		}
+//
+//		DrawTextColored(3,screenHeight-_noobHeight,"LOG",fontSize,0,255,0);
+//		DrawTextColored(3+_logStringWidth,screenHeight-_noobHeight,_tempItoaArray,fontSize,0,255,0);
+//
+//		EndDrawingA();
+//
+//
+//		FpsCapWait();
+//	}
+//}
+
 void InBetweenLines(lua_State *L, lua_Debug *ar) {
 	if (currentGameStatus==3){
 		currentScriptLine++;
@@ -1049,6 +958,25 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 					autoModeOn=1;
 				}
 			}
+			if (WasJustPressed(SCE_CTRL_START)){
+				DrawHistory(messageHistory);
+				//int noobNumber = oldestMessage;
+				//while (1){
+				//	if (noobNumber>=MAXMESSAGEHISTORY){
+				//		if (oldestMessage!=0){
+				//			noobNumber=0;
+				//		}else{
+				//			break;
+				//		}
+				//	}
+				//	printf("%s\n",messageHistory[noobNumber]);
+				//	noobNumber++;
+				//	if (noobNumber==oldestMessage){
+				//		break;
+				//	}
+				//}
+				//oldestMessage++;
+			}
 			ControlsEnd();
 			FpsCapWait();
 			if (autoModeOn==1){
@@ -1071,8 +999,6 @@ void DrawBackground(CrossTexture* passedBackground, unsigned char passedRez){
 		//}
 	}else if (passedRez == REZ_PS3_BACKGROUND){
 		DrawTexture(passedBackground,0,2);
-	}else if (passedRez == REZ_UPDATED){
-		printf("There are no updated background sprites in the original version. Perhaps you meant ps3?");
 	}
 }
 
@@ -1081,8 +1007,6 @@ void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedRez
 		DrawTextureAlpha(passedBackground,160,32,passedAlpha);
 	}else if (passedRez == REZ_PS3_BACKGROUND){
 		DrawTextureAlpha(passedBackground,0,2,passedAlpha);
-	}else if (passedRez == REZ_UPDATED){
-		printf("There are no updated background sprites in the original version. Perhaps you meant ps3?");
 	}
 }
 
@@ -1093,7 +1017,7 @@ void DrawBust(bust* passedBust){
 			DrawTexture(passedBust->image,123+passedBust->xOffset*1.3,passedBust->yOffset+2);
 			//}else if (passedBust->rez == REZ_OLD && currentBackgroundRez == REZ_PS3_BACKGROUND){ // In this case, the Steam busts should be bigger, but I'm too lazy to do that. Actually, all busts should be bigger. They look a little small
 			//	DrawTexture(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset+62);
-		}else if (passedBust->rez==REZ_OLD || passedBust->rez == REZ_UPDATED){ // For normal graphics
+		}else if (passedBust->rez==REZ_OLD){ // For normal graphics
 			// (960-640)/2=160
 			// (544-480)/2=32
 			DrawTexture(passedBust->image,160+passedBust->xOffset,passedBust->yOffset+32);
@@ -1103,7 +1027,7 @@ void DrawBust(bust* passedBust){
 	}else{
 		if (passedBust->rez == REZ_PS3_BUST){ // For ordinary PS3 graphics.
 			DrawTextureAlpha(passedBust->image,123+passedBust->xOffset*1.3,passedBust->yOffset+2,passedBust->alpha);
-		}else if (passedBust->rez==REZ_OLD || passedBust->rez == REZ_UPDATED){ // For normal graphics
+		}else if (passedBust->rez==REZ_OLD){ // For normal graphics
 			DrawTextureAlpha(passedBust->image,160+passedBust->xOffset,passedBust->yOffset+32,passedBust->alpha);
 		}else if (passedBust->rez == REZ_PS3_BACKGROUND){ // For the CG scenes
 			DrawBackgroundAlpha(passedBust->image,passedBust->rez,passedBust->alpha);
@@ -1169,21 +1093,6 @@ void MoveFilePointerPastNewline(FILE* fp){
 	}
 }
 
-// Checks if the byte is the one for a newline
-// If it's 0D, it seeks past 0A
-signed char IsNewLine(FILE* fp, unsigned char _temp){
-	if (_temp==13){
-		fseek(fp,1,SEEK_CUR);
-		return 1;
-	}
-	if (_temp=='\n' || _temp==10){
-		// It seems like the other newline char is skipped for me?
-		return 1;
-	}
-	return 0;
-}
-
-
 // LAST ARG IS WHERE THE LENGTH IS STORED
 unsigned char* ReadNumberStringList(FILE *fp, unsigned char* arraysize){
 	int numScripts;
@@ -1215,8 +1124,6 @@ unsigned char* ReadNumberStringList(FILE *fp, unsigned char* arraysize){
 	(*arraysize) = numScripts;
 	return _thelist;
 }
-
-
 
 char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 	char currentReadLine[200];
@@ -1265,7 +1172,6 @@ char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 	(*arraysize) = numScripts;
 	return _thelist;
 }
-
 
 void LoadPreset(char* filename){
 	//currentPresetFileList
@@ -1471,8 +1377,6 @@ signed char CheckForUserStuff(){
 	return 0;
 }
 
-
-
 int FixVolumeArg(int _val){
 	if (_val>255){
 		return 255;
@@ -1483,7 +1387,6 @@ int FixVolumeArg(int _val){
 	}
 	return 255;
 }
-
 
 
 //===================
@@ -1785,7 +1688,6 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 	//unsigned const char* message = (unsigned const char*)lua_tostring(passedState,4);
 	//endType = lua_tonumber(passedState,5);
 	endType = _endtypetemp;
-	
 
 	for (i = 0; i < u_strlen(message); i++){
 		FpsCapStart();
@@ -1796,6 +1698,7 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 			currentLine++;
 			currentChar = GetNextCharOnLine(currentLine);
 		}
+
 		// If it's a new word, add a newline if the word will be cut off
 		if (message[i]==' '){
 			for (j=1;j<61;j++){
@@ -1836,6 +1739,7 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 				}
 			}
 		}
+
 		if (message[i]==226 && message[i+1]==128 && message[i+2]==148){ // Don't write a wierd hyphen.
 			i=i+2;
 			memset(&(currentMessages[currentLine][currentChar]),45,1); // Replace it with a normal hyphen
@@ -1869,7 +1773,6 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 			memcpy(&(currentMessages[currentLine][currentChar]),&(message[i]),1);
 			currentChar++;
 		}
-
 		//
 		if (WasJustPressed(SCE_CTRL_CROSS)){
 			waitingIsForShmucks=1;
@@ -1882,7 +1785,7 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 			ControlsEnd();
 			FpsCapWait();
 		}
-		
+
 	}
 }
 
@@ -1978,7 +1881,9 @@ void LoadSettings(){
 		fclose(fp);
 
 		if (cpuOverclocked==1){
-			scePowerSetArmClockFrequency(444);
+			#if PLATFORM == PLAT_VITA
+				scePowerSetArmClockFrequency(444);
+			#endif
 		}
 		printf("Loaded settings file.\n");
 	}
@@ -1994,9 +1899,6 @@ int L_ClearMessage(lua_State* passedState){
 	ClearMessageArray();
 	return 0;
 }
-
-
-
 
 int L_OutputLine(lua_State* passedState){
 	OutputLine((unsigned const char*)lua_tostring(passedState,4),lua_tonumber(passedState,5),0);
@@ -2050,8 +1952,6 @@ int L_PlayBGM(lua_State* passedState){
 
 	return 0;
 }
-
-
 
 // Some int argument
 // Maybe music slot
@@ -2174,7 +2074,6 @@ int L_FadeBustshot(lua_State* passedState){
 	FadeBustshot(lua_tonumber(passedState,1)-1,lua_tonumber(passedState,7),lua_toboolean(passedState,8));
 	return 0;
 }
-
 
 // Slot, file, volume
 int L_PlaySE(lua_State* passedState){
@@ -2489,11 +2388,10 @@ void MakeLuaUseful(){
 
 //======================================================
 
-
-
 void Draw(){
 	int i;
 	//DrawTexture(testtex,32,32);
+
 	StartDrawingA();
 
 	if (currentBackground!=NULL){
@@ -2797,7 +2695,7 @@ void TitleScreen(){
 		}
 		DrawText(32,5+_textheight*(4+2),"Exit",fontSize);
 
-		DrawText(850,544-5-_textheight,"v1.4",fontSize);
+		DrawText(850,544-5-_textheight,VERSIONSTRING,fontSize);
 
 		DrawText(5,5+_textheight*(_choice+2),">",fontSize);
 		EndDrawingA();
@@ -3102,29 +3000,21 @@ void NavigationMenu(){
 
 		// Editor secret code
 			if (WasJustPressed(SCE_CTRL_UP)){
-				_codeProgress=1;
+				_codeProgress = Password(_codeProgress,0);
 			}
 			if (WasJustPressed(SCE_CTRL_DOWN)){
-				if (_codeProgress==1){
-					_codeProgress=2;
-				}else{
-					_codeProgress=0;
-				}
+				_codeProgress = Password(_codeProgress,1);
 			}
+			//int Password(int val, int _shouldHave){
 			if (WasJustPressed(SCE_CTRL_LEFT)){
-				if (_codeProgress==2){
-					_codeProgress=3;
-				}else{
-					_codeProgress=0;
-				}
+				_codeProgress = Password(_codeProgress,2);
 			}
 			if (WasJustPressed(SCE_CTRL_RIGHT)){
-				if (_codeProgress==3){
+				_codeProgress = Password(_codeProgress,3);
+				if (_codeProgress==4){
 					SaveGameEditor();
 					itoa(currentPresetChapter,_endOfChapterString,10);
 					_nextChapterExist=1;
-					_codeProgress=0;
-				}else{
 					_codeProgress=0;
 				}
 			}

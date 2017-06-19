@@ -1,0 +1,15 @@
+OutputLine
+OutputLine(arg0, arg1, arg2, arg3, arg4)
+	arg0 - NULL 100% of the time. In an included script file, test.txt, "Mion" is put in the argument. There's a chance it was supposed to be a string that says who is talking. Making the argument anything but NULL does nothing.
+	arg1 - The message in Japanese
+	arg2 - Same as arg0, NULL
+	arg3 - Message in English
+	arg4 - Line end type
+
+
+OutputLine(NULL, "　確",NULL, "T", Line_WaitForInput);
+
+
+OutputLineAll(NULL, "\n", Line_ContinueAfterTyping);
+	arg0 - Same as arg0 in OutputLine.
+	
