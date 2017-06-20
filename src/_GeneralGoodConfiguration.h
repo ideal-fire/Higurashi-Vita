@@ -13,8 +13,8 @@
 	#define SND_SDL 1
 
 	// Change these depending on the target platform
-	#define RENDERER REND_SDL
-	#define PLATFORM PLAT_WINDOWS
+	#define RENDERER REND_VITA2D
+	#define PLATFORM PLAT_VITA
 	#define SOUNDPLAYER SND_SDL
 
 #endif

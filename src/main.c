@@ -37,6 +37,7 @@
 	void LazyMessage(char* stra, char* strb, char* strc, char* strd);
 	void SaveSettings();
 	void XOutFunction();
+	void DrawHistory(unsigned char _textStuffToDraw[][61]);
 
 // Libraries all need
 #include <math.h>
@@ -70,6 +71,7 @@
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
 #define VERSIONSTRING "v1.5"
+#define HISTORYONONESCREEN 13
 /////////////////////////////////////
 
 #define OPTIONSFILEFORMAT 1
@@ -798,120 +800,6 @@ int FixHistoryOldSub(int _val, int _scroll){
 	}
 }
 
-#define HISTORYONONESCREEN 13
-
-void DrawHistory(unsigned char _textStuffToDraw[][61]){
-	int _noobHeight = TextHeight(fontSize);
-	int _logStringWidth = TextWidth(fontSize,"Log ");
-	char _tempItoaArray[5];
-	int _oldOffset;
-
-	int _scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
-
-	int i;
-	while (1){
-		FpsCapStart();
-
-		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_UP)){
-			_scrollOffset--;
-			if (_scrollOffset<0){
-				_scrollOffset=0;
-			}
-		}
-		if (WasJustPressed(SCE_CTRL_DOWN)){
-			_scrollOffset++;
-			if (_scrollOffset>MAXMESSAGEHISTORY-HISTORYONONESCREEN){
-				_scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
-			}
-		}
-		if (WasJustPressed(SCE_CTRL_CIRCLE)){
-			ControlsEnd();
-			break;
-		}
-		ControlsEnd();
-
-		StartDrawingA();
-
-		DrawRectangle(0,0,960,544,18,0,138,200);
-
-		for (i = 0; i < HISTORYONONESCREEN; i++){
-			DrawText(MESSAGETEXTXOFFSET,TextHeight(fontSize)+i*(TextHeight(fontSize)),_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize);
-		}
-
-		DrawTextColored(3,screenHeight-_noobHeight,"LOG",fontSize,0,255,0);
-		DrawTextColored(3+_logStringWidth,screenHeight-_noobHeight,_tempItoaArray,fontSize,0,255,0);
-
-		DrawRectangle(955,0,5,544,0,0,0,255);
-		DrawRectangle(955,floor(444*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,100,255,0,0,255);
-
-		EndDrawingA();
-
-
-		FpsCapWait();
-	}
-}
-
-// I don't want all my hard work to go to waste.
-//void DrawHistoryDraft(unsigned char _textStuffToDraw[][61], int _offset){
-//	_offset=MAXMESSAGEHISTORY-(HISTORYONONESCREEN);
-//	int _noobHeight = TextHeight(fontSize);
-//	int _logStringWidth = TextWidth(fontSize,"Log ");
-//	char _tempItoaArray[5];
-//	int _oldOffset;
-//	int _maxPage = ceil((double)MAXMESSAGEHISTORY/HISTORYONONESCREEN)-1;
-//	int _page=_maxPage;
-//	itoa(_page+1,_tempItoaArray,10);
-//	while (1){
-//		FpsCapStart();
-//
-//		ControlsStart();
-//		if (WasJustPressed(SCE_CTRL_RIGHT)){
-//			if (_page<_maxPage){
-//				_page++;
-//				itoa(_page+1,_tempItoaArray,10);
-//			}
-//			printf("Offset is now %d\n",_page);
-//		}
-//		if (WasJustPressed(SCE_CTRL_LEFT)){
-//			if (_page>0){
-//				_page--;
-//				itoa(_page+1,_tempItoaArray,10);
-//			}
-//			printf("Offset is now %d\n",_page);
-//		}
-//		if (WasJustPressed(SCE_CTRL_CIRCLE)){
-//			ControlsEnd();
-//			break;
-//		}
-//		ControlsEnd();
-//
-//		StartDrawingA();
-//
-//		//void DrawRectangle(int x, int y, int w, int h, int r, int g, int b, int a){
-//		DrawRectangle(0,0,960,544,18,0,138,200);
-//
-//		int i;
-//		if (_page!=_maxPage){
-//			for (i = 0; i < HISTORYONONESCREEN; i++){
-//				DrawText(MESSAGETEXTXOFFSET,TextHeight(fontSize)+i*(TextHeight(fontSize)),_textStuffToDraw[i+_page*HISTORYONONESCREEN],fontSize);
-//			}
-//		}else{
-//			for (i = 0; i < MAXMESSAGEHISTORY%HISTORYONONESCREEN; i++){
-//				DrawText(MESSAGETEXTXOFFSET,TextHeight(fontSize)+i*(TextHeight(fontSize)),_textStuffToDraw[i+_page*HISTORYONONESCREEN],fontSize);
-//			}
-//		}
-//
-//		DrawTextColored(3,screenHeight-_noobHeight,"LOG",fontSize,0,255,0);
-//		DrawTextColored(3+_logStringWidth,screenHeight-_noobHeight,_tempItoaArray,fontSize,0,255,0);
-//
-//		EndDrawingA();
-//
-//
-//		FpsCapWait();
-//	}
-//}
-
 void InBetweenLines(lua_State *L, lua_Debug *ar) {
 	if (currentGameStatus==3){
 		currentScriptLine++;
@@ -960,22 +848,6 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 			}
 			if (WasJustPressed(SCE_CTRL_START)){
 				DrawHistory(messageHistory);
-				//int noobNumber = oldestMessage;
-				//while (1){
-				//	if (noobNumber>=MAXMESSAGEHISTORY){
-				//		if (oldestMessage!=0){
-				//			noobNumber=0;
-				//		}else{
-				//			break;
-				//		}
-				//	}
-				//	printf("%s\n",messageHistory[noobNumber]);
-				//	noobNumber++;
-				//	if (noobNumber==oldestMessage){
-				//		break;
-				//	}
-				//}
-				//oldestMessage++;
 			}
 			ControlsEnd();
 			FpsCapWait();
@@ -1888,6 +1760,73 @@ void LoadSettings(){
 		printf("Loaded settings file.\n");
 	}
 }
+
+void DrawHistory(unsigned char _textStuffToDraw[][61]){
+	ControlsEnd();
+	int _noobHeight = TextHeight(fontSize);
+	int _controlsStringWidth = TextWidth(fontSize,"UP and DOWN to scroll, O to return");
+	int _scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
+
+	int i;
+	while (1){
+		FpsCapStart();
+
+		ControlsStart();
+		if (WasJustPressed(SCE_CTRL_UP)){
+			_scrollOffset--;
+			if (_scrollOffset<0){
+				_scrollOffset=0;
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_DOWN)){
+			_scrollOffset++;
+			if (_scrollOffset>MAXMESSAGEHISTORY-HISTORYONONESCREEN){
+				_scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_CIRCLE) || WasJustPressed(SCE_CTRL_START)){
+			ControlsEnd();
+			break;
+		}
+		ControlsEnd();
+
+		StartDrawingA();
+
+		if (currentBackground!=NULL){
+			DrawBackground(currentBackground,currentBackgroundRez);
+		}
+	
+		for (i = MAXBUSTS-1; i != -1; i--){
+			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1){
+				DrawBust(&(Busts[bustOrder[i]]));
+			}
+		}
+	
+		for (i = MAXBUSTS-1; i != -1; i--){
+			if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
+				DrawBust(&(Busts[bustOrderOverBox[i]]));
+			}
+		}
+
+		DrawRectangle(0,0,960,544,0,230,255,200);
+
+		for (i = 0; i < HISTORYONONESCREEN; i++){
+			DrawTextColored(MESSAGETEXTXOFFSET,TextHeight(fontSize)+i*(TextHeight(fontSize)),_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
+		}
+
+		DrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
+		DrawTextColored(screenWidth-3-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, O to return",fontSize,0,0,0);
+
+		DrawRectangle(955,0,5,544,0,0,0,255);
+		DrawRectangle(955,floor(444*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,100,255,0,0,255);
+
+		EndDrawingA();
+
+
+		FpsCapWait();
+	}
+}
+
 
 /*
 =================================================
