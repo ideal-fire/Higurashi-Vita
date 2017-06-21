@@ -1,4 +1,6 @@
 /*
+	1280x800
+
 	(?<!.)char(?!\*)
 	Make sure there's nothing behind char and that it doesn't have * after it
 	I can use this to find all normal char and replace it with signed char
@@ -29,12 +31,13 @@
 
 	In my testing, 444 HZ cpu makes loading and freeing 130 KB sound file take about 200 miliseconds less and loading the biggest image file in Onikakushi PS3 patch take about 50 miliseconds less
 */
+#include "_GeneralGoodConfiguration.h"
 
 // main.h
 	void Draw();
 	void RecalculateBustOrder();
 	void PlayBGM(const char* filename, int _volume);
-	void LazyMessage(char* stra, char* strb, char* strc, char* strd);
+	void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd);
 	void SaveSettings();
 	void XOutFunction();
 	void DrawHistory(unsigned char _textStuffToDraw[][61]);
@@ -51,7 +54,7 @@
 #include <Lua/lauxlib.h>
 //
 
-#include "_GeneralGoodConfiguration.h"
+
 #include "GeneralGoodExtended.h"
 
 #define REZ_UNDEFINED 0
@@ -79,7 +82,7 @@
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
 	lua_setglobal(L,y);
 
-// Platform specific libraries
+// Platform specific headers
 	// Nothing to see here.
 
 ////////////////////////////////////////
@@ -102,16 +105,24 @@
 #endif
 
 //////////////
+// The STREAMINGASSETS variable is only used for images and sound
 #if PLATFORM == PLAT_VITA
 	char STREAMINGASSETS[] = "ux0:data/HIGURASHI/StreamingAssets/";
 	char PRESETFOLDER[] = "ux0:data/HIGURASHI/StreamingAssets/Presets/";
 	char SCRIPTFOLDER[] = "ux0:data/HIGURASHI/StreamingAssets/Scripts/";
 	char SAVEFOLDER[] = "ux0:data/HIGURASHI/Saves/";
 #elif PLATFORM == PLAT_WINDOWS
-	char STREAMINGASSETS[] = "./StreamingAssets/";
-	char PRESETFOLDER[] = "./StreamingAssets/Presets/";
-	char SCRIPTFOLDER[] = "./StreamingAssets/Scripts/";
-	char SAVEFOLDER[] = "./Saves/";
+	#if SUBPLATFORM == SUB_ANDROID
+		char STREAMINGASSETS[] = "/sdcard/HIGURASHI/StreamingAssets/";
+		char PRESETFOLDER[] = "/sdcard/HIGURASHI/StreamingAssets/Presets/";
+		char SCRIPTFOLDER[] = "/sdcard/HIGURASHI/StreamingAssets/Scripts/";
+		char SAVEFOLDER[] = "/sdcard/HIGURASHI/Saves/";
+	#else
+		char STREAMINGASSETS[] = "./StreamingAssets/";
+		char PRESETFOLDER[] = "./StreamingAssets/Presets/";
+		char SCRIPTFOLDER[] = "./StreamingAssets/Scripts/";
+		char SAVEFOLDER[] = "./Saves/";
+	#endif
 #endif
 
 /*
@@ -185,7 +196,7 @@ unsigned char bustOrder[MAXBUSTS];
 
 unsigned char bustOrderOverBox[MAXBUSTS];
 
-char* locationStrings[3] = {"CG/","CG/","CGAlt/"};
+char* locationStrings[3] = {(char*)"CG/",(char*)"CG/",(char*)"CGAlt/"};
 
 typedef struct grhuighruei{
 	char** theArray;
@@ -264,6 +275,10 @@ unsigned char oldestMessage=0;
 /*
 */
 
+void itoa(int _num, char* _buffer, int _uselessBase){
+	sprintf(_buffer, "%d", _num);
+}
+
 int TextHeight(float scale){
 	#if RENDERER == REND_SDL
 		return (8*scale);
@@ -271,7 +286,7 @@ int TextHeight(float scale){
 		return vita2d_font_text_height(fontImage,scale,"a");
 	#endif
 }
-int TextWidth(float scale, char* message){
+int TextWidth(float scale, const char* message){
 	#if RENDERER == REND_SDL
 		return floor((8*scale)*strlen(message)+strlen(message));
 	#elif RENDERER == REND_VITA2D
@@ -318,8 +333,8 @@ void PlayMenuSound(){
 	}
 }
 
-CrossTexture* SafeLoadPNG(char* path){
-	CrossTexture* _tempTex = LoadPNG(path);
+CrossTexture* SafeLoadPNG(const char* path){
+	CrossTexture* _tempTex = LoadPNG((char*)path);
 	if (_tempTex==NULL){
 		LazyMessage("Failed to load image",path,"What will happen now?!",NULL);
 	}
@@ -366,7 +381,7 @@ void ClearMessageArray(){
 	int i,j;
 	for (i = 0; i < 15; i++){
 		if (currentMessages[i][0]!='\0'){
-			strcpy(messageHistory[oldestMessage],currentMessages[i]);
+			strcpy((char*)messageHistory[oldestMessage],(const char*)currentMessages[i]);
 			oldestMessage++;
 			if (oldestMessage==MAXMESSAGEHISTORY){
 				oldestMessage=0;
@@ -524,7 +539,7 @@ int DidActuallyConvert(char* filepath){
 	return _isConverted;
 }
 
-void DisplaypcallError(int val, char* fourthMessage){
+void DisplaypcallError(int val, const char* fourthMessage){
 	switch (val){
 		case LUA_ERRRUN:
 			LazyMessage("lua_pcall failed with error","LUA_ERRSYNTAX, a runtime error.","Please report the bug on the thread.",fourthMessage);
@@ -544,7 +559,7 @@ void DisplaypcallError(int val, char* fourthMessage){
 	}
 }
 
-void RunScript(char* _scriptfolderlocation,char* filename, char addTxt){
+void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	ClearMessageArray();	
 	currentScriptLine=0;
 	char tempstringconcat[strlen(_scriptfolderlocation)+strlen(filename)+strlen(".txt")+1];
@@ -605,7 +620,7 @@ void RunScript(char* _scriptfolderlocation,char* filename, char addTxt){
 }
 
 char* CombineStringsPLEASEFREE(const char* first, const char* firstpointfive, const char* second, const char* third){
-	char* tempstringconcat = calloc(1,strlen(first)+strlen(firstpointfive)+strlen(second)+strlen(third)+1);
+	char* tempstringconcat = (char*)calloc(1,strlen(first)+strlen(firstpointfive)+strlen(second)+strlen(third)+1);
 	strcat(tempstringconcat, first);
 	strcat(tempstringconcat, firstpointfive);
 	strcat(tempstringconcat, second);
@@ -1106,11 +1121,11 @@ void LoadPreset(char* filename){
 }
 
 void SetNextScriptName(){
-	memset((nextScriptToLoad),'\0',sizeof(nextScriptToLoad));
-	strcpy(nextScriptToLoad,currentPresetFileList.theArray[currentPresetChapter]);
+	memset((char*)(nextScriptToLoad),'\0',sizeof(nextScriptToLoad));
+	strcpy((char*)nextScriptToLoad,currentPresetFileList.theArray[currentPresetChapter]);
 }
 
-void LazyMessage(char* stra, char* strb, char* strc, char* strd){
+void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd){
 	int _textheight = TextHeight(fontSize);
 	ControlsStart();
 	ControlsEnd();
@@ -1143,7 +1158,7 @@ void LazyMessage(char* stra, char* strb, char* strc, char* strd){
 
 // Returns one if they chose yes
 // Returns zero if they chose no
-int LazyChoice(char* stra, char* strb, char* strc, char* strd){
+int LazyChoice(const char* stra, const char* strb, const char* strc, const char* strd){
 	int _textheight = TextHeight(fontSize);
 	int _choice=0;
 	ControlsStart();
@@ -1192,22 +1207,22 @@ int LazyChoice(char* stra, char* strb, char* strc, char* strd){
 }
 
 void LoadGame(){
-	strcpy(globalTempConcat,SAVEFOLDER);
-	strcat(globalTempConcat,currentPresetFilename);
+	strcpy((char*)globalTempConcat,SAVEFOLDER);
+	strcat((char*)globalTempConcat,currentPresetFilename);
 	currentPresetChapter=-1;
-	if (CheckFileExist(globalTempConcat)==1){
+	if (CheckFileExist((char*)globalTempConcat)==1){
 		FILE *fp;
-		fp = fopen(globalTempConcat, "r");
+		fp = fopen((const char*)globalTempConcat, "r");
 		fread(&currentPresetChapter,2,1,fp);
 		fclose(fp);
 	}
 }
 
 void SaveGame(){
-	strcpy(globalTempConcat,SAVEFOLDER);
-	strcat(globalTempConcat,currentPresetFilename);
+	strcpy((char*)globalTempConcat,SAVEFOLDER);
+	strcat((char*)globalTempConcat,currentPresetFilename);
 	FILE *fp;
-	fp = fopen(globalTempConcat, "w");
+	fp = fopen((const char*)globalTempConcat, "w");
 	fwrite(&currentPresetChapter,2,1,fp);
 	fclose(fp);
 }
@@ -1629,7 +1644,7 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 			
 			for (j=0;j<MAXIMAGECHAR;j++){
 				if (imageCharType[j]==-1){
-					imageCharX[j] = TextWidth(fontSize,currentMessages[currentLine])+MESSAGETEXTXOFFSET;
+					imageCharX[j] = TextWidth(fontSize,(char*)currentMessages[currentLine])+MESSAGETEXTXOFFSET;
 					imageCharY[j] = TextHeight(fontSize)*currentLine+TextHeight(fontSize);
 					imageCharType[j] = _imagechartype;
 					break;
@@ -1670,7 +1685,7 @@ void StopBGM(){
 		FreeMusic(currentMusic);
 		currentMusic=NULL;
 	}
-	lastBGMFilename = realloc(lastBGMFilename,1);
+	lastBGMFilename = (char*)realloc(lastBGMFilename,1);
 	lastBGMFilenameStored=0;
 }
 
@@ -1685,7 +1700,7 @@ void PlayBGM(const char* filename, int _volume){
 		currentMusic=NULL;
 	}
 
-	lastBGMFilename = realloc(lastBGMFilename,strlen(filename)+1);
+	lastBGMFilename = (char*)realloc(lastBGMFilename,strlen(filename)+1);
 	strcpy(lastBGMFilename,filename);
 	
 	lastBGMVolume=FixVolumeArg(_volume);
@@ -1695,7 +1710,7 @@ void PlayBGM(const char* filename, int _volume){
 		currentMusic = LoadMusic(tempstringconcat);
 		
 
-		Mix_VolumeMusic(FixVolumeArg(_volume));
+		SetMusicVolume(FixVolumeArg(_volume));
 
 		PlayMusic(currentMusic);
 		lastBGMFilenameStored=1;
@@ -1811,7 +1826,8 @@ void DrawHistory(unsigned char _textStuffToDraw[][61]){
 		DrawRectangle(0,0,960,544,0,230,255,200);
 
 		for (i = 0; i < HISTORYONONESCREEN; i++){
-			DrawTextColored(MESSAGETEXTXOFFSET,TextHeight(fontSize)+i*(TextHeight(fontSize)),_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
+			//void DrawTextColored(int x, int y, const char* text, float size, unsigned char r, unsigned char g, unsigned char b){
+			DrawTextColored(MESSAGETEXTXOFFSET,TextHeight(fontSize)+i*(TextHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
 		}
 
 		DrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
@@ -1902,7 +1918,7 @@ int L_StopBGM(lua_State* passedState){
 // Last arg, I was right. Bool for if wait for fadeoutr
 int L_FadeoutBGM(lua_State* passedState){
 	// I BET THE SECOND ARGUMENT IS IF IT WAITS OR NOT
-	Mix_FadeOutMusic(lua_tonumber(passedState,2));
+	FadeoutMusic(lua_tonumber(passedState,2));
 	if (lua_toboolean(passedState,3)==1){
 		Wait(lua_tonumber(passedState,2));
 	}
@@ -2025,7 +2041,7 @@ int L_PlaySE(lua_State* passedState){
 		char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/",lua_tostring(passedState,2),".ogg");
 		if (CheckFileExist(tempstringconcat)==1){
 			soundEffects[passedSlot] = LoadSound(tempstringconcat);
-			Mix_VolumeChunk(soundEffects[passedSlot],FixVolumeArg(lua_tonumber(passedState,3)));
+			SetSFXVolume(soundEffects[passedSlot],FixVolumeArg(lua_tonumber(passedState,3)));
 			PlaySound(soundEffects[passedSlot],1);
 		}else{
 			WriteToDebugFile("SE file not found");
@@ -2150,7 +2166,7 @@ int L_Select(lua_State* passedState){
 	int i;
 	for (i=0;i<_totalOptions;i++){
 		lua_rawgeti(passedState,2,i+1);
-		noobOptions[i] = calloc(1,strlen(lua_tostring(passedState,-1))+1);
+		noobOptions[i] = (char*)calloc(1,strlen(lua_tostring(passedState,-1))+1);
 		strcpy(noobOptions[i],lua_tostring(passedState,-1));
 	}
 
@@ -2380,9 +2396,9 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 	// Can hold MAXFILES filenames
 	// Each with no more than 50 characters (51 char block of memory. extra one for null char)
 	char** filenameholder;
-	filenameholder = calloc(MAXFILES,sizeof(char*));
+	filenameholder = (char**)calloc(MAXFILES,sizeof(char*));
 	for (i=0;i<MAXFILES;i++){
-		filenameholder[i]=calloc(1,MAXFILELENGTH);
+		filenameholder[i]=(char*)calloc(1,MAXFILELENGTH);
 	}
 
 	CROSSDIR dir;
@@ -2452,7 +2468,7 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 				}
 			}
 			if (WasJustPressed(SCE_CTRL_CROSS)){
-				(*_chosenfile) = calloc(1,strlen(filenameholder[_choice])+1);
+				(*_chosenfile) = (char*)calloc(1,strlen(filenameholder[_choice])+1);
 				memcpy(*_chosenfile,filenameholder[_choice],strlen(filenameholder[_choice])+1);
 				PlayMenuSound();
 				break;		
@@ -2579,7 +2595,7 @@ void TitleScreen(){
 				}else if (_choice==1){
 					printf("Manual script selection\n");
 					ControlsEnd();
-					FileSelector(SCRIPTFOLDER,&currentPresetFilename,"Select a script");
+					FileSelector(SCRIPTFOLDER,&currentPresetFilename,(char*)"Select a script");
 					if (currentPresetFilename!=NULL){
 						currentGameStatus=3;
 						RunScript(SCRIPTFOLDER,currentPresetFilename,0);
@@ -2780,10 +2796,10 @@ void ChapterJump(){
 	ControlsEnd();
 
 	itoa(_chapterChoice,&(_tempNumberString[0]),10);
-	strcpy(globalTempConcat,currentPresetFileList.theArray[_chapterChoice]);
-	strcat(globalTempConcat," (");
-	strcat(globalTempConcat,_tempNumberString);
-	strcat(globalTempConcat,")");
+	strcpy((char*)globalTempConcat,currentPresetFileList.theArray[_chapterChoice]);
+	strcat((char*)globalTempConcat," (");
+	strcat((char*)globalTempConcat,_tempNumberString);
+	strcat((char*)globalTempConcat,")");
 
 	while (currentGameStatus!=99){
 		FpsCapStart();
@@ -2799,10 +2815,10 @@ void ChapterJump(){
 			}
 
 			itoa(_chapterChoice,&(_tempNumberString[0]),10);
-			strcpy(globalTempConcat,currentPresetFileList.theArray[_chapterChoice]);
-			strcat(globalTempConcat," (");
-			strcat(globalTempConcat,_tempNumberString);
-			strcat(globalTempConcat,")");
+			strcpy((char*)globalTempConcat,currentPresetFileList.theArray[_chapterChoice]);
+			strcat((char*)globalTempConcat," (");
+			strcat((char*)globalTempConcat,_tempNumberString);
+			strcat((char*)globalTempConcat,")");
 		}
 		if (WasJustPressed(SCE_CTRL_LEFT)){
 			if (!IsDown(SCE_CTRL_RTRIGGER)){
@@ -2814,10 +2830,10 @@ void ChapterJump(){
 				_chapterChoice=currentPresetChapter;
 			}
 			itoa(_chapterChoice,&(_tempNumberString[0]),10);
-			strcpy(globalTempConcat,currentPresetFileList.theArray[_chapterChoice]);
-			strcat(globalTempConcat," (");
-			strcat(globalTempConcat,_tempNumberString);
-			strcat(globalTempConcat,")");
+			strcpy((char*)globalTempConcat,currentPresetFileList.theArray[_chapterChoice]);
+			strcat((char*)globalTempConcat," (");
+			strcat((char*)globalTempConcat,_tempNumberString);
+			strcat((char*)globalTempConcat,")");
 		}
 		if (WasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
@@ -2851,7 +2867,7 @@ void ChapterJump(){
 		StartDrawingA();
 		
 		if (chapterNamesLoaded==0){
-			DrawText(32,5+_textheight*(0+2),globalTempConcat,fontSize);
+			DrawText(32,5+_textheight*(0+2),(const char*)globalTempConcat,fontSize);
 		}else{
 			DrawText(32,5+_textheight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice],fontSize);
 		}
@@ -2916,7 +2932,7 @@ void SaveGameEditor(){
 void NavigationMenu(){
 	signed char _choice=0;
 	int _textheight = TextHeight(fontSize);
-	int _endofscriptwidth = TextWidth(fontSize,"End of script: ");
+	int _endofscriptwidth = TextWidth(fontSize,(char*)"End of script: ");
 	char _endOfChapterString[10];
 	itoa(currentPresetChapter,_endOfChapterString,10);
 
@@ -3046,8 +3062,11 @@ signed char init(){
 		// Check if this fails?
 		IMG_Init( IMG_INIT_PNG );
 
-		fontImage=SafeLoadPNG("./Font.png");
-
+		#if SUBPLATFORM == SUB_ANDROID
+			fontImage=SafeLoadPNG((char*)"a/Font.png");
+		#else
+			fontImage=SafeLoadPNG((char*)"./Font.png");
+		#endif
 		SDL_SetRenderDrawBlendMode(mainWindowRenderer,SDL_BLENDMODE_BLEND);
 	#endif
 	#if RENDERER == REND_VITA2D
@@ -3060,8 +3079,8 @@ signed char init(){
 		// Zero a variable that should already be zero.
 		memset(&pad, 0, sizeof(pad));
 
-		if (CheckFileExist("app0:a/LiberationSans-Regular.ttf")==1){
-			fontImage = vita2d_load_font_file("app0:a/LiberationSans-Regular.ttf");
+		if (CheckFileExist((char*)"app0:a/LiberationSans-Regular.ttf")==1){
+			fontImage = vita2d_load_font_file((char*)"app0:a/LiberationSans-Regular.ttf");
 		}
 		//fontImageItalics = vita2d_load_font_file("app0:a/LiberationSans-Italic.ttf");
 	#endif
@@ -3101,13 +3120,13 @@ signed char init(){
 	}
 	free(tempstringconcat);
 	#if PLATFORM == PLAT_WINDOWS
-		imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG("./unknown.png");
-		imageCharImages[IMAGECHARNOTE] = SafeLoadPNG("./note.png");
-		imageCharImages[IMAGECHARSTAR] = SafeLoadPNG("./star.png");
+		imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG((char*)"./unknown.png");
+		imageCharImages[IMAGECHARNOTE] = SafeLoadPNG((char*)"./note.png");
+		imageCharImages[IMAGECHARSTAR] = SafeLoadPNG((char*)"./star.png");
 	#elif PLATFORM == PLAT_VITA
-		imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG("app0:a/unknown.png");
-		imageCharImages[IMAGECHARNOTE] = SafeLoadPNG("app0:a/note.png");
-		imageCharImages[IMAGECHARSTAR] = SafeLoadPNG("app0:a/star.png");
+		imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG((char*)"app0:a/unknown.png");
+		imageCharImages[IMAGECHARNOTE] = SafeLoadPNG((char*)"app0:a/note.png");
+		imageCharImages[IMAGECHARSTAR] = SafeLoadPNG((char*)"app0:a/star.png");
 	#endif
 
 	// Zero the image char arrray
@@ -3115,19 +3134,22 @@ signed char init(){
 		imageCharType[i]=-1;
 	}
 
-	lastBGMFilename = malloc(1);
+	lastBGMFilename = (char*)malloc(1);
 
+	#if MOBILE
+	#else
 	LoadSettings();
+	#endif
 
 	// THIS IS A SPECIAL CHECK I'LL ONLY KEEP IN v1.4
-	if (CheckFileExist("ux0:data/HIGURASHI/StreamingAssets/date.xxm0ronslayerxx")==0){
-		if (CheckFileExist("ux0:data/HIGURASHI/StreamingAssets/CG/re_se_bi_a1.png")==1){
-			LazyMessage("Welcome to v1.4 In this version, PS3 patch graphics were","changed. If you were using the PS3 patch, you need to reinstall it","and convert it with the new version of the script converter.","Don't worry, you get higher resolution sprites.");
-			FILE* fp;
-			fp = fopen ("ux0:data/HIGURASHI/StreamingAssets/date.xxm0ronslayerxx", "w");
-			fclose(fp);
-		}
-	}
+	//if (CheckFileExist("ux0:data/HIGURASHI/StreamingAssets/date.xxm0ronslayerxx")==0){
+	//	if (CheckFileExist("ux0:data/HIGURASHI/StreamingAssets/CG/re_se_bi_a1.png")==1){
+	//		LazyMessage("Welcome to v1.4 In this version, PS3 patch graphics were","changed. If you were using the PS3 patch, you need to reinstall it","and convert it with the new version of the script converter.","Don't worry, you get higher resolution sprites.");
+	//		FILE* fp;
+	//		fp = fopen ("ux0:data/HIGURASHI/StreamingAssets/date.xxm0ronslayerxx", "w");
+	//		fclose(fp);
+	//	}
+	//}
 
 
 	return 0;
@@ -3229,9 +3251,9 @@ int main(int argc, char *argv[]){
 			case 1:
 				// Create the string for the full path of the preset file and load it
 				memset(&globalTempConcat,0,sizeof(globalTempConcat));
-				strcpy(globalTempConcat,PRESETFOLDER);
-				strcat(globalTempConcat,currentPresetFilename);
-				LoadPreset(globalTempConcat);
+				strcpy((char*)globalTempConcat,PRESETFOLDER);
+				strcat((char*)globalTempConcat,currentPresetFilename);
+				LoadPreset((char*)globalTempConcat);
 
 				// Does not load the savefile, I promise.
 				LoadGame();
@@ -3241,7 +3263,7 @@ int main(int argc, char *argv[]){
 				if (currentPresetChapter==-1){
 					ControlsStart();
 					if (IsDown(SCE_CTRL_RTRIGGER)){
-						LazyMessage("You held R. This is a secret.","You will skip the first chapter.","Exit now if that's not okay.",NULL);
+						LazyMessage((char*)"You held R. This is a secret.",(char*)"You will skip the first chapter.",(char*)"Exit now if that's not okay.",NULL);
 						currentGameStatus=4;
 						currentPresetChapter=0;
 						SetNextScriptName();
@@ -3258,14 +3280,14 @@ int main(int argc, char *argv[]){
 				
 				break;
 			case 2:
-				if (FileSelector(PRESETFOLDER,&currentPresetFilename,"Select a preset")==2){
+				if (FileSelector(PRESETFOLDER,&currentPresetFilename,(char*)"Select a preset")==2){
 					ControlsEnd();
 					printf("No files were found\n");
 					StartDrawingA();
 					DrawText(32,5,"No presets found.",fontSize);
-					DrawText(32,TextHeight(fontSize)+5,"If you ran the converter, you should've gotten some.",fontSize);
-					DrawText(32,TextHeight(fontSize)*2+10,"You can manually put presets in:",fontSize);
-					DrawText(32,TextHeight(fontSize)*3+15,"ux0:data/HIGURASHI/StreamingAssets/Presets/",fontSize);
+					DrawText(32,TextHeight(fontSize)+5,(const char*)"If you ran the converter, you should've gotten some.",fontSize);
+					DrawText(32,TextHeight(fontSize)*2+10,(const char*)"You can manually put presets in:",fontSize);
+					DrawText(32,TextHeight(fontSize)*3+15,(const char*)"ux0:data/HIGURASHI/StreamingAssets/Presets/",fontSize);
 					DrawText(32,200,"Press X to return",fontSize);
 					EndDrawingA();
 					
@@ -3288,7 +3310,7 @@ int main(int argc, char *argv[]){
 				}
 				break;
 			case 3:
-				LuaThread(nextScriptToLoad);
+				LuaThread((char*)nextScriptToLoad);
 
 				// If a preset is loaded, save the game. Otherwise, go to title
 				if (currentPresetFileList.length!=0){

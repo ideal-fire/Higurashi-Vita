@@ -55,6 +55,12 @@
 		};
 	#endif
 
+	// Subplatform Stuff
+	#if SUBPLATFORM == SUB_ANDROID
+		// For mkdir
+		#include <sys/stat.h>
+	#endif
+
 	// Renderer stuff
 	#if RENDERER == REND_SDL
 
@@ -85,6 +91,10 @@
 
 		#define CROSSSFX Mix_Chunk
 		#define CROSSMUSIC Mix_Music
+	#endif
+	#if SOUNDPLAYER == SND_NONE
+		#define CROSSSFX int
+		#define CROSSMUSIC int
 	#endif
 
 	//////////////////////////////////////////////////////////

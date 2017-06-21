@@ -53,7 +53,7 @@
 		#endif
 	}
 
-	signed char CheckFileExist(char* location){
+	signed char CheckFileExist(const char* location){
 		#if PLATFORM == PLAT_VITA
 			SceUID fileHandle = sceIoOpen(location, SCE_O_RDONLY, 0777);
 			if (fileHandle < 0){
@@ -71,11 +71,15 @@
 		#endif
 	}
 
-	void MakeDirectory(char* path){
+	void MakeDirectory(const char* path){
 		#if PLATFORM == PLAT_VITA
 			sceIoMkdir(path,0777);
 		#elif PLATFORM == PLAT_WINDOWS
-			mkdir(path);
+			#if SUBPLATFORM == SUB_ANDROID
+				mkdir(path,0777);
+			#else
+				mkdir(path);
+			#endif
 		#endif
 	}
 
@@ -84,6 +88,25 @@
 	== SOUND
 	=================================================
 	*/
+
+	void SetSFXVolume(CROSSSFX* tochange, int toval){
+		#if SOUNDPLAYER == SND_SDL
+			Mix_VolumeChunk(tochange],toval);
+		#endif
+	}
+
+	void FadeoutMusic(int time){
+		#if SOUNDPLAYER == SND_SDL
+			Mix_FadeOutMusic(time);
+		#endif
+	}
+
+	void SetMusicVolume(int vol){
+		#if SOUNDPLAYER == SND_SDL
+			Mix_VolumeMusic(vol);
+		#endif
+	}
+
 	CROSSSFX* LoadSound(char* filepath){
 		#if SOUNDPLAYER == SND_SDL
 			return Mix_LoadWAV(filepath);
@@ -467,7 +490,7 @@
 		return 1;
 	}
 
-	CROSSDIR OpenDirectory(char* filepath){
+	CROSSDIR OpenDirectory(const char* filepath){
 		#if PLATFORM == PLAT_WINDOWS
 			return opendir(filepath);
 		#elif PLATFORM == PLAT_VITA
@@ -512,7 +535,7 @@
 		#endif
 	}
 
-	char DirectoryExists(char* filepath){
+	char DirectoryExists(const char* filepath){
 		CROSSDIR _tempdir = OpenDirectory(filepath);
 		if (DirOpenWorked(_tempdir)==1){
 			DirectoryClose(_tempdir);

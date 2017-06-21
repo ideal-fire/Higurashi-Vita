@@ -1,20 +1,54 @@
 #ifndef GENERALGOODCONFIGURATION
 #define GENERALGOODCONFIGURATION
 
+
+	#define PRE_UNDEFINED 0
+	#define PRE_WINDOWS 1
+	#define PRE_VITA 2
+	#define PRE_ANDROID 3
+
+
+	#define PLAT_UNDEFINED 0
 	#define PLAT_WINDOWS 1
 	#define PLAT_VITA 2
 	#define PLAT_3DS 3
 	
-	#define REND_SDL 0
-	#define REND_VITA2D 1
-	#define REND_SF2D 2
+	#define REND_UNDEFINED
+	#define REND_SDL 1
+	#define REND_VITA2D 2
+	#define REND_SF2D 3
 
 	#define SND_NONE 0
 	#define SND_SDL 1
 
-	// Change these depending on the target platform
-	#define RENDERER REND_VITA2D
-	#define PLATFORM PLAT_VITA
-	#define SOUNDPLAYER SND_SDL
+	#define SUB_NONE 0
+	#define SUB_ANDROID 1
+	
+	
+	// CHANGE THIS IF YOU'RE COMPILING FOR A DIFFERENT PLATFORM
+	#define PRESET PRE_VITA
+
+	// Constants that change the code so it runs on a specific platform
+	#if PRESET == PRE_VITA
+		#define RENDERER REND_VITA2D
+		#define PLATFORM PLAT_VITA
+		#define SUBPLATFORM SUB_NONE
+		#define SOUNDPLAYER SND_SDL
+	#elif PRESET == PRE_WINDOWS
+		#define RENDERER REND_SDL
+		#define PLATFORM PLAT_WINDOWS
+		#define SUBPLATFORM SUB_NONE
+		#define SOUNDPLAYER SND_SDL
+	#elif PRESET == PRE_ANDROID
+		#define RENDERER REND_SDL
+		#define PLATFORM PLAT_WINDOWS
+		#define SUBPLATFORM SUB_ANDROID
+		#define SOUNDPLAYER SND_NONE
+	#else // These are the defaults for no preset. Change these if you're not choosing a preset.
+		#define RENDERER REND_UNDEFINED // 0
+		#define PLATFORM PLAT_UNDEFINED // 0
+		#define SUBPLATFORM SUB_NONE // 0
+		#define SOUNDPLAYER SND_NONE // 0
+	#endif
 
 #endif
