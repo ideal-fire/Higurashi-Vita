@@ -1,5 +1,6 @@
-Every file in this folder ("src") is under Attribution 4.0 International.
+Every file in this directory ("src") is under Attribution 4.0 International.
 https://creativecommons.org/licenses/by/4.0/legalcode
+This license does not apply to files in subdirectories of this directory.
 ==============
 
 Attribution 4.0 International

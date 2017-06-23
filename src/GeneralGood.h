@@ -91,7 +91,7 @@
 
 	void SetSFXVolume(CROSSSFX* tochange, int toval){
 		#if SOUNDPLAYER == SND_SDL
-			Mix_VolumeChunk(tochange],toval);
+			Mix_VolumeChunk(tochange,toval);
 		#endif
 	}
 

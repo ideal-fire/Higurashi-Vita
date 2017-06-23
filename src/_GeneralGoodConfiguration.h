@@ -24,9 +24,13 @@
 	#define SUB_NONE 0
 	#define SUB_ANDROID 1
 	
+	#define TEXT_NONE 0
+	#define TEXT_VITA2D 1
+	#define TEXT_FONTCACHE 2
+	#define TEXT_DEBUG 3
 	
 	// CHANGE THIS IF YOU'RE COMPILING FOR A DIFFERENT PLATFORM
-	#define PRESET PRE_VITA
+	#define PRESET PRE_WINDOWS
 
 	// Constants that change the code so it runs on a specific platform
 	#if PRESET == PRE_VITA
@@ -34,21 +38,25 @@
 		#define PLATFORM PLAT_VITA
 		#define SUBPLATFORM SUB_NONE
 		#define SOUNDPLAYER SND_SDL
+		#define TEXTRENDERER TEXT_VITA2D
 	#elif PRESET == PRE_WINDOWS
 		#define RENDERER REND_SDL
 		#define PLATFORM PLAT_WINDOWS
 		#define SUBPLATFORM SUB_NONE
 		#define SOUNDPLAYER SND_SDL
+		#define TEXTRENDERER TEXT_FONTCACHE
 	#elif PRESET == PRE_ANDROID
 		#define RENDERER REND_SDL
 		#define PLATFORM PLAT_WINDOWS
 		#define SUBPLATFORM SUB_ANDROID
-		#define SOUNDPLAYER SND_NONE
+		#define SOUNDPLAYER SND_SDL
+		#define TEXTRENDERER TEXT_FONTCACHE
 	#else // These are the defaults for no preset. Change these if you're not choosing a preset.
 		#define RENDERER REND_UNDEFINED // 0
 		#define PLATFORM PLAT_UNDEFINED // 0
 		#define SUBPLATFORM SUB_NONE // 0
 		#define SOUNDPLAYER SND_NONE // 0
+		#define TEXTRENDERER TEXT_NONE // 0
 	#endif
 
 #endif

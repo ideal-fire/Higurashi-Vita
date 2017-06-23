@@ -1,0 +1,1 @@
+explorer.exe "C:\Users\knoob\Desktop\Nathan\Programing\Android\SDL2-2.0.5\android-project"

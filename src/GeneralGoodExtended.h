@@ -5,8 +5,14 @@
 	signed char InputValidity = 1;
 
 
+	int screenHeight = 544;
+	int screenWidth = 960;
 
 	#include <stdio.h>
+
+	int SCE_TOUCH = 19;
+	int touchX=-1;
+	int touchY=-1;
 
 	// Platform stuff
 	#if PLATFORM == PLAT_VITA
@@ -52,6 +58,7 @@
 			SCE_CTRL_INTERCEPTED = 16,  //!< Input not available because intercepted by another application
 			SCE_CTRL_VOLUP       = 17,	//!< Volume up button.
 			SCE_CTRL_VOLDOWN     = 18	//!< Volume down button.
+			//int SCE_TOUCH = 19;
 		};
 	#endif
 
@@ -59,6 +66,8 @@
 	#if SUBPLATFORM == SUB_ANDROID
 		// For mkdir
 		#include <sys/stat.h>
+		// So we can see console output with adb logcat
+		#define printf SDL_Log
 	#endif
 
 	// Renderer stuff
@@ -69,8 +78,8 @@
 		#include <SDL2/SDL_image.h>
 
 		// Stores control data
-		char pad[19]={0};
-		char lastPad[19]={0};
+		char pad[20]={0};
+		char lastPad[20]={0};
 
 		//The window we'll be rendering to
 		SDL_Window* mainWindow;
@@ -96,6 +105,19 @@
 		#define CROSSSFX int
 		#define CROSSMUSIC int
 	#endif
+
+
+	// Text Stuff
+	#if TEXTRENDERER == TEXT_FONTCACHE
+		#include "SDL_FontCache/SDL_FontCache.h"
+		#define CrossFont FC_Font
+	#elif TEXTRENDERER == TEXT_DEBUG
+		#define CrossFont CrossTexture
+	#elif TEXTRENDERER == TEXT_VITA2D
+		#define CrossFont vita2d_font
+	#endif
+
+
 
 	//////////////////////////////////////////////////////////
 	// Need dis
@@ -125,6 +147,40 @@
 			sf2d_end_frame();
 			sf2d_swapbuffers();
 		#endif
+	}
+
+	signed char WasJustReleased(int value){
+		if (InputValidity==1 || isSkipping==1){
+			#if PLATFORM == PLAT_VITA
+				if (lastPad.buttons & value && !(pad.buttons & value)){
+					return 1;
+				}
+			#elif PLATFORM == PLAT_WINDOWS
+				if (lastPad[value]==1 && pad[value]==0){
+					return 1;
+				}
+			#endif
+		}
+		return 0;
+	}
+
+	signed char WasJustPressed(int value){
+		if (InputValidity==1 || isSkipping==1){
+			#if PLATFORM == PLAT_VITA
+				if (pad.buttons & value && !(lastPad.buttons & value)){
+					return 1;
+				}
+			#elif PLATFORM == PLAT_WINDOWS
+				if (pad[value]==1 && lastPad[value]==0){
+					return 1;
+				}
+			#elif PLATFORM==PLAT_3DS
+				if (wasJustPad & value){
+					return 1;
+				}
+			#endif
+		}
+		return 0;
 	}
 
 	void ControlsStart(){
@@ -185,36 +241,44 @@
 						}
 					}
 				#endif
+				
+				
+				if( e.type == SDL_FINGERDOWN || (pad[SCE_TOUCH]==1 && e.type == SDL_FINGERMOTION)){
+					touchX = e.tfinger.x * screenWidth;
+					touchY = e.tfinger.y * screenHeight;
+					pad[SCE_TOUCH]=1;
+				}else if (e.type == SDL_MOUSEBUTTONDOWN || (pad[SCE_TOUCH]==1 && e.type == SDL_MOUSEMOTION) ){
+					SDL_GetMouseState(&touchX,&touchY);
+					pad[SCE_TOUCH] = 1;
+				}
+				if (e.type == SDL_FINGERUP){
+					pad[SCE_TOUCH] = 0;
+				}else if (e.type == SDL_MOUSEBUTTONUP){
+					pad[SCE_TOUCH] = 0;
+				}
+				
 			}
 		#endif
+
+		// Platform for ANDROID is also PLAT_WINDOWS
+		#if PLATFORM == PLAT_WINDOWS
+			CheckTouchControls();
+		#endif
+
 	}
+
+
+
 
 	void ControlsEnd(){
 		#if PLATFORM == PLAT_VITA
 			lastPad=pad;
 		#elif PLATFORM == PLAT_WINDOWS
-			memcpy(lastPad,pad,19);
+			memcpy(lastPad,pad,sizeof(pad));
 		#endif
 	}
 
-	signed char WasJustPressed(int value){
-		if (InputValidity==1 || isSkipping==1){
-			#if PLATFORM == PLAT_VITA
-				if (pad.buttons & value && !(lastPad.buttons & value)){
-					return 1;
-				}
-			#elif PLATFORM == PLAT_WINDOWS
-				if (pad[value]==1 && lastPad[value]==0){
-					return 1;
-				}
-			#elif PLATFORM==PLAT_3DS
-				if (wasJustPad & value){
-					return 1;
-				}
-			#endif
-		}
-		return 0;
-	}
+	
 
 	signed char IsDown(int value){
 		if (InputValidity==1 || isSkipping==1){

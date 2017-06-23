@@ -30,6 +30,9 @@
 			So, here's my idea, I take whatever char it is and add 100 if it's italics
 
 	In my testing, 444 HZ cpu makes loading and freeing 130 KB sound file take about 200 miliseconds less and loading the biggest image file in Onikakushi PS3 patch take about 50 miliseconds less
+
+	TODO - Add PNG verification. Loops through all PNG files, tries to load them. Reports each file that fails to load
+
 */
 #include "_GeneralGoodConfiguration.h"
 
@@ -41,6 +44,8 @@
 	void SaveSettings();
 	void XOutFunction();
 	void DrawHistory(unsigned char _textStuffToDraw[][61]);
+	void FixPath(char* filename,unsigned char _buffer[], char type);
+	void CheckTouchControls();
 
 // Libraries all need
 #include <math.h>
@@ -66,6 +71,11 @@
 #define LOCATION_CG 1
 #define LOCATION_CGALT 2
 
+#define TYPE_UNDEFINED 0
+#define TYPE_DATA 1
+#define TYPE_EMBEDDED 2
+
+
 /////////////////////////////////////
 #define MAXBUSTS 7
 #define MAXIMAGECHAR 20
@@ -73,7 +83,7 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v1.5"
+#define VERSIONSTRING "v1.6"
 #define HISTORYONONESCREEN 13
 /////////////////////////////////////
 
@@ -88,21 +98,18 @@
 ////////////////////////////////////////
 // PLatform specific variables
 ///////////////////////////////////////
-#if RENDERER == REND_SDL
-	CrossTexture* fontImage;
+CrossFont* fontImage;
+#if TEXTRENDERER == TEXT_DEBUG
 	float fontSize = 1.7;
 #endif
-
-#if RENDERER == REND_VITA2D
+#if TEXTRENDERER == TEXT_FONTCACHE
+	int fontSize = 25;
+#endif
+#if TEXTRENDERER == TEXT_VITA2D
 	int fontSize=32;
 #endif
 
-#if PLATFORM == PLAT_VITA
-	#if RENDERER != REND_SDL
-		vita2d_font* fontImage;
-		vita2d_font* fontImageItalics;
-	#endif
-#endif
+
 
 //////////////
 // The STREAMINGASSETS variable is only used for images and sound
@@ -171,8 +178,7 @@ signed char useVsync=0;
 unsigned char currentMessages[15][61];
 int currentLine=0;
 int place=0;
-int screenHeight = 544;
-int screenWidth = 960;
+
 
 CrossTexture* currentBackground = NULL;
 CROSSMUSIC* currentMusic = NULL;
@@ -268,6 +274,11 @@ unsigned char graphicsLocation = LOCATION_CGALT;
 unsigned char messageHistory[MAXMESSAGEHISTORY][61];
 unsigned char oldestMessage=0;
 
+#define TOUCHMODE_NONE 0
+#define TOUCHMODE_MAINGAME 1
+#define TOUCHMODE_MENU 2
+unsigned char easyTouchControlMode = TOUCHMODE_MAINGAME;
+
 /*
 ====================================================
 */
@@ -275,26 +286,34 @@ unsigned char oldestMessage=0;
 /*
 */
 
-void itoa(int _num, char* _buffer, int _uselessBase){
-	sprintf(_buffer, "%d", _num);
-}
+#if SUBPLATFORM == SUB_ANDROID
+	void itoa(int _num, char* _buffer, int _uselessBase){
+		sprintf(_buffer, "%d", _num);
+	}
+#endif
 
 int TextHeight(float scale){
-	#if RENDERER == REND_SDL
+	#if TEXTRENDERER == TEXT_DEBUG
 		return (8*scale);
-	#elif RENDERER == REND_VITA2D
+	#elif TEXTRENDERER == TEXT_VITA2D
 		return vita2d_font_text_height(fontImage,scale,"a");
-	#endif
-}
-int TextWidth(float scale, const char* message){
-	#if RENDERER == REND_SDL
-		return floor((8*scale)*strlen(message)+strlen(message));
-	#elif RENDERER == REND_VITA2D
-		return vita2d_font_text_width(fontImage,scale,message);
+	#elif TEXTRENDERER == TEXT_FONTCACHE
+		return FC_GetRealHeight(fontImage);
 	#endif
 }
 
-#if RENDERER == REND_SDL
+// Please always use the same font size
+int TextWidth(float scale, const char* message){
+	#if TEXTRENDERER == TEXT_DEBUG
+		return floor((8*scale)*strlen(message)+strlen(message));
+	#elif TEXTRENDERER == TEXT_VITA2D
+		return vita2d_font_text_width(fontImage,scale,message);
+	#elif TEXTRENDERER == TEXT_FONTCACHE
+		return FC_GetWidth(fontImage,"%s",message);
+	#endif
+}
+
+#if TEXTRENDERER == TEXT_DEBUG
 	void DrawLetter(int letterId, int _x, int _y, float size){
 		DrawTexturePartScale(fontImage,_x,_y,(letterId-32)*(8),0,8,8,size,size);
 	}
@@ -303,27 +322,34 @@ int TextWidth(float scale, const char* message){
 	}
 #endif
 void DrawText(int x, int y, const char* text, float size){
-	#if RENDERER == REND_VITA2D
+	#if TEXTRENDERER == TEXT_VITA2D
 		vita2d_font_draw_text(fontImage,x,y+TextHeight(size), RGBA8(255,255,255,255),floor(size),text);
-	#endif
-	#if RENDERER == REND_SDL
+	#elif TEXTRENDERER == TEXT_DEBUG
 		int i=0;
 		for (i = 0; i < strlen(text); i++){
 			DrawLetter(text[i],(x+(i*(8*size))+i),(y),size);
 		}
+	#elif TEXTRENDERER == TEXT_FONTCACHE
+		FC_Draw(fontImage, mainWindowRenderer, x, y, "%s", text);
 	#endif
 }
 void DrawTextColored(int x, int y, const char* text, float size, unsigned char r, unsigned char g, unsigned char b){
-	#if RENDERER == REND_VITA2D
+	#if TEXTRENDERER == TEXT_VITA2D
 		vita2d_font_draw_text(fontImage,x,y+TextHeight(size), RGBA8(r,g,b,255),floor(size),text);
-	#endif
-	#if RENDERER == REND_SDL
+	#elif TEXTRENDERER == TEXT_DEBUG
 		int i=0;
 		int notICounter=0;
 		for (i = 0; i < strlen(text); i++){
 			DrawLetterColor(text[i],(x+(notICounter*(8*size))+notICounter),(y),size,r,g,b);
 			notICounter++;
 		}
+	#elif TEXTRENDERER == TEXT_FONTCACHE
+		SDL_Color _tempcolor;
+		_tempcolor.r = r;
+		_tempcolor.g = g;
+		_tempcolor.b = b;
+		_tempcolor.a = 255;
+		FC_DrawColor(fontImage, mainWindowRenderer, x, y, _tempcolor ,"%s", text);
 	#endif
 }
 
@@ -336,6 +362,7 @@ void PlayMenuSound(){
 CrossTexture* SafeLoadPNG(const char* path){
 	CrossTexture* _tempTex = LoadPNG((char*)path);
 	if (_tempTex==NULL){
+		ShowErrorIfNull(_tempTex);
 		LazyMessage("Failed to load image",path,"What will happen now?!",NULL);
 	}
 	return _tempTex;
@@ -834,6 +861,8 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 			ControlsStart();
 			Update();
 			Draw();
+
+
 			if (WasJustPressed(SCE_CTRL_CROSS)){
 				MessageBoxEnabled=1;
 				endType = Line_ContinueAfterTyping;
@@ -1728,12 +1757,8 @@ void PlayBGM(const char* filename, int _volume){
 // autoModeWait, 4 bytes
 void SaveSettings(){
 	FILE* fp;
-
-	#if PLATFORM == PLAT_VITA
-	fp = fopen ("ux0:data/HIGURASHI/settings.noob", "w");
-	#elif PLATFORM == PLAT_WINDOWS
-	fp = fopen ("./settings.noob", "w");
-	#endif
+	FixPath("settings.noob",globalTempConcat,TYPE_DATA);
+	fp = fopen ((const char*)globalTempConcat, "w");
 	//graphicsLocation
 
 	unsigned char _tempOptionsFormat = OPTIONSFILEFORMAT;
@@ -1745,18 +1770,10 @@ void SaveSettings(){
 	printf("SAved settings file.\n");
 }
 void LoadSettings(){
-	#if PLATFORM == PLAT_VITA
-	if (CheckFileExist("ux0:data/HIGURASHI/settings.noob")==1)
-	#elif PLATFORM == PLAT_WINDOWS
-	if (CheckFileExist("./settings.noob")==1)
-	#endif
-	{
+	FixPath("settings.noob",globalTempConcat,TYPE_DATA);
+	if (CheckFileExist((const char*)globalTempConcat)==1){
 		FILE* fp;
-		#if PLATFORM == PLAT_VITA
-		fp = fopen ("ux0:data/HIGURASHI/settings.noob", "r");
-		#elif PLATFORM == PLAT_WINDOWS
-		fp = fopen ("./settings.noob", "r");
-		#endif
+		fp = fopen ((const char*)globalTempConcat, "r");
 		unsigned char _tempOptionsFormat = 255;
 		// This is the version of the format of the options file.
 		fread(&_tempOptionsFormat,1,1,fp);
@@ -1831,15 +1848,79 @@ void DrawHistory(unsigned char _textStuffToDraw[][61]){
 		}
 
 		DrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
-		DrawTextColored(screenWidth-3-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, O to return",fontSize,0,0,0);
+		DrawTextColored(screenWidth-5-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, O to return",fontSize,0,0,0);
 
 		DrawRectangle(955,0,5,544,0,0,0,255);
 		DrawRectangle(955,floor(444*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,100,255,0,0,255);
 
 		EndDrawingA();
 
-
 		FpsCapWait();
+	}
+}
+
+// Type is TYPE_EMBEDDED for embedded file
+// Type TYPE_DATA is for ux0:data/HIGURASHI folder
+// filename should NOT start with a slash
+void FixPath(char* filename,unsigned char _buffer[], char type){
+	#if SUBPLATFORM == SUB_ANDROID
+		if (type==TYPE_DATA){
+			strcpy((char*)_buffer,"/sdcard/HIGURASHI/");
+		}else if (type==TYPE_EMBEDDED){
+			strcpy((char*)_buffer,"a/");
+		}
+		strcat((char*)_buffer,filename);
+	#elif PLATFORM == PLAT_WINDOWS
+		if (type==TYPE_DATA){
+			strcpy((char*)_buffer,"./");
+		}else if (type==TYPE_EMBEDDED){
+			strcpy((char*)_buffer,"./");
+		}
+		strcat((char*)_buffer,filename);
+	#elif PLATFORM == PLAT_VITA
+		if (type==TYPE_DATA){
+			strcpy((char*)_buffer,"ux0:data/HIGURASHI/");
+		}else if (type==TYPE_EMBEDDED){
+			strcpy((char*)_buffer,"app0:a/");
+		}
+		strcat((char*)_buffer,filename);
+	#endif
+}
+
+#if PLATFORM == PLAT_WINDOWS
+	void TouchInGameMenu(){
+		ControlsEnd();
+		easyTouchControlMode = TOUCHMODE_NONE;
+		while (1){
+			FpsCapStart();
+			ControlsStart();
+			ControlsEnd();
+			StartDrawingA();
+
+			//void DrawRectangle(int x, int y, int w, int h, int r, int g, int b, int a){
+			DrawRectangle(0,0,screenWidth*.33,screenHeight*.5,255,0,0,255);
+			//void DrawText(int x, int y, const char* text, float size){
+			DrawText(0,0,"Auto",fontSize);
+
+			
+			DrawRectangle(screenWidth*.66,0,screenWidth*.34,screenHeight*.5,0,0,255,255);
+			DrawText(screenWidth*.66,0,"Back",fontSize);
+			EndDrawingA();
+			FpsCapWait();
+		}
+	}
+#endif
+
+void CheckTouchControls(){
+	if (easyTouchControlMode!=TOUCHMODE_NONE){
+		if (WasJustPressed(SCE_TOUCH)){
+			if (touchX>screenWidth*.80 && touchY<screenHeight*.20){
+				printf("Menu\n");
+				TouchInGameMenu();
+			}else{
+				printf("x\n");
+			}
+		}
 	}
 }
 
@@ -2565,6 +2646,7 @@ void TitleScreen(){
 		if (WasJustPressed(SCE_CTRL_UP)){
 			_choice--;
 		}
+
 		// Left and right to change bust location
 		if (WasJustPressed(SCE_CTRL_RIGHT) || WasJustPressed(SCE_CTRL_LEFT) || (_choice==2 && WasJustPressed(SCE_CTRL_CROSS))){
 			if (_choice==2){
@@ -2635,7 +2717,7 @@ void TitleScreen(){
 		DrawText(32,5,"Main Menu",fontSize);
 
 		DrawText(32,5+_textheight*(0+2),"Load preset and savefile",fontSize);
-		DrawText(32,5+_textheight*(1+2),"Manual [Not recommended]",fontSize);
+		DrawText(32,5+_textheight*(1+2),"Manual mode",fontSize);
 		DrawText(32,5+_textheight*(2+2),"Bust location: ",fontSize);
 			if (graphicsLocation == LOCATION_CGALT){
 				DrawText(32+_bustlocationcollinspacewidth,5+_textheight*(2+2),"CGAlt",fontSize);
@@ -2643,11 +2725,19 @@ void TitleScreen(){
 				DrawText(32+_bustlocationcollinspacewidth,5+_textheight*(2+2),"CG",fontSize);
 			}
 
-		if (cpuOverclocked==1){
-			DrawTextColored(32,5+_textheight*(3+2),"Overclock CPU",fontSize,0,255,0);
-		}else{
-			DrawText(32,5+_textheight*(3+2),"Overclock CPU",fontSize);
-		}
+		#if PLATFORM == PLAT_VITA
+			if (cpuOverclocked==1){
+				DrawTextColored(32,5+_textheight*(3+2),"Overclock CPU",fontSize,0,255,0);
+			}else{
+				DrawText(32,5+_textheight*(3+2),"Overclock CPU",fontSize);
+			}
+		#else
+			if (cpuOverclocked==1){
+				DrawTextColored(32,5+_textheight*(3+2),"Green Nothing",fontSize,0,255,0);
+			}else{
+				DrawText(32,5+_textheight*(3+2),"Nothing",fontSize);
+			}
+		#endif
 		DrawText(32,5+_textheight*(4+2),"Exit",fontSize);
 
 		DrawText(850,544-5-_textheight,VERSIONSTRING,fontSize);
@@ -3042,15 +3132,28 @@ void NavigationMenu(){
 	}
 }
 
-
 // =====================================================
 
 // Please exit if this function returns 2
 // Go ahead as normal if it returns 0
 signed char init(){
+	printf("====================================================\n===========================================================\n==================================================================\n");
 	#if RENDERER == REND_SDL
-		mainWindow = SDL_CreateWindow( "HappyWindo", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screenWidth, screenHeight, SDL_WINDOW_SHOWN );
-		ShowErrorIfNull(mainWindow);
+		SDL_Init( SDL_INIT_VIDEO );
+		#if SUBPLATFORM == SUB_ANDROID
+			// For knowing screen resolution and stuff.
+			SDL_DisplayMode displayMode;
+			if( SDL_GetCurrentDisplayMode( 0, &displayMode ) == 0 ){
+				mainWindow = SDL_CreateWindow( "HappyWindo", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, displayMode.w, displayMode.h, SDL_WINDOW_SHOWN );
+				screenWidth=displayMode.w;
+				screenHeight=displayMode.h;
+			}else{
+				printf("Failed to get display mode....\n");
+			}
+		#else
+			mainWindow = SDL_CreateWindow( "HappyWindo", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screenWidth, screenHeight, SDL_WINDOW_SHOWN );
+			ShowErrorIfNull(mainWindow);
+		#endif
 		
 		if (useVsync==0){
 			mainWindowRenderer = SDL_CreateRenderer( mainWindow, -1, SDL_RENDERER_ACCELERATED);
@@ -3058,15 +3161,9 @@ signed char init(){
 			mainWindowRenderer = SDL_CreateRenderer( mainWindow, -1, SDL_RENDERER_PRESENTVSYNC);
 		}
 		ShowErrorIfNull(mainWindowRenderer);
-		
 		// Check if this fails?
 		IMG_Init( IMG_INIT_PNG );
 
-		#if SUBPLATFORM == SUB_ANDROID
-			fontImage=SafeLoadPNG((char*)"a/Font.png");
-		#else
-			fontImage=SafeLoadPNG((char*)"./Font.png");
-		#endif
 		SDL_SetRenderDrawBlendMode(mainWindowRenderer,SDL_BLENDMODE_BLEND);
 	#endif
 	#if RENDERER == REND_VITA2D
@@ -3084,10 +3181,19 @@ signed char init(){
 		}
 		//fontImageItalics = vita2d_load_font_file("app0:a/LiberationSans-Italic.ttf");
 	#endif
-	#if RENDERER == REND_SF2D
-		sf2d_init();
-	#endif
 
+	#if TEXTRENDERER == TEXT_DEBUG
+		FixPath("Font.png",globalTempConcat,TYPE_EMBEDDED);
+		#if SUBPLATFORM == SUB_ANDROID
+			fontImage=SafeLoadPNG((char*)globalTempConcat);
+		#else
+			fontImage=SafeLoadPNG((char*)globalTempConcat);
+		#endif
+	#elif TEXTRENDERER == TEXT_FONTCACHE
+		fontImage = FC_CreateFont();
+		FixPath("LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
+		FC_LoadFont(fontImage, mainWindowRenderer, (char*)globalTempConcat, fontSize, FC_MakeColor(255,255,255,255), TTF_STYLE_NORMAL);
+	#endif
 
 	if (CheckForUserStuff()==2){
 		return 2;
@@ -3106,7 +3212,6 @@ signed char init(){
 	for (i=0;i<MAXBUSTS;i++){
 		ResetBustStruct(&(Busts[i]),0);
 	}
-
 	// Make the save files directory
 	MakeDirectory(SAVEFOLDER);
 
@@ -3119,15 +3224,15 @@ signed char init(){
 		menuSoundLoaded=0;
 	}
 	free(tempstringconcat);
-	#if PLATFORM == PLAT_WINDOWS
-		imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG((char*)"./unknown.png");
-		imageCharImages[IMAGECHARNOTE] = SafeLoadPNG((char*)"./note.png");
-		imageCharImages[IMAGECHARSTAR] = SafeLoadPNG((char*)"./star.png");
-	#elif PLATFORM == PLAT_VITA
-		imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG((char*)"app0:a/unknown.png");
-		imageCharImages[IMAGECHARNOTE] = SafeLoadPNG((char*)"app0:a/note.png");
-		imageCharImages[IMAGECHARSTAR] = SafeLoadPNG((char*)"app0:a/star.png");
-	#endif
+
+
+
+	FixPath("unknown.png",globalTempConcat,TYPE_EMBEDDED);
+	imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG((char*)globalTempConcat);
+	FixPath("note.png",globalTempConcat,TYPE_EMBEDDED);
+	imageCharImages[IMAGECHARNOTE] = SafeLoadPNG((char*)globalTempConcat);
+	FixPath("star.png",globalTempConcat,TYPE_EMBEDDED);
+	imageCharImages[IMAGECHARSTAR] = SafeLoadPNG((char*)globalTempConcat);
 
 	// Zero the image char arrray
 	for (i=0;i<MAXIMAGECHAR;i++){
@@ -3136,10 +3241,7 @@ signed char init(){
 
 	lastBGMFilename = (char*)malloc(1);
 
-	#if MOBILE
-	#else
 	LoadSettings();
-	#endif
 
 	// THIS IS A SPECIAL CHECK I'LL ONLY KEEP IN v1.4
 	//if (CheckFileExist("ux0:data/HIGURASHI/StreamingAssets/date.xxm0ronslayerxx")==0){
@@ -3151,7 +3253,6 @@ signed char init(){
 	//	}
 	//}
 
-
 	return 0;
 }
 
@@ -3160,7 +3261,6 @@ int main(int argc, char *argv[]){
 	if (init()==2){
 		return 1;
 	}
-
 
 	ClearDebugFile();
 
@@ -3175,7 +3275,11 @@ int main(int argc, char *argv[]){
 
 	// Funky fresh stuff for me to use
 	#if PLATFORM == PLAT_WINDOWS
-		luaL_dofile(L,"./happy.lua");
+		#if SUBPLATFORM == SUB_ANDROID
+			luaL_dofile(L,"/sdcard/HIGURASHI/StreamingAssets/happy.lua");
+		#else
+			luaL_dofile(L,"./happy.lua");
+		#endif
 	#elif PLATFORM == PLAT_VITA
 		luaL_dofile(L,"app0:a/happy.lua");
 	#endif
@@ -3242,6 +3346,15 @@ int main(int argc, char *argv[]){
 	////currentGameStatus=3;
 	//currentGameStatus=0;
 
+	//while (1){
+	//	FpsCapStart();
+	//	StartDrawingA();
+	//	DrawTextColored(5,5,"Noob",32,255,0,0);
+	//	//DrawText(int x, int y, const char* text, float size){
+	//	EndDrawingA();
+	//	FpsCapWait();
+	//}
+
 	//int i=0;
 	while (currentGameStatus!=99){
 		switch (currentGameStatus){
@@ -3287,7 +3400,7 @@ int main(int argc, char *argv[]){
 					DrawText(32,5,"No presets found.",fontSize);
 					DrawText(32,TextHeight(fontSize)+5,(const char*)"If you ran the converter, you should've gotten some.",fontSize);
 					DrawText(32,TextHeight(fontSize)*2+10,(const char*)"You can manually put presets in:",fontSize);
-					DrawText(32,TextHeight(fontSize)*3+15,(const char*)"ux0:data/HIGURASHI/StreamingAssets/Presets/",fontSize);
+					DrawText(32,TextHeight(fontSize)*3+15,(const char*)PRESETFOLDER,fontSize);
 					DrawText(32,200,"Press X to return",fontSize);
 					EndDrawingA();
 					
