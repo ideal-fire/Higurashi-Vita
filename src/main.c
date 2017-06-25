@@ -33,7 +33,16 @@
 
 	TODO - Add PNG verification. Loops through all PNG files, tries to load them. Reports each file that fails to load
 
+	It seems that every Russian character starts with D0 or D1
+
 */
+
+#define RUSSIAN 1
+
+#define MAXCHARSONLINE 60
+
+#define LINEARRAYSIZE ((MAXCHARSONLINE*2)+1)
+
 #include "_GeneralGoodConfiguration.h"
 
 // main.h
@@ -43,7 +52,7 @@
 	void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd);
 	void SaveSettings();
 	void XOutFunction();
-	void DrawHistory(unsigned char _textStuffToDraw[][61]);
+	void DrawHistory(unsigned char _textStuffToDraw[][LINEARRAYSIZE]);
 	void FixPath(char* filename,unsigned char _buffer[], char type);
 	void CheckTouchControls();
 
@@ -175,7 +184,7 @@ lua_State* L;
 int endType;
 signed char useVsync=0;
 // ~60 chars per line???
-unsigned char currentMessages[15][61];
+unsigned char currentMessages[15][LINEARRAYSIZE];
 int currentLine=0;
 int place=0;
 
@@ -271,7 +280,7 @@ unsigned char currentBackgroundRez;
 
 unsigned char graphicsLocation = LOCATION_CGALT;
 
-unsigned char messageHistory[MAXMESSAGEHISTORY][61];
+unsigned char messageHistory[MAXMESSAGEHISTORY][LINEARRAYSIZE];
 unsigned char oldestMessage=0;
 
 #define TOUCHMODE_NONE 0
@@ -415,7 +424,7 @@ void ClearMessageArray(){
 			}
 		}
 		
-		for (j = 0; j < 61; j++){
+		for (j = 0; j < LINEARRAYSIZE; j++){
 			currentMessages[i][j]='\0';
 		}
 	}
@@ -452,7 +461,7 @@ void PrintScreenValues(){
 	system("cls");
 	int i,j;
 	for (i = 0; i < 15; i++){
-		for (j = 0; j < 61; j++){
+		for (j = 0; j < LINEARRAYSIZE; j++){
 			printf("%d;",currentMessages[i][j]);
 		}
 		printf("\n");
@@ -1605,31 +1614,39 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 	//endType = lua_tonumber(passedState,5);
 	endType = _endtypetemp;
 
+	char currentDisplayCharOnLine = 0;
+
+	char weTrynaDrawThisFrame=1;
+
 	for (i = 0; i < u_strlen(message); i++){
 		FpsCapStart();
 		ControlsStart();
 		//
 
-		if (currentChar==60){
+		if (currentDisplayCharOnLine==MAXCHARSONLINE){
+			printf("force newline\n");
 			currentLine++;
 			currentChar = GetNextCharOnLine(currentLine);
+			currentDisplayCharOnLine=currentChar;
 		}
 
 		// If it's a new word, add a newline if the word will be cut off
 		if (message[i]==' '){
-			for (j=1;j<61;j++){
+			for (j=1;j<MAXCHARSONLINE+1;j++){
 				if (i+j>u_strlen(message)){
-					if (currentChar+j>=60){
+					if (currentDisplayCharOnLine+j>=MAXCHARSONLINE){
 						currentLine++;
 						currentChar = GetNextCharOnLine(currentLine);
+						currentDisplayCharOnLine=currentChar;
 					}
 					break;
 				}
 				if (message[i+j]==' '){
-					// Greater OR equal to 60 because I don't want to start a new line on a space
-					if (currentChar+j>=60){
+					// Greater OR equal to MAXCHARSONLINE because I don't want to start a new line on a space
+					if (currentDisplayCharOnLine+j>=MAXCHARSONLINE){
 						currentLine++;
 						currentChar = GetNextCharOnLine(currentLine);
+						currentDisplayCharOnLine=currentChar;
 						i++;
 					}
 					break;
@@ -1660,6 +1677,7 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 			i=i+2;
 			memset(&(currentMessages[currentLine][currentChar]),45,1); // Replace it with a normal hyphen
 			currentChar++;
+			currentDisplayCharOnLine++;
 		}else if (message[i]==226){ // COde for special image character
 			unsigned char _imagechartype;
 			if (message[i+1]==153 && message[i+2]==170){ // ♪
@@ -1682,12 +1700,20 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 			memset(&(currentMessages[currentLine][currentChar]),32,2);
 			i+=2;
 			currentChar+=3;
+			currentDisplayCharOnLine+=3;
 		}else if (message[i]=='\n'){ // Interpret new line
 			currentLine++;
 			currentChar = GetNextCharOnLine(currentLine);
+			currentDisplayCharOnLine=currentChar;
 		}else{ // Normal letter
 			memcpy(&(currentMessages[currentLine][currentChar]),&(message[i]),1);
 			currentChar++;
+			if (message[i]!=0xD0 && message[i]!=0xD1){
+				currentDisplayCharOnLine++;
+				weTrynaDrawThisFrame=1;
+			}else{
+				weTrynaDrawThisFrame=0;
+			}
 		}
 		//
 		if (WasJustPressed(SCE_CTRL_CROSS)){
@@ -1695,12 +1721,16 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 			ControlsEnd();
 		}
 		//
-		if (waitingIsForShmucks!=1 && capEnabled==1){
-			Draw();
-			Update();
-			ControlsEnd();
-			FpsCapWait();
+
+		if (weTrynaDrawThisFrame==1){
+			if (waitingIsForShmucks!=1 && capEnabled==1){
+				Draw();
+				Update();
+				ControlsEnd();
+				FpsCapWait();
+			}
 		}
+
 
 	}
 }
@@ -1793,7 +1823,7 @@ void LoadSettings(){
 	}
 }
 
-void DrawHistory(unsigned char _textStuffToDraw[][61]){
+void DrawHistory(unsigned char _textStuffToDraw[][LINEARRAYSIZE]){
 	ControlsEnd();
 	int _noobHeight = TextHeight(fontSize);
 	int _controlsStringWidth = TextWidth(fontSize,"UP and DOWN to scroll, O to return");
@@ -1909,20 +1939,25 @@ void FixPath(char* filename,unsigned char _buffer[], char type){
 			FpsCapWait();
 		}
 	}
-#endif
 
-void CheckTouchControls(){
-	if (easyTouchControlMode!=TOUCHMODE_NONE){
-		if (WasJustPressed(SCE_TOUCH)){
-			if (touchX>screenWidth*.80 && touchY<screenHeight*.20){
-				printf("Menu\n");
-				TouchInGameMenu();
-			}else{
-				printf("x\n");
+	void CheckTouchControls(){
+		if (easyTouchControlMode!=TOUCHMODE_NONE){
+			if (easyTouchControlMode==TOUCHMODE_MAINGAME){
+				if (WasJustPressed(SCE_TOUCH)){
+					if (touchX>screenWidth*.80 && touchY<screenHeight*.20){
+						printf("Menu\n");
+						TouchInGameMenu();
+					}else{
+						printf("z\n");
+						pad[SCE_CTRL_CROSS]=1;
+					}
+				}
 			}
 		}
 	}
-}
+#endif
+
+
 
 
 /*
@@ -2469,6 +2504,7 @@ void LuaThread(char* _torun){
 // Returns 1 if user quit
 // Returns 2 if no files found
 char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage){
+
 	int i=0;
 	int totalFiles=0;
 

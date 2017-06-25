@@ -278,7 +278,10 @@
 		#endif
 	}
 
-	
+	void ControlsReset(){
+		memset(&pad,0,sizeof(pad));
+		memset(&lastPad,0,sizeof(lastPad));
+	}
 
 	signed char IsDown(int value){
 		if (InputValidity==1 || isSkipping==1){
