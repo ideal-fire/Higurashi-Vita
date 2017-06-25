@@ -33,11 +33,13 @@
 
 	TODO - Add PNG verification. Loops through all PNG files, tries to load them. Reports each file that fails to load
 
+	TODO - Let players change BGM relative to SE volume
+	TODO - Don't play SE when skipping
+
 	It seems that every Russian character starts with D0 or D1
 
 */
 
-#define RUSSIAN 1
 
 #define MAXCHARSONLINE 60
 
@@ -92,7 +94,7 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v1.6"
+#define VERSIONSTRING "v1.6 - Russian Test (resistallyouwant)"
 #define HISTORYONONESCREEN 13
 /////////////////////////////////////
 
@@ -1610,11 +1612,12 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 	MessageBoxEnabled=1;
 	unsigned int i,j;
 	int currentChar = GetNextCharOnLine(currentLine);
+	char currentDisplayCharOnLine = currentChar;
 	//unsigned const char* message = (unsigned const char*)lua_tostring(passedState,4);
 	//endType = lua_tonumber(passedState,5);
 	endType = _endtypetemp;
 
-	char currentDisplayCharOnLine = 0;
+	
 
 	char weTrynaDrawThisFrame=1;
 
@@ -2631,6 +2634,8 @@ void TitleScreen(){
 	int _bustlocationcollinspacewidth = TextWidth(fontSize,"Bust location: ");
 	signed char _titlePassword=0;
 
+	int _versionStringWidth = TextWidth(fontSize,VERSIONSTRING);
+
 
 	// This checks if we have Rena busts in CG AND CGAlt
 	char* _temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,"CG/","re_se_de_a1.png","");
@@ -2776,7 +2781,7 @@ void TitleScreen(){
 		#endif
 		DrawText(32,5+_textheight*(4+2),"Exit",fontSize);
 
-		DrawText(850,544-5-_textheight,VERSIONSTRING,fontSize);
+		DrawText(955-_versionStringWidth,544-5-_textheight,VERSIONSTRING,fontSize);
 
 		DrawText(5,5+_textheight*(_choice+2),">",fontSize);
 		EndDrawingA();
