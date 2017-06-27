@@ -30,21 +30,15 @@
 			So, here's my idea, I take whatever char it is and add 100 if it's italics
 
 	In my testing, 444 HZ cpu makes loading and freeing 130 KB sound file take about 200 miliseconds less and loading the biggest image file in Onikakushi PS3 patch take about 50 miliseconds less
-
-	TODO - Add PNG verification. Loops through all PNG files, tries to load them. Reports each file that fails to load
-
-	TODO - Let players change BGM relative to SE volume
-	TODO - Don't play SE when skipping
-
-	It seems that every Russian character starts with D0 or D1
-
 */
 
 
 #define MAXCHARSONLINE 60
 
-#define LINEARRAYSIZE ((MAXCHARSONLINE*2)+1)
+int LINEARRAYSIZE = ((MAXCHARSONLINE*2)+1);
 
+#define LINEARRAYSIZE ((MAXCHARSONLINE*2)+1)
+#define PLAYTIPMUSIC 0
 #include "_GeneralGoodConfiguration.h"
 
 // main.h
@@ -70,7 +64,6 @@
 #include <Lua/lauxlib.h>
 //
 
-
 #include "GeneralGoodExtended.h"
 
 #define REZ_UNDEFINED 0
@@ -94,11 +87,13 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v1.6 - Russian Test (resistallyouwant)"
+#define VERSIONSTRING "v1.6"
 #define HISTORYONONESCREEN 13
 /////////////////////////////////////
 
-#define OPTIONSFILEFORMAT 1
+// 1 is start
+// 2 adds BGM and SE volume
+#define OPTIONSFILEFORMAT 2
 
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
 	lua_setglobal(L,y);
@@ -246,6 +241,7 @@ unsigned char nextScriptToLoad[256] = {0};
 unsigned char globalTempConcat[256] = {0};
 
 char* lastBGMFilename;
+// This value is in terms of script volume args, meaning it's 0 to 256 instead of 0 to 128
 int lastBGMVolume = -1;
 int lastBGMFilenameStored = 0;
 
@@ -276,8 +272,6 @@ int32_t autoModeWait=500;
 
 signed char cpuOverclocked=0;
 
-signed char SILENTMODE = 0;
-
 unsigned char currentBackgroundRez;
 
 unsigned char graphicsLocation = LOCATION_CGALT;
@@ -289,6 +283,9 @@ unsigned char oldestMessage=0;
 #define TOUCHMODE_MAINGAME 1
 #define TOUCHMODE_MENU 2
 unsigned char easyTouchControlMode = TOUCHMODE_MAINGAME;
+
+float bgmVolume = 0.75;
+float seVolume = 1.0;
 
 /*
 ====================================================
@@ -410,8 +407,73 @@ size_t u_strlen(const unsigned char * array){
 	return (const size_t)strlen((const char*)array);
 }
 
-void nothing(){
-	printf("nothing");
+// Returns one if they chose yes
+// Returns zero if they chose no
+int LazyChoice(const char* stra, const char* strb, const char* strc, const char* strd){
+	int _textheight = TextHeight(fontSize);
+	int _choice=0;
+	ControlsStart();
+	ControlsEnd();
+	while (currentGameStatus!=99){
+		FpsCapStart();
+		ControlsStart();
+		if (WasJustPressed(SCE_CTRL_CROSS)){
+			PlayMenuSound();
+			ControlsStart();
+			ControlsEnd();
+			return _choice;
+		}
+		if (WasJustPressed(SCE_CTRL_DOWN)){
+			_choice++;
+			if (_choice>1){
+				_choice=0;
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_UP)){
+			_choice--;
+			if (_choice<0){
+				_choice=1;
+			}
+		}
+		ControlsEnd();
+		StartDrawingA();
+		if (stra!=NULL){
+			DrawText(32,5+_textheight*(0+2),stra,fontSize);
+		}
+		if (strb!=NULL){
+			DrawText(32,5+_textheight*(1+2),strb,fontSize);
+		}
+		if (strc!=NULL){
+			DrawText(32,5+_textheight*(2+2),strc,fontSize);
+		}
+		if (strd!=NULL){
+			DrawText(32,5+_textheight*(3+2),strd,fontSize);
+		}
+		DrawText(0,544-32-_textheight*(_choice+1),">",fontSize);
+		DrawText(32,544-32-_textheight*2,"Yes",fontSize);
+		DrawText(32,544-32-_textheight,"No",fontSize);
+		EndDrawingA();
+		FpsCapWait();
+	}
+	return 0;
+}
+
+int FixVolumeArg(int _val){
+	if (floor(_val/(float)2)>128){
+		return 128;
+	}else if (_val<0){
+		return 0;
+	}else{
+		return floor(_val/(float)2);
+	}
+	return 255;
+}
+
+int FixBGMVolume(int _val){
+	return FixVolumeArg(_val)*bgmVolume;
+}
+int FixSEVolume(int _val){
+	return FixVolumeArg(_val)*seVolume;
 }
 
 void ClearMessageArray(){
@@ -757,35 +819,66 @@ void RestartBGM(){
 }
 
 void InGameMenu(){
+	PlayMenuSound();
 	signed char _choice=0;
 	short _textheight = TextHeight(fontSize);
 	char _tempAutoModeString[10] = {'\0'};
 	int _tempStrWidth = TextWidth(fontSize,"Auto Mode Speed: ");
 	itoa(autoModeWait,_tempAutoModeString,10);
 	char _needResave=0;
+	int _bustlocationcollinspacewidth = TextWidth(fontSize,"Bust location: ");
+	char _canShowRena=0;
+	// This variable is used to check if the player changed the bust location after exiting
+	char _artBefore=graphicsLocation;
+	CrossTexture* _renaImage=NULL;
+	int _noobBGMVolumeWidth = TextWidth(fontSize,"BGM Volume  ");
+	char _tempItoaHoldBGM[5] = {'\0'};
+	char _tempItoaHoldSE[5] = {'\0'};
+
+	// This checks if we have Rena busts in CG AND CGAlt
+	char* _temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,"CG/","re_se_de_a1.png","");
+	if (CheckFileExist(_temppath)==1){
+		free(_temppath);
+		_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,"CGAlt/","re_se_de_a1.png","");
+		if (CheckFileExist(_temppath)==1){
+			_canShowRena=1;
+		}
+	}
+	free(_temppath);
+	
+	// Loads Rena, if possible
+	if (_canShowRena==1){
+		_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,locationStrings[graphicsLocation],"re_se_de_a1.png","");
+		_renaImage = SafeLoadPNG(_temppath);
+		free(_temppath);
+	}
+
+	itoa(bgmVolume*4,_tempItoaHoldBGM,10);
+	itoa(seVolume*4, _tempItoaHoldSE,10);
+
 	while (1){
-		
 		FpsCapStart();
 		ControlsStart();
 		if (WasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
-			if (_choice>3){
+			if (_choice>8){
 				_choice=0;
 			}
 		}
 		if (WasJustPressed(SCE_CTRL_UP)){
 			_choice--;
 			if (_choice<0){
-				_choice=3;
+				_choice=8;
 			}
 		}
+		if (WasJustPressed(SCE_CTRL_CIRCLE)){
+			break;
+		}
 		if (WasJustPressed(SCE_CTRL_CROSS)){
-			if (_choice==0){
-				if (_needResave==1){
-					SaveSettings();
-				}
+			if (_choice==0){ // Resume
+				PlayMenuSound();
 				break;
-			}else if (_choice==3){
+			}else if (_choice==8){ // Quit
 				endType = Line_ContinueAfterTyping;
 				
 				if (_choice==99){
@@ -797,11 +890,39 @@ void InGameMenu(){
 				lua_getglobal(L,"quitxfunction");
 				lua_call(L, 0, 0);
 				break;
-			}else if (_choice==1){
+			}else if (_choice==1){ // Restart BGM
 				RestartBGM();
-			}else if (_choice==2){
+			}else if (_choice==2){ // Auto mode speed
 				LazyMessage("Use left and right to change the","auto mode speed.","Activate auto mode with SELECT in game.",NULL);
 				ControlsEnd();
+			}else if (_choice==4){ // CPU speed
+				PlayMenuSound();
+				if (cpuOverclocked==0){
+					cpuOverclocked=1;
+					#if PLATFORM == PLAT_VITA
+						scePowerSetArmClockFrequency(444);
+					#endif
+				}else if (cpuOverclocked==1){
+					cpuOverclocked=0;
+					#if PLATFORM == PLAT_VITA
+						scePowerSetArmClockFrequency(333);
+					#endif
+				}
+			}else if (_choice==7){
+				PlayMenuSound();
+				if (LazyChoice("This will reset your settings.","Is this okay?",NULL,NULL)==1){
+					autoModeWait=500;
+					graphicsLocation = LOCATION_CGALT;
+					cpuOverclocked=0; // We don't actually change the CPU speed. They'll never notice. ;)
+					bgmVolume=.75;
+					seVolume=1.0;
+					// Some need to have their strings changed so the user can actually see the changes
+					itoa(autoModeWait,_tempAutoModeString,10);
+					itoa(bgmVolume*4,_tempItoaHoldBGM,10);
+					itoa(seVolume*4, _tempItoaHoldSE,10);
+					// Update music volume using new default setting
+					SetMusicVolume(FixBGMVolume(lastBGMVolume));
+				}
 			}
 		}
 
@@ -817,6 +938,23 @@ void InGameMenu(){
 				}
 				itoa(autoModeWait,_tempAutoModeString,10);
 				_needResave=1;
+			}else if (_choice==5){
+				if (bgmVolume==0){
+					bgmVolume=1.25;
+				}
+				bgmVolume-=.25;
+				itoa(bgmVolume*4,_tempItoaHoldBGM,10);
+				SetMusicVolume(FixBGMVolume(lastBGMVolume));
+			}else if (_choice==6){
+				if (seVolume==0){
+					seVolume=1.25;
+				}
+				seVolume-=.25;
+				itoa(seVolume*4,_tempItoaHoldSE,10);
+				if (menuSoundLoaded==1){
+					SetSFXVolume(menuSound,FixSEVolume(256));
+				}
+				PlayMenuSound();
 			}
 		}
 		if (WasJustPressed(SCE_CTRL_RIGHT)){
@@ -830,18 +968,98 @@ void InGameMenu(){
 				_needResave=1;
 			}
 		}
+		if (WasJustPressed(SCE_CTRL_CROSS) || WasJustPressed(SCE_CTRL_RIGHT) || WasJustPressed(SCE_CTRL_LEFT)){
+			if (!WasJustPressed(SCE_CTRL_LEFT)){
+				if (_choice==5){
+					if (bgmVolume==1){
+						bgmVolume=0;
+					}else{
+						bgmVolume+=.25;
+					}
+					itoa(bgmVolume*4,_tempItoaHoldBGM,10);
+					SetMusicVolume(FixBGMVolume(lastBGMVolume));
+				}else if (_choice==6){
+					if (seVolume==1){
+						seVolume=0;
+					}else{
+						seVolume+=.25;
+					}
+					itoa(seVolume*4,_tempItoaHoldSE,10);
+
+					if (menuSoundLoaded==1){
+						SetSFXVolume(menuSound,FixSEVolume(256));
+					}
+					PlayMenuSound();
+
+				}
+			}
+			if (_choice==3){
+				PlayMenuSound();
+				if (graphicsLocation == LOCATION_CG){
+					graphicsLocation = LOCATION_CGALT;
+				}else if (graphicsLocation == LOCATION_CGALT){
+					graphicsLocation = LOCATION_CG;
+				}
+				if (_canShowRena==1){
+					FreeTexture(_renaImage);
+					_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,locationStrings[graphicsLocation],"re_se_de_a1.png","");
+					_renaImage = SafeLoadPNG(_temppath);
+					free(_temppath);
+				}
+			}
+		}
 
 		ControlsEnd();
 		StartDrawingA();
+		// Display sample Rena if changing bust location
+		if (_choice==3){
+			if (_canShowRena==1){
+				DrawTexture(_renaImage,480,544-GetTextureHeight(_renaImage));
+			}
+		}
 		DrawText(32,5,"Resume",fontSize);
-		DrawText(0,5+_choice*_textheight,">",fontSize);
-		//DrawText(32,5+_textheight,"Return to navigation menu",fontSize);
 		DrawText(32,5+_textheight,"Restart BGM",fontSize);
 		DrawText(32,5+_textheight*2,"Auto Mode Speed: ",fontSize);
-		DrawText(32+_tempStrWidth,5+_textheight*2,_tempAutoModeString,fontSize);
-		DrawText(32,5+_textheight*3,"Quit",fontSize);
+			DrawText(32+_tempStrWidth,5+_textheight*2,_tempAutoModeString,fontSize);
+		
+		DrawText(32,5+_textheight*3,"Bust location: ",fontSize);
+			if (graphicsLocation == LOCATION_CGALT){
+				DrawText(32+_bustlocationcollinspacewidth,5+_textheight*3,"CGAlt",fontSize);
+			}else if (graphicsLocation==LOCATION_CG){
+				DrawText(32+_bustlocationcollinspacewidth,5+_textheight*3,"CG",fontSize);
+			}
+
+		// Display CPU overclock option
+			#if PLATFORM == PLAT_VITA
+				if (cpuOverclocked==1){
+					DrawTextColored(32,5+_textheight*4,"Overclock CPU",fontSize,0,255,0);
+				}else{
+					DrawText(32,5+_textheight*4,"Overclock CPU",fontSize);
+				}
+			#else
+				if (cpuOverclocked==1){
+					DrawTextColored(32,5+_textheight*4,"Green Nothing",fontSize,0,255,0);
+				}else{
+					DrawText(32,5+_textheight*4,"Nothing",fontSize);
+				}
+			#endif
+		DrawText(32,5+_textheight*5,"BGM Volume",fontSize);
+			DrawText(32+_noobBGMVolumeWidth,5+_textheight*5,_tempItoaHoldBGM,fontSize);
+		DrawText(32,5+_textheight*6,"SE Volume",fontSize);
+			DrawText(32+_noobBGMVolumeWidth,5+_textheight*6,_tempItoaHoldSE,fontSize);
+
+		DrawText(32,5+_textheight*7,"Defaults",fontSize);
+		DrawText(32,5+_textheight*8,"Quit",fontSize);
+		DrawText(0,5+_choice*_textheight,">",fontSize);
 		EndDrawingA();
 		FpsCapWait();
+	}
+	SaveSettings();
+	if (_canShowRena==1){
+		FreeTexture(_renaImage);
+	}
+	if (_artBefore != graphicsLocation){
+		LazyMessage("You changed the character art location.","The next time a character is loaded,","it will load from",locationStrings[graphicsLocation]);
 	}
 }
 
@@ -890,7 +1108,6 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 				endType=Line_ContinueAfterTyping;
 			}
 			if (WasJustPressed(SCE_CTRL_TRIANGLE)){
-				printf("MENU\n");
 				InGameMenu();
 			}
 			if (WasJustPressed(SCE_CTRL_SELECT)){
@@ -1196,56 +1413,6 @@ void LazyMessage(const char* stra, const char* strb, const char* strc, const cha
 	}
 }
 
-// Returns one if they chose yes
-// Returns zero if they chose no
-int LazyChoice(const char* stra, const char* strb, const char* strc, const char* strd){
-	int _textheight = TextHeight(fontSize);
-	int _choice=0;
-	ControlsStart();
-	ControlsEnd();
-	while (currentGameStatus!=99){
-		FpsCapStart();
-		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_CROSS)){
-			ControlsStart();
-			ControlsEnd();
-			return _choice;
-		}
-		if (WasJustPressed(SCE_CTRL_DOWN)){
-			_choice++;
-			if (_choice>1){
-				_choice=0;
-			}
-		}
-		if (WasJustPressed(SCE_CTRL_UP)){
-			_choice--;
-			if (_choice<0){
-				_choice=1;
-			}
-		}
-		ControlsEnd();
-		StartDrawingA();
-		if (stra!=NULL){
-			DrawText(32,5+_textheight*(0+2),stra,fontSize);
-		}
-		if (strb!=NULL){
-			DrawText(32,5+_textheight*(1+2),strb,fontSize);
-		}
-		if (strc!=NULL){
-			DrawText(32,5+_textheight*(2+2),strc,fontSize);
-		}
-		if (strd!=NULL){
-			DrawText(32,5+_textheight*(3+2),strd,fontSize);
-		}
-		DrawText(0,544-32-_textheight*(_choice+1),">",fontSize);
-		DrawText(32,544-32-_textheight*2,"Yes",fontSize);
-		DrawText(32,544-32-_textheight,"No",fontSize);
-		EndDrawingA();
-		FpsCapWait();
-	}
-	return 0;
-}
-
 void LoadGame(){
 	strcpy((char*)globalTempConcat,SAVEFOLDER);
 	strcat((char*)globalTempConcat,currentPresetFilename);
@@ -1302,17 +1469,6 @@ signed char CheckForUserStuff(){
 		return 1;
 	}
 	return 0;
-}
-
-int FixVolumeArg(int _val){
-	if (_val>255){
-		return 255;
-	}else if (_val<0){
-		return 0;
-	}else{
-		return _val;
-	}
-	return 255;
 }
 
 
@@ -1617,17 +1773,16 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 	//endType = lua_tonumber(passedState,5);
 	endType = _endtypetemp;
 
-	
-
-	char weTrynaDrawThisFrame=1;
+	//char drawThisFrame=1;
 
 	for (i = 0; i < u_strlen(message); i++){
-		FpsCapStart();
+		#if PLATFORM == PLAT_WINDOWS
+			FpsCapStart();
+		#endif
 		ControlsStart();
 		//
 
 		if (currentDisplayCharOnLine==MAXCHARSONLINE){
-			printf("force newline\n");
 			currentLine++;
 			currentChar = GetNextCharOnLine(currentLine);
 			currentDisplayCharOnLine=currentChar;
@@ -1655,11 +1810,9 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 					break;
 				}
 			}
-
 			if (message[i]==' ' && currentChar==0){
 				continue;
 			}
-
 		}
 
 		// Disable italics
@@ -1674,9 +1827,7 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 					continue;
 				}
 			}
-		}
-
-		if (message[i]==226 && message[i+1]==128 && message[i+2]==148){ // Don't write a wierd hyphen.
+		}else if (message[i]==226 && message[i+1]==128 && message[i+2]==148){ // Weird hyphen replace
 			i=i+2;
 			memset(&(currentMessages[currentLine][currentChar]),45,1); // Replace it with a normal hyphen
 			currentChar++;
@@ -1711,11 +1862,11 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 		}else{ // Normal letter
 			memcpy(&(currentMessages[currentLine][currentChar]),&(message[i]),1);
 			currentChar++;
-			if (message[i]!=0xD0 && message[i]!=0xD1){
-				currentDisplayCharOnLine++;
-				weTrynaDrawThisFrame=1;
-			}else{
-				weTrynaDrawThisFrame=0;
+			currentDisplayCharOnLine++;
+			if (message[i]>=0xC2){ // The first one that takes two bytes is U+0080, or 0xC2 0x80
+				i++;
+				memcpy(&(currentMessages[currentLine][currentChar]),&(message[i]),1);
+				currentChar++;
 			}
 		}
 		//
@@ -1725,23 +1876,26 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 		}
 		//
 
-		if (weTrynaDrawThisFrame==1){
-			if (waitingIsForShmucks!=1 && capEnabled==1){
+		if (waitingIsForShmucks==0){
+			//if (drawThisFrame==1){
 				Draw();
 				Update();
 				ControlsEnd();
+				//drawThisFrame=0;
+			//}else{
+			//	drawThisFrame=1;
+			//}
+			#if PLATFORM == PLAT_WINDOWS
 				FpsCapWait();
-			}
+			#endif
 		}
+		
 
 
 	}
 }
 
 void StopBGM(){
-	#if SILENTMODE == 1
-		return 0;
-	#endif
 	StopMusic();
 	if (currentMusic!=NULL){
 		FreeMusic(currentMusic);
@@ -1752,9 +1906,6 @@ void StopBGM(){
 }
 
 void PlayBGM(const char* filename, int _volume){
-	if (SILENTMODE==1){
-		return;
-	}
 
 	StopMusic();
 	if (currentMusic!=NULL){
@@ -1765,14 +1916,13 @@ void PlayBGM(const char* filename, int _volume){
 	lastBGMFilename = (char*)realloc(lastBGMFilename,strlen(filename)+1);
 	strcpy(lastBGMFilename,filename);
 	
-	lastBGMVolume=FixVolumeArg(_volume);
+	lastBGMVolume=_volume;
 
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/BGM/", filename, ".ogg");
 	if (CheckFileExist(tempstringconcat)==1){
 		currentMusic = LoadMusic(tempstringconcat);
 		
-
-		SetMusicVolume(FixVolumeArg(_volume));
+		SetMusicVolume(FixBGMVolume(_volume));
 
 		PlayMusic(currentMusic);
 		lastBGMFilenameStored=1;
@@ -1788,20 +1938,30 @@ void PlayBGM(const char* filename, int _volume){
 // cpuOverclocked, 1 byte
 // graphicsLocation, 1 byte
 // autoModeWait, 4 bytes
+// BGM volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
+// SE volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
 void SaveSettings(){
 	FILE* fp;
 	FixPath("settings.noob",globalTempConcat,TYPE_DATA);
 	fp = fopen ((const char*)globalTempConcat, "w");
 	//graphicsLocation
 
+	unsigned char _bgmTemp = floor(bgmVolume*4);
+	unsigned char _seTemp = floor(seVolume*4);
+
 	unsigned char _tempOptionsFormat = OPTIONSFILEFORMAT;
 	fwrite(&_tempOptionsFormat,1,1,fp);
 	fwrite(&cpuOverclocked,1,1,fp);
 	fwrite(&graphicsLocation,1,1,fp);
 	fwrite(&autoModeWait,4,1,fp);
+
+	fwrite(&_bgmTemp,1,1,fp);
+	fwrite(&_seTemp,1,1,fp);
+
 	fclose(fp);
 	printf("SAved settings file.\n");
 }
+
 void LoadSettings(){
 	FixPath("settings.noob",globalTempConcat,TYPE_DATA);
 	if (CheckFileExist((const char*)globalTempConcat)==1){
@@ -1810,10 +1970,19 @@ void LoadSettings(){
 		unsigned char _tempOptionsFormat = 255;
 		// This is the version of the format of the options file.
 		fread(&_tempOptionsFormat,1,1,fp);
-		if (_tempOptionsFormat==1){
+		if (_tempOptionsFormat>=1){
 			fread(&cpuOverclocked,1,1,fp);
 			fread(&graphicsLocation,1,1,fp);
 			fread(&autoModeWait,4,1,fp);
+		}
+		if (_tempOptionsFormat>=2){
+			unsigned char _bgmTemp;
+			unsigned char _seTemp;
+
+			fread(&_bgmTemp,1,1,fp);
+			fread(&_seTemp,1,1,fp);
+			bgmVolume = (float)_bgmTemp/4;
+			seVolume = (float)_seTemp/4;
 		}
 		fclose(fp);
 
@@ -1881,7 +2050,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][LINEARRAYSIZE]){
 		}
 
 		DrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
-		DrawTextColored(screenWidth-5-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, O to return",fontSize,0,0,0);
+		DrawTextColored(screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, O to return",fontSize,0,0,0);
 
 		DrawRectangle(955,0,5,544,0,0,0,255);
 		DrawRectangle(955,floor(444*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,100,255,0,0,255);
@@ -1954,14 +2123,18 @@ void FixPath(char* filename,unsigned char _buffer[], char type){
 						printf("z\n");
 						pad[SCE_CTRL_CROSS]=1;
 					}
+				}else if (WasJustReleased(SCE_TOUCH)){
+					if (touchX>screenWidth*.80 && touchY<screenHeight*.20){
+						
+					}else{
+						printf("z is no more\n");
+						pad[SCE_CTRL_CROSS]=0;
+					}
 				}
 			}
 		}
 	}
 #endif
-
-
-
 
 /*
 =================================================
@@ -2152,7 +2325,7 @@ int L_FadeBustshot(lua_State* passedState){
 // Slot, file, volume
 int L_PlaySE(lua_State* passedState){
 	int passedSlot = lua_tonumber(passedState,1);
-	if (SILENTMODE!=1){
+	if (isSkipping==0){
 		if (soundEffects[passedSlot]!=NULL){
 			FreeSound(soundEffects[passedSlot]);
 			soundEffects[passedSlot]=NULL;
@@ -2160,7 +2333,7 @@ int L_PlaySE(lua_State* passedState){
 		char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/",lua_tostring(passedState,2),".ogg");
 		if (CheckFileExist(tempstringconcat)==1){
 			soundEffects[passedSlot] = LoadSound(tempstringconcat);
-			SetSFXVolume(soundEffects[passedSlot],FixVolumeArg(lua_tonumber(passedState,3)));
+			SetSFXVolume(soundEffects[passedSlot],FixSEVolume(lua_tonumber(passedState,3)));
 			PlaySound(soundEffects[passedSlot],1);
 		}else{
 			WriteToDebugFile("SE file not found");
@@ -2341,7 +2514,7 @@ int L_LoadValueFromLocalWork(lua_State* passedState){
 	if ( strcmp(_wordWant,"SelectResult")==0){
 		lua_pushnumber(passedState,lastSelectionAnswer);
 	}else{
-		printf("Unknown LoadValueFromLocalWork arg!");
+		LazyMessage("Unknown LoadValueFromLocalWork!",_wordWant,"Please report to MyLegGuy!","thx");
 	}
 	return 1;
 }
@@ -2630,37 +2803,15 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 void TitleScreen(){
 	signed char _choice=0;
 	int _textheight = TextHeight(fontSize);
-	char _canShowRena=0;
-	int _bustlocationcollinspacewidth = TextWidth(fontSize,"Bust location: ");
+	
 	signed char _titlePassword=0;
 
 	int _versionStringWidth = TextWidth(fontSize,VERSIONSTRING);
-
-
-	// This checks if we have Rena busts in CG AND CGAlt
-	char* _temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,"CG/","re_se_de_a1.png","");
-	if (CheckFileExist(_temppath)==1){
-		free(_temppath);
-		_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,"CGAlt/","re_se_de_a1.png","");
-		if (CheckFileExist(_temppath)==1){
-			_canShowRena=1;
-		}
-	}
-	free(_temppath);
-
-	CrossTexture* _renaImage=NULL;
-	if (_canShowRena==1){
-		_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,locationStrings[graphicsLocation],"re_se_de_a1.png","");
-		_renaImage = SafeLoadPNG(_temppath);
-		free(_temppath);
-	}
-
 
 	//SetClearColor(255,255,255,255);
 	while (currentGameStatus!=99){
 		FpsCapStart();
 		ControlsStart();
-
 
 		// Password right left down up square
 			if (WasJustPressed(SCE_CTRL_RIGHT)){
@@ -2683,103 +2834,58 @@ void TitleScreen(){
 
 		if (WasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
+			if (_choice>3){
+				_choice=0;
+			}
 		}
 		if (WasJustPressed(SCE_CTRL_UP)){
 			_choice--;
+			if (_choice<0){
+				_choice=3;
+			}
 		}
 
-		// Left and right to change bust location
-		if (WasJustPressed(SCE_CTRL_RIGHT) || WasJustPressed(SCE_CTRL_LEFT) || (_choice==2 && WasJustPressed(SCE_CTRL_CROSS))){
-			if (_choice==2){
+		if (WasJustPressed(SCE_CTRL_CROSS)){
+			if (_choice==0){
 				PlayMenuSound();
-				if (graphicsLocation == LOCATION_CG){
-					graphicsLocation = LOCATION_CGALT;
-				}else if (graphicsLocation == LOCATION_CGALT){
-					graphicsLocation = LOCATION_CG;
-				}
-				if (_canShowRena==1){
-					FreeTexture(_renaImage);
-					_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,locationStrings[graphicsLocation],"re_se_de_a1.png","");
-					_renaImage = SafeLoadPNG(_temppath);
-					free(_temppath);
-				}
-				SaveSettings();
-			}
-		}else{
-			if (WasJustPressed(SCE_CTRL_CROSS)){
-				PlayMenuSound();
-				if (_choice==0){
-					if (currentPresetFilename==NULL){
-						currentPresetChapter=0;
-						ControlsEnd();
-						currentGameStatus=2;
-					}
-					break;
-				}else if (_choice==1){
-					printf("Manual script selection\n");
+				if (currentPresetFilename==NULL){
+					currentPresetChapter=0;
 					ControlsEnd();
-					FileSelector(SCRIPTFOLDER,&currentPresetFilename,(char*)"Select a script");
-					if (currentPresetFilename!=NULL){
-						currentGameStatus=3;
-						RunScript(SCRIPTFOLDER,currentPresetFilename,0);
-						currentGameStatus=0;
-					}
-				}/*else if (_choice==2){
-					This is not put here. See code above.
-				}*/else if (_choice==4){ // Quit button
-					currentGameStatus=99;
-					break;
-				}else if (_choice==3){ // Overclock CPU
-					if (cpuOverclocked==0){
-						cpuOverclocked=1;
-						#if PLATFORM == PLAT_VITA
-							scePowerSetArmClockFrequency(444);
-						#endif
-					}else if (cpuOverclocked==1){
-						cpuOverclocked=0;
-						#if PLATFORM == PLAT_VITA
-							scePowerSetArmClockFrequency(333);
-						#endif
-					}
-					SaveSettings();
-				}else{
-					_choice=0;
+					currentGameStatus=2;
 				}
+				break;
+			}else if (_choice==1){
+				PlayMenuSound();
+				printf("Manual script selection\n");
+				ControlsEnd();
+				FileSelector(SCRIPTFOLDER,&currentPresetFilename,(char*)"Select a script");
+				if (currentPresetFilename!=NULL){
+					currentGameStatus=3;
+					RunScript(SCRIPTFOLDER,currentPresetFilename,0);
+					currentGameStatus=0;
+				}
+			}else if (_choice==3){ // Quit button
+				currentGameStatus=99;
+				break;
+			}else if (_choice==2){ // Go to setting menu
+				ControlsEnd();
+				InGameMenu();
+				ControlsEnd();
+				break;
+			}else{
+				_choice=0;
 			}
 		}
+		
 
 		StartDrawingA();
-		// Display sample Rena if changing bust location
-		if (_choice==2){
-			if (_canShowRena==1){
-				DrawTexture(_renaImage,480,544-GetTextureHeight(_renaImage));
-			}
-		}
+
 		DrawText(32,5,"Main Menu",fontSize);
 
 		DrawText(32,5+_textheight*(0+2),"Load preset and savefile",fontSize);
 		DrawText(32,5+_textheight*(1+2),"Manual mode",fontSize);
-		DrawText(32,5+_textheight*(2+2),"Bust location: ",fontSize);
-			if (graphicsLocation == LOCATION_CGALT){
-				DrawText(32+_bustlocationcollinspacewidth,5+_textheight*(2+2),"CGAlt",fontSize);
-			}else if (graphicsLocation==LOCATION_CG){
-				DrawText(32+_bustlocationcollinspacewidth,5+_textheight*(2+2),"CG",fontSize);
-			}
-
-		#if PLATFORM == PLAT_VITA
-			if (cpuOverclocked==1){
-				DrawTextColored(32,5+_textheight*(3+2),"Overclock CPU",fontSize,0,255,0);
-			}else{
-				DrawText(32,5+_textheight*(3+2),"Overclock CPU",fontSize);
-			}
-		#else
-			if (cpuOverclocked==1){
-				DrawTextColored(32,5+_textheight*(3+2),"Green Nothing",fontSize,0,255,0);
-			}else{
-				DrawText(32,5+_textheight*(3+2),"Nothing",fontSize);
-			}
-		#endif
-		DrawText(32,5+_textheight*(4+2),"Exit",fontSize);
+		DrawText(32,5+_textheight*(2+2),"Settings",fontSize);
+		DrawText(32,5+_textheight*(3+2),"Exit",fontSize);
 
 		DrawText(955-_versionStringWidth,544-5-_textheight,VERSIONSTRING,fontSize);
 
@@ -2787,10 +2893,6 @@ void TitleScreen(){
 		EndDrawingA();
 		ControlsEnd();
 		FpsCapWait();
-	}
-
-	if (_canShowRena==1){
-		FreeTexture(_renaImage);
 	}
 }
 
@@ -2896,6 +2998,9 @@ void TipMenu(){
 		if (WasJustPressed(SCE_CTRL_CIRCLE)){
 			ClearMessageArray();
 			currentGameStatus=4;
+			#ifdef PLAYTIPMUSIC
+				StopBGM();
+			#endif
 			break;
 		}
 		ControlsEnd();
@@ -3140,6 +3245,10 @@ void NavigationMenu(){
 				printf("Viewing tips\n");
 				currentGameStatus=5;
 				ControlsEnd();
+				#ifdef PLAYTIPMUSIC
+					PlayBGM("lsys14",256);
+				#endif
+
 				break;
 			}else if (_choice==3){
 				printf("Exiting\n");
@@ -3266,8 +3375,6 @@ signed char init(){
 	}
 	free(tempstringconcat);
 
-
-
 	FixPath("unknown.png",globalTempConcat,TYPE_EMBEDDED);
 	imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG((char*)globalTempConcat);
 	FixPath("note.png",globalTempConcat,TYPE_EMBEDDED);
@@ -3308,7 +3415,7 @@ int main(int argc, char *argv[]){
 	// Fill with null char
 	ClearMessageArray();
 
-	// Initiate Lua
+	// Initialize Lua
 	L = luaL_newstate();
 	luaL_openlibs(L);
 	MakeLuaUseful();
@@ -3326,77 +3433,8 @@ int main(int argc, char *argv[]){
 	#endif
 	lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
 
- 
-	//CROSSMUSIC* testsong = LoadMusic("app0:a/testogg.ogg");
-	//WriteSDLError();
-	//PlayMusic(testsong);
-	//WriteSDLError();
-	//
-	//FILE *fp;
-	//fp = fopen("ux0:data/HIGURASHI/a.txt", "a");
-	//fprintf(fp,"There are %d music deocoders available\n", Mix_GetNumMusicDecoders());
-	//fclose(fp);
+	// Put stupid test stuff here
 
-	//SetClearColor(255,0,0,255);
-	//CrossTexture* testTex = SafeLoadPNG("ux0:data/HIGURASHI/StreamingAssets/CG/c.png");
-	//CrossTexture* testTex2 = SafeLoadPNG("ux0:data/HIGURASHI/StreamingAssets/CG/bg_080.png");
-	//vita2d_texture_set_filters(testTex2,vita2d_texture_get_min_filter(testTex),vita2d_texture_get_mag_filter(testTex));
-	//while (1==1){
-	//	StartDrawingA();
-	//	vita2d_draw_texture(testTex2,0,0);
-	//	EndDrawingA();
-	//}
-
-	//printf("%s\n",currentPresetFilename);
-
-	//fread
-	//LoadPreset("./StreamingAssets/Presets/Watanagashi.txt");
-	//return 1;
-	
-	// Sound loading test
-	//scePowerSetArmClockFrequency(444);
-	////scePowerSetBusClockFrequency(222);
-	////scePowerSetGpuClockFrequency(222);
-	//u64 startLoadTest = GetTicks();
-	//CROSSSFX* noobSound = LoadSound("ux0:data/HIGURASHI/StreamingAssets/SE/s19/02/990200069.ogg");
-	//FreeSound(noobSound);
-	//u64 testResult = GetTicks()-startLoadTest;
-	//WriteIntToDebugFile(testResult);
-	//return 1;
-	// Graphics loading test
-	//scePowerSetArmClockFrequency(444);
-	////scePowerSetBusClockFrequency(222);
-	////scePowerSetGpuClockFrequency(222);
-	//u64 startLoadTest = GetTicks();
-	//CrossTexture* noobSound = LoadPNG("ux0:data/HIGURASHI/StreamingAssets/CG/haikei-.png");
-	//FreeTexture(noobSound);
-	//u64 testResult = GetTicks()-startLoadTest;
-	//WriteIntToDebugFile(testResult);
-	//return 1;
-
-	//currentGameStatus=0;
-	//LoadPreset("./StreamingAssets/Presets/Onikakushi.txt");
-	//currentGameStatus=3;
-	//int noob=19;
-	//printf("Bout to print\n");
-	//printf("%s\n",currentPresetTipList.theArray[noob]);
-	//strcpy(nextScriptToLoad,"onik_001");
-	//currentGameStatus=3;
-	//// luaL_dofile(L,"ux0:data/HIGURASHI/StreamingAssets/Scripts/onik_001.txt");
-	//RunScript(SCRIPTFOLDER,"onik_001",1);
-	////currentGameStatus=3;
-	//currentGameStatus=0;
-
-	//while (1){
-	//	FpsCapStart();
-	//	StartDrawingA();
-	//	DrawTextColored(5,5,"Noob",32,255,0,0);
-	//	//DrawText(int x, int y, const char* text, float size){
-	//	EndDrawingA();
-	//	FpsCapWait();
-	//}
-
-	//int i=0;
 	while (currentGameStatus!=99){
 		switch (currentGameStatus){
 			case 0:
