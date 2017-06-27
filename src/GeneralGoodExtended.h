@@ -268,8 +268,6 @@
 	}
 
 
-
-
 	void ControlsEnd(){
 		#if PLATFORM == PLAT_VITA
 			lastPad=pad;
