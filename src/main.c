@@ -688,7 +688,7 @@ void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 				LazyMessage("luaL_loadfile failed with error","LUA_ERRGCMM","This is a __gc metamethod error.","Please report the bug on the thread.");
 			break;
 			case LUA_ERRFILE:
-				LazyMessage("luaL_loadfile failed with error","LUA_ERRFILE","This means the file failed to load.","This is probably your fault.");
+				LazyMessage("luaL_loadfile failed with error","LUA_ERRFILE, this means the file failed to load.","Make sure the file exists.",tempstringconcat);
 			break;
 			default:
 				LazyMessage("luaL_loadfile failed with error","UNKNOWN ERROR!","This is weird and should NEVER HAPPEN!","Please report the bug on the thread.");
@@ -1058,8 +1058,10 @@ void InGameMenu(){
 	if (_canShowRena==1){
 		FreeTexture(_renaImage);
 	}
-	if (_artBefore != graphicsLocation){
-		LazyMessage("You changed the character art location.","The next time a character is loaded,","it will load from",locationStrings[graphicsLocation]);
+	if (currentGameStatus!=0){
+		if (_artBefore != graphicsLocation){
+			LazyMessage("You changed the character art location.","The next time a character is loaded,","it will load from",locationStrings[graphicsLocation]);
+		}
 	}
 }
 
