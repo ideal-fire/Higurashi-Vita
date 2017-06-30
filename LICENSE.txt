@@ -1,3 +1,3 @@
 Each subdirectory has its own license file. Please refer to that file for the license for the files in that folder.
 
-Please refer to files in the "VpkContents/a" folder for licenses for other things.
+Please refer to files in the "VpkContents/License" folder for licenses for other things.

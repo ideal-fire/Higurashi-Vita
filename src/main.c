@@ -1,17 +1,17 @@
 /*
 	1280x800
-
+	
 	(?<!.)char(?!\*)
 	Make sure there's nothing behind char and that it doesn't have * after it
 	I can use this to find all normal char and replace it with signed char
-
+	
 	https://www.youtube.com/watch?v=0T8cxjXwwww
-
+	
 	TODO - Inversion
-
+	
 	TODO - These are films. Look at the DrawFilm function please.
 		TODO - The functions I made don't work well for some reason.
-
+	
 	(OPTIONAL TODO)
 		TODO - (optional) Garbage collector won't collect functions made in script files??? i.e: function hima_tips_09_b()
 			Maybe I can make a system similar to the one I made in MrDude that tracks all the global variables made between two points of time.
@@ -28,8 +28,18 @@
 				// Here's the plan.
 				// Make another message array, but store text that is in italics in it
 			So, here's my idea, I take whatever char it is and add 100 if it's italics
-
+	
+	TODO - Make functions for easy menu controls
+	
 	In my testing, 444 HZ cpu makes loading and freeing 130 KB sound file take about 200 miliseconds less and loading the biggest image file in Onikakushi PS3 patch take about 50 miliseconds less
+	
+	image width / screen width
+	image height / screen height
+	
+	the bigger result is the one we lock to
+	we multiple image width and height by said result to get resulting image
+	
+	TODO - SPRITE MOVING IS BUGGED. THE SPRITE MOVES MEGA-FAST
 */
 
 
@@ -51,6 +61,8 @@ int LINEARRAYSIZE = ((MAXCHARSONLINE*2)+1);
 	void DrawHistory(unsigned char _textStuffToDraw[][LINEARRAYSIZE]);
 	void FixPath(char* filename,unsigned char _buffer[], char type);
 	void CheckTouchControls();
+	void DrawTouchControlsHelp();
+	void SaveGameEditor();
 
 // Libraries all need
 #include <math.h>
@@ -65,11 +77,6 @@ int LINEARRAYSIZE = ((MAXCHARSONLINE*2)+1);
 //
 
 #include "GeneralGoodExtended.h"
-
-#define REZ_UNDEFINED 0
-#define REZ_OLD 1
-#define REZ_PS3_BACKGROUND 3
-#define REZ_PS3_BUST 4
 
 #define LOCATION_UNDEFINED 0
 #define LOCATION_CG 1
@@ -87,7 +94,7 @@ int LINEARRAYSIZE = ((MAXCHARSONLINE*2)+1);
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v1.6"
+#define VERSIONSTRING "v1.7"
 #define HISTORYONONESCREEN 13
 /////////////////////////////////////
 
@@ -164,7 +171,6 @@ typedef struct hauighrehrge{
 	int statusVariable3;
 	int statusVariable4;
 	unsigned int lineCreatedOn;
-	unsigned char rez;
 }bust;
 
 bust Busts[MAXBUSTS];
@@ -272,8 +278,6 @@ int32_t autoModeWait=500;
 
 signed char cpuOverclocked=0;
 
-unsigned char currentBackgroundRez;
-
 unsigned char graphicsLocation = LOCATION_CGALT;
 
 unsigned char messageHistory[MAXMESSAGEHISTORY][LINEARRAYSIZE];
@@ -282,10 +286,26 @@ unsigned char oldestMessage=0;
 #define TOUCHMODE_NONE 0
 #define TOUCHMODE_MAINGAME 1
 #define TOUCHMODE_MENU 2
-unsigned char easyTouchControlMode = TOUCHMODE_MAINGAME;
+#define TOUCHMODE_LEFTRIGHTSELECT 3
+unsigned char easyTouchControlMode = TOUCHMODE_MENU;
 
 float bgmVolume = 0.75;
 float seVolume = 1.0;
+
+int currentTextHeight;
+
+#if PLATFORM == PLAT_WINDOWS
+	CrossTexture* controlsUpImage;
+	CrossTexture* controlsDownImage;
+	CrossTexture* controlsLeftImage;
+	CrossTexture* controlsRightImage;
+	CrossTexture* controlsSelectImage;
+	CrossTexture* controlsBackImage;
+
+	CrossTexture* controlsMenuImage;
+
+	char showControls=0;
+#endif
 
 /*
 ====================================================
@@ -341,6 +361,7 @@ void DrawText(int x, int y, const char* text, float size){
 		FC_Draw(fontImage, mainWindowRenderer, x, y, "%s", text);
 	#endif
 }
+
 void DrawTextColored(int x, int y, const char* text, float size, unsigned char r, unsigned char g, unsigned char b){
 	#if TEXTRENDERER == TEXT_VITA2D
 		vita2d_font_draw_text(fontImage,x,y+TextHeight(size), RGBA8(r,g,b,255),floor(size),text);
@@ -376,13 +397,23 @@ CrossTexture* SafeLoadPNG(const char* path){
 	return _tempTex;
 }
 
+CrossTexture* LoadEmbeddedPNG(const char* path){
+	FixPath((char*)path,globalTempConcat,TYPE_EMBEDDED);
+	CrossTexture* _tempTex = LoadPNG((char*)globalTempConcat);
+	if (_tempTex==NULL){
+		ShowErrorIfNull(_tempTex);
+		LazyMessage("Failed to load image",path,"What will happen now?!","THIS IS SUPPOSED TO BE EMBEDDED!");
+	}
+	return _tempTex;
+}
+
 void DrawMessageBox(){
-	DrawRectangle(0,0,960,544,0,0,0,MessageBoxAlpha);
+	DrawRectangle(0,0,screenWidth,screenHeight,0,0,0,MessageBoxAlpha);
 }
 
 void DrawCurrentFilter(){
-	DrawRectangle(0,0,960,544,filterR,filterG,filterB,filterA-100);
-	//DrawRectangle(0,0,960,544,filterR,255-(filterG*filterA*.0011),filterB,255);
+	DrawRectangle(0,0,screenWidth,screenHeight,filterR,filterG,filterB,filterA-100);
+	//DrawRectangle(0,0,960,screenHeight,filterR,255-(filterG*filterA*.0011),filterB,255);
 }
 
 u64 waitwithCodeTarget;
@@ -394,6 +425,24 @@ void WaitWithCodeEnd(int amount){
 	if (GetTicks()<waitwithCodeTarget){
 		Wait(waitwithCodeTarget-GetTicks());
 	}
+}
+
+char MenuControls(char _choice,int _menuMin, int _menuMax){
+	if (WasJustPressed(SCE_CTRL_UP)){
+		if (_choice!=_menuMin){
+			return (_choice-1);
+		}else{
+			return _menuMax;
+		}
+	}
+	if (WasJustPressed(SCE_CTRL_DOWN)){
+		if (_choice!=_menuMax){
+			return (_choice+1);
+		}else{
+			return _menuMin;
+		}
+	}
+	return _choice;
 }
 
 void WriteSDLError(){
@@ -410,7 +459,6 @@ size_t u_strlen(const unsigned char * array){
 // Returns one if they chose yes
 // Returns zero if they chose no
 int LazyChoice(const char* stra, const char* strb, const char* strc, const char* strd){
-	int _textheight = TextHeight(fontSize);
 	int _choice=0;
 	ControlsStart();
 	ControlsEnd();
@@ -438,20 +486,20 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 		ControlsEnd();
 		StartDrawingA();
 		if (stra!=NULL){
-			DrawText(32,5+_textheight*(0+2),stra,fontSize);
+			DrawText(32,5+currentTextHeight*(0+2),stra,fontSize);
 		}
 		if (strb!=NULL){
-			DrawText(32,5+_textheight*(1+2),strb,fontSize);
+			DrawText(32,5+currentTextHeight*(1+2),strb,fontSize);
 		}
 		if (strc!=NULL){
-			DrawText(32,5+_textheight*(2+2),strc,fontSize);
+			DrawText(32,5+currentTextHeight*(2+2),strc,fontSize);
 		}
 		if (strd!=NULL){
-			DrawText(32,5+_textheight*(3+2),strd,fontSize);
+			DrawText(32,5+currentTextHeight*(3+2),strd,fontSize);
 		}
-		DrawText(0,544-32-_textheight*(_choice+1),">",fontSize);
-		DrawText(32,544-32-_textheight*2,"Yes",fontSize);
-		DrawText(32,544-32-_textheight,"No",fontSize);
+		DrawText(0,screenHeight-32-currentTextHeight*(_choice+1),">",fontSize);
+		DrawText(32,screenHeight-32-currentTextHeight*2,"Yes",fontSize);
+		DrawText(32,screenHeight-32-currentTextHeight,"No",fontSize);
 		EndDrawingA();
 		FpsCapWait();
 	}
@@ -659,6 +707,12 @@ void DisplaypcallError(int val, const char* fourthMessage){
 	}
 }
 
+int _debugCount=0;
+void PrintDebugCounter(){
+	printf("DEBUG %d\n",_debugCount);
+	_debugCount++;
+}
+
 void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	ClearMessageArray();	
 	currentScriptLine=0;
@@ -670,7 +724,8 @@ void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	}
 	// Free garbage and old main function if it existed
 	DisposeOldScript();
-
+	
+	
 	int _loadFileResult = luaL_loadfile(L, tempstringconcat);
 	if (_loadFileResult!=LUA_OK){
 		switch (_loadFileResult){
@@ -697,7 +752,7 @@ void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 		currentGameStatus=0;
 		return;
 	}
-
+	
 	int _pcallResult = lua_pcall(L, 0, LUA_MULTRET, 0);
 	if (_pcallResult!=LUA_OK){
 		printf("Failed pcall!\n");
@@ -706,7 +761,7 @@ void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 		return;
 	}
 
-	//if (luaL_dofile(L,tempstringconcat)==0){
+	//if (SafeLuaDoFile(L,tempstringconcat)==0){
 	//	printf("Failed to load\n");
 	//}
 
@@ -797,20 +852,6 @@ void Update(){
 	}
 }
 
-int GetRezFromImage(CrossTexture* passedImage){
-	int _width = GetTextureWidth(passedImage);
-	int _height = GetTextureHeight(passedImage);
-	if (_width==640 && _height==480){ // Old background, old bust, or updated bust
-		return REZ_OLD;
-	}else if (_width==960 && _height==540){ // PS3 background
-		return REZ_PS3_BACKGROUND;
-	}else if (_width==720 && _height==540){ // PS3 bust
-		return REZ_PS3_BUST;
-	}
-	// Default
-	return REZ_OLD;
-}
-
 void RestartBGM(){
 	StopMusic();
 	if (lastBGMFilenameStored==1){
@@ -818,10 +859,9 @@ void RestartBGM(){
 	}
 }
 
-void InGameMenu(){
+void SettingsMenu(){
 	PlayMenuSound();
 	signed char _choice=0;
-	short _textheight = TextHeight(fontSize);
 	char _tempAutoModeString[10] = {'\0'};
 	int _tempStrWidth = TextWidth(fontSize,"Auto Mode Speed: ");
 	itoa(autoModeWait,_tempAutoModeString,10);
@@ -859,20 +899,25 @@ void InGameMenu(){
 	while (1){
 		FpsCapStart();
 		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_DOWN)){
-			_choice++;
-			if (_choice>8){
-				_choice=0;
-			}
+
+
+		//char MenuControls(char _choice,int _menuMin, int _menuMax
+		if (currentGameStatus!=0){
+			_choice = MenuControls(_choice,0,8);
+		}else{
+			_choice = MenuControls(_choice,0,7);
 		}
-		if (WasJustPressed(SCE_CTRL_UP)){
-			_choice--;
-			if (_choice<0){
-				_choice=8;
-			}
-		}
+
 		if (WasJustPressed(SCE_CTRL_CIRCLE)){
-			break;
+			if (_choice==2){
+				autoModeWait-=500;
+				if (autoModeWait<=0){
+					autoModeWait=500;
+				}
+				itoa(autoModeWait,_tempAutoModeString,10);
+			}else{
+				break;
+			}
 		}
 		if (WasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){ // Resume
@@ -893,8 +938,8 @@ void InGameMenu(){
 			}else if (_choice==1){ // Restart BGM
 				RestartBGM();
 			}else if (_choice==2){ // Auto mode speed
-				LazyMessage("Use left and right to change the","auto mode speed.","Activate auto mode with SELECT in game.",NULL);
-				ControlsEnd();
+				autoModeWait+=500;
+				itoa(autoModeWait,_tempAutoModeString,10);
 			}else if (_choice==4){ // CPU speed
 				PlayMenuSound();
 				if (cpuOverclocked==0){
@@ -1014,43 +1059,50 @@ void InGameMenu(){
 		// Display sample Rena if changing bust location
 		if (_choice==3){
 			if (_canShowRena==1){
-				DrawTexture(_renaImage,480,544-GetTextureHeight(_renaImage));
+				DrawTexture(_renaImage,screenWidth-GetTextureWidth(_renaImage)-5,screenHeight-GetTextureHeight(_renaImage));
 			}
 		}
-		DrawText(32,5,"Resume",fontSize);
-		DrawText(32,5+_textheight,"Restart BGM",fontSize);
-		DrawText(32,5+_textheight*2,"Auto Mode Speed: ",fontSize);
-			DrawText(32+_tempStrWidth,5+_textheight*2,_tempAutoModeString,fontSize);
+
+		if (currentGameStatus==0){
+			DrawText(32,5,"Back",fontSize);
+		}else{
+			DrawText(32,5,"Resume",fontSize);
+		}
+		DrawText(32,5+currentTextHeight,"Restart BGM",fontSize);
+		DrawText(32,5+currentTextHeight*2,"Auto Mode Speed: ",fontSize);
+			DrawText(32+_tempStrWidth,5+currentTextHeight*2,_tempAutoModeString,fontSize);
 		
-		DrawText(32,5+_textheight*3,"Bust location: ",fontSize);
+		DrawText(32,5+currentTextHeight*3,"Bust location: ",fontSize);
 			if (graphicsLocation == LOCATION_CGALT){
-				DrawText(32+_bustlocationcollinspacewidth,5+_textheight*3,"CGAlt",fontSize);
+				DrawText(32+_bustlocationcollinspacewidth,5+currentTextHeight*3,"CGAlt",fontSize);
 			}else if (graphicsLocation==LOCATION_CG){
-				DrawText(32+_bustlocationcollinspacewidth,5+_textheight*3,"CG",fontSize);
+				DrawText(32+_bustlocationcollinspacewidth,5+currentTextHeight*3,"CG",fontSize);
 			}
 
 		// Display CPU overclock option
 			#if PLATFORM == PLAT_VITA
 				if (cpuOverclocked==1){
-					DrawTextColored(32,5+_textheight*4,"Overclock CPU",fontSize,0,255,0);
+					DrawTextColored(32,5+currentTextHeight*4,"Overclock CPU",fontSize,0,255,0);
 				}else{
-					DrawText(32,5+_textheight*4,"Overclock CPU",fontSize);
+					DrawText(32,5+currentTextHeight*4,"Overclock CPU",fontSize);
 				}
 			#else
 				if (cpuOverclocked==1){
-					DrawTextColored(32,5+_textheight*4,"Green Nothing",fontSize,0,255,0);
+					DrawTextColored(32,5+currentTextHeight*4,"Green Nothing",fontSize,0,255,0);
 				}else{
-					DrawText(32,5+_textheight*4,"Nothing",fontSize);
+					DrawText(32,5+currentTextHeight*4,"Nothing",fontSize);
 				}
 			#endif
-		DrawText(32,5+_textheight*5,"BGM Volume",fontSize);
-			DrawText(32+_noobBGMVolumeWidth,5+_textheight*5,_tempItoaHoldBGM,fontSize);
-		DrawText(32,5+_textheight*6,"SE Volume",fontSize);
-			DrawText(32+_noobBGMVolumeWidth,5+_textheight*6,_tempItoaHoldSE,fontSize);
+		DrawText(32,5+currentTextHeight*5,"BGM Volume",fontSize);
+			DrawText(32+_noobBGMVolumeWidth,5+currentTextHeight*5,_tempItoaHoldBGM,fontSize);
+		DrawText(32,5+currentTextHeight*6,"SE Volume",fontSize);
+			DrawText(32+_noobBGMVolumeWidth,5+currentTextHeight*6,_tempItoaHoldSE,fontSize);
 
-		DrawText(32,5+_textheight*7,"Defaults",fontSize);
-		DrawText(32,5+_textheight*8,"Quit",fontSize);
-		DrawText(0,5+_choice*_textheight,">",fontSize);
+		DrawText(32,5+currentTextHeight*7,"Defaults",fontSize);
+		if (currentGameStatus!=0){
+			DrawText(32,5+currentTextHeight*8,"Quit",fontSize);
+		}
+		DrawText(0,5+_choice*currentTextHeight,">",fontSize);
 		EndDrawingA();
 		FpsCapWait();
 	}
@@ -1110,7 +1162,7 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 				endType=Line_ContinueAfterTyping;
 			}
 			if (WasJustPressed(SCE_CTRL_TRIANGLE)){
-				InGameMenu();
+				SettingsMenu();
 			}
 			if (WasJustPressed(SCE_CTRL_SELECT)){
 				PlayMenuSound();
@@ -1135,51 +1187,60 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 	}
 }
 
-void DrawBackground(CrossTexture* passedBackground, unsigned char passedRez){
-	if (passedRez == REZ_OLD){
-		//if (filterActive==1){
-		//	//void DrawTextureScaleTint(CrossTexture* passedTexture, int destX, int destY, float texXScale, float texYScale, unsigned char r, unsigned char g, unsigned char b){
-		//	DrawTextureScaleTint(passedBackground,160,32,1,1,filterR,filterG,filterB);
-		//}else{
-		DrawTexture(passedBackground,160,32);
-		//}
-	}else if (passedRez == REZ_PS3_BACKGROUND){
-		DrawTexture(passedBackground,0,2);
+void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
+	*_tempXOffset = floor((screenWidth-GetTextureWidth(_tempImg))/2);
+	*_tempYOffset = floor((screenHeight-GetTextureHeight(_tempImg))/2);
+	// If they're bigger than the screen, assume that they're supposed to scroll or something
+	if (*_tempXOffset<0){
+		*_tempXOffset=0;
+	}
+	if (*_tempYOffset<0){
+		*_tempYOffset=0;
 	}
 }
 
-void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedRez, unsigned char passedAlpha){
-	if (passedRez == REZ_OLD){
-		DrawTextureAlpha(passedBackground,160,32,passedAlpha);
-	}else if (passedRez == REZ_PS3_BACKGROUND){
-		DrawTextureAlpha(passedBackground,0,2,passedAlpha);
-	}
+float GetXOffsetScale(CrossTexture* _tempImg){
+	return (GetTextureWidth(_tempImg)/(float)640);
 }
+float GetYOffsetScale(CrossTexture* _tempImg){
+	return ( GetTextureHeight(_tempImg)/(float)480);
+}
+
+void DrawBackground(CrossTexture* passedBackground){
+
+
+	signed int _tempXOffset;
+	signed int _tempYOffset;
+	GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
+	DrawTexture(passedBackground,_tempXOffset,_tempYOffset);
+}
+
+void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlpha){
+
+	
+	signed int _tempXOffset;
+	signed int _tempYOffset;
+	GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
+	DrawTextureAlpha(passedBackground,_tempXOffset,_tempYOffset,passedAlpha);
+}
+
+
 
 void DrawBust(bust* passedBust){
-	if (passedBust->alpha==255){
-		if (passedBust->rez == REZ_PS3_BUST){ // For ordinary PS3 graphics.
-			//DrawTexture(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset);
-			DrawTexture(passedBust->image,123+passedBust->xOffset*1.3,passedBust->yOffset+2);
-			//}else if (passedBust->rez == REZ_OLD && currentBackgroundRez == REZ_PS3_BACKGROUND){ // In this case, the Steam busts should be bigger, but I'm too lazy to do that. Actually, all busts should be bigger. They look a little small
-			//	DrawTexture(passedBust->image,141+passedBust->xOffset*1.13,passedBust->yOffset+62);
-		}else if (passedBust->rez==REZ_OLD){ // For normal graphics
-			// (960-640)/2=160
-			// (544-480)/2=32
-			DrawTexture(passedBust->image,160+passedBust->xOffset,passedBust->yOffset+32);
-		}else if (passedBust->rez == REZ_PS3_BACKGROUND){ // For the CG scenes
-			DrawBackground(passedBust->image,passedBust->rez);
+
+		signed int _tempXOffset;
+		signed int _tempYOffset;
+		
+		GetXAndYOffset(passedBust->image,&_tempXOffset,&_tempYOffset);
+		if (passedBust->alpha==255){
+			DrawTexture(passedBust->image,_tempXOffset+passedBust->xOffset*GetXOffsetScale(passedBust->image),_tempYOffset+passedBust->yOffset*GetYOffsetScale(passedBust->image));
+		}else{
+			DrawTextureAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*GetXOffsetScale(passedBust->image),_tempYOffset+passedBust->yOffset*GetYOffsetScale(passedBust->image), passedBust->alpha);
 		}
-	}else{
-		if (passedBust->rez == REZ_PS3_BUST){ // For ordinary PS3 graphics.
-			DrawTextureAlpha(passedBust->image,123+passedBust->xOffset*1.3,passedBust->yOffset+2,passedBust->alpha);
-		}else if (passedBust->rez==REZ_OLD){ // For normal graphics
-			DrawTextureAlpha(passedBust->image,160+passedBust->xOffset,passedBust->yOffset+32,passedBust->alpha);
-		}else if (passedBust->rez == REZ_PS3_BACKGROUND){ // For the CG scenes
-			DrawBackgroundAlpha(passedBust->image,passedBust->rez,passedBust->alpha);
-		}
-	}
+	
 }
+
+
 
 void RecalculateBustOrder(){
 	int i, j, k;
@@ -1385,7 +1446,6 @@ void SetNextScriptName(){
 }
 
 void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd){
-	int _textheight = TextHeight(fontSize);
 	ControlsStart();
 	ControlsEnd();
 	while (currentGameStatus!=99){
@@ -1398,18 +1458,18 @@ void LazyMessage(const char* stra, const char* strb, const char* strc, const cha
 		ControlsEnd();
 		StartDrawingA();
 		if (stra!=NULL){
-			DrawText(32,5+_textheight*(0+2),stra,fontSize);
+			DrawText(32,5+currentTextHeight*(0+2),stra,fontSize);
 		}
 		if (strb!=NULL){
-			DrawText(32,5+_textheight*(1+2),strb,fontSize);
+			DrawText(32,5+currentTextHeight*(1+2),strb,fontSize);
 		}
 		if (strc!=NULL){
-			DrawText(32,5+_textheight*(2+2),strc,fontSize);
+			DrawText(32,5+currentTextHeight*(2+2),strc,fontSize);
 		}
 		if (strd!=NULL){
-			DrawText(32,5+_textheight*(3+2),strd,fontSize);
+			DrawText(32,5+currentTextHeight*(3+2),strd,fontSize);
 		}
-		DrawText(32,544-32-_textheight,"X to continue.",fontSize);
+		DrawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.",fontSize);
 		EndDrawingA();
 		FpsCapWait();
 	}
@@ -1458,12 +1518,17 @@ signed char CheckForUserStuff(){
 		FreeTexture(_nofonttext);
 		return 2;
 	}
-	if (DirectoryExists("ux0:data/HIGURASHI/")==0){
-		MakeDirectory("ux0:data/HIGURASHI/");
+
+	//void FixPath(char* filename,unsigned char _buffer[], char type){
+	FixPath("",globalTempConcat,TYPE_DATA);
+
+	if (DirectoryExists(globalTempConcat)==0){
+		MakeDirectory(globalTempConcat);
 		_oneMissing=1;
 	}
-	if (DirectoryExists("ux0:data/HIGURASHI/StreamingAssets/")==0){
-		LazyMessage("ux0:data/HIGURASHI/StreamingAssets/","does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the Vita. Refer to thread for tutorial.");
+	FixPath("StreamingAssets/",globalTempConcat,TYPE_DATA);
+	if (DirectoryExists(globalTempConcat)==0){
+		LazyMessage(globalTempConcat,"does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the system. Refer to thread for tutorial.");
 		_oneMissing=1;
 	}
 	
@@ -1587,8 +1652,6 @@ void DrawScene(const char* filename, int time){
 
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[graphicsLocation],filename,".png");
 
-	unsigned char newBackgroundRez;
-
 	if (CheckFileExist(tempstringconcat)==0){
 		free(tempstringconcat);
 		if (graphicsLocation == LOCATION_CGALT){
@@ -1603,8 +1666,6 @@ void DrawScene(const char* filename, int time){
 	CrossTexture* newBackground = SafeLoadPNG(tempstringconcat);
 	free(tempstringconcat);
 
-	newBackgroundRez = GetRezFromImage(newBackground);
-
 	while (_backgroundAlpha>0){
 		FpsCapStart();
 
@@ -1617,11 +1678,11 @@ void DrawScene(const char* filename, int time){
 		StartDrawingA();
 		
 		if (currentBackground!=NULL){
-			DrawBackground(newBackground,newBackgroundRez);
+			DrawBackground(newBackground);
 
-			DrawBackgroundAlpha(currentBackground,currentBackgroundRez,_backgroundAlpha);
+			DrawBackgroundAlpha(currentBackground,_backgroundAlpha);
 		}else{
-			DrawBackgroundAlpha(newBackground,newBackgroundRez,255-_backgroundAlpha);
+			DrawBackgroundAlpha(newBackground,255-_backgroundAlpha);
 		}
 		
 		for (i = MAXBUSTS-1; i != -1; i--){
@@ -1663,7 +1724,6 @@ void DrawScene(const char* filename, int time){
 		FreeTexture(currentBackground);
 		currentBackground=NULL;
 	}
-	currentBackgroundRez = newBackgroundRez;
 	currentBackground=newBackground;
 }
 
@@ -1705,7 +1765,6 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	free(tempstringconcat);
 	
 	
-	Busts[passedSlot].rez = GetRezFromImage(Busts[passedSlot].image);
 
 	Busts[passedSlot].xOffset = _xoffset;
 	Busts[passedSlot].yOffset = _yoffset;
@@ -2000,7 +2059,7 @@ void LoadSettings(){
 void DrawHistory(unsigned char _textStuffToDraw[][LINEARRAYSIZE]){
 	ControlsEnd();
 	int _noobHeight = TextHeight(fontSize);
-	int _controlsStringWidth = TextWidth(fontSize,"UP and DOWN to scroll, O to return");
+	int _controlsStringWidth = TextWidth(fontSize,"UP and DOWN to scroll, "BACKBUTTONNAME" to return");
 	int _scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
 
 	int i;
@@ -2029,7 +2088,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][LINEARRAYSIZE]){
 		StartDrawingA();
 
 		if (currentBackground!=NULL){
-			DrawBackground(currentBackground,currentBackgroundRez);
+			DrawBackground(currentBackground);
 		}
 	
 		for (i = MAXBUSTS-1; i != -1; i--){
@@ -2044,7 +2103,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][LINEARRAYSIZE]){
 			}
 		}
 
-		DrawRectangle(0,0,960,544,0,230,255,200);
+		DrawRectangle(0,0,screenWidth,screenHeight,0,230,255,200);
 
 		for (i = 0; i < HISTORYONONESCREEN; i++){
 			//void DrawTextColored(int x, int y, const char* text, float size, unsigned char r, unsigned char g, unsigned char b){
@@ -2052,10 +2111,10 @@ void DrawHistory(unsigned char _textStuffToDraw[][LINEARRAYSIZE]){
 		}
 
 		DrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
-		DrawTextColored(screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, O to return",fontSize,0,0,0);
+		DrawTextColored(screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, "BACKBUTTONNAME" to return",fontSize,0,0,0);
 
-		DrawRectangle(955,0,5,544,0,0,0,255);
-		DrawRectangle(955,floor(444*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,100,255,0,0,255);
+		DrawRectangle((screenWidth-5),0,5,screenHeight,0,0,0,255);
+		DrawRectangle((screenWidth-5),floor(444*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,100,255,0,0,255);
 
 		EndDrawingA();
 
@@ -2091,46 +2150,105 @@ void FixPath(char* filename,unsigned char _buffer[], char type){
 	#endif
 }
 
+void ChangeEasyTouchMode(int _newControlValue){
+	ControlsReset();
+	easyTouchControlMode = _newControlValue;
+}
+
 #if PLATFORM == PLAT_WINDOWS
-	void TouchInGameMenu(){
-		ControlsEnd();
-		easyTouchControlMode = TOUCHMODE_NONE;
-		while (1){
-			FpsCapStart();
-			ControlsStart();
-			ControlsEnd();
-			StartDrawingA();
 
-			//void DrawRectangle(int x, int y, int w, int h, int r, int g, int b, int a){
-			DrawRectangle(0,0,screenWidth*.33,screenHeight*.5,255,0,0,255);
-			//void DrawText(int x, int y, const char* text, float size){
-			DrawText(0,0,"Auto",fontSize);
+	void DrawTouchControlsHelp(){
 
-			
-			DrawRectangle(screenWidth*.66,0,screenWidth*.34,screenHeight*.5,0,0,255,255);
-			DrawText(screenWidth*.66,0,"Back",fontSize);
-			EndDrawingA();
-			FpsCapWait();
+		if (showControls==1){
+			if (easyTouchControlMode!=TOUCHMODE_NONE){
+				if (easyTouchControlMode==TOUCHMODE_MAINGAME){
+					DrawTextureScaleSize(controlsMenuImage,screenWidth*.80,0,screenWidth*.20,screenHeight*.20);
+				}else if (easyTouchControlMode==TOUCHMODE_MENU){
+					DrawTextureScaleSize(controlsBackImage,0,0,screenWidth*.20,screenHeight);
+					DrawTextureScaleSize(controlsSelectImage,screenWidth*.80,0,screenWidth*.20,screenHeight);
+					DrawTextureScaleSize(controlsUpImage,screenWidth*.20,0,screenWidth*.60,screenHeight*.50);
+					DrawTextureScaleSize(controlsDownImage,screenWidth*.20,screenHeight*.50,screenWidth*.60,screenHeight*.50);
+				}else if (easyTouchControlMode == TOUCHMODE_LEFTRIGHTSELECT){
+
+					DrawTextureScaleSize(controlsLeftImage,0,0,screenWidth*.20,screenHeight);
+					DrawTextureScaleSize(controlsRightImage,screenWidth*.80,0,screenWidth*.20,screenHeight);
+					DrawTextureScaleSize(controlsSelectImage,screenWidth*.20,0,screenWidth*.60,screenHeight*.50);
+					DrawTextureScaleSize(controlsBackImage,screenWidth*.20,screenHeight*.50,screenWidth*.60,screenHeight*.50);
+				
+				}
+			}
 		}
 	}
 
+	// These are general control schemes that can be used in multiple areas
+	// Change the variable easyTouchControlMode to one of the constants
+	// Set to TOUCHMODE_NONE for touch controls that are special
 	void CheckTouchControls(){
+
+		if (WasJustPressedRegardless(SCE_ANDROID_BACK)){
+			if (showControls==0){
+				showControls=1;
+			}else{
+				showControls=0;
+			}
+		}
+
 		if (easyTouchControlMode!=TOUCHMODE_NONE){
 			if (easyTouchControlMode==TOUCHMODE_MAINGAME){
 				if (WasJustPressed(SCE_TOUCH)){
 					if (touchX>screenWidth*.80 && touchY<screenHeight*.20){
-						printf("Menu\n");
-						TouchInGameMenu();
+						ChangeEasyTouchMode(TOUCHMODE_MENU);
+						ControlsReset();
+						SettingsMenu();
+						ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 					}else{
-						printf("z\n");
 						pad[SCE_CTRL_CROSS]=1;
 					}
 				}else if (WasJustReleased(SCE_TOUCH)){
-					if (touchX>screenWidth*.80 && touchY<screenHeight*.20){
-						
+					pad[SCE_CTRL_CROSS]=0;
+				}
+			}else if (easyTouchControlMode==TOUCHMODE_MENU){
+				if (WasJustPressed(SCE_TOUCH)){
+					if (touchX>screenWidth*.80){
+						pad[SCE_CTRL_CROSS]=1;
+					}else if (touchX<screenWidth*.20){
+						pad[SCE_CTRL_CIRCLE]=1;
+					}else if (touchY>screenHeight*.5){
+						pad[SCE_CTRL_DOWN]=1;
 					}else{
-						printf("z is no more\n");
+						pad[SCE_CTRL_UP]=1;
+					}
+				}else if (WasJustReleased(SCE_TOUCH)){
+					if (touchX>screenWidth*.80){
 						pad[SCE_CTRL_CROSS]=0;
+					}else if (touchX<screenWidth*.20){
+						pad[SCE_CTRL_CIRCLE]=0;
+					}else if (touchY>screenHeight*.5){
+						pad[SCE_CTRL_DOWN]=0;
+					}else{
+						pad[SCE_CTRL_UP]=0;
+					}
+				}
+			}else if (easyTouchControlMode == TOUCHMODE_LEFTRIGHTSELECT){
+				if (WasJustPressed(SCE_TOUCH)){
+					if (touchX<=screenWidth*.20){
+						pad[SCE_CTRL_LEFT]=1;
+					}else if (touchX>=screenWidth*.80){
+						pad[SCE_CTRL_RIGHT]=1;
+					}else if (touchY<screenHeight*.5){
+						pad[SCE_CTRL_CROSS]=1;
+					}else{
+						pad[SCE_CTRL_CIRCLE]=1;
+					}
+				}else if (WasJustReleased(SCE_TOUCH)){
+					if (touchX<=screenWidth*.20){
+						pad[SCE_CTRL_LEFT]=0;
+					}else if (touchX>=screenWidth*.80){
+						pad[SCE_CTRL_RIGHT]=0;
+					}else if (touchY<screenHeight*.5){
+						pad[SCE_CTRL_CROSS]=0;
+					}else{
+						pad[SCE_CTRL_CIRCLE]=0;
 					}
 				}
 			}
@@ -2465,7 +2583,6 @@ int L_Select(lua_State* passedState){
 	}
 
 	// This is the actual loop for choosing the choice
-	int _textheight = TextHeight(fontSize);
 	signed char _choice=0;
 	while (1){
 		FpsCapStart();
@@ -2488,14 +2605,14 @@ int L_Select(lua_State* passedState){
 		}
 		ControlsEnd();
 		StartDrawingA();
-		DrawBackground(currentBackground,currentBackgroundRez);
+		DrawBackground(currentBackground);
 		if (MessageBoxEnabled==1){
 			DrawMessageBox();
 		}
 		for (i=0;i<_totalOptions;i++){
-			DrawText(32,i*_textheight,noobOptions[i],fontSize);
+			DrawText(32,i*currentTextHeight,noobOptions[i],fontSize);
 		}
-		DrawText(0,_choice*_textheight,">",fontSize);
+		DrawText(0,_choice*currentTextHeight,">",fontSize);
 
 		EndDrawingA();
 		FpsCapWait();
@@ -2644,7 +2761,7 @@ void Draw(){
 	StartDrawingA();
 
 	if (currentBackground!=NULL){
-		DrawBackground(currentBackground,currentBackgroundRez);
+		DrawBackground(currentBackground);
 	}
 
 	for (i = MAXBUSTS-1; i != -1; i--){
@@ -2653,7 +2770,7 @@ void Draw(){
 		}
 	}
 
-	if (MessageBoxEnabled==1){
+	if (MessageBoxEnabled==1 && filterActive==0){
 		// This is the message box
 		DrawMessageBox();
 	}
@@ -2667,7 +2784,6 @@ void Draw(){
 	if (filterActive==1){
 		DrawCurrentFilter();
 	}
-
 	if (MessageBoxEnabled==1){
 		DrawMessageText();
 	}
@@ -2727,9 +2843,8 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 		*_chosenfile=NULL;
 		_returnVal=2;
 	}else{
-		int _textheight = TextHeight(fontSize);
 		int _choice=0;
-		int _maxPerNoScroll=floor((544-5-_textheight*2)/(_textheight));
+		int _maxPerNoScroll=floor((screenHeight-5-currentTextHeight*2)/(currentTextHeight));
 		if (totalFiles<_maxPerNoScroll){
 			_maxPerNoScroll=totalFiles;
 		}
@@ -2784,10 +2899,10 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 				_tmpoffset=0;
 			}
 			for (i=0;i<_maxPerNoScroll;i++){
-				DrawText(32,5+_textheight*(i+2),filenameholder[i+_tmpoffset],fontSize);
+				DrawText(32,5+currentTextHeight*(i+2),filenameholder[i+_tmpoffset],fontSize);
 			}
-			DrawTextColored(32,5+_textheight*((_choice-_tmpoffset)+2),filenameholder[_choice],fontSize,0,255,0);
-			DrawText(5,5+_textheight*((_choice-_tmpoffset)+2),">",fontSize);
+			DrawTextColored(32,5+currentTextHeight*((_choice-_tmpoffset)+2),filenameholder[_choice],fontSize,0,255,0);
+			DrawText(5,5+currentTextHeight*((_choice-_tmpoffset)+2),">",fontSize);
 			EndDrawingA();
 			ControlsEnd();
 			FpsCapWait();
@@ -2804,7 +2919,6 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 
 void TitleScreen(){
 	signed char _choice=0;
-	int _textheight = TextHeight(fontSize);
 	
 	signed char _titlePassword=0;
 
@@ -2849,6 +2963,7 @@ void TitleScreen(){
 
 		if (WasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
+				printf("%s\n",currentPresetFilename);
 				PlayMenuSound();
 				if (currentPresetFilename==NULL){
 					currentPresetChapter=0;
@@ -2860,18 +2975,22 @@ void TitleScreen(){
 				PlayMenuSound();
 				printf("Manual script selection\n");
 				ControlsEnd();
-				FileSelector(SCRIPTFOLDER,&currentPresetFilename,(char*)"Select a script");
-				if (currentPresetFilename!=NULL){
+				char* _tempManualFileSelectionResult;
+				FileSelector(SCRIPTFOLDER,&_tempManualFileSelectionResult,(char*)"Select a script");
+				if (_tempManualFileSelectionResult!=NULL){
+					ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 					currentGameStatus=3;
-					RunScript(SCRIPTFOLDER,currentPresetFilename,0);
+					RunScript(SCRIPTFOLDER,_tempManualFileSelectionResult,0);
+					free(_tempManualFileSelectionResult);
 					currentGameStatus=0;
+					ChangeEasyTouchMode(TOUCHMODE_MENU);
 				}
 			}else if (_choice==3){ // Quit button
 				currentGameStatus=99;
 				break;
 			}else if (_choice==2){ // Go to setting menu
 				ControlsEnd();
-				InGameMenu();
+				SettingsMenu();
 				ControlsEnd();
 				break;
 			}else{
@@ -2884,14 +3003,15 @@ void TitleScreen(){
 
 		DrawText(32,5,"Main Menu",fontSize);
 
-		DrawText(32,5+_textheight*(0+2),"Load preset and savefile",fontSize);
-		DrawText(32,5+_textheight*(1+2),"Manual mode",fontSize);
-		DrawText(32,5+_textheight*(2+2),"Settings",fontSize);
-		DrawText(32,5+_textheight*(3+2),"Exit",fontSize);
+		DrawText(32,5+currentTextHeight*(0+2),"Load preset and savefile",fontSize);
+		DrawText(32,5+currentTextHeight*(1+2),"Manual mode",fontSize);
+		DrawText(32,5+currentTextHeight*(2+2),"Settings",fontSize);
+		DrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
 
-		DrawText(955-_versionStringWidth,544-5-_textheight,VERSIONSTRING,fontSize);
+		DrawText((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING,fontSize);
+		DrawText(5,screenHeight-5-currentTextHeight,SYSTEMSTRING,fontSize);
 
-		DrawText(5,5+_textheight*(_choice+2),">",fontSize);
+		DrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
 		EndDrawingA();
 		ControlsEnd();
 		FpsCapWait();
@@ -2899,6 +3019,8 @@ void TitleScreen(){
 }
 
 void TipMenu(){
+	ControlsReset();
+
 	ClearMessageArray();
 	if (currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
 		LazyMessage("No tips unlocked.",NULL,NULL,NULL);
@@ -2906,7 +3028,6 @@ void TipMenu(){
 		ControlsEnd();
 		return;
 	}
-	int _textheight = TextHeight(fontSize);
 	// The number for the tip the user has selected. Starts at 1. Subtract 1 if using this for an array
 	unsigned char _chosenTip=1;
 	char _chosenTipString[4]={48,0,0,0};
@@ -2929,9 +3050,27 @@ void TipMenu(){
 	luaL_dostring(L,_totalSelectedString);
 	isSkipping=0;
 	int i;
+	signed char _choice=0;
+
+	ChangeEasyTouchMode(TOUCHMODE_LEFTRIGHTSELECT);
+
 	while (currentGameStatus!=99){
 		FpsCapStart();
 		ControlsStart();
+
+		if (WasJustPressed(SCE_CTRL_DOWN)){
+			_choice++;
+			if (_choice>1){
+				_choice=0;
+			}
+		}
+		if (WasJustPressed(SCE_CTRL_UP)){
+			_choice--;
+			if (_choice<0){
+				_choice=1;
+			}
+		}
+
 		if (WasJustPressed(SCE_CTRL_RIGHT)){
 			_chosenTip++;
 			if (_chosenTip>currentPresetTipUnlockList.theArray[currentPresetChapter]){
@@ -2960,7 +3099,7 @@ void TipMenu(){
 			luaL_dostring(L,_totalSelectedString);
 			isSkipping=0;
 		}
-		if (WasJustPressed(SCE_CTRL_LEFT)){
+		if (WasJustPressed(SCE_CTRL_LEFT) ){
 			_chosenTip--;
 			if (_chosenTip<1){
 				_chosenTip=currentPresetTipUnlockList.theArray[currentPresetChapter];
@@ -2989,34 +3128,46 @@ void TipMenu(){
 			isSkipping=0;
 		}
 		if (WasJustPressed(SCE_CTRL_CROSS)){
+			ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 			ControlsEnd();
 			// This will trick the in between lines functions into thinking that we're in normal script execution mode and not quit
 			currentGameStatus=3;
 			RunScript(SCRIPTFOLDER, currentPresetTipList.theArray[_chosenTip-1],1);
 			ControlsEnd();
+			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			currentGameStatus=5;
 			break;
 		}
 		if (WasJustPressed(SCE_CTRL_CIRCLE)){
+			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			ClearMessageArray();
 			currentGameStatus=4;
-			#ifdef PLAYTIPMUSIC
+			#if PLAYTIPMUSIC == 1
 				StopBGM();
 			#endif
 			break;
 		}
+
+
+
 		ControlsEnd();
 		StartDrawingA();
-		//DrawText(32,5+_textheight*(0+2),"Tip: ",fontSize);
-		//DrawText(32+_tipcollinwidth,5+_textheight*(0+2),_totalSelectedString,fontSize);
+		//DrawText(32,5+currentTextHeight*(0+2),"Tip: ",fontSize);
+		//DrawText(32+_tipcollinwidth,5+currentTextHeight*(0+2),_totalSelectedString,fontSize);
 		for (i = 0; i < 3; i++){
 			//printf("%s\n",currentMessages[i]);
-			DrawText(32,TextHeight(fontSize)+i*(TextHeight(fontSize)),(char*)currentMessages[i],fontSize);
+			DrawText(32,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 		}
 
-		DrawText(5,544-5-_textheight*3,"Left and Right - Change TIP",fontSize);
-		DrawText(5,544-5-_textheight*2,"O - Back",fontSize);
-		DrawText(5,544-5-_textheight,"X - Select",fontSize);
+		//DrawText(32,currentTextHeight*5,"View TIP",fontSize);
+		//DrawText(32,currentTextHeight*6,"Back",fontSize);
+
+		//DrawText(5,(_choice+5)*currentTextHeight,">",fontSize);
+
+		DrawText(5,screenHeight-5-currentTextHeight*3,"Left and Right - Change TIP",fontSize);
+		//DrawText(5,screenHeight-5-currentTextHeight*3,"Up and Down - Select option",fontSize);
+		DrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back",fontSize);
+		DrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select",fontSize);
 
 		EndDrawingA();
 		FpsCapWait();
@@ -3024,12 +3175,12 @@ void TipMenu(){
 }
 
 void ChapterJump(){
+	ChangeEasyTouchMode(TOUCHMODE_LEFTRIGHTSELECT);
 	//currentGameStatus=3;
 	//RunScript
 	//currentGameStatus=4;
 	int _chapterChoice=0;
 	unsigned char _choice=0;
-	int _textheight = TextHeight(fontSize);
 	char _tempNumberString[15];
 	ControlsEnd();
 
@@ -3086,11 +3237,13 @@ void ChapterJump(){
 			}
 		}
 		if (WasJustPressed(SCE_CTRL_CROSS)){
+			ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 			if (_choice==0){
 				ControlsEnd();
 				currentGameStatus=3;
 				RunScript(SCRIPTFOLDER, currentPresetFileList.theArray[_chapterChoice],1);
 				ControlsEnd();
+				ChangeEasyTouchMode(TOUCHMODE_MENU);
 				currentGameStatus=5;
 				break;
 			}
@@ -3099,33 +3252,34 @@ void ChapterJump(){
 			}
 		}
 		if (WasJustPressed(SCE_CTRL_CIRCLE)){
+			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			break;
 		}
 		ControlsEnd();
 		StartDrawingA();
 		
 		if (chapterNamesLoaded==0){
-			DrawText(32,5+_textheight*(0+2),(const char*)globalTempConcat,fontSize);
+			DrawText(32,5+currentTextHeight*(0+2),(const char*)globalTempConcat,fontSize);
 		}else{
-			DrawText(32,5+_textheight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice],fontSize);
+			DrawText(32,5+currentTextHeight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice],fontSize);
 		}
 
-		DrawText(32,5+_textheight*(1+2),"Back",fontSize);
-		DrawText(5,5+_textheight*(_choice+2),">",fontSize);
+		DrawText(32,5+currentTextHeight*(1+2),"Back",fontSize);
+		DrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
 
-		DrawText(5,544-5-_textheight*4,"Left and Right - Change chapter",fontSize);
-		DrawText(5,544-5-_textheight*3,"R and Left or Right - Change chapter quickly",fontSize);
-		DrawText(5,544-5-_textheight*2,"O - Back",fontSize);
-		DrawText(5,544-5-_textheight,"X - Select",fontSize);
+		DrawText(5,screenHeight-5-currentTextHeight*4,"Left and Right - Change chapter",fontSize);
+		DrawText(5,screenHeight-5-currentTextHeight*3,"R and Left or Right - Change chapter quickly",fontSize);
+		DrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back",fontSize);
+		DrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select",fontSize);
 		EndDrawingA();
 		FpsCapWait();
 	}
 }
 
 void SaveGameEditor(){
+	ChangeEasyTouchMode(TOUCHMODE_LEFTRIGHTSELECT);
 	char _endOfChapterString[10];
 	itoa(currentPresetChapter,_endOfChapterString,10);
-	int _textheight = TextHeight(fontSize);
 	ControlsEnd();
 	while (1){
 		FpsCapStart();
@@ -3146,6 +3300,7 @@ void SaveGameEditor(){
 			itoa(currentPresetChapter,_endOfChapterString,10);
 		}
 		if (WasJustPressed(SCE_CTRL_CROSS)){
+			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			SaveGame();
 			ControlsEnd();
 			break;
@@ -3153,23 +3308,23 @@ void SaveGameEditor(){
 		ControlsEnd();
 		StartDrawingA();
 		if (chapterNamesLoaded==0){
-			DrawText(32, _textheight, _endOfChapterString, fontSize);
+			DrawText(32, currentTextHeight, _endOfChapterString, fontSize);
 		}else{
-			DrawText(32, _textheight, currentPresetFileFriendlyList.theArray[currentPresetChapter], fontSize);
+			DrawText(32, currentTextHeight, currentPresetFileFriendlyList.theArray[currentPresetChapter], fontSize);
 		}
 
 		
-		DrawText(32, screenHeight-_textheight*3, "Welcome to the debug save file editor!", fontSize);
-		DrawText(32, screenHeight-_textheight*2, "X - Finish and save", fontSize);
-		DrawText(32, screenHeight-_textheight, "Left and Right - Change last completed chapter", fontSize);
+		DrawText(32, screenHeight-currentTextHeight*3, "Welcome to the save file editor!", fontSize);
+		DrawText(32, screenHeight-currentTextHeight*2, SELECTBUTTONNAME" - Finish and save", fontSize);
+		DrawText(32, screenHeight-currentTextHeight, "Left and Right - Change last completed chapter", fontSize);
 		EndDrawingA();
 		FpsCapWait();
 	}
 }
 
 void NavigationMenu(){
+	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	signed char _choice=0;
-	int _textheight = TextHeight(fontSize);
 	int _endofscriptwidth = TextWidth(fontSize,(char*)"End of script: ");
 	char _endOfChapterString[10];
 	itoa(currentPresetChapter,_endOfChapterString,10);
@@ -3236,6 +3391,8 @@ void NavigationMenu(){
 				if (currentPresetChapter+1==currentPresetFileList.length){
 					LazyMessage("There is no next chapter.", NULL, NULL, NULL);
 				}else{
+					easyTouchControlMode = TOUCHMODE_MAINGAME;
+					ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 					currentPresetChapter++;
 					SetNextScriptName();
 					currentGameStatus=3;
@@ -3247,7 +3404,7 @@ void NavigationMenu(){
 				printf("Viewing tips\n");
 				currentGameStatus=5;
 				ControlsEnd();
-				#ifdef PLAYTIPMUSIC
+				#if PLAYTIPMUSIC == 1
 					PlayBGM("lsys14",256);
 				#endif
 
@@ -3273,13 +3430,45 @@ void NavigationMenu(){
 		
 
 		if (_nextChapterExist==1){
-			DrawText(32,5+_textheight*(0+2),"Next",fontSize);
+			DrawText(32,5+currentTextHeight*(0+2),"Next",fontSize);
 		}
-		DrawText(32,5+_textheight*(1+2),"Chapter Jump",fontSize);
-		DrawText(32,5+_textheight*(2+2),"View Tips",fontSize);
-		DrawText(32,5+_textheight*(3+2),"Exit",fontSize);
-		DrawText(5,5+_textheight*(_choice+2),">",fontSize);
+		DrawText(32,5+currentTextHeight*(1+2),"Chapter Jump",fontSize);
+		DrawText(32,5+currentTextHeight*(2+2),"View Tips",fontSize);
+		DrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
+		DrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
 		EndDrawingA();
+		FpsCapWait();
+	}
+}
+
+void NewGameMenu(){
+	char _choice=0;
+	ChangeEasyTouchMode(TOUCHMODE_MENU);
+	while (1){
+		FpsCapStart();
+
+		ControlsStart();
+		_choice = MenuControls(_choice,0,1);
+
+		if (WasJustPressed(SCE_CTRL_CROSS)){
+			if (_choice==0){
+				break;
+			}else{
+				currentPresetChapter=0;
+				ControlsEnd();
+				SaveGameEditor();
+				break;
+			}
+		}
+		ControlsEnd();
+
+		StartDrawingA();
+		DrawText(32,currentTextHeight,"NEW GAME",fontSize);
+		DrawText(32,currentTextHeight*3,"Start from beginning",fontSize);
+		DrawText(32,currentTextHeight*4,"Savegame Editor",fontSize);
+		DrawText(5,currentTextHeight*(_choice+3),">",fontSize);
+		EndDrawingA();
+
 		FpsCapWait();
 	}
 }
@@ -3377,12 +3566,27 @@ signed char init(){
 	}
 	free(tempstringconcat);
 
-	FixPath("unknown.png",globalTempConcat,TYPE_EMBEDDED);
-	imageCharImages[IMAGECHARUNKNOWN] = SafeLoadPNG((char*)globalTempConcat);
-	FixPath("note.png",globalTempConcat,TYPE_EMBEDDED);
-	imageCharImages[IMAGECHARNOTE] = SafeLoadPNG((char*)globalTempConcat);
-	FixPath("star.png",globalTempConcat,TYPE_EMBEDDED);
-	imageCharImages[IMAGECHARSTAR] = SafeLoadPNG((char*)globalTempConcat);
+	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("unknown.png");
+	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("note.png");
+	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("star.png");
+
+	#if PLATFORM == PLAT_WINDOWS
+		controlsUpImage = LoadEmbeddedPNG("controlsUpImage.png");
+		controlsDownImage = LoadEmbeddedPNG("controlsDownImage.png");
+		controlsLeftImage = LoadEmbeddedPNG("controlsLeftImage.png");
+		controlsRightImage = LoadEmbeddedPNG("controlsRightImage.png");
+		controlsBackImage = LoadEmbeddedPNG("controlsBackImage.png");
+		controlsSelectImage = LoadEmbeddedPNG("controlsSelectImage.png");
+		controlsMenuImage = LoadEmbeddedPNG("controlsMenuImage.png");
+
+		SDL_SetTextureAlphaMod(controlsUpImage, 100);
+		SDL_SetTextureAlphaMod(controlsDownImage, 100);
+		SDL_SetTextureAlphaMod(controlsLeftImage, 100);
+		SDL_SetTextureAlphaMod(controlsRightImage, 100);
+		SDL_SetTextureAlphaMod(controlsBackImage, 100);
+		SDL_SetTextureAlphaMod(controlsSelectImage, 100);
+		SDL_SetTextureAlphaMod(controlsMenuImage, 100);
+	#endif
 
 	// Zero the image char arrray
 	for (i=0;i<MAXIMAGECHAR;i++){
@@ -3403,7 +3607,16 @@ signed char init(){
 	//	}
 	//}
 
+	currentTextHeight = TextHeight(fontSize);
+
 	return 0;
+}
+
+void SafeLuaDoFile(lua_State* passedState, char* passedPath){
+	if (CheckFileExist(passedPath)==0){
+		LazyMessage("The LUA file",passedPath,"does not exist!","What will happen now?!");
+	}
+	luaL_dofile(passedState,passedPath);
 }
 
 int main(int argc, char *argv[]){
@@ -3426,12 +3639,12 @@ int main(int argc, char *argv[]){
 	// Funky fresh stuff for me to use
 	#if PLATFORM == PLAT_WINDOWS
 		#if SUBPLATFORM == SUB_ANDROID
-			luaL_dofile(L,"/sdcard/HIGURASHI/StreamingAssets/happy.lua");
+			SafeLuaDoFile(L,"/sdcard/HIGURASHI/StreamingAssets/happy.lua");
 		#else
-			luaL_dofile(L,"./happy.lua");
+			SafeLuaDoFile(L,"./happy.lua");
 		#endif
 	#elif PLATFORM == PLAT_VITA
-		luaL_dofile(L,"app0:a/happy.lua");
+		SafeLuaDoFile(L,"app0:a/happy.lua");
 	#endif
 	lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
 
@@ -3455,18 +3668,15 @@ int main(int argc, char *argv[]){
 				// If there is no save game, start a new one at chapter 0
 				// Otherwise, go to the navigation menu
 				if (currentPresetChapter==-1){
-					ControlsStart();
-					if (IsDown(SCE_CTRL_RTRIGGER)){
-						LazyMessage((char*)"You held R. This is a secret.",(char*)"You will skip the first chapter.",(char*)"Exit now if that's not okay.",NULL);
-						currentGameStatus=4;
-						currentPresetChapter=0;
-						SetNextScriptName();
-						ControlsEnd();
-					}else{
+					NewGameMenu();
+					ControlsEnd();
+					if (currentPresetChapter==-1){
 						ControlsEnd();
 						currentPresetChapter=0;
 						SetNextScriptName();
 						currentGameStatus=3;
+					}else{
+						currentGameStatus=4;
 					}
 				}else{
 					currentGameStatus=4;
@@ -3482,7 +3692,7 @@ int main(int argc, char *argv[]){
 					DrawText(32,TextHeight(fontSize)+5,(const char*)"If you ran the converter, you should've gotten some.",fontSize);
 					DrawText(32,TextHeight(fontSize)*2+10,(const char*)"You can manually put presets in:",fontSize);
 					DrawText(32,TextHeight(fontSize)*3+15,(const char*)PRESETFOLDER,fontSize);
-					DrawText(32,200,"Press X to return",fontSize);
+					DrawText(32,200,"Press "SELECTBUTTONNAME" to return",fontSize);
 					EndDrawingA();
 					
 					while (currentGameStatus!=99){

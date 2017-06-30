@@ -225,6 +225,30 @@
 		#endif
 	}
 
+	int GetTextureWidth(CrossTexture* passedTexture){
+		#if RENDERER == REND_VITA2D
+			return vita2d_texture_get_width(passedTexture);
+		#elif RENDERER == REND_SDL
+			int w, h;
+			SDL_QueryTexture(passedTexture, NULL, NULL, &w, &h);
+			return w;
+		#elif RENDERER == REND_SF2D
+			return passedTexture->width;
+		#endif
+	}
+	
+	int GetTextureHeight(CrossTexture* passedTexture){
+		#if RENDERER == REND_VITA2D
+			return vita2d_texture_get_height(passedTexture);
+		#elif RENDERER == REND_SDL
+			int w, h;
+			SDL_QueryTexture(passedTexture, NULL, NULL, &w, &h);
+			return h;
+		#elif RENDERER == REND_SF2D
+			return passedTexture->height;
+		#endif
+	}
+
 	void DrawRectangle(int x, int y, int w, int h, int r, int g, int b, int a){
 		#if RENDERER == REND_VITA2D
 			vita2d_draw_rectangle(x,y,w,h,RGBA8(r,g,b,a));
@@ -431,6 +455,29 @@
 			sf2d_draw_texture_scale(passedTexture,destX,destY,texXScale,texYScale);
 		#endif
 	}
+
+	void DrawTextureScaleSize(CrossTexture* passedTexture, int destX, int destY, float texXScale, float texYScale){
+		#if RENDERER == REND_VITA2D
+			vita2d_draw_texture_scale(passedTexture,destX,destY,texXScale/(double)GetTextureWidth(passedTexture),texYScale/(double)GetTextureHeight(passedTexture));
+		#elif RENDERER == REND_SDL
+			SDL_Rect _srcRect;
+			SDL_Rect _destRect;
+			SDL_QueryTexture(passedTexture, NULL, NULL, &(_srcRect.w), &(_srcRect.h));
+			
+			_srcRect.x=0;
+			_srcRect.y=0;
+		
+			_destRect.w=(texXScale);
+			_destRect.h=(texYScale);
+	
+			_destRect.x=destX;
+			_destRect.y=destY;
+	
+			SDL_RenderCopy(mainWindowRenderer, passedTexture, &_srcRect, &_destRect );
+		#elif RENDERER == REND_SF2D
+			sf2d_draw_texture_scale(passedTexture,destX,destY,texXScale,texYScale);
+		#endif
+	}
 	
 	// TODO MAKE ROTATE ON WINDOWS
 	void DrawTexturePartScaleRotate(CrossTexture* texture, float x, float y, float tex_x, float tex_y, float tex_w, float tex_h, float x_scale, float y_scale, float rad){
@@ -440,30 +487,6 @@
 			DrawTexturePartScale(texture,x,y,tex_x,tex_y,tex_w,tex_h,x_scale,y_scale);
 		#elif RENDERER == REND_SF2D
 			sf2d_draw_texture_part_rotate_scale(texture,x,y,rad,tex_x,tex_y,tex_w,tex_h,x_scale,y_scale);
-		#endif
-	}
-	
-	int GetTextureWidth(CrossTexture* passedTexture){
-		#if RENDERER == REND_VITA2D
-			return vita2d_texture_get_width(passedTexture);
-		#elif RENDERER == REND_SDL
-			int w, h;
-			SDL_QueryTexture(passedTexture, NULL, NULL, &w, &h);
-			return w;
-		#elif RENDERER == REND_SF2D
-			return passedTexture->width;
-		#endif
-	}
-	
-	int GetTextureHeight(CrossTexture* passedTexture){
-		#if RENDERER == REND_VITA2D
-			return vita2d_texture_get_height(passedTexture);
-		#elif RENDERER == REND_SDL
-			int w, h;
-			SDL_QueryTexture(passedTexture, NULL, NULL, &w, &h);
-			return h;
-		#elif RENDERER == REND_SF2D
-			return passedTexture->height;
 		#endif
 	}
 

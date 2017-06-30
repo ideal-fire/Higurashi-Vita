@@ -11,6 +11,7 @@
 	#include <stdio.h>
 
 	int SCE_TOUCH = 19;
+	int SCE_ANDROID_BACK = 20;
 	int touchX=-1;
 	int touchY=-1;
 
@@ -78,8 +79,8 @@
 		#include <SDL2/SDL_image.h>
 
 		// Stores control data
-		char pad[20]={0};
-		char lastPad[20]={0};
+		char pad[21]={0};
+		char lastPad[21]={0};
 
 		//The window we'll be rendering to
 		SDL_Window* mainWindow;
@@ -137,6 +138,11 @@
 	}
 	
 	void EndDrawingA(){
+
+		#if PLATFORM == PLAT_WINDOWS
+			DrawTouchControlsHelp();
+		#endif
+
 		#if RENDERER == REND_VITA2D
 			vita2d_end_drawing();
 			vita2d_swap_buffers();
@@ -161,6 +167,25 @@
 				}
 			#endif
 		}
+		return 0;
+	}
+
+	signed char WasJustPressedRegardless(int value){
+		
+		#if PLATFORM == PLAT_VITA
+			if (pad.buttons & value && !(lastPad.buttons & value)){
+				return 1;
+			}
+		#elif PLATFORM == PLAT_WINDOWS
+			if (pad[value]==1 && lastPad[value]==0){
+				return 1;
+			}
+		#elif PLATFORM==PLAT_3DS
+			if (wasJustPad & value){
+				return 1;
+			}
+		#endif
+		
 		return 0;
 	}
 
@@ -216,6 +241,8 @@
 							pad[SCE_CTRL_START]=1;
 						}else if (e.key.keysym.sym==SDLK_e){ /* Select */
 							pad[SCE_CTRL_SELECT]=1;
+						}else if (e.key.keysym.sym==SDLK_b || e.key.keysym.sym==SDLK_AC_BACK){ /* Back button on android */
+							pad[SCE_ANDROID_BACK]=1;
 						}
 					}else if (e.type == SDL_KEYUP){
 						if (e.key.keysym.sym==SDLK_z){ /* X */
@@ -238,25 +265,28 @@
 							pad[SCE_CTRL_START]=0;
 						}else if (e.key.keysym.sym==SDLK_e){ /* Select */
 							pad[SCE_CTRL_SELECT]=0;
+						}else if (e.key.keysym.sym==SDLK_b || e.key.keysym.sym==SDLK_AC_BACK){ /* Back button on android */
+							pad[SCE_ANDROID_BACK]=0;
 						}
 					}
 				#endif
 				
-				
-				if( e.type == SDL_FINGERDOWN || (pad[SCE_TOUCH]==1 && e.type == SDL_FINGERMOTION)){
-					touchX = e.tfinger.x * screenWidth;
-					touchY = e.tfinger.y * screenHeight;
-					pad[SCE_TOUCH]=1;
-				}else if (e.type == SDL_MOUSEBUTTONDOWN || (pad[SCE_TOUCH]==1 && e.type == SDL_MOUSEMOTION) ){
-					SDL_GetMouseState(&touchX,&touchY);
-					pad[SCE_TOUCH] = 1;
-				}
-				if (e.type == SDL_FINGERUP){
-					pad[SCE_TOUCH] = 0;
-				}else if (e.type == SDL_MOUSEBUTTONUP){
-					pad[SCE_TOUCH] = 0;
-				}
-				
+				#if PLATFORM == PLAT_WINDOWS
+					if( e.type == SDL_FINGERDOWN || (pad[SCE_TOUCH]==1 && e.type == SDL_FINGERMOTION)){
+						touchX = e.tfinger.x * screenWidth;
+						touchY = e.tfinger.y * screenHeight;
+						pad[SCE_TOUCH]=1;
+					}else if (e.type == SDL_MOUSEBUTTONDOWN || (pad[SCE_TOUCH]==1 && e.type == SDL_MOUSEMOTION) ){
+						SDL_GetMouseState(&touchX,&touchY);
+						pad[SCE_TOUCH] = 1;
+					}
+					if (e.type == SDL_FINGERUP){
+						pad[SCE_TOUCH] = 0;
+					}else if (e.type == SDL_MOUSEBUTTONUP){
+						pad[SCE_TOUCH] = 0;
+					}
+				#endif
+
 			}
 		#endif
 
