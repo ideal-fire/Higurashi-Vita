@@ -1,3 +1,18 @@
+	//In my testing, 444 HZ cpu makes loading and freeing 130 KB sound file take about 200 miliseconds less and loading the biggest image file in Onikakushi PS3 patch take about 50 miliseconds less
+	//
+	//image width / screen width
+	//image height / screen height
+	//
+	//the bigger result is the one we lock to
+	//we multiple image width and height by said result to get resulting image
+	
+	//1280x800
+	//
+	//(?<!.)char(?!\*)
+	//Make sure there's nothing behind char and that it doesn't have * after it
+	//I can use this to find all normal char and replace it with signed char
+	
+
 	//CROSSMUSIC* testsong = LoadMusic("app0:a/testogg.ogg");
 	//WriteSDLError();
 	//PlayMusic(testsong);

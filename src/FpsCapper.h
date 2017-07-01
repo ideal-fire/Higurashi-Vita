@@ -1,11 +1,15 @@
 #ifndef HAPPYFPSCAP
 #define HAPPYFPSCAP
 
-#define MILISECONDSPERFRAME 16.667
+#define COUNTFRAMES 0
+
+#define MILISECONDSPERFRAME 17
 
 // The milisecodnds at the start of the frame.
-u64 frameStartMiliseconds;
-//u64 numberOfFrames;
+unsigned int frameStartMiliseconds;
+#if COUNTFRAMES == 1
+	unsigned int numberOfFrames;
+#endif
 signed char capEnabled = 1;
 
 void FpsCapStart(){
@@ -14,14 +18,15 @@ void FpsCapStart(){
 
 void FpsCapWait(){
 	if (capEnabled==1){
-		// I just hope I only use this at the end of a frame....
-		//numberOfFrames=numberOfFrames+1;
-		u64 tempHold;
+			// I just hope I only use this at the end of a frame....
+			numberOfFrames=numberOfFrames+1;
+		#endif
+		unsigned int tempHold;
 		tempHold = GetTicks();
 		//printf("%llu;%llu\n",frameStartMiliseconds,tempHold);
 		// LIMIT FPS
 		if (tempHold-frameStartMiliseconds<MILISECONDSPERFRAME){
-			Wait( MILISECONDSPERFRAME - (tempHold-frameStartMiliseconds));
+			Wait( (MILISECONDSPERFRAME - (tempHold-frameStartMiliseconds)));
 		}else{
 			//printf("Slowdown %llu\n", tempHold-frameStartMiliseconds);
 			//printf("Slowdown %d\n",MILISECONDSPERFRAME - (tempHold-frameStartMiliseconds));

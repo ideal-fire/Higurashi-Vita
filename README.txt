@@ -1,4 +1,4 @@
-A completely unofficial port of Higurashi for the PS Vita.
+An unofficial port of Higurashi for the PS Vita.
 
 Needs a modified version of Lua to run the game scripts correctly.
 

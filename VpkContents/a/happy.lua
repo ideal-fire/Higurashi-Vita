@@ -1,3 +1,7 @@
+// CHANGE THIS WHEN I UPDATE THIS FILE!
+// 1 - for Higurashi-Vita v1.7
+HAPPYFILEVERSION=1;
+
 Line_ContinueAfterTyping=0;
 Line_WaitForInput=1;
 Line_Normal=2;
@@ -24,6 +28,11 @@ end
 function FreeTrash()
 	main=nil;
 	collectgarbage()
+end
+
+// Returns the version of this very file. This is used for Android.
+function GetHappyLuaVersion()
+	return HAPPYFILEVERSION;
 end
 
 // Sets a global flag for future data stuff
