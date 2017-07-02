@@ -63,3 +63,4 @@ lib-custom/
 *.bin
 
 # File where I put trash
+/src/Graveyard.h
