@@ -59,6 +59,7 @@ lib-custom/
 *.vpk
 *.elf
 *.sfo
-eboot.bin
 *.velf
 *.bin
+
+# File where I put trash

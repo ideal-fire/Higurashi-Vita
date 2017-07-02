@@ -18,6 +18,7 @@ void FpsCapStart(){
 
 void FpsCapWait(){
 	if (capEnabled==1){
+		#if COUNTFRAMES == 1
 			// I just hope I only use this at the end of a frame....
 			numberOfFrames=numberOfFrames+1;
 		#endif

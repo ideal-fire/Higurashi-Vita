@@ -20,7 +20,6 @@
 				// Here's the plan.
 				// Make another message array, but store text that is in italics in it
 			So, here's my idea, I take whatever char it is and add 100 if it's italics
-
 */
 
 
@@ -53,7 +52,6 @@ int LINEARRAYSIZE = ((MAXCHARSONLINE*2)+1);
 		unsigned char* theArray;
 		unsigned char length;
 	}goodu8MallocArray;
-	
 
 // Libraries all need
 #include <math.h>
@@ -104,9 +102,6 @@ int LINEARRAYSIZE = ((MAXCHARSONLINE*2)+1);
 ////////////////////////////////////////
 // PLatform specific variables
 ///////////////////////////////////////
-
-
-
 
 //////////////
 // The STREAMINGASSETS variable is only used for images and sound
@@ -281,6 +276,9 @@ int currentTextHeight;
 	CrossTexture* controlsBackImage;
 
 	CrossTexture* controlsMenuImage;
+	CrossTexture* skipImage;
+	CrossTexture* autoImage;
+	CrossTexture* textlogImage;
 
 	char showControls=0;
 #endif
@@ -823,9 +821,17 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 		currentScriptLine++;
 		if (isSkipping==1){
 			ControlsStart();
-			if (!IsDown(SCE_CTRL_SQUARE)){
-				isSkipping=0;
-			}
+			#if PLATFORM != PLAT_WINDOWS
+				if (!IsDown(SCE_CTRL_SQUARE)){
+					isSkipping=0;
+				}
+			#endif
+			#if PLATFORM == PLAT_WINDOWS
+				if (!(IsDown(SCE_TOUCH) && (touchX<screenWidth*.25 && touchY<screenHeight*.20))){
+					isSkipping=0;
+					PlayMenuSound();
+				}
+			#endif
 			ControlsEnd();
 			if (isSkipping==1){
 				endType=Line_ContinueAfterTyping;
@@ -837,7 +843,6 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 			ControlsStart();
 			Update();
 			Draw();
-
 
 			if (WasJustPressed(SCE_CTRL_CROSS)){
 				MessageBoxEnabled=1;
@@ -925,15 +930,15 @@ void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlp
 }
 
 void DrawBust(bust* passedBust){
-		signed int _tempXOffset;
-		signed int _tempYOffset;
-		
-		GetXAndYOffset(passedBust->image,&_tempXOffset,&_tempYOffset);
-		if (passedBust->alpha==255){
-			DrawTexture(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale);
-		}else{
-			DrawTextureAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, passedBust->alpha);
-		}	
+	signed int _tempXOffset;
+	signed int _tempYOffset;
+	
+	GetXAndYOffset(passedBust->image,&_tempXOffset,&_tempYOffset);
+	if (passedBust->alpha==255){
+		DrawTexture(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale);
+	}else{
+		DrawTextureAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, passedBust->alpha);
+	}	
 }
 
 void RecalculateBustOrder(){
@@ -1324,11 +1329,11 @@ void DrawScene(const char* filename, int time){
 	int _alphaPerFrame=255;
 	//FadeAllBustshots(time,0);
 	int i=0;
-	for (i=0;i<MAXBUSTS;i++){
-		if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
-			FadeBustshot(i,time,0);
-		}
-	}
+	//for (i=0;i<MAXBUSTS;i++){
+	//	if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
+	//		FadeBustshot(i,time,0);
+	//	}
+	//}
 
 	signed short _backgroundAlpha=255;
 
@@ -1360,11 +1365,17 @@ void DrawScene(const char* filename, int time){
 	CrossTexture* newBackground = SafeLoadPNG(tempstringconcat);
 	free(tempstringconcat);
 
-	while (_backgroundAlpha>0){
+	// I need to rework this. The new background is drawn on top, with alpha starting from 0.
+	// The bustshots do not fade themselves
+	// They appear to fade because of the new background
+
+	_backgroundAlpha=0;
+
+	while (_backgroundAlpha<255){
 		FpsCapStart();
 
 		Update();
-		_backgroundAlpha-=_alphaPerFrame;
+		_backgroundAlpha+=_alphaPerFrame;
 		if (_backgroundAlpha<0){
 			_backgroundAlpha=0;
 		}
@@ -1372,15 +1383,11 @@ void DrawScene(const char* filename, int time){
 		StartDrawingA();
 		
 		if (currentBackground!=NULL){
-			DrawBackground(newBackground);
-
-			DrawBackgroundAlpha(currentBackground,_backgroundAlpha);
-		}else{
-			DrawBackgroundAlpha(newBackground,255-_backgroundAlpha);
+			DrawBackground(currentBackground);
 		}
 		
 		for (i = MAXBUSTS-1; i != -1; i--){
-			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1){
+			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn != currentScriptLine-1){
 				DrawBust(&(Busts[bustOrder[i]]));
 			}
 		}
@@ -1388,10 +1395,22 @@ void DrawScene(const char* filename, int time){
 			DrawMessageBox();
 		}
 		for (i = MAXBUSTS-1; i != -1; i--){
-			if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
+			if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1 && Busts[bustOrderOverBox[i]].lineCreatedOn != currentScriptLine-1){
 				DrawBust(&(Busts[bustOrderOverBox[i]]));
 			}
 		}
+
+		if (currentBackground==NULL){
+			DrawBackgroundAlpha(newBackground,_backgroundAlpha);
+		}else{
+			DrawBackgroundAlpha(currentBackground,_backgroundAlpha);
+		}
+		for (i = MAXBUSTS-1; i != -1; i--){
+			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
+				DrawBust(&(Busts[bustOrder[i]]));
+			}
+		}
+
 		if (filterActive==1){
 			DrawCurrentFilter();
 		}
@@ -1402,16 +1421,17 @@ void DrawScene(const char* filename, int time){
 
 		ControlsStart();
 		if (WasJustPressed(SCE_CTRL_CROSS)){
-			for (i=0;i<MAXBUSTS;i++){
-				if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
-					Busts[i].alpha=1;
-				}
-			}
-			_backgroundAlpha=1;
+			_backgroundAlpha=255;
 		}
 		ControlsEnd();
 
 		FpsCapWait();
+	}
+
+	for (i=0;i<MAXBUSTS;i++){
+		if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
+			ResetBustStruct(&Busts[i], 1);
+		}
 	}
 
 	if (currentBackground!=NULL){
@@ -1854,11 +1874,13 @@ void ChangeEasyTouchMode(int _newControlValue){
 #if PLATFORM == PLAT_WINDOWS
 
 	void DrawTouchControlsHelp(){
-
 		if (showControls==1){
 			if (easyTouchControlMode!=TOUCHMODE_NONE){
 				if (easyTouchControlMode==TOUCHMODE_MAINGAME){
-					DrawTextureScaleSize(controlsMenuImage,screenWidth*.80,0,screenWidth*.20,screenHeight*.20);
+					DrawTextureScaleSize(skipImage,0,0,screenWidth*.25,screenHeight*.20);
+					DrawTextureScaleSize(autoImage,screenWidth*.25,0,screenWidth*.25,screenHeight*.20);
+					DrawTextureScaleSize(textlogImage,screenWidth*.50,0,screenWidth*.25,screenHeight*.20);
+					DrawTextureScaleSize(controlsMenuImage,screenWidth*.75,0,screenWidth*.25,screenHeight*.20);
 				}else if (easyTouchControlMode==TOUCHMODE_MENU){
 					DrawTextureScaleSize(controlsBackImage,0,0,screenWidth*.20,screenHeight);
 					DrawTextureScaleSize(controlsSelectImage,screenWidth*.80,0,screenWidth*.20,screenHeight);
@@ -1892,15 +1914,37 @@ void ChangeEasyTouchMode(int _newControlValue){
 		if (easyTouchControlMode!=TOUCHMODE_NONE){
 			if (easyTouchControlMode==TOUCHMODE_MAINGAME){
 				if (WasJustPressed(SCE_TOUCH)){
-					if (touchX>screenWidth*.80 && touchY<screenHeight*.20){
-						ChangeEasyTouchMode(TOUCHMODE_MENU);
-						ControlsReset();
-						SettingsMenu();
-						ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
+
+					if (touchY<screenHeight*.20){
+						if (touchX>screenWidth*.75){
+							ChangeEasyTouchMode(TOUCHMODE_MENU);
+							ControlsReset();
+							SettingsMenu();
+							ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
+						}else if (touchX>screenWidth*.50){
+							//textlog
+							ChangeEasyTouchMode(TOUCHMODE_MENU);
+							DrawHistory(messageHistory);
+							ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
+						}else if (touchX>screenWidth*.25){
+							//auto
+							PlayMenuSound();
+							if (autoModeOn==1){
+								autoModeOn=0;
+							}else{
+								autoModeOn=1;
+							}
+						}else if (touchX>0){
+							endType=Line_ContinueAfterTyping;
+							isSkipping=1;
+							PlayMenuSound();
+						}
 					}else{
 						pad[SCE_CTRL_CROSS]=1;
 					}
-				}else if (WasJustReleased(SCE_TOUCH)){
+
+				}
+				if (WasJustReleased(SCE_TOUCH)){
 					pad[SCE_CTRL_CROSS]=0;
 				}
 			}else if (easyTouchControlMode==TOUCHMODE_MENU){
@@ -2773,6 +2817,9 @@ void SettingsMenu(){
 				}
 			}else if (_choice==7){
 				FontSizeSetup();
+				_bustlocationcollinspacewidth = TextWidth(fontSize,"Bust location: ");
+				_noobBGMVolumeWidth = TextWidth(fontSize,"BGM Volume  ");
+				_tempStrWidth = TextWidth(fontSize,"Auto Mode Speed: ");
 			}
 		}
 
@@ -3581,11 +3628,14 @@ signed char init(){
 	// Make the save files directory
 	MakeDirectory(SAVEFOLDER);
 
+	LoadSettings();
+
 	// Load the menu sound effect if it's present
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/","wa_038",".ogg");
 	if (CheckFileExist(tempstringconcat)){
 		menuSoundLoaded=1;
 		menuSound = LoadSound(tempstringconcat);
+		SetSFXVolume(menuSound,FixSEVolume(256));
 	}else{
 		menuSoundLoaded=0;
 	}
@@ -3603,6 +3653,9 @@ signed char init(){
 		controlsBackImage = LoadEmbeddedPNG("controlsBackImage.png");
 		controlsSelectImage = LoadEmbeddedPNG("controlsSelectImage.png");
 		controlsMenuImage = LoadEmbeddedPNG("controlsMenuImage.png");
+		autoImage = LoadEmbeddedPNG("autoImage.png");
+		skipImage = LoadEmbeddedPNG("skipImage.png");
+		textlogImage = LoadEmbeddedPNG("textlogImage.png");
 
 		SDL_SetTextureAlphaMod(controlsUpImage, 100);
 		SDL_SetTextureAlphaMod(controlsDownImage, 100);
@@ -3611,6 +3664,9 @@ signed char init(){
 		SDL_SetTextureAlphaMod(controlsBackImage, 100);
 		SDL_SetTextureAlphaMod(controlsSelectImage, 100);
 		SDL_SetTextureAlphaMod(controlsMenuImage, 100);
+		SDL_SetTextureAlphaMod(autoImage, 100);
+		SDL_SetTextureAlphaMod(skipImage, 100);
+		SDL_SetTextureAlphaMod(textlogImage, 100);
 	#endif
 
 	// Zero the image char arrray
@@ -3620,7 +3676,7 @@ signed char init(){
 
 	lastBGMFilename = (char*)malloc(1);
 
-	LoadSettings();
+
 
 	// THIS IS A SPECIAL CHECK I'LL ONLY KEEP IN v1.4
 	//if (CheckFileExist("ux0:data/HIGURASHI/StreamingAssets/date.xxm0ronslayerxx")==0){
@@ -3704,6 +3760,8 @@ signed char init(){
 			LazyMessage("Your happy.lua file is from the future!","Some things may not work, I don't know.","If you have problems, update the application.",NULL);
 		}
 	#endif
+
+	SDL_SetRenderDrawBlendMode(mainWindowRenderer,SDL_BLENDMODE_BLEND);
 
 	return 0;
 }
@@ -3803,5 +3861,10 @@ int main(int argc, char *argv[]){
 		}
 	}
 	printf("ENDGAME\n");
+	#if SUBPLATFORM == SUB_ANDROID
+		#if RENDERER == REND_SDL
+			SDL_Quit();
+		#endif
+	#endif
 	return 0;
 }
