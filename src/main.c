@@ -3509,13 +3509,13 @@ void NewGameMenu(){
 
 void SetDefaultFontSize(){
 	#if TEXTRENDERER == TEXT_DEBUG
-		float fontSize = 1.7;
+		fontSize = 1.7;
 	#endif
 	#if TEXTRENDERER == TEXT_FONTCACHE
 		fontSize = floor(screenWidth/40);
 	#endif
 	#if TEXTRENDERER == TEXT_VITA2D
-		int fontSize=32;
+		fontSize=32;
 	#endif
 }
 
@@ -3589,7 +3589,17 @@ signed char init(){
 		ReloadFont();
 	#endif
 
-	if (CheckForUserStuff()==2){
+	char _tempCheckResult = CheckForUserStuff();
+	#if PLATFORM == PLAT_WINDOWS
+		if (_tempCheckResult==1){
+				char _tempResWidthString[20];
+				char _tempResHeightString[20];
+				itoa(screenWidth,_tempResWidthString,10);
+				itoa(screenHeight,_tempResHeightString,10);
+				LazyMessage("By the way, your screen resolution is",_tempResWidthString,_tempResHeightString,NULL);
+		}
+	#endif
+	if (_tempCheckResult==2){	
 		return 2;
 	}
 
@@ -3742,14 +3752,17 @@ signed char init(){
 		}
 	#endif
 
-	SDL_SetRenderDrawBlendMode(mainWindowRenderer,SDL_BLENDMODE_BLEND);
-
 	return 0;
 }
 
 int main(int argc, char *argv[]){
 	/* code */
 	if (init()==2){
+		#if SUBPLATFORM == SUB_ANDROID
+			#if RENDERER == REND_SDL
+				SDL_Quit();
+			#endif
+		#endif
 		return 1;
 	}
 
