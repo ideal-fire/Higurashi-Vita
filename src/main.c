@@ -1320,7 +1320,20 @@ void FadeAllBustshots(int _time, char _wait){
 	}
 }
 
-void DrawScene(const char* filename, int time){
+void LocationStringFallback(char** tempstringconcat, const char* filename){
+	if (CheckFileExist(*tempstringconcat)==0){
+		free(*tempstringconcat);
+		if (graphicsLocation == LOCATION_CGALT){
+			printf("Switching to cg\n");
+			*tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[LOCATION_CG],filename,".png");
+		}else if (graphicsLocation == LOCATION_CG){
+			printf("Falling back on cgalt.\n");
+			*tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[LOCATION_CGALT],filename,".png");
+		}
+	}
+}
+
+void DrawScene(const char* _filename, int time){
 	if (isSkipping==1){
 		time=0;
 	}
@@ -1335,7 +1348,7 @@ void DrawScene(const char* filename, int time){
 	//	}
 	//}
 
-	signed short _backgroundAlpha=255;
+	signed short _backgroundAlpha=0;
 
 	if (time!=0){
 		int _time = time;
@@ -1349,35 +1362,18 @@ void DrawScene(const char* filename, int time){
 		}
 	}
 
-	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[graphicsLocation],filename,".png");
-
-	if (CheckFileExist(tempstringconcat)==0){
-		free(tempstringconcat);
-		if (graphicsLocation == LOCATION_CGALT){
-			printf("Switching to cg\n");
-			tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[LOCATION_CG],filename,".png");
-		}else if (graphicsLocation == LOCATION_CG){
-			printf("Falling back on cgalt.\n");
-			tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[LOCATION_CGALT],filename,".png");
-		}
-	}
-
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[graphicsLocation],_filename,".png");
+	LocationStringFallback(&tempstringconcat,_filename);
 	CrossTexture* newBackground = SafeLoadPNG(tempstringconcat);
 	free(tempstringconcat);
-
-	// I need to rework this. The new background is drawn on top, with alpha starting from 0.
-	// The bustshots do not fade themselves
-	// They appear to fade because of the new background
-
-	_backgroundAlpha=0;
 
 	while (_backgroundAlpha<255){
 		FpsCapStart();
 
 		Update();
 		_backgroundAlpha+=_alphaPerFrame;
-		if (_backgroundAlpha<0){
-			_backgroundAlpha=0;
+		if (_backgroundAlpha>255){
+			_backgroundAlpha=255;
 		}
 		//int i;
 		StartDrawingA();
@@ -1400,11 +1396,9 @@ void DrawScene(const char* filename, int time){
 			}
 		}
 
-		if (currentBackground==NULL){
-			DrawBackgroundAlpha(newBackground,_backgroundAlpha);
-		}else{
-			DrawBackgroundAlpha(currentBackground,_backgroundAlpha);
-		}
+		
+		DrawBackgroundAlpha(newBackground,_backgroundAlpha);
+		
 		for (i = MAXBUSTS-1; i != -1; i--){
 			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
 				DrawBust(&(Busts[bustOrder[i]]));
@@ -1454,20 +1448,7 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	ResetBustStruct(&(Busts[passedSlot]),1);
 
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[graphicsLocation],_filename,".png");
-
-
-	if (CheckFileExist(tempstringconcat)==0){
-		free(tempstringconcat);
-		if (graphicsLocation == LOCATION_CGALT){
-			printf("Switching to cg\n");
-			tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[LOCATION_CG],_filename,".png");
-		}else{
-			printf("Falling back on cgalt\n");
-			tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[LOCATION_CGALT],_filename,".png");
-		}
-	}
-
-
+	LocationStringFallback(&tempstringconcat,_filename);
 	Busts[passedSlot].image = SafeLoadPNG(tempstringconcat);
 	free(tempstringconcat);
 	if (Busts[passedSlot].image==NULL){
