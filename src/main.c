@@ -1478,7 +1478,13 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 		Busts[passedSlot].isInvisible=0;
 	}
 	Busts[passedSlot].layer = _layer;
-	Busts[passedSlot].lineCreatedOn = currentScriptLine;
+
+	// The lineCreatedOn variable is used to know if the bustshot should stay after a scene change. The bustshot can only stay after a scene change if it's created the line before the scene change AND it doesn't wait for fadein completion.
+	if (_waitforfadein==0){
+		Busts[passedSlot].lineCreatedOn = currentScriptLine;
+	}else{
+		Busts[passedSlot].lineCreatedOn = 0;
+	}
 
 	Busts[passedSlot].isActive=1;
 	RecalculateBustOrder();
@@ -2114,6 +2120,8 @@ int L_DrawBustshotWithFiltering(lua_State* passedState){
 	// 	// Textbox's layer is 31. >31 layer shows a not darkened sprite.
 	// Fadein time
 	// (bool) wait for fadein? (16)
+	//
+	// * The bustshot can only stay after a scene change if it's created the line before the scene change AND it doesn't wait for fadein completion.
 int L_DrawBustshot(lua_State* passedState){
 	Draw();
 
