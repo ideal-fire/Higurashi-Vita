@@ -22,7 +22,6 @@
 			So, here's my idea, I take whatever char it is and add 100 if it's italics
 */
 
-
 #define MAXCHARSONLINE 60
 
 int LINEARRAYSIZE = ((MAXCHARSONLINE*2)+1);
@@ -74,7 +73,6 @@ int LINEARRAYSIZE = ((MAXCHARSONLINE*2)+1);
 #define TYPE_UNDEFINED 0
 #define TYPE_DATA 1
 #define TYPE_EMBEDDED 2
-
 
 /////////////////////////////////////
 #define MAXBUSTS 7
@@ -197,7 +195,6 @@ unsigned char bustOrderOverBox[MAXBUSTS];
 
 char* locationStrings[3] = {(char*)"CG/",(char*)"CG/",(char*)"CGAlt/"};
 
-
 goodStringMallocArray currentPresetFileList;
 goodStringMallocArray currentPresetTipList;
 goodStringMallocArray currentPresetTipNameList;
@@ -213,8 +210,16 @@ char* currentPresetFilename=NULL;
 2 - Open file selector for preset file selection
 3 - Start Lua thread
 4 - Navigation menu after preset loading
+5 - tip menu
 */
-signed char currentGameStatus=0;
+#define GAMESTATUS_TITLE 0
+#define GAMESTATUS_LOADPRESET 1
+#define GAMESTATUS_PRESETSELECTION 2
+#define GAMESTATUS_MAINGAME 3
+#define GAMESTATUS_NAVIGATIONMENU 4
+#define GAMESTATUS_TIPMENU 5
+#define GAMESTATUS_QUIT 99
+signed char currentGameStatus=GAMESTATUS_TITLE;
 
 unsigned char nextScriptToLoad[256] = {0};
 unsigned char globalTempConcat[256] = {0};
@@ -372,9 +377,11 @@ char MenuControls(char _choice,int _menuMin, int _menuMax){
 	return _choice;
 }
 
-char SafeLuaDoFile(lua_State* passedState, char* passedPath){
+char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 	if (CheckFileExist(passedPath)==0){
-		LazyMessage("The LUA file",passedPath,"does not exist!","What will happen now?!");
+		if (showMessage==1){
+			LazyMessage("The LUA file",passedPath,"does not exist!","What will happen now?!");
+		}
 		return 0;
 	}
 	luaL_dofile(passedState,passedPath);
@@ -398,7 +405,7 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 	int _choice=0;
 	ControlsStart();
 	ControlsEnd();
-	while (currentGameStatus!=99){
+	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
 		ControlsStart();
 		if (WasJustPressed(SCE_CTRL_CROSS)){
@@ -534,7 +541,7 @@ void WriteIntToDebugFile(int a){
 }
 
 void XOutFunction(){
-	if (currentGameStatus==3){
+	if (currentGameStatus==GAMESTATUS_MAINGAME){
 		//luaL_error(L,"game stopped\n");
 		// Adds function to stack
 		lua_getglobal(L,"quitxfunction");
@@ -542,7 +549,7 @@ void XOutFunction(){
 		lua_call(L, 0, 0);
 	}else{
 		printf("normalquit\n");
-		currentGameStatus=99;
+		currentGameStatus=GAMESTATUS_QUIT;
 	}
 }
 
@@ -699,7 +706,7 @@ void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 				LazyMessage("luaL_loadfile failed with error","UNKNOWN ERROR!","This is weird and should NEVER HAPPEN!","Please report the bug on the thread.");
 			break;
 		}
-		currentGameStatus=0;
+		currentGameStatus=GAMESTATUS_TITLE;
 		return;
 	}
 	
@@ -707,7 +714,7 @@ void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	if (_pcallResult!=LUA_OK){
 		printf("Failed pcall!\n");
 		DisplaypcallError(_pcallResult,"This is the first lua_pcall in RunScript.");
-		currentGameStatus=0;
+		currentGameStatus=GAMESTATUS_TITLE;
 		return;
 	}
 
@@ -817,7 +824,7 @@ int FixHistoryOldSub(int _val, int _scroll){
 }
 
 void InBetweenLines(lua_State *L, lua_Debug *ar) {
-	if (currentGameStatus==3){
+	if (currentGameStatus==GAMESTATUS_MAINGAME){
 		currentScriptLine++;
 		if (isSkipping==1){
 			ControlsStart();
@@ -1052,7 +1059,7 @@ char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 
 	int i=0;
 	for (i=0;i<numScripts;i++){
-		while (currentGameStatus!=99){
+		while (currentGameStatus!=GAMESTATUS_QUIT){
 			if (fread(&justreadbyte,1,1,fp)!=1){
 				break;
 			}
@@ -1147,7 +1154,7 @@ void SetNextScriptName(){
 void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd){
 	ControlsStart();
 	ControlsEnd();
-	while (currentGameStatus!=99){
+	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
 		ControlsStart();
 		if (WasJustPressed(SCE_CTRL_CROSS)){
@@ -1201,23 +1208,22 @@ void SaveGame(){
 // Returns 1 for nonvital file missing
 // Returns 2 for vital file missing
 signed char CheckForUserStuff(){
-	#if PLATFORM == PLAT_WINDOWS
-		return 0;
-	#endif
+	
 	char _oneMissing = 0;
-	if (CheckFileExist("app0:a/LiberationSans-Regular.ttf")==0){
-		//LazyMessage("app0:a/LiberationSans-Regular.ttf", "is missing. This should've been in the VPK.","Please download the VPK again.",NULL);
-		CrossTexture* _nofonttext = SafeLoadPNG("app0:sce_sys/icon0.png");
-
-		StartDrawingA();
-		DrawTexture(_nofonttext,32,32);
-		EndDrawingA();
-		
-		Wait(3000);
-		FreeTexture(_nofonttext);
-		return 2;
-	}
-
+	#if PLATFORM == PLAT_VITA
+		if (CheckFileExist("app0:a/LiberationSans-Regular.ttf")==0){
+			//LazyMessage("app0:a/LiberationSans-Regular.ttf", "is missing. This should've been in the VPK.","Please download the VPK again.",NULL);
+			CrossTexture* _nofonttext = SafeLoadPNG("app0:sce_sys/icon0.png");
+	
+			StartDrawingA();
+			DrawTexture(_nofonttext,32,32);
+			EndDrawingA();
+			
+			Wait(3000);
+			FreeTexture(_nofonttext);
+			return 2;
+		}
+	#endif
 	//void FixPath(char* filename,unsigned char _buffer[], char type){
 	FixPath("",globalTempConcat,TYPE_DATA);
 
@@ -2562,7 +2568,7 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 			_maxPerNoScroll=totalFiles;
 		}
 		int _tmpoffset=0;
-		while (currentGameStatus!=99){
+		while (currentGameStatus!=GAMESTATUS_QUIT){
 			FpsCapStart();
 			ControlsStart();
 	
@@ -2730,7 +2736,7 @@ void SettingsMenu(){
 		FpsCapStart();
 		ControlsStart();
 
-		if (currentGameStatus!=0){
+		if (currentGameStatus!=GAMESTATUS_TITLE){
 			_choice = MenuControls(_choice,0,9);
 		}else{
 			_choice = MenuControls(_choice,0,8);
@@ -2755,9 +2761,9 @@ void SettingsMenu(){
 				endType = Line_ContinueAfterTyping;
 				
 				if (_choice==99){
-					currentGameStatus=4;
+					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 				}else{
-					currentGameStatus=99;
+					currentGameStatus=GAMESTATUS_QUIT;
 				}
 				
 				lua_getglobal(L,"quitxfunction");
@@ -2896,7 +2902,7 @@ void SettingsMenu(){
 			}
 		}
 
-		if (currentGameStatus==0){
+		if (currentGameStatus==GAMESTATUS_TITLE){
 			DrawText(32,5,"Back",fontSize);
 		}else{
 			DrawText(32,5,"Resume",fontSize);
@@ -2933,7 +2939,7 @@ void SettingsMenu(){
 
 		DrawText(32,5+currentTextHeight*7,"Font Size",fontSize);
 		DrawText(32,5+currentTextHeight*8,"Defaults",fontSize);
-		if (currentGameStatus!=0){
+		if (currentGameStatus!=GAMESTATUS_TITLE){
 			DrawText(32,5+currentTextHeight*9,"Quit",fontSize);
 		}
 		DrawText(0,5+_choice*currentTextHeight,">",fontSize);
@@ -2944,7 +2950,7 @@ void SettingsMenu(){
 	if (_canShowRena==1){
 		FreeTexture(_renaImage);
 	}
-	if (currentGameStatus!=0){
+	if (currentGameStatus!=GAMESTATUS_TITLE){
 		if (_artBefore != graphicsLocation){
 			LazyMessage("You changed the character art location.","The next time a character is loaded,","it will load from",locationStrings[graphicsLocation]);
 		}
@@ -2959,7 +2965,7 @@ void TitleScreen(){
 	int _versionStringWidth = TextWidth(fontSize,VERSIONSTRING);
 
 	//SetClearColor(255,255,255,255);
-	while (currentGameStatus!=99){
+	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
 		ControlsStart();
 
@@ -2997,12 +3003,11 @@ void TitleScreen(){
 
 		if (WasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
-				printf("%s\n",currentPresetFilename);
 				PlayMenuSound();
 				if (currentPresetFilename==NULL){
 					currentPresetChapter=0;
 					ControlsEnd();
-					currentGameStatus=2;
+					currentGameStatus=GAMESTATUS_PRESETSELECTION;
 				}
 				break;
 			}else if (_choice==1){
@@ -3013,14 +3018,14 @@ void TitleScreen(){
 				FileSelector(SCRIPTFOLDER,&_tempManualFileSelectionResult,(char*)"Select a script");
 				if (_tempManualFileSelectionResult!=NULL){
 					ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
-					currentGameStatus=3;
+					currentGameStatus=GAMESTATUS_MAINGAME;
 					RunScript(SCRIPTFOLDER,_tempManualFileSelectionResult,0);
 					free(_tempManualFileSelectionResult);
-					currentGameStatus=0;
+					currentGameStatus=GAMESTATUS_TITLE;
 					ChangeEasyTouchMode(TOUCHMODE_MENU);
 				}
 			}else if (_choice==3){ // Quit button
-				currentGameStatus=99;
+				currentGameStatus=GAMESTATUS_QUIT;
 				break;
 			}else if (_choice==2){ // Go to setting menu
 				ControlsEnd();
@@ -3058,7 +3063,7 @@ void TipMenu(){
 	ClearMessageArray();
 	if (currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
 		LazyMessage("No tips unlocked.",NULL,NULL,NULL);
-		currentGameStatus=4;
+		currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 		ControlsEnd();
 		return;
 	}
@@ -3088,7 +3093,7 @@ void TipMenu(){
 
 	ChangeEasyTouchMode(TOUCHMODE_LEFTRIGHTSELECT);
 
-	while (currentGameStatus!=99){
+	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
 		ControlsStart();
 
@@ -3165,17 +3170,17 @@ void TipMenu(){
 			ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 			ControlsEnd();
 			// This will trick the in between lines functions into thinking that we're in normal script execution mode and not quit
-			currentGameStatus=3;
+			currentGameStatus=GAMESTATUS_MAINGAME;
 			RunScript(SCRIPTFOLDER, currentPresetTipList.theArray[_chosenTip-1],1);
 			ControlsEnd();
 			ChangeEasyTouchMode(TOUCHMODE_MENU);
-			currentGameStatus=5;
+			currentGameStatus=GAMESTATUS_TIPMENU;
 			break;
 		}
 		if (WasJustPressed(SCE_CTRL_CIRCLE)){
 			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			ClearMessageArray();
-			currentGameStatus=4;
+			currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 			#if PLAYTIPMUSIC == 1
 				StopBGM();
 			#endif
@@ -3224,7 +3229,7 @@ void ChapterJump(){
 	strcat((char*)globalTempConcat,_tempNumberString);
 	strcat((char*)globalTempConcat,")");
 
-	while (currentGameStatus!=99){
+	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
 		ControlsStart();
 		if (WasJustPressed(SCE_CTRL_RIGHT)){
@@ -3274,11 +3279,11 @@ void ChapterJump(){
 			ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 			if (_choice==0){
 				ControlsEnd();
-				currentGameStatus=3;
+				currentGameStatus=GAMESTATUS_MAINGAME;
 				RunScript(SCRIPTFOLDER, currentPresetFileList.theArray[_chapterChoice],1);
 				ControlsEnd();
 				ChangeEasyTouchMode(TOUCHMODE_MENU);
-				currentGameStatus=5;
+				currentGameStatus=GAMESTATUS_TIPMENU;
 				break;
 			}
 			if (_choice==1){
@@ -3376,7 +3381,7 @@ void NavigationMenu(){
 
 	unsigned char _codeProgress=0;
 
-	while (currentGameStatus!=99){
+	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
 		ControlsStart();
 
@@ -3429,14 +3434,14 @@ void NavigationMenu(){
 					ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 					currentPresetChapter++;
 					SetNextScriptName();
-					currentGameStatus=3;
+					currentGameStatus=GAMESTATUS_MAINGAME;
 					break;
 				}
 			}else if (_choice==1){
 				ChapterJump();
 			}else if (_choice==2){
 				printf("Viewing tips\n");
-				currentGameStatus=5;
+				currentGameStatus=GAMESTATUS_TIPMENU;
 				ControlsEnd();
 				#if PLAYTIPMUSIC == 1
 					PlayBGM("lsys14",256);
@@ -3445,7 +3450,7 @@ void NavigationMenu(){
 				break;
 			}else if (_choice==3){
 				printf("Exiting\n");
-				currentGameStatus=99;
+				currentGameStatus=GAMESTATUS_QUIT;
 				break;
 			}else{
 				printf("INVALID SELECTION\n");
@@ -3592,11 +3597,12 @@ signed char init(){
 	char _tempCheckResult = CheckForUserStuff();
 	#if PLATFORM == PLAT_WINDOWS
 		if (_tempCheckResult==1){
-				char _tempResWidthString[20];
-				char _tempResHeightString[20];
-				itoa(screenWidth,_tempResWidthString,10);
-				itoa(screenHeight,_tempResHeightString,10);
-				LazyMessage("By the way, your screen resolution is",_tempResWidthString,_tempResHeightString,NULL);
+			char _tempResWidthString[20];
+			char _tempResHeightString[20];
+			itoa(screenWidth,_tempResWidthString,10);
+			itoa(screenHeight,_tempResHeightString,10);
+			LazyMessage("By the way, your screen resolution is",_tempResWidthString,"by",_tempResHeightString);
+			return 2;
 		}
 	#endif
 	if (_tempCheckResult==2){	
@@ -3708,12 +3714,12 @@ signed char init(){
 	char _didLoadHappyLua;
 	#if PLATFORM == PLAT_WINDOWS
 		#if SUBPLATFORM == SUB_ANDROID
-			_didLoadHappyLua = SafeLuaDoFile(L,"/sdcard/HIGURASHI/StreamingAssets/happy.lua");
+			_didLoadHappyLua = SafeLuaDoFile(L,"/sdcard/HIGURASHI/StreamingAssets/happy.lua",0);
 		#else
-			_didLoadHappyLua = SafeLuaDoFile(L,"./happy.lua");
+			_didLoadHappyLua = SafeLuaDoFile(L,"./happy.lua",0);
 		#endif
 	#elif PLATFORM == PLAT_VITA
-		_didLoadHappyLua = SafeLuaDoFile(L,"app0:a/happy.lua");
+		_didLoadHappyLua = SafeLuaDoFile(L,"app0:a/happy.lua",0);
 	#endif
 	lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
 
@@ -3723,7 +3729,7 @@ signed char init(){
 		#elif PLATFORM == PLAT_WINDOWS
 			printf("Falling back on happybackup.lua");
 			FixPath("StreamingAssets/happybackup.lua",globalTempConcat,TYPE_DATA);
-			_didLoadHappyLua = SafeLuaDoFile(L,(char*)globalTempConcat);
+			_didLoadHappyLua = SafeLuaDoFile(L,(char*)globalTempConcat,0);
 			if (_didLoadHappyLua==0){
 				LazyMessage("/sdcard/HIGURASHI/StreamingAssets/happy.lua","is missing. Did you convert the script files?",(const char*)globalTempConcat,"is also missing. It's from the script converter.");
 			}
@@ -3731,24 +3737,26 @@ signed char init(){
 	}
 
 	#if SUBPLATFORM == SUB_ANDROID
-		// This checks the version of happy.lua if the user is on Android
-		// Android users need to put happy.lua on their SD card themselves
-		// I need to make sure they have a compatible version.
-		lua_getglobal(L,"GetHappyLuaVersion");
-		lua_pcall(L,0,1,0);
-		int _returnedHappyVersion = lua_tonumber(L,-1);
-		printf("happy.lua version %d\n", _returnedHappyVersion);
-		if (_returnedHappyVersion<MINHAPPYLUAVERSION){
-			LazyMessage("Your happy.lua file is outdated. Please get it from","https://github.com/MyLegGuy/HigurashiVitaConverter/releases","and put happy.lua at","/sdcard/HIGURASHI/StreamingAssets/happy.lua");
-			char _tempItoa[10];
-			char _tempItoa2[10];
-			itoa(_returnedHappyVersion,_tempItoa,10);
-			itoa(MINHAPPYLUAVERSION,_tempItoa2,10);
-			LazyMessage("By the way, you have happy.lua version",_tempItoa,"and you need happy.lua version",_tempItoa2);
-			return 2;
-		}
-		if (_returnedHappyVersion>MAXHAPPYLUAVERSION){
-			LazyMessage("Your happy.lua file is from the future!","Some things may not work, I don't know.","If you have problems, update the application.",NULL);
+		if (_didLoadHappyLua==1){
+			// This checks the version of happy.lua if the user is on Android
+			// Android users need to put happy.lua on their SD card themselves
+			// I need to make sure they have a compatible version.
+			lua_getglobal(L,"GetHappyLuaVersion");
+			lua_pcall(L,0,1,0);
+			int _returnedHappyVersion = lua_tonumber(L,-1);
+			printf("happy.lua version %d\n", _returnedHappyVersion);
+			if (_returnedHappyVersion<MINHAPPYLUAVERSION){
+				LazyMessage("Your happy.lua file is outdated. Please get it from","https://github.com/MyLegGuy/HigurashiVitaConverter/releases","and put happy.lua at","/sdcard/HIGURASHI/StreamingAssets/happy.lua");
+				char _tempItoa[10];
+				char _tempItoa2[10];
+				itoa(_returnedHappyVersion,_tempItoa,10);
+				itoa(MINHAPPYLUAVERSION,_tempItoa2,10);
+				LazyMessage("By the way, you have happy.lua version",_tempItoa,"and you need happy.lua version",_tempItoa2);
+				return 2;
+			}
+			if (_returnedHappyVersion>MAXHAPPYLUAVERSION){
+				LazyMessage("Your happy.lua file is from the future!","Some things may not work, I don't know.","If you have problems, update the application.",NULL);
+			}
 		}
 	#endif
 
@@ -3770,7 +3778,7 @@ int main(int argc, char *argv[]){
 
 	// Put stupid test stuff here
 
-	while (currentGameStatus!=99){
+	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
 			case 0:
 				TitleScreen();
@@ -3788,18 +3796,19 @@ int main(int argc, char *argv[]){
 				// If there is no save game, start a new one at chapter 0
 				// Otherwise, go to the navigation menu
 				if (currentPresetChapter==-1){
+					ControlsEnd();
 					NewGameMenu();
 					ControlsEnd();
 					if (currentPresetChapter==-1){
 						ControlsEnd();
 						currentPresetChapter=0;
 						SetNextScriptName();
-						currentGameStatus=3;
+						currentGameStatus=GAMESTATUS_MAINGAME;
 					}else{
-						currentGameStatus=4;
+						currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 					}
 				}else{
-					currentGameStatus=4;
+					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 				}
 				
 				break;
@@ -3815,7 +3824,7 @@ int main(int argc, char *argv[]){
 					DrawText(32,200,"Press "SELECTBUTTONNAME" to return",fontSize);
 					EndDrawingA();
 					
-					while (currentGameStatus!=99){
+					while (currentGameStatus!=GAMESTATUS_QUIT){
 						FpsCapStart();
 						ControlsStart();
 						if (WasJustPressed(SCE_CTRL_CROSS)){
@@ -3828,9 +3837,9 @@ int main(int argc, char *argv[]){
 				}
 				ControlsEnd();
 				if (currentPresetFilename==NULL){
-					currentGameStatus=0;
+					currentGameStatus=GAMESTATUS_TITLE;
 				}else{
-					currentGameStatus=1;
+					currentGameStatus=GAMESTATUS_LOADPRESET;
 				}
 				break;
 			case 3:
@@ -3838,10 +3847,10 @@ int main(int argc, char *argv[]){
 
 				// If a preset is loaded, save the game. Otherwise, go to title
 				if (currentPresetFileList.length!=0){
-					currentGameStatus=4;
+					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 					SaveGame();
 				}else{
-					currentGameStatus=0;
+					currentGameStatus=GAMESTATUS_TITLE;
 				}
 				break;
 			case 4:
@@ -3862,3 +3871,4 @@ int main(int argc, char *argv[]){
 	#endif
 	return 0;
 }
+  

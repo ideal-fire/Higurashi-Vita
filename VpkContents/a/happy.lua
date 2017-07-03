@@ -1,5 +1,3 @@
-// First test upload to Github
-
 // CHANGE THIS WHEN I UPDATE THIS FILE!
 // 1 - for Higurashi-Vita v1.7
 HAPPYFILEVERSION=1;

@@ -377,7 +377,6 @@
 
 	}
 
-
 	void ControlsEnd(){
 		#if PLATFORM == PLAT_VITA
 			lastPad=pad;
@@ -387,8 +386,13 @@
 	}
 
 	void ControlsReset(){
-		memset(&pad,0,sizeof(pad));
-		memset(&lastPad,0,sizeof(lastPad));
+		#if PLATFORM != PLAT_VITA
+			memset(&pad,0,sizeof(pad));
+			memset(&lastPad,0,sizeof(lastPad));
+		#elif PLATFORM == PLAT_VITA
+			memset(&pad.buttons,0xFF,sizeof(pad.buttons));
+			memset(&lastPad.buttons,0xFF,sizeof(pad.buttons));
+		#endif
 	}
 
 	signed char IsDown(int value){
