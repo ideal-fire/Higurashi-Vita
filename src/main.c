@@ -347,6 +347,18 @@ void DrawLoadingScreen(){
 	EndDrawingA();
 }
 
+void SetDefaultFontSize(){
+	#if TEXTRENDERER == TEXT_DEBUG
+		fontSize = 1.7;
+	#endif
+	#if TEXTRENDERER == TEXT_FONTCACHE
+		fontSize = floor(screenWidth/40);
+	#endif
+	#if TEXTRENDERER == TEXT_VITA2D
+		fontSize=32;
+	#endif
+}
+
 void ReloadFont(){
 	DrawLoadingScreen();
 	#if TEXTRENDERER == TEXT_FONTCACHE
@@ -1224,23 +1236,30 @@ signed char CheckForUserStuff(){
 			return 2;
 		}
 	#endif
-	//void FixPath(char* filename,unsigned char _buffer[], char type){
+
+	// This will make the string whatever prefix / HIGURASHI /
 	FixPath("",globalTempConcat,TYPE_DATA);
 
 	if (DirectoryExists((const char*)globalTempConcat)==0){
 		MakeDirectory((const char*)globalTempConcat);
 		_oneMissing=1;
 	}
+
 	FixPath("StreamingAssets/",globalTempConcat,TYPE_DATA);
 	if (DirectoryExists((const char*)globalTempConcat)==0){
+		#if PLATFORM  == PLAT_WINDOWS
+			char _tempResWidthString[20];
+			char _tempResHeightString[20];
+			itoa(screenWidth,_tempResWidthString,10);
+			itoa(screenHeight,_tempResHeightString,10);
+			LazyMessage("Your screen resolution is",_tempResWidthString,"by",_tempResHeightString);
+		#endif
 		LazyMessage((const char*)globalTempConcat,"does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the system. Refer to thread for tutorial.");
 		_oneMissing=1;
 	}
 	
-	if (_oneMissing==1){
-		return 1;
-	}
-	return 0;
+
+	return _oneMissing;
 }
 
 
@@ -1733,6 +1752,13 @@ void SaveSettings(){
 }
 
 void LoadSettings(){
+	FixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
+	if (CheckFileExist((const char*)globalTempConcat)==0){
+		SetDefaultFontSize();
+	}else{
+		LoadFontSizeFile();
+	}
+
 	FixPath("settings.noob",globalTempConcat,TYPE_DATA);
 	if (CheckFileExist((const char*)globalTempConcat)==1){
 		FILE* fp;
@@ -3520,24 +3546,70 @@ void NewGameMenu(){
 	}
 }
 
-void SetDefaultFontSize(){
-	#if TEXTRENDERER == TEXT_DEBUG
-		fontSize = 1.7;
-	#endif
-	#if TEXTRENDERER == TEXT_FONTCACHE
-		fontSize = floor(screenWidth/40);
-	#endif
-	#if TEXTRENDERER == TEXT_VITA2D
-		fontSize=32;
-	#endif
-}
-
 // =====================================================
+
+// Returns 2 for missing or outdated happy.lua
+// Returns 0 otherwise
+char init_dohappylua(){
+	// Happy.lua contains functions that both Higurashi script files use and my C code
+	char _didLoadHappyLua;
+	#if PLATFORM == PLAT_WINDOWS
+		#if SUBPLATFORM == SUB_ANDROID
+			_didLoadHappyLua = SafeLuaDoFile(L,"/sdcard/HIGURASHI/StreamingAssets/happy.lua",0);
+		#else
+			_didLoadHappyLua = SafeLuaDoFile(L,"./happy.lua",0);
+		#endif
+	#elif PLATFORM == PLAT_VITA
+		_didLoadHappyLua = SafeLuaDoFile(L,"app0:a/happy.lua",0);
+	#endif
+	lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
+
+	if (_didLoadHappyLua==0){
+		#if PLATFORM == PLAT_VITA
+			LazyMessage("Happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
+		#elif PLATFORM == PLAT_WINDOWS
+			printf("Falling back on happybackup.lua");
+			FixPath("StreamingAssets/happybackup.lua",globalTempConcat,TYPE_DATA);
+			_didLoadHappyLua = SafeLuaDoFile(L,(char*)globalTempConcat,0);
+			if (_didLoadHappyLua==0){
+				LazyMessage("/sdcard/HIGURASHI/StreamingAssets/happy.lua","is missing. Did you convert the script files?",(const char*)globalTempConcat,"is also missing. It's from the script converter too.");
+				return 2;
+			}
+		#endif
+	}
+
+	#if SUBPLATFORM == SUB_ANDROID
+		if (_didLoadHappyLua==1){
+			// This checks the version of happy.lua if the user is on Android
+			// Android users need to put happy.lua on their SD card themselves
+			// I need to make sure they have a compatible version.
+			lua_getglobal(L,"GetHappyLuaVersion");
+			lua_pcall(L,0,1,0);
+			int _returnedHappyVersion = lua_tonumber(L,-1);
+			printf("happy.lua version %d\n", _returnedHappyVersion);
+			if (_returnedHappyVersion<MINHAPPYLUAVERSION){
+				LazyMessage("Your happy.lua file is outdated. Please get it from","https://github.com/MyLegGuy/HigurashiVitaConverter/releases","and put happy.lua at","/sdcard/HIGURASHI/StreamingAssets/happy.lua");
+				char _tempItoa[10];
+				char _tempItoa2[10];
+				itoa(_returnedHappyVersion,_tempItoa,10);
+				itoa(MINHAPPYLUAVERSION,_tempItoa2,10);
+				LazyMessage("By the way, you have happy.lua version",_tempItoa,"and you need happy.lua version",_tempItoa2);
+				return 2;
+			}
+			if (_returnedHappyVersion>MAXHAPPYLUAVERSION){
+				LazyMessage("Your happy.lua file is from the future!","Some things may not work, I don't know.","If you have problems, update the application.",NULL);
+			}
+		}
+	#endif
+
+	return 0;
+}
 
 // Please exit if this function returns 2
 // Go ahead as normal if it returns 0
 signed char init(){
 	printf("====================================================\n===========================================================\n==================================================================\n");
+	int i=0;
 	#if RENDERER == REND_SDL
 		SDL_Init( SDL_INIT_VIDEO );
 		#if SUBPLATFORM == SUB_ANDROID
@@ -3569,29 +3641,17 @@ signed char init(){
 	#if RENDERER == REND_VITA2D
 		// Init vita2d and set its clear color.
 		vita2d_init();
-		
-		// We love default fonts.
-		//defaultPgf = vita2d_load_default_pgf();
 
 		// Zero a variable that should already be zero.
 		memset(&pad, 0, sizeof(pad));
 
-		if (CheckFileExist((char*)"app0:a/LiberationSans-Regular.ttf")==1){
-			fontImage = vita2d_load_font_file((char*)"app0:a/LiberationSans-Regular.ttf");
-		}
 		//fontImageItalics = vita2d_load_font_file("app0:a/LiberationSans-Italic.ttf");
 	#endif
+	SetClearColor(0,0,0,255);
 
+	// We need this for ReloadFont();
 	FixPath("Loading.png",globalTempConcat,TYPE_EMBEDDED);
 	loadingImage = LoadPNG((char*)globalTempConcat);
-
-	// This loads the font size file if it's there.
-	FixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
-	if (CheckFileExist((const char*)globalTempConcat)==0){
-		SetDefaultFontSize();
-	}else{
-		LoadFontSizeFile();
-	}
 
 	#if TEXTRENDERER == TEXT_DEBUG
 		FixPath("Font.png",globalTempConcat,TYPE_EMBEDDED);
@@ -3600,55 +3660,17 @@ signed char init(){
 		// Make sure it's null beforehand so the free function in the reload function does nothing
 		fontImage = NULL;
 		ReloadFont();
-	#endif
-
-	char _tempCheckResult = CheckForUserStuff();
-	#if PLATFORM == PLAT_WINDOWS
-		if (_tempCheckResult==1){
-			char _tempResWidthString[20];
-			char _tempResHeightString[20];
-			itoa(screenWidth,_tempResWidthString,10);
-			itoa(screenHeight,_tempResHeightString,10);
-			LazyMessage("By the way, your screen resolution is",_tempResWidthString,"by",_tempResHeightString);
-			return 2;
+	#elif TEXTRENDERER == TEXT_VITA2D
+		if (CheckFileExist((char*)"app0:a/LiberationSans-Regular.ttf")==1){
+			fontImage = vita2d_load_font_file((char*)"app0:a/LiberationSans-Regular.ttf");
 		}
 	#endif
-	if (_tempCheckResult==2){	
-		return 2;
-	}
 
-	SetClearColor(0,0,0,255);
-
-	#if SOUNDPLAYER == SND_SDL
-		SDL_Init( SDL_INIT_AUDIO );
-		Mix_Init(MIX_INIT_OGG);
-		//WriteSDLError();
-		//Initialize SDL_mixer
-		Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, 2, 2048 );
-	#endif
-	int i=0;
-	for (i=0;i<MAXBUSTS;i++){
-		ResetBustStruct(&(Busts[i]),0);
-	}
-	// Make the save files directory
-	MakeDirectory(SAVEFOLDER);
-
+	// This will also load the font size file
 	LoadSettings();
 
-	// Load the menu sound effect if it's present
-	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/","wa_038",".ogg");
-	if (CheckFileExist(tempstringconcat)){
-		menuSoundLoaded=1;
-		menuSound = LoadSound(tempstringconcat);
-		SetSFXVolume(menuSound,FixSEVolume(256));
-	}else{
-		menuSoundLoaded=0;
-	}
-	free(tempstringconcat);
-
-	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("unknown.png");
-	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("note.png");
-	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("star.png");
+	// We need this for any message display
+	currentTextHeight = TextHeight(fontSize);
 
 	#if PLATFORM == PLAT_WINDOWS
 		controlsUpImage = LoadEmbeddedPNG("controlsUpImage.png");
@@ -3674,39 +3696,45 @@ signed char init(){
 		SDL_SetTextureAlphaMod(textlogImage, 100);
 	#endif
 
+	char _tempCheckResult = CheckForUserStuff();
+	#if PLATFORM == PLAT_WINDOWS
+		if (_tempCheckResult==1){
+			return 2;
+		}
+	#endif
+	if (_tempCheckResult==2){
+		return 2;
+	}
+
+	#if SOUNDPLAYER == SND_SDL
+		SDL_Init( SDL_INIT_AUDIO );
+		Mix_Init(MIX_INIT_OGG);
+		//WriteSDLError();
+		//Initialize SDL_mixer
+		Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, 2, 2048 );
+	#endif
+
+	// Load the menu sound effect if it's present
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/","wa_038",".ogg");
+	if (CheckFileExist(tempstringconcat)){
+		menuSoundLoaded=1;
+		menuSound = LoadSound(tempstringconcat);
+		SetSFXVolume(menuSound,FixSEVolume(256));
+	}else{
+		menuSoundLoaded=0;
+	}
+	free(tempstringconcat);
+
+	// Needed for any advanced message display
+	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("unknown.png");
+	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("note.png");
+	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("star.png");
+
 	// Zero the image char arrray
 	for (i=0;i<MAXIMAGECHAR;i++){
 		imageCharType[i]=-1;
 	}
 
-	lastBGMFilename = (char*)malloc(1);
-
-
-
-	// THIS IS A SPECIAL CHECK I'LL ONLY KEEP IN v1.4
-	//if (CheckFileExist("ux0:data/HIGURASHI/StreamingAssets/date.xxm0ronslayerxx")==0){
-	//	if (CheckFileExist("ux0:data/HIGURASHI/StreamingAssets/CG/re_se_bi_a1.png")==1){
-	//		LazyMessage("Welcome to v1.4 In this version, PS3 patch graphics were","changed. If you were using the PS3 patch, you need to reinstall it","and convert it with the new version of the script converter.","Don't worry, you get higher resolution sprites.");
-	//		FILE* fp;
-	//		fp = fopen ("ux0:data/HIGURASHI/StreamingAssets/date.xxm0ronslayerxx", "w");
-	//		fclose(fp);
-	//	}
-	//}
-
-	currentTextHeight = TextHeight(fontSize);
-
-	
-	// Let the user change the font size if the font size file wasn't saved
-	// We only force this on Android. Not Vita because the size is already perfect.
-	FixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
-	#if PLATFORM == PLAT_WINDOWS
-		if (CheckFileExist((const char*)globalTempConcat)==0){
-			FontSizeSetup();
-		}
-	#endif
-	
-
-	//
 	ClearDebugFile();
 
 	// Fill with null char
@@ -3717,57 +3745,28 @@ signed char init(){
 	luaL_openlibs(L);
 	MakeLuaUseful();
 
-
-	// Happy.lua contains functions that both Higurashi script files use and my C code
-	char _didLoadHappyLua;
-	#if PLATFORM == PLAT_WINDOWS
-		#if SUBPLATFORM == SUB_ANDROID
-			_didLoadHappyLua = SafeLuaDoFile(L,"/sdcard/HIGURASHI/StreamingAssets/happy.lua",0);
-		#else
-			_didLoadHappyLua = SafeLuaDoFile(L,"./happy.lua",0);
-		#endif
-	#elif PLATFORM == PLAT_VITA
-		_didLoadHappyLua = SafeLuaDoFile(L,"app0:a/happy.lua",0);
-	#endif
-	lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
-
-	if (_didLoadHappyLua==0){
-		#if PLATFORM == PLAT_VITA
-			LazyMessage("Happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
-		#elif PLATFORM == PLAT_WINDOWS
-			printf("Falling back on happybackup.lua");
-			FixPath("StreamingAssets/happybackup.lua",globalTempConcat,TYPE_DATA);
-			_didLoadHappyLua = SafeLuaDoFile(L,(char*)globalTempConcat,0);
-			if (_didLoadHappyLua==0){
-				LazyMessage("/sdcard/HIGURASHI/StreamingAssets/happy.lua","is missing. Did you convert the script files?",(const char*)globalTempConcat,"is also missing. It's from the script converter.");
-			}
-		#endif
+	if (init_dohappylua()==2){
+		return 2;
 	}
 
-	#if SUBPLATFORM == SUB_ANDROID
-		if (_didLoadHappyLua==1){
-			// This checks the version of happy.lua if the user is on Android
-			// Android users need to put happy.lua on their SD card themselves
-			// I need to make sure they have a compatible version.
-			lua_getglobal(L,"GetHappyLuaVersion");
-			lua_pcall(L,0,1,0);
-			int _returnedHappyVersion = lua_tonumber(L,-1);
-			printf("happy.lua version %d\n", _returnedHappyVersion);
-			if (_returnedHappyVersion<MINHAPPYLUAVERSION){
-				LazyMessage("Your happy.lua file is outdated. Please get it from","https://github.com/MyLegGuy/HigurashiVitaConverter/releases","and put happy.lua at","/sdcard/HIGURASHI/StreamingAssets/happy.lua");
-				char _tempItoa[10];
-				char _tempItoa2[10];
-				itoa(_returnedHappyVersion,_tempItoa,10);
-				itoa(MINHAPPYLUAVERSION,_tempItoa2,10);
-				LazyMessage("By the way, you have happy.lua version",_tempItoa,"and you need happy.lua version",_tempItoa2);
-				return 2;
-			}
-			if (_returnedHappyVersion>MAXHAPPYLUAVERSION){
-				LazyMessage("Your happy.lua file is from the future!","Some things may not work, I don't know.","If you have problems, update the application.",NULL);
-			}
+	// Make the save files directory
+	MakeDirectory(SAVEFOLDER);
+
+	// realloc is used on this later.
+	lastBGMFilename = (char*)malloc(1);
+
+	for (i=0;i<MAXBUSTS;i++){
+		ResetBustStruct(&(Busts[i]),0);
+	}
+
+	// Let the user change the font size if the font size file wasn't saved
+	// We only force this on Android. Not Vita because the size is already perfect.
+	FixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
+	#if PLATFORM == PLAT_WINDOWS
+		if (CheckFileExist((const char*)globalTempConcat)==0){
+			FontSizeSetup();
 		}
 	#endif
-
 	return 0;
 }
 
@@ -3879,4 +3878,3 @@ int main(int argc, char *argv[]){
 	#endif
 	return 0;
 }
-  

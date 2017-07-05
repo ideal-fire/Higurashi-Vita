@@ -64,3 +64,6 @@ lib-custom/
 
 # File where I put trash
 /src/Graveyard.h
+
+# For Windows build
+/lib-custom/
