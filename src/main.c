@@ -306,6 +306,7 @@ CrossTexture* loadingImage;
 */
 
 // Give a function name to this. It will tell you if it's new.
+// THIS DOES NOT ACCOUNT FOR FUNCTIONS MADE IN happy.lua
 void DebugLuaReg(char* name){
 	if (lua_getglobal(L,name)==0){
 		//printf("%s is new!\n",name);
@@ -2556,7 +2557,6 @@ void MakeLuaUseful(){
 		LUAREGISTER(L_NotYet,"FadeScene")
 		LUAREGISTER(L_NotYet,"FadeSceneWithMask")
 		LUAREGISTER(L_NotYet,"FadeSpriteWithFiltering")
-		LUAREGISTER(L_NotYet,"GetGlobalFlag")
 		LUAREGISTER(L_NotYet,"GetLocalFlag")
 		LUAREGISTER(L_NotYet,"GetPositionOfSprite")
 		LUAREGISTER(L_NotYet,"HideGallery")
@@ -2576,7 +2576,6 @@ void MakeLuaUseful(){
 		LUAREGISTER(L_NotYet,"Return")
 		LUAREGISTER(L_NotYet,"RevealGallery")
 		LUAREGISTER(L_NotYet,"SavePoint")
-		LUAREGISTER(L_NotYet,"SetGlobalFlag")
 		LUAREGISTER(L_NotYet,"SetGuiPosition")
 		LUAREGISTER(L_NotYet,"SetLocalFlag")
 		LUAREGISTER(L_NotYet,"SetSkipAll")
