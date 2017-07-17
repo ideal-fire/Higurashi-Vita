@@ -1,10 +1,16 @@
 /*
 
 	TODO - Inversion
+		I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
 	
 	TODO - These are films. Look at the DrawFilm function please.
 		TODO - The functions I made don't work well for some reason.
 	
+	TODO - Position markup
+		At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos> I didn't see the end tag, and saw everything else that is past the first "<"
+
+	??? - Only one BGM can be played at once. This is a problem in times where two are playing, like the typing sound effect and the cicadas.
+
 	(OPTIONAL TODO)
 		TODO - (optional) Garbage collector won't collect functions made in script files??? i.e: function hima_tips_09_b()
 			Maybe I can make a system similar to the one I made in MrDude that tracks all the global variables made between two points of time.
@@ -19,8 +25,11 @@
 			(A possible solution is to store x cordinates to start italics text)
 				// Here's the plan.
 				// Make another message array, but store text that is in italics in it
-			So, here's my idea, I take whatever char it is and add 100 if it's italics
+	
+	TODO - Fix if statements that don't have brackets. To do so, first check if the previous line was an if statement. If it was, and this line isn't a bracket, add a then before this line and an end after this line
+
 */
+
 
 #define MAXCHARSONLINE 60
 
@@ -90,6 +99,8 @@ int LINEARRAYSIZE = ((MAXCHARSONLINE*2)+1);
 // 1 is start
 // 2 adds BGM and SE volume
 #define OPTIONSFILEFORMAT 2
+
+//#define LUAREGISTER(x,y) DebugLuaReg(y);
 
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
 	lua_setglobal(L,y);
@@ -294,6 +305,15 @@ CrossTexture* loadingImage;
 ====================================================
 */
 
+// Give a function name to this. It will tell you if it's new.
+void DebugLuaReg(char* name){
+	if (lua_getglobal(L,name)==0){
+		//printf("%s is new!\n",name);
+		printf("LUAREGISTER(L_NotYet,\"%s\")\n",name);
+		lua_pop(L,-1);
+		return;
+	}
+}
 
 void PlayMenuSound(){
 	if (menuSoundLoaded==1){
@@ -2205,22 +2225,24 @@ int L_FadeBustshot(lua_State* passedState){
 
 // Slot, file, volume
 int L_PlaySE(lua_State* passedState){
-	int passedSlot = lua_tonumber(passedState,1);
-	if (isSkipping==0){
-		if (soundEffects[passedSlot]!=NULL){
-			FreeSound(soundEffects[passedSlot]);
-			soundEffects[passedSlot]=NULL;
+	if (seVolume>0){
+		int passedSlot = lua_tonumber(passedState,1);
+		if (isSkipping==0){
+			if (soundEffects[passedSlot]!=NULL){
+				FreeSound(soundEffects[passedSlot]);
+				soundEffects[passedSlot]=NULL;
+			}
+			char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/",lua_tostring(passedState,2),".ogg");
+			if (CheckFileExist(tempstringconcat)==1){
+				soundEffects[passedSlot] = LoadSound(tempstringconcat);
+				SetSFXVolume(soundEffects[passedSlot],FixSEVolume(lua_tonumber(passedState,3)));
+				PlaySound(soundEffects[passedSlot],1);
+			}else{
+				WriteToDebugFile("SE file not found");
+				WriteToDebugFile(tempstringconcat);
+			}
+			free(tempstringconcat);
 		}
-		char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/",lua_tostring(passedState,2),".ogg");
-		if (CheckFileExist(tempstringconcat)==1){
-			soundEffects[passedSlot] = LoadSound(tempstringconcat);
-			SetSFXVolume(soundEffects[passedSlot],FixSEVolume(lua_tonumber(passedState,3)));
-			PlaySound(soundEffects[passedSlot],1);
-		}else{
-			WriteToDebugFile("SE file not found");
-			WriteToDebugFile(tempstringconcat);
-		}
-		free(tempstringconcat);
 	}
 	return 0;
 }
@@ -2503,6 +2525,82 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_NotYet,"SetValidityOfLoading")
 	LUAREGISTER(L_NotYet,"ActivateScreenEffectForcedly")
 	LUAREGISTER(L_NotYet,"SetValidityOfUserEffectSpeed")
+
+	// Not investigated yet
+		LUAREGISTER(L_NotYet,"BlurOffOn")
+		LUAREGISTER(L_NotYet,"Break")
+		LUAREGISTER(L_NotYet,"ChangeBustshot")
+		LUAREGISTER(L_NotYet,"ChangeVolumeOfBGM")
+		LUAREGISTER(L_NotYet,"ChapterPreview")
+		LUAREGISTER(L_NotYet,"CheckTipsAchievements")
+		LUAREGISTER(L_NotYet,"CloseGallery")
+		LUAREGISTER(L_NotYet,"ControlMotionOfSprite")
+		LUAREGISTER(L_NotYet,"DisableBlur")
+		LUAREGISTER(L_NotYet,"DisableEffector")
+		LUAREGISTER(L_NotYet,"DisableGradation")
+		LUAREGISTER(L_NotYet,"DisplayWindow")
+		LUAREGISTER(L_NotYet,"DrawBGWithMask")
+		LUAREGISTER(L_NotYet,"DrawBustFace")
+		LUAREGISTER(L_NotYet,"DrawFace")
+		LUAREGISTER(L_NotYet,"DrawSpriteWithFiltering")
+		LUAREGISTER(L_NotYet,"DrawStandgraphic")
+		LUAREGISTER(L_NotYet,"EnableBlur")
+		LUAREGISTER(L_NotYet,"EnableHorizontalGradation")
+		LUAREGISTER(L_NotYet,"EnlargeScreen")
+		LUAREGISTER(L_NotYet,"ExecutePlannedControl")
+		LUAREGISTER(L_NotYet,"FadeAllBustshots2")
+		LUAREGISTER(L_NotYet,"FadeAllBustshots3")
+		LUAREGISTER(L_NotYet,"FadeFace")
+		LUAREGISTER(L_NotYet,"FadeOutMultiBGM")
+		LUAREGISTER(L_NotYet,"FadeOutSE")
+		LUAREGISTER(L_NotYet,"FadeScene")
+		LUAREGISTER(L_NotYet,"FadeSceneWithMask")
+		LUAREGISTER(L_NotYet,"FadeSpriteWithFiltering")
+		LUAREGISTER(L_NotYet,"GetGlobalFlag")
+		LUAREGISTER(L_NotYet,"GetLocalFlag")
+		LUAREGISTER(L_NotYet,"GetPositionOfSprite")
+		LUAREGISTER(L_NotYet,"HideGallery")
+		LUAREGISTER(L_NotYet,"JumpScript")
+		LUAREGISTER(L_NotYet,"LanguagePrompt")
+		LUAREGISTER(L_NotYet,"MoveBustshot")
+		LUAREGISTER(L_NotYet,"MoveSpriteEx")
+		LUAREGISTER(L_NotYet,"NullOp")
+		LUAREGISTER(L_NotYet,"OpenGallery")
+		LUAREGISTER(L_NotYet,"PlaceViewTip")
+		LUAREGISTER(L_NotYet,"PlaceViewTip2")
+		LUAREGISTER(L_NotYet,"PlayVoice")
+		LUAREGISTER(L_NotYet,"PlusStandgraphic1")
+		LUAREGISTER(L_NotYet,"PlusStandgraphic2")
+		LUAREGISTER(L_NotYet,"PlusStandgraphic3")
+		LUAREGISTER(L_NotYet,"PreloadBitmap")
+		LUAREGISTER(L_NotYet,"Return")
+		LUAREGISTER(L_NotYet,"RevealGallery")
+		LUAREGISTER(L_NotYet,"SavePoint")
+		LUAREGISTER(L_NotYet,"SetGlobalFlag")
+		LUAREGISTER(L_NotYet,"SetGuiPosition")
+		LUAREGISTER(L_NotYet,"SetLocalFlag")
+		LUAREGISTER(L_NotYet,"SetSkipAll")
+		LUAREGISTER(L_NotYet,"SetTextFade")
+		LUAREGISTER(L_NotYet,"SetValidityOfFilmToFace")
+		LUAREGISTER(L_NotYet,"SetValidityOfInterface")
+		LUAREGISTER(L_NotYet,"SpringText")
+		LUAREGISTER(L_NotYet,"StartShakingOfAllObjects")
+		LUAREGISTER(L_NotYet,"StartShakingOfBustshot")
+		LUAREGISTER(L_NotYet,"StartShakingOfSprite")
+		LUAREGISTER(L_NotYet,"StartShakingOfWindow")
+		LUAREGISTER(L_NotYet,"StoreValueToLocalWork")
+		LUAREGISTER(L_NotYet,"TerminateShakingOfAllObjects")
+		LUAREGISTER(L_NotYet,"TerminateShakingOfBustshot")
+		LUAREGISTER(L_NotYet,"TerminateShakingOfSprite")
+		LUAREGISTER(L_NotYet,"TerminateShakingOfWindow")
+		LUAREGISTER(L_NotYet,"TitleScreen")
+		LUAREGISTER(L_NotYet,"ViewChapterScreen")
+		LUAREGISTER(L_NotYet,"ViewExtras")
+		LUAREGISTER(L_NotYet,"ViewTips")
+		LUAREGISTER(L_NotYet,"WaitForInput")
+		LUAREGISTER(L_NotYet,"WaitToFinishSEPlaying")
+		LUAREGISTER(L_NotYet,"WaitToFinishVoicePlaying")
+
 }
 
 //======================================================
@@ -3871,10 +3969,6 @@ int main(int argc, char *argv[]){
 		}
 	}
 	printf("ENDGAME\n");
-	#if SUBPLATFORM == SUB_ANDROID
-		#if RENDERER == REND_SDL
-			SDL_Quit();
-		#endif
-	#endif
+	QuitApplication();
 	return 0;
 }

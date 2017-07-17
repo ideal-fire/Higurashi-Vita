@@ -7,7 +7,7 @@ OBJS     = ./src/main.o
 
 LIBS = -lScePower_stub -lSDL2_mixer -lvorbisfile -lvorbis -logg -lSDL2 -lvita2d -lSceDisplay_stub -lSceGxm_stub \
 	-lSceSysmodule_stub -lSceCtrl_stub -lScePgf_stub \
-	-lSceCommonDialog_stub -lSceAudio_stub -lSceTouch_stub -lfreetype -lpng -ljpeg -lz -lm -lc -llua -lm
+	-lSceCommonDialog_stub -lSceAudio_stub -lSceTouch_stub -lfreetype -lpng -ljpeg -lz -lm -lc -lluaHIGURASHI -lm
 
 PREFIX  = arm-vita-eabi
 CC      = $(PREFIX)-gcc
