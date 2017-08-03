@@ -25,8 +25,7 @@
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 	TODO - Fix if statements that don't have brackets. To do so, first check if the previous line was an if statement. If it was, and this line isn't a bracket, add a then before this line and an end after this line
-	TODO - Investigate missing quotation marks after image characters
-	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width
+	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 */
 
 #define SINGLELINEARRAYSIZE 121
@@ -1562,217 +1561,6 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	}
 }
 
-/*
-This code scans the string and marks the places where new lines are needed.
-What I should do is scan the string WHILE INTERPRETING NEWLINES AND MARKUP, find the places I need new lines, and write it all directly to the master message array.
-	While displaying, I have a variable that has the max char and max line. 
-*/
-
-//void ShowMessageWithPortrait(char* _tempMsg, char isQuestion, CrossTexture* portrait, double portScale){
-//	// The string needs to be copied. We're going to modify it, at we can't if we just type the string into the function and let the compiler do everything else
-//	char message[strlen(_tempMsg)+1];
-//	strcpy(message,_tempMsg);
-//	signed char currentSelected=defaultSelected;
-//	int textboxLinesPerScreens = (SCREENHEIGHT-TEXTBOXY)/TextHeight(fontSize);
-//	short newLineLocations[50];
-//	int totalMessageLength = strlen(message);
-//	int i, j;
-//
-//	// This will loop through the entire message, looking for where I need to add new lines. When it finds a spot that
-//	// needs a new line, that spot in the message will become 0. So, when looking for the place to 
-//	int lastNewlinePosition=-1; // If this doesn't start at -1, the first character will be cut off
-//	for (i = 0; i < totalMessageLength; i++){
-//		if (message[i]==32){ // Only check when we meet a space. 32 is a space in ASCII
-//			message[i]='\0';
-//			//printf("Space found at %d\n",i);
-//			//printf("%s\n",&message[lastNewlinePosition+1]);
-//			//printf("%d\n",TextWidth(fontSize,&(message[lastNewlinePosition+1])));
-//			if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>SCREENWIDTH-20){
-//				char _didWork=0;
-//				for (j=i-1;j>lastNewlinePosition+1;j--){
-//					//printf("J:%d\n",j);
-//					if (message[j]==32){
-//						message[j]='\0';
-//						_didWork=1;
-//						message[i]=32;
-//						lastNewlinePosition=j;
-//						break;
-//					}
-//				}
-//				if (_didWork==0){
-//					message[i]='\0';
-//					lastNewlinePosition=i+1;
-//				}
-//			}else{
-//				message[i]=32;
-//			}
-//		}
-//	}
-//	// This code will make a new line if there needs to be one because of the last word
-//	if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>SCREENWIDTH-20){
-//		for (j=totalMessageLength-1;j>lastNewlinePosition+1;j--){
-//			if (message[j]==32){
-//				message[j]='\0';
-//				break;
-//			}
-//		}
-//	}
-//
-//	// This spot in the message will be the one that's 0 char. The player won't be able to see this character.
-//	int currentLetter=0;
-//	int currentLine=0;
-//	signed int nextCharStorage=-1;
-//	char currentlyVisibleLines=1;
-//	char frames=0;
-//	// This variable is the location of the start of the first VISIBLE line
-//	// This will change if the text box has multiple screens because the text is too long
-//	int offsetStrlen=0;
-//	//  textboxNewCharSpeed
-//	
-//	nextCharStorage = message[0];
-//	message[0]='\0';
-//	while (1){
-//		// drawing and stuff code heres
-//	}
-//	return;
-//}
-
-void OutputLineOld(unsigned const char* message, char _endtypetemp, char _autoskip){
-	char waitingIsForShmucks=_autoskip;
-	if (isSkipping==1){
-		waitingIsForShmucks=1;
-	}
-
-	MessageBoxEnabled=1;
-	unsigned int i,j;
-	int currentChar = GetNextCharOnLine(currentLine);
-	char currentDisplayCharOnLine = currentChar;
-	//unsigned const char* message = (unsigned const char*)lua_tostring(passedState,4);
-	//endType = lua_tonumber(passedState,5);
-	endType = _endtypetemp;
-
-	//char drawThisFrame=1;
-
-	for (i = 0; i < u_strlen(message); i++){
-		#if PLATFORM == PLAT_WINDOWS
-			FpsCapStart();
-		#endif
-		ControlsStart();
-		//
-
-		if (currentDisplayCharOnLine==SINGLELINEARRAYSIZE || (TextWidth(fontSize,(const char*)currentMessages[currentLine])>=screenWidth-100)){
-			currentLine++;
-			currentChar = GetNextCharOnLine(currentLine);
-			currentDisplayCharOnLine=currentChar;
-		}
-
-		// If it's a new word, add a newline if the word will be cut off
-		if (message[i]==' '){
-			for (j=1;j<SINGLELINEARRAYSIZE+1;j++){
-				if (i+j>u_strlen(message)){
-					if (currentDisplayCharOnLine+j>=SINGLELINEARRAYSIZE){
-						currentLine++;
-						currentChar = GetNextCharOnLine(currentLine);
-						currentDisplayCharOnLine=currentChar;
-					}
-					break;
-				}
-				if (message[i+j]==' '){
-					// Greater OR equal to SINGLELINEARRAYSIZE because I don't want to start a new line on a space
-					if (currentDisplayCharOnLine+j>=SINGLELINEARRAYSIZE){
-						currentLine++;
-						currentChar = GetNextCharOnLine(currentLine);
-						currentDisplayCharOnLine=currentChar;
-						i++;
-					}
-					break;
-				}
-			}
-			if (message[i]==' ' && currentChar==0){
-				continue;
-			}
-		}
-
-		// Disable italics
-		if (message[i]=='<'){
-			char _dooffset=0;
-			if (message[i+1]=='/'){
-				_dooffset=1;
-			}
-			if (message[i+1+_dooffset]=='i'){
-				if (message[i+2+_dooffset]=='>'){
-					i+=(2+_dooffset);
-					continue;
-				}
-			}
-		}else if (message[i]==226 && message[i+1]==128 && message[i+2]==148){ // Weird hyphen replace
-			i=i+2;
-			memset(&(currentMessages[currentLine][currentChar]),45,1); // Replace it with a normal hyphen
-			currentChar++;
-			currentDisplayCharOnLine++;
-		}else if (message[i]==226){ // COde for special image character
-			unsigned char _imagechartype;
-			if (message[i+1]==153 && message[i+2]==170){ // ♪
-				_imagechartype = IMAGECHARNOTE;
-			}else if (message[i+1]==152 && message[i+2]==134){ // ☆
-				_imagechartype = IMAGECHARSTAR;
-			}else{
-				printf("Unknown image char! %d;%d\n",message[i+1],message[i+2]);
-				_imagechartype = IMAGECHARUNKNOWN;
-			}
-			
-			for (j=0;j<MAXIMAGECHAR;j++){
-				if (imageCharType[j]==-1){
-					imageCharX[j] = TextWidth(fontSize,(char*)currentMessages[currentLine])+MESSAGETEXTXOFFSET;
-					imageCharY[j] = TextHeight(fontSize)*currentLine+TextHeight(fontSize);
-					imageCharType[j] = _imagechartype;
-					break;
-				}
-			}
-			memset(&(currentMessages[currentLine][currentChar]),32,2);
-			i+=2;
-			currentChar+=3;
-			currentDisplayCharOnLine+=3;
-		}else if (message[i]=='\n'){ // Interpret new line
-			currentLine++;
-			currentChar = GetNextCharOnLine(currentLine);
-			currentDisplayCharOnLine=currentChar;
-		}else{ // Normal letter
-			memcpy(&(currentMessages[currentLine][currentChar]),&(message[i]),1);
-			currentChar++;
-			currentDisplayCharOnLine++;
-			if (message[i]>=0xC2){ // The first one that takes two bytes is U+0080, or 0xC2 0x80
-				i++;
-				memcpy(&(currentMessages[currentLine][currentChar]),&(message[i]),1);
-				currentChar++;
-			}
-		}
-		//
-		if (WasJustPressed(SCE_CTRL_CROSS)){
-			waitingIsForShmucks=1;
-			ControlsEnd();
-		}
-		//
-
-		if (waitingIsForShmucks==0){
-			//if (drawThisFrame==1){
-				Draw();
-				Update();
-				ControlsEnd();
-				//drawThisFrame=0;
-			//}else{
-			//	drawThisFrame=1;
-			//}
-			#if PLATFORM == PLAT_WINDOWS
-				FpsCapWait();
-			#endif
-		}
-		
-
-
-	}
-}
-
 // strcpy, but it won't copy from src to dest if the value is 1.
 // You can use this to exclude certian spots
 // I do not mean the ASCII character 1, which is 49.
@@ -1812,6 +1600,11 @@ int strlenNO1(char* src){
 #endif
 
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
+	// 1 when finished displaying the text
+	char _isDone=0;
+	if (isSkipping==1){
+		_isDone=1;
+	}
 	MessageBoxEnabled=1;
 
 	unsigned char message[strlen(_tempMsg)+1+strlen(currentMessages[currentLine])];
@@ -1962,9 +1755,11 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		// example, NOOB will be copied. This is seperate from the code above. NOOB by itself does not need a new line.
 		strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
 	}
-	char _isDone=0;
+	
 	while(_isDone==0){
-		FpsCapStart();
+		#if PLATFORM != PLAT_VITA
+			FpsCapStart();
+		#endif
 
 		// The first one that takes two bytes is U+0080, or 0xC2 0x80
 		// If it is a two byte character, we don't want to try and draw when there's only one byte. Skip to include the next one.
@@ -2034,7 +1829,9 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				}
 			}
 		}
-		FpsCapWait();
+		#if PLATFORM != PLAT_VITA
+			FpsCapWait();
+		#endif
 	}
 
 	// End of function
