@@ -5,9 +5,6 @@
 	
 	TODO - These are films. Look at the DrawFilm function please.
 		TODO - The functions I made don't work well for some reason.
-	
-	TODO - Position markup
-		At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos> I didn't see the end tag, and saw everything else that is past the first "<"
 
 	??? - Only one BGM can be played at once. This is a problem in times where two are playing, like the typing sound effect and the cicadas.
 
@@ -25,17 +22,14 @@
 			(A possible solution is to store x cordinates to start italics text)
 				// Here's the plan.
 				// Make another message array, but store text that is in italics in it
-	
+		TODO - Position markup
+			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 	TODO - Fix if statements that don't have brackets. To do so, first check if the previous line was an if statement. If it was, and this line isn't a bracket, add a then before this line and an end after this line
-
+	TODO - Investigate missing quotation marks after image characters
+	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width
 */
 
-
-#define MAXCHARSONLINE 60
-
-int LINEARRAYSIZE = ((MAXCHARSONLINE*2)+1);
-
-#define LINEARRAYSIZECONSTANT ((MAXCHARSONLINE*2)+1)
+#define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
 #include "_GeneralGoodConfiguration.h"
 
@@ -46,7 +40,7 @@ int LINEARRAYSIZE = ((MAXCHARSONLINE*2)+1);
 	void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd);
 	void SaveSettings();
 	void XOutFunction();
-	void DrawHistory(unsigned char _textStuffToDraw[][LINEARRAYSIZE]);
+	void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]);
 	void FixPath(char* filename,unsigned char _buffer[], char type);
 	void CheckTouchControls();
 	void DrawTouchControlsHelp();
@@ -177,7 +171,7 @@ lua_State* L;
 int endType;
 signed char useVsync=0;
 // ~60 chars per line???
-unsigned char currentMessages[15][LINEARRAYSIZECONSTANT];
+unsigned char currentMessages[15][SINGLELINEARRAYSIZE];
 int currentLine=0;
 int place=0;
 
@@ -251,6 +245,11 @@ unsigned short imageCharX[MAXIMAGECHAR] = {0};
 unsigned short imageCharY[MAXIMAGECHAR] = {0};
 // The character that the image character is. The values in here are one of the IMAGECHAR constants
 signed char imageCharType[MAXIMAGECHAR] = {0};
+// The line number the image chars are at. This is used when displaying the message in OutputLine
+unsigned short imageCharLines[MAXIMAGECHAR] = {0};
+// The character positions within the lines they're at. This is used when displayng the message in OutputLine. Image characters are 3 spaces in the message. This will refer to the first spot. 
+unsigned short imageCharCharPositions[MAXIMAGECHAR] = {0};
+
 #define IMAGECHARSTAR 1
 #define IMAGECHARNOTE 2
 #define IMAGECHARUNKNOWN 0
@@ -269,7 +268,7 @@ signed char cpuOverclocked=0;
 
 unsigned char graphicsLocation = LOCATION_CGALT;
 
-unsigned char messageHistory[MAXMESSAGEHISTORY][LINEARRAYSIZECONSTANT];
+unsigned char messageHistory[MAXMESSAGEHISTORY][SINGLELINEARRAYSIZE];
 unsigned char oldestMessage=0;
 
 #define TOUCHMODE_NONE 0
@@ -512,7 +511,7 @@ void ClearMessageArray(){
 			}
 		}
 		
-		for (j = 0; j < LINEARRAYSIZE; j++){
+		for (j = 0; j < SINGLELINEARRAYSIZE; j++){
 			currentMessages[i][j]='\0';
 		}
 	}
@@ -522,12 +521,6 @@ void ClearMessageArray(){
 }
 
 int GetNextCharOnLine(int _linenum){
-	if (_linenum==15){
-		_linenum=0;
-		currentLine=0;
-		ClearMessageArray();
-		return 0;
-	}
 	return u_strlen(currentMessages[_linenum]);
 }
 
@@ -549,7 +542,7 @@ void PrintScreenValues(){
 	system("cls");
 	int i,j;
 	for (i = 0; i < 15; i++){
-		for (j = 0; j < LINEARRAYSIZE; j++){
+		for (j = 0; j < SINGLELINEARRAYSIZE; j++){
 			printf("%d;",currentMessages[i][j]);
 		}
 		printf("\n");
@@ -1569,7 +1562,82 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	}
 }
 
-void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip){
+/*
+This code scans the string and marks the places where new lines are needed.
+What I should do is scan the string WHILE INTERPRETING NEWLINES AND MARKUP, find the places I need new lines, and write it all directly to the master message array.
+	While displaying, I have a variable that has the max char and max line. 
+*/
+
+//void ShowMessageWithPortrait(char* _tempMsg, char isQuestion, CrossTexture* portrait, double portScale){
+//	// The string needs to be copied. We're going to modify it, at we can't if we just type the string into the function and let the compiler do everything else
+//	char message[strlen(_tempMsg)+1];
+//	strcpy(message,_tempMsg);
+//	signed char currentSelected=defaultSelected;
+//	int textboxLinesPerScreens = (SCREENHEIGHT-TEXTBOXY)/TextHeight(fontSize);
+//	short newLineLocations[50];
+//	int totalMessageLength = strlen(message);
+//	int i, j;
+//
+//	// This will loop through the entire message, looking for where I need to add new lines. When it finds a spot that
+//	// needs a new line, that spot in the message will become 0. So, when looking for the place to 
+//	int lastNewlinePosition=-1; // If this doesn't start at -1, the first character will be cut off
+//	for (i = 0; i < totalMessageLength; i++){
+//		if (message[i]==32){ // Only check when we meet a space. 32 is a space in ASCII
+//			message[i]='\0';
+//			//printf("Space found at %d\n",i);
+//			//printf("%s\n",&message[lastNewlinePosition+1]);
+//			//printf("%d\n",TextWidth(fontSize,&(message[lastNewlinePosition+1])));
+//			if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>SCREENWIDTH-20){
+//				char _didWork=0;
+//				for (j=i-1;j>lastNewlinePosition+1;j--){
+//					//printf("J:%d\n",j);
+//					if (message[j]==32){
+//						message[j]='\0';
+//						_didWork=1;
+//						message[i]=32;
+//						lastNewlinePosition=j;
+//						break;
+//					}
+//				}
+//				if (_didWork==0){
+//					message[i]='\0';
+//					lastNewlinePosition=i+1;
+//				}
+//			}else{
+//				message[i]=32;
+//			}
+//		}
+//	}
+//	// This code will make a new line if there needs to be one because of the last word
+//	if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>SCREENWIDTH-20){
+//		for (j=totalMessageLength-1;j>lastNewlinePosition+1;j--){
+//			if (message[j]==32){
+//				message[j]='\0';
+//				break;
+//			}
+//		}
+//	}
+//
+//	// This spot in the message will be the one that's 0 char. The player won't be able to see this character.
+//	int currentLetter=0;
+//	int currentLine=0;
+//	signed int nextCharStorage=-1;
+//	char currentlyVisibleLines=1;
+//	char frames=0;
+//	// This variable is the location of the start of the first VISIBLE line
+//	// This will change if the text box has multiple screens because the text is too long
+//	int offsetStrlen=0;
+//	//  textboxNewCharSpeed
+//	
+//	nextCharStorage = message[0];
+//	message[0]='\0';
+//	while (1){
+//		// drawing and stuff code heres
+//	}
+//	return;
+//}
+
+void OutputLineOld(unsigned const char* message, char _endtypetemp, char _autoskip){
 	char waitingIsForShmucks=_autoskip;
 	if (isSkipping==1){
 		waitingIsForShmucks=1;
@@ -1592,7 +1660,7 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 		ControlsStart();
 		//
 
-		if (currentDisplayCharOnLine==MAXCHARSONLINE || (TextWidth(fontSize,(const char*)currentMessages[currentLine])>=screenWidth-100)){
+		if (currentDisplayCharOnLine==SINGLELINEARRAYSIZE || (TextWidth(fontSize,(const char*)currentMessages[currentLine])>=screenWidth-100)){
 			currentLine++;
 			currentChar = GetNextCharOnLine(currentLine);
 			currentDisplayCharOnLine=currentChar;
@@ -1600,9 +1668,9 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 
 		// If it's a new word, add a newline if the word will be cut off
 		if (message[i]==' '){
-			for (j=1;j<MAXCHARSONLINE+1;j++){
+			for (j=1;j<SINGLELINEARRAYSIZE+1;j++){
 				if (i+j>u_strlen(message)){
-					if (currentDisplayCharOnLine+j>=MAXCHARSONLINE){
+					if (currentDisplayCharOnLine+j>=SINGLELINEARRAYSIZE){
 						currentLine++;
 						currentChar = GetNextCharOnLine(currentLine);
 						currentDisplayCharOnLine=currentChar;
@@ -1610,8 +1678,8 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 					break;
 				}
 				if (message[i+j]==' '){
-					// Greater OR equal to MAXCHARSONLINE because I don't want to start a new line on a space
-					if (currentDisplayCharOnLine+j>=MAXCHARSONLINE){
+					// Greater OR equal to SINGLELINEARRAYSIZE because I don't want to start a new line on a space
+					if (currentDisplayCharOnLine+j>=SINGLELINEARRAYSIZE){
 						currentLine++;
 						currentChar = GetNextCharOnLine(currentLine);
 						currentDisplayCharOnLine=currentChar;
@@ -1703,6 +1771,274 @@ void OutputLine(unsigned const char* message, char _endtypetemp, char _autoskip)
 
 
 	}
+}
+
+// strcpy, but it won't copy from src to dest if the value is 1.
+// You can use this to exclude certian spots
+// I do not mean the ASCII character 1, which is 49.
+void strcpyNO1(char* dest, const char* src){
+	int i;
+	int _destCopyOffset=0;
+	int _srcStrlen = strlen(src);
+	for (i=0;i<_srcStrlen;i++){
+		if (src[i]!=1){
+			dest[_destCopyOffset]=src[i];
+			_destCopyOffset++;
+		}
+	}
+}
+// Same as strlen, but doesn't count any places with the value of 1 as a character.
+int strlenNO1(char* src){
+	int len=0;
+	int i;
+	for (i=0;;i++){
+		if (src[i]=='\0'){
+			break;
+		}else if (src[i]!=1){
+			len++;
+		}
+	}
+	return len;
+}
+
+#if PLATFORM == PLAT_WINDOWS
+	int _LagTestStart;
+	void LagTestStart(){
+		_LagTestStart = GetTicks();
+	}
+	void LagTestEnd(){
+		printf("lagometer: %d\n",GetTicks()-_LagTestStart);
+	}
+#endif
+
+void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
+	MessageBoxEnabled=1;
+
+	unsigned char message[strlen(_tempMsg)+1+strlen(currentMessages[currentLine])];
+	// This will make the start of the message have whatever the start of the line says.
+	// For example, if the line we're writing to already has "Keiichi is an idiot" written on it, that will be copied to the start of this message.
+	strcpy(message,currentMessages[currentLine]);
+	strcat(message,_tempMsg);
+	int totalMessageLength=strlen(message);
+
+	// These are used when we're displaying the message to the user
+	// Refer to the while loop near the end of this function.
+	int _currentDrawLine = currentLine;
+	int _currentDrawChar = GetNextCharOnLine(currentLine);
+
+	int i, j;
+	// This will loop through the entire message, looking for where I need to add new lines. When it finds a spot that
+	// needs a new line, that spot in the message will become 0. So, when looking for the place to 
+	int lastNewlinePosition=-1; // If this doesn't start at -1, the first character will be cut off. lastNewlinePosition+1 is always used, so a negative index won't be a problem.
+	for (i = strlen(currentMessages[currentLine]); i < totalMessageLength; i++){
+		if (message[i]==32){ // Only check when we meet a space. 32 is a space in ASCII
+			message[i]='\0';
+			// Check if the text has gone past the end of the screen OR we're out of array space for this line
+			if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET || i-lastNewlinePosition>=SINGLELINEARRAYSIZE-1){
+				char _didWork=0;
+				for (j=i-1;j>lastNewlinePosition+1;j--){
+					//printf("J:%d, M:%c\n",j,message[j]);
+					if (message[j]==32){
+						// j in message will now be the end point
+						message[j]='\0';
+						_didWork=1;
+						// Fix the thing we messed up, i is no longer the end point
+						message[i]=32;
+						// This code would copy 
+						strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
+						lastNewlinePosition=j;
+						currentLine++;
+						break;
+					}
+				}
+				if (_didWork==0){
+					//oh well. That's fine. We'll just copy it anyway.
+					strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
+					lastNewlinePosition=i;
+					currentLine++;
+				}
+				// TODO - Check if we're on the last line
+			}else{
+				message[i]=32;
+			}
+		}else{
+			// Don't do special checks if it is a normal English ASCII character
+			// Here we have special checks for stuff like image characters and new lines.
+			if (message[i]<65 || message[i]>122){
+				if (message[i]=='<'){
+					int k;
+					// Loop and look for the end
+					for (k=i+1;k<i+100;k++){
+						if (message[k]=='>'){
+							break;
+						}
+					}
+					if (k!=i+100){
+						memset(&(message[i]),1,k-i+1); // Because this starts at i, k being 11 with i as 10 would just write 1 byte, therefor missing the end '>'. THe fix is to add one.
+						i+=(k-i-1);
+					}
+				}else if (message[i]==226 && message[i+1]==128 && message[i+2]==148){ // Weird hyphen replace
+					i=i+2;
+					memset(&(message[i]),45,1); // Replace it with a normal hyphen
+					memset(&(message[i+1]),1,2); // Replace these with value 1
+				}else if (message[i]==226){ // COde for special image character
+					unsigned char _imagechartype;
+					if (message[i+1]==153 && message[i+2]==170){ // ♪
+						_imagechartype = IMAGECHARNOTE;
+					}else if (message[i+1]==152 && message[i+2]==134){ // ☆
+						_imagechartype = IMAGECHARSTAR;
+					}else{
+						printf("Unknown image char! %d;%d\n",message[i+1],message[i+2]);
+						_imagechartype = IMAGECHARUNKNOWN;
+					}
+					message[i]=0; // So we can use TextWidth
+					for (j=0;j<MAXIMAGECHAR;j++){
+						if (imageCharType[j]==-1){
+							imageCharX[j] = TextWidth(fontSize,&(message[lastNewlinePosition+1]))+MESSAGETEXTXOFFSET;
+							imageCharY[j] = TextHeight(fontSize)*currentLine+TextHeight(fontSize);
+							imageCharLines[j] = currentLine;
+							message[i]='\0';
+							imageCharCharPositions[j] = strlenNO1(&(message[lastNewlinePosition+1]));
+							imageCharType[j] = _imagechartype;
+							//printf("Asssigned line %d and pos %d\n",imageCharLines[j],imageCharCharPositions[j]);
+							break;
+						}
+					}
+					memset(&(message[i]),32,3);
+					i+=2;
+				}else if (message[i]=='\n'){ // Interpret new line
+					message[i]='\0';
+					strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
+					currentLine++;
+					lastNewlinePosition=i;
+				}
+			}
+		}
+	}
+	// This code will make a new line if there needs to be one because of the last word
+	if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET){
+		char _didWork=0;
+		for (j=totalMessageLength-1;j>lastNewlinePosition+1;j--){
+			if (message[j]==32){
+				// WWWWWWWWWWWWWWWWWWWWWWWW MION
+				message[j]='\0';
+				// Copy stuff before the split, this would copy the W characters
+				strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
+				currentLine++;
+				lastNewlinePosition=j;
+				_didWork=1;
+				// Copy stuff after the split, this would copy the MION
+				strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
+				break;
+			}
+		}
+		// Were we able to find a place to put a new line? If not, do this.
+		if (_didWork==0){
+			printf("did not work.\n");
+			// Just put as much as possible on one line.
+			for (i=lastNewlinePosition+1;i<totalMessageLength;i++){
+				char _tempCharCache = message[i];
+				message[i]='\0';
+				if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>screenWidth-MESSAGETEXTXOFFSET){
+					// What this means is that when only the string UP TO the last character was small enough. Now we have to replicate the behavior of the previous loop to get the shorter string.
+					char _tempCharCache2 = message[i-1];
+					message[i-1]='\0';
+					strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
+					message[i-1]=_tempCharCache2;
+					currentLine++;
+					lastNewlinePosition=i-2;
+				}else{
+					//printf("%d;%s\n",TextWidth(fontSize,&(message[lastNewlinePosition+1])));
+				}
+
+				message[i] = _tempCharCache;
+			}
+			// Copy whatever remains
+			strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
+		}
+	}else{
+		// Copy whatever is left. In a
+		// WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW(\n)NOOB
+		// example, NOOB will be copied. This is seperate from the code above. NOOB by itself does not need a new line.
+		strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
+	}
+	char _isDone=0;
+	while(_isDone==0){
+		FpsCapStart();
+
+		// The first one that takes two bytes is U+0080, or 0xC2 0x80
+		// If it is a two byte character, we don't want to try and draw when there's only one byte. Skip to include the next one.
+		if (currentMessages[_currentDrawChar][_currentDrawChar]>=0xC2){
+			_currentDrawChar++;
+		}
+
+		ControlsStart();
+		if (WasJustPressed(SCE_CTRL_CROSS)){
+			_isDone=1;
+		}
+		ControlsEnd();
+		
+		StartDrawingA();
+		if (currentBackground!=NULL){
+			DrawBackground(currentBackground);
+		}
+		
+		for (i = MAXBUSTS-1; i != -1; i--){
+			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1){
+				DrawBust(&(Busts[bustOrder[i]]));
+			}
+		}
+		
+		if (MessageBoxEnabled==1 && filterActive==0){
+			DrawMessageBox();
+		}
+		
+		for (i = MAXBUSTS-1; i != -1; i--){
+			if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
+				DrawBust(&(Busts[bustOrderOverBox[i]]));
+			}
+		}
+		
+		if (filterActive==1){
+			DrawCurrentFilter();
+		}
+		if (MessageBoxEnabled==1){
+			char _tempCharCache = currentMessages[_currentDrawLine][_currentDrawChar+1];
+			currentMessages[_currentDrawLine][_currentDrawChar+1]='\0';
+			for (i = 0; i <= _currentDrawLine; i++){
+				DrawText(MESSAGETEXTXOFFSET,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+			}
+			currentMessages[_currentDrawLine][_currentDrawChar+1]=_tempCharCache;
+			for (i=0;i<MAXIMAGECHAR;i++){
+				if (imageCharType[i]!=-1){
+					if ((imageCharLines[i]<_currentDrawLine) || (imageCharLines[i]==_currentDrawLine && imageCharCharPositions[i]<=_currentDrawChar)){
+						DrawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)TextWidth(fontSize,"   ")/ GetTextureWidth(imageCharImages[imageCharType[i]])),((double)TextHeight(fontSize)/GetTextureHeight(imageCharImages[imageCharType[i]])));
+					}
+				}
+			}
+		}
+		EndDrawingA();
+		
+		if (_isDone==0){
+			_currentDrawChar++;
+			// If the next char we're about to display is the end of the line
+			if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){
+				_currentDrawLine++;
+				// If we just passed the line we'll be writing to next time then we're done
+				if (_currentDrawLine==currentLine+1){
+					_isDone=1; // We will no longer increment the current character
+					_currentDrawLine-=1; // Fix this variable as we passed where we wanted to be
+					_currentDrawChar=strlen(currentMessages[_currentDrawLine]); // The character we're displaying is at the end
+				}else{ // Otherwise, start displaying at the start of the next line
+					_currentDrawChar=0;
+				}
+			}
+		}
+		FpsCapWait();
+	}
+
+	// End of function
+	endType = _endtypetemp;
 }
 
 void StopBGM(){
@@ -1812,7 +2148,7 @@ void LoadSettings(){
 	}
 }
 
-void DrawHistory(unsigned char _textStuffToDraw[][LINEARRAYSIZE]){
+void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 	ControlsEnd();
 	int _noobHeight = TextHeight(fontSize);
 	int _controlsStringWidth = TextWidth(fontSize,"UP and DOWN to scroll, "BACKBUTTONNAME" to return");
@@ -2599,7 +2935,6 @@ void MakeLuaUseful(){
 		LUAREGISTER(L_NotYet,"WaitForInput")
 		LUAREGISTER(L_NotYet,"WaitToFinishSEPlaying")
 		LUAREGISTER(L_NotYet,"WaitToFinishVoicePlaying")
-
 }
 
 //======================================================
@@ -3750,6 +4085,9 @@ signed char init(){
 	FixPath("Loading.png",globalTempConcat,TYPE_EMBEDDED);
 	loadingImage = LoadPNG((char*)globalTempConcat);
 
+	// This will also load the font size file and therefor must come before font loading
+	LoadSettings();
+
 	#if TEXTRENDERER == TEXT_DEBUG
 		FixPath("Font.png",globalTempConcat,TYPE_EMBEDDED);
 		fontImage=SafeLoadPNG((char*)globalTempConcat);
@@ -3762,9 +4100,6 @@ signed char init(){
 			fontImage = vita2d_load_font_file((char*)"app0:a/LiberationSans-Regular.ttf");
 		}
 	#endif
-
-	// This will also load the font size file
-	LoadSettings();
 
 	// We need this for any message display
 	currentTextHeight = TextHeight(fontSize);

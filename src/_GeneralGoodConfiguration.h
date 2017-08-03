@@ -29,7 +29,7 @@
 	#define TEXT_DEBUG 3
 
 	// CHANGE THIS IF YOU'RE COMPILING FOR A DIFFERENT PLATFORM
-	#define PRESET PRE_VITA
+	#define PRESET PRE_WINDOWS
 
 	// Constants that change the code so it runs on a specific platform
 	#if PRESET == PRE_VITA

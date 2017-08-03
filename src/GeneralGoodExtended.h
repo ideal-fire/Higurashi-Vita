@@ -179,7 +179,7 @@
 		#elif TEXTRENDERER == TEXT_VITA2D
 			return vita2d_font_text_height(fontImage,scale,"a");
 		#elif TEXTRENDERER == TEXT_FONTCACHE
-			return floor(FC_GetRealHeight(fontImage)*.75);
+			return floor(FC_GetRealHeight(fontImage)*.90);
 		#endif
 	}
 
