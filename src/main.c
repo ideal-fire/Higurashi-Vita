@@ -1,13 +1,13 @@
 /*
-
+	
 	TODO - Inversion
 		I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
 	
 	TODO - These are films. Look at the DrawFilm function please.
 		TODO - The functions I made don't work well for some reason.
-
+	
 	??? - Only one BGM can be played at once. This is a problem in times where two are playing, like the typing sound effect and the cicadas.
-
+	
 	(OPTIONAL TODO)
 		TODO - (optional) Garbage collector won't collect functions made in script files??? i.e: function hima_tips_09_b()
 			Maybe I can make a system similar to the one I made in MrDude that tracks all the global variables made between two points of time.
@@ -24,7 +24,6 @@
 				// Make another message array, but store text that is in italics in it
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
-	TODO - Fix if statements that don't have brackets. To do so, first check if the previous line was an if statement. If it was, and this line isn't a bracket, add a then before this line and an end after this line
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 */
 
@@ -855,11 +854,12 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 			ControlsStart();
 			#if PLATFORM != PLAT_WINDOWS
 				if (!IsDown(SCE_CTRL_SQUARE)){
+
 					isSkipping=0;
 				}
 			#endif
 			#if PLATFORM == PLAT_WINDOWS
-				if (!(IsDown(SCE_TOUCH) && (touchX<screenWidth*.25 && touchY<screenHeight*.20))){
+				if ( (  !(IsDown(SCE_TOUCH) && (touchX<screenWidth*.25 && touchY<screenHeight*.20)) ) && !(IsDown(SCE_CTRL_SQUARE))  ){
 					isSkipping=0;
 					PlayMenuSound();
 				}
@@ -1613,6 +1613,13 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	strcpy(message,currentMessages[currentLine]);
 	strcat(message,_tempMsg);
 	int totalMessageLength=strlen(message);
+
+	//printf("Total assembled: (START)%s(END)\n",message);
+
+	if (totalMessageLength==0){
+		endType = _endtypetemp;
+		return;
+	}
 
 	// These are used when we're displaying the message to the user
 	// Refer to the while loop near the end of this function.
