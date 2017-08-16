@@ -17,7 +17,7 @@
 		TODO - (Optional) Italics
 			OutputLine(NULL, "　……知レバ、…巻キ込マレテシマウ…。",
 			   NULL, "...<i>If she found out... she would become involved</i>...", Line_Normal);
-	
+
 			(Here's the problem, It'll be hard to draw non italics text and italics in the same line)
 			(A possible solution is to store x cordinates to start italics text)
 				// Here's the plan.
@@ -82,7 +82,7 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v1.7"
+#define VERSIONSTRING "v1.8"
 #define HISTORYONONESCREEN 13
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
@@ -168,7 +168,6 @@ lua_State* L;
 #define Line_Normal 2
 int endType;
 signed char useVsync=0;
-// ~60 chars per line???
 unsigned char currentMessages[15][SINGLELINEARRAYSIZE];
 int currentLine=0;
 int place=0;
@@ -780,6 +779,33 @@ signed char WaitCanSkip(int amount){
 	}
 	Wait(amount%50);
 	return 0;
+}
+
+void DrawUntilX(){
+	while (1){
+		FpsCapStart();
+
+		ControlsStart();
+		if (WasJustPressed(SCE_CTRL_CROSS) || isSkipping==1){
+			break;
+		}
+		ControlsEnd();
+
+		StartDrawingA();
+		Draw();
+		EndDrawingA();
+
+		FpsCapWait();
+	}
+	ControlsEnd();
+}
+
+void LastLineLazyFix(int* _line){
+	if (*_line==15){
+		DrawUntilX();
+		ClearMessageArray();
+		*_line=0;
+	}
 }
 
 void Update(){
@@ -1625,7 +1651,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	// Refer to the while loop near the end of this function.
 	int _currentDrawLine = currentLine;
 	int _currentDrawChar = GetNextCharOnLine(currentLine);
-
 	int i, j;
 	// This will loop through the entire message, looking for where I need to add new lines. When it finds a spot that
 	// needs a new line, that spot in the message will become 0. So, when looking for the place to 
@@ -1657,7 +1682,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 					lastNewlinePosition=i;
 					currentLine++;
 				}
-				// TODO - Check if we're on the last line
+				LastLineLazyFix(&currentLine);
 			}else{
 				message[i]=32;
 			}
@@ -1714,6 +1739,8 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				}
 			}
 		}
+
+		LastLineLazyFix(&currentLine);
 	}
 	// This code will make a new line if there needs to be one because of the last word
 	if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET){
@@ -1762,6 +1789,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		// example, NOOB will be copied. This is seperate from the code above. NOOB by itself does not need a new line.
 		strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
 	}
+	LastLineLazyFix(&currentLine);
 	
 	while(_isDone==0){
 		#if PLATFORM != PLAT_VITA
@@ -1770,7 +1798,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 
 		// The first one that takes two bytes is U+0080, or 0xC2 0x80
 		// If it is a two byte character, we don't want to try and draw when there's only one byte. Skip to include the next one.
-		if (currentMessages[_currentDrawChar][_currentDrawChar]>=0xC2){
+		if (currentMessages[_currentDrawLine][_currentDrawChar]>=0xC2){
 			_currentDrawChar++;
 		}
 
