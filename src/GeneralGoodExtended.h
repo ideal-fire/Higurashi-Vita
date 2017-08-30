@@ -1,14 +1,42 @@
 #ifndef GENERALGOODSTUFFEXTENDED
 #define GENERALGOODSTUFFEXTENDED
 
+	#define ISUSINGEXTENDED 1
+	
+	char* DATAFOLDER;
+	
+	// For FixPath argument
+	#define TYPE_UNDEFINED 0
+	#define TYPE_DATA 1
+	#define TYPE_EMBEDDED 2
+
+	#if DOFIXCOORDS == 1
+		int FixX(int x);
+		int FixY(int y);
+	#endif
+
+	#if DOFIXCOORDS == 1
+		void FixCoords(int* _x, int* _y){
+			*_x = FixX(*_x);
+			*_y = FixY(*_y);
+		}
+		#define EASYFIXCOORDS(x, y) FixCoords(x,y)
+	#else
+		#define EASYFIXCOORDS(x,y)
+	#endif
+
+
 	unsigned char isSkipping=0;
 	signed char InputValidity = 1;
-
 
 	int screenHeight = 544;
 	int screenWidth = 960;
 
 	#include <stdio.h>
+	#include <math.h>
+	#include <string.h>
+	#include <stdlib.h>
+	#include <unistd.h>
 
 	int SCE_TOUCH = 19;
 	int SCE_ANDROID_BACK = 20;
@@ -62,6 +90,10 @@
 			//int SCE_TOUCH = 19;
 		};
 	#endif
+	#if PLATFORM == PLAT_3DS
+		u32 pad;
+		u32 wasJustPad;
+	#endif
 
 	// Subplatform Stuff
 	#if SUBPLATFORM == SUB_ANDROID
@@ -69,6 +101,9 @@
 		#include <sys/stat.h>
 		// So we can see console output with adb logcat
 		#define printf SDL_Log
+
+		//#include <android/asset_manager.h>
+		//#include <android/asset_manager_jni.h>
 	#endif
 
 	// Renderer stuff
@@ -118,12 +153,13 @@
 		#define CrossFont vita2d_font
 	#endif
 
-	CrossFont* fontImage;
+	CrossFont* fontImage=NULL;
 	#if TEXTRENDERER == TEXT_DEBUG
 		float fontSize = 1.7;
 	#endif
 	#if TEXTRENDERER == TEXT_FONTCACHE
-		int fontSize = 32;
+		//int fontSize = 20;
+		int fontSize=50;
 	#endif
 	#if TEXTRENDERER == TEXT_VITA2D
 		int fontSize=32;
@@ -142,9 +178,39 @@
 		}
 	#endif
 
+	// May not actually quit out of the program. You still need to return from the main function
+	void Quit(lua_State* L){
+		lua_close(L);
+		#if RENDERER == REND_VITA2D
+			vita2d_fini();
+		#elif RENDERER == REND_SDL
+			//Destroy window
+			SDL_DestroyRenderer( mainWindowRenderer );
+			SDL_DestroyWindow( mainWindow );
+			mainWindow = NULL;
+			mainWindowRenderer = NULL;
+			// QUit SDL subsystems
+			IMG_Quit();
+		#elif RENDERER == REND_SF2D
+			sf2d_fini();
+		#endif
+		#if SOUNDPLAYER == SND_SDL
+			// TODO sdl mixer quit
+		#endif
+		#if PLATFORM == PLAT_WINDOWS
+			#if RENDERER == REND_SDL
+				SDL_Quit();
+			#else
+				printf("No quit function avalible for Windows without SDL.\n");
+			#endif
+		#elif PLATFORM == PLAT_VITA
+			sceKernelExitProcess(0);
+		#elif PLATFORM == PLAT_3DS
+			// Nothing needed for 3ds?
+		#endif
+	}
 
-
-	void StartDrawingA(){
+	void StartDrawing(){
 		#if RENDERER == REND_VITA2D
 			vita2d_start_drawing();
 			vita2d_clear_screen();
@@ -155,10 +221,10 @@
 		#endif
 	}
 	
-	void EndDrawingA(){
+	void EndDrawing(){
 
 		#if PLATFORM == PLAT_WINDOWS
-			DrawTouchControlsHelp();
+			//DrawTouchControlsHelp();
 		#endif
 
 		#if RENDERER == REND_VITA2D
@@ -179,7 +245,7 @@
 		#elif TEXTRENDERER == TEXT_VITA2D
 			return vita2d_font_text_height(fontImage,scale,"a");
 		#elif TEXTRENDERER == TEXT_FONTCACHE
-			return floor(FC_GetRealHeight(fontImage)*.90);
+			return floor(FC_GetRealHeight(fontImage));
 		#endif
 	}
 
@@ -204,6 +270,7 @@
 	#endif
 	void DrawText(int x, int y, const char* text, float size){
 		#if TEXTRENDERER == TEXT_VITA2D
+			EASYFIXCOORDS(&x,&y);
 			vita2d_font_draw_text(fontImage,x,y+TextHeight(size), RGBA8(255,255,255,255),floor(size),text);
 		#elif TEXTRENDERER == TEXT_DEBUG
 			int i=0;
@@ -211,12 +278,14 @@
 				DrawLetter(text[i],(x+(i*(8*size))+i),(y),size);
 			}
 		#elif TEXTRENDERER == TEXT_FONTCACHE
+			EASYFIXCOORDS(&x,&y);
 			FC_Draw(fontImage, mainWindowRenderer, x, y, "%s", text);
 		#endif
 	}
 	
 	void DrawTextColored(int x, int y, const char* text, float size, unsigned char r, unsigned char g, unsigned char b){
 		#if TEXTRENDERER == TEXT_VITA2D
+			EASYFIXCOORDS(&x,&y);
 			vita2d_font_draw_text(fontImage,x,y+TextHeight(size), RGBA8(r,g,b,255),floor(size),text);
 		#elif TEXTRENDERER == TEXT_DEBUG
 			int i=0;
@@ -226,6 +295,7 @@
 				notICounter++;
 			}
 		#elif TEXTRENDERER == TEXT_FONTCACHE
+			EASYFIXCOORDS(&x,&y);
 			SDL_Color _tempcolor;
 			_tempcolor.r = r;
 			_tempcolor.g = g;
@@ -297,7 +367,7 @@
 			SDL_Event e;
 			while( SDL_PollEvent( &e ) != 0 ){
 				if( e.type == SDL_QUIT ){
-					XOutFunction();
+					//XOutFunction();
 				}
 				#if PLATFORM == PLAT_WINDOWS
 					if( e.type == SDL_KEYDOWN ){
@@ -372,7 +442,7 @@
 
 		// Platform for ANDROID is also PLAT_WINDOWS
 		#if PLATFORM == PLAT_WINDOWS
-			CheckTouchControls();
+			//CheckTouchControls();
 		#endif
 
 	}
@@ -385,13 +455,27 @@
 		#endif
 	}
 
+	void ControlsResetFull(){
+		#if PLATFORM != PLAT_VITA
+			memset(&pad,0xFF,sizeof(pad));
+			memset(&lastPad,0xFF,sizeof(lastPad));
+		#elif PLATFORM == PLAT_VITA
+			memset(&pad.buttons,0xFF,sizeof(pad.buttons));
+			memset(&lastPad.buttons,0xFF,sizeof(pad.buttons));
+		#endif
+	}
+
 	void ControlsReset(){
+		ControlsResetFull();
+	}
+
+	void ControlsResetEmpty(){
 		#if PLATFORM != PLAT_VITA
 			memset(&pad,0,sizeof(pad));
 			memset(&lastPad,0,sizeof(lastPad));
 		#elif PLATFORM == PLAT_VITA
-			memset(&pad.buttons,0xFF,sizeof(pad.buttons));
-			memset(&lastPad.buttons,0xFF,sizeof(pad.buttons));
+			memset(&pad.buttons,0,sizeof(pad.buttons));
+			memset(&lastPad.buttons,0,sizeof(pad.buttons));
 		#endif
 	}
 
@@ -415,18 +499,56 @@
 		return 0;
 	}
 
-	// Checks if the byte is the one for a newline
-	// If it's 0D, it seeks past 0A
-	signed char IsNewLine(FILE* fp, unsigned char _temp){
-		if (_temp==13){
-			fseek(fp,1,SEEK_CUR);
-			return 1;
+	// Passed string should be freed already
+	void GenerateDefaultDataDirectory(char** _dataDirPointer, char useUma0){
+		#if SUBPLATFORM == SUB_ANDROID
+			*_dataDirPointer = malloc(strlen("/data/data/"ANDROIDPACKAGENAME"/"+1));
+			strcpy(*_dataDirPointer,"/data/data/"ANDROIDPACKAGENAME"/"+1);
+		#elif PLATFORM == PLAT_WINDOWS
+			*_dataDirPointer = malloc(strlen("./"+1));
+			strcpy(*_dataDirPointer,"./");
+		#elif PLATFORM == PLAT_VITA
+			if (useUma0){\
+				*_dataDirPointer = malloc(strlen("uma0:data/"VITAAPPID"/"+1));
+				strcpy(*_dataDirPointer,"uma0:data/"VITAAPPID"/");
+			}else{
+				*_dataDirPointer = malloc(strlen("ux0:data/"VITAAPPID"/"+1));
+				strcpy(*_dataDirPointer,"ux0:data/"VITAAPPID"/");
+			}
+		#endif
+	}
+
+	void FixPath(char* filename,char _buffer[], char type){
+		#if SUBPLATFORM == SUB_ANDROID
+			if (type==TYPE_DATA){
+				strcpy((char*)_buffer,DATAFOLDER);
+			}else if (type==TYPE_EMBEDDED){
+				strcpy((char*)_buffer,"");
+			}
+			strcat((char*)_buffer,filename);
+		#elif PLATFORM == PLAT_WINDOWS
+			if (type==TYPE_DATA){
+				strcpy((char*)_buffer,DATAFOLDER);
+			}else if (type==TYPE_EMBEDDED){
+				strcpy((char*)_buffer,"./");
+			}
+			strcat((char*)_buffer,filename);
+		#elif PLATFORM == PLAT_VITA
+			if (type==TYPE_DATA){
+				strcpy((char*)_buffer,DATAFOLDER);
+			}else if (type==TYPE_EMBEDDED){
+				strcpy((char*)_buffer,"app0:");
+			}
+			strcat((char*)_buffer,filename);
+		#endif
+	}
+
+	void MakeDataDirectory(){
+		char tempPathFixBuffer[256];
+		FixPath("",tempPathFixBuffer,TYPE_DATA);
+		if (DirectoryExists((const char*)tempPathFixBuffer)==0){
+			MakeDirectory((const char*)tempPathFixBuffer);
 		}
-		if (_temp=='\n' || _temp==10){
-			// It seems like the other newline char is skipped for me?
-			return 1;
-		}
-		return 0;
 	}
 
 #endif

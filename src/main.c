@@ -25,6 +25,10 @@
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
+
+
+	TODO - Make it so the user can use multiple StreamingAssets folders based on the preset name.
+		When the user chooses manual script selection, it will load the default StreamingAssets folder. If they want a different one, they press triangle and are brough to preset selection screen
 */
 
 #define SINGLELINEARRAYSIZE 121
@@ -39,7 +43,7 @@
 	void SaveSettings();
 	void XOutFunction();
 	void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]);
-	void FixPath(char* filename,unsigned char _buffer[], char type);
+	//void FixPath(char* filename,unsigned char _buffer[], char type);
 	void CheckTouchControls();
 	void DrawTouchControlsHelp();
 	void SaveGameEditor();
@@ -71,10 +75,6 @@
 #define LOCATION_CG 1
 #define LOCATION_CGALT 2
 
-#define TYPE_UNDEFINED 0
-#define TYPE_DATA 1
-#define TYPE_EMBEDDED 2
-
 /////////////////////////////////////
 #define MAXBUSTS 7
 #define MAXIMAGECHAR 20
@@ -82,7 +82,8 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v1.8"
+#define VERSIONSTRING "v1.9"
+#define ISUNSAFEBUILD 0
 #define HISTORYONONESCREEN 13
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
@@ -106,24 +107,11 @@
 
 //////////////
 // The STREAMINGASSETS variable is only used for images and sound
-#if PLATFORM == PLAT_VITA
-	char STREAMINGASSETS[] = "ux0:data/HIGURASHI/StreamingAssets/";
-	char PRESETFOLDER[] = "ux0:data/HIGURASHI/StreamingAssets/Presets/";
-	char SCRIPTFOLDER[] = "ux0:data/HIGURASHI/StreamingAssets/Scripts/";
-	char SAVEFOLDER[] = "ux0:data/HIGURASHI/Saves/";
-#elif PLATFORM == PLAT_WINDOWS
-	#if SUBPLATFORM == SUB_ANDROID
-		char STREAMINGASSETS[] = "/sdcard/HIGURASHI/StreamingAssets/";
-		char PRESETFOLDER[] = "/sdcard/HIGURASHI/StreamingAssets/Presets/";
-		char SCRIPTFOLDER[] = "/sdcard/HIGURASHI/StreamingAssets/Scripts/";
-		char SAVEFOLDER[] = "/sdcard/HIGURASHI/Saves/";
-	#else
-		char STREAMINGASSETS[] = "./StreamingAssets/";
-		char PRESETFOLDER[] = "./StreamingAssets/Presets/";
-		char SCRIPTFOLDER[] = "./StreamingAssets/Scripts/";
-		char SAVEFOLDER[] = "./Saves/";
-	#endif
-#endif
+// TODO - Generate these all using a root data directory.  b
+char* STREAMINGASSETS;
+char* PRESETFOLDER;
+char* SCRIPTFOLDER;
+char* SAVEFOLDER;
 
 /*
 CUSTOM INCLUDES
@@ -359,9 +347,9 @@ void WaitWithCodeEnd(int amount){
 
 // Draws the loading screen.
 void DrawLoadingScreen(){
-	StartDrawingA();
+	StartDrawing();
 	DrawTextureScaleSize(loadingImage,0,0,screenWidth,screenHeight);
-	EndDrawingA();
+	EndDrawing();
 }
 
 void SetDefaultFontSize(){
@@ -456,7 +444,7 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 			}
 		}
 		ControlsEnd();
-		StartDrawingA();
+		StartDrawing();
 		if (stra!=NULL){
 			DrawText(32,5+currentTextHeight*(0+2),stra,fontSize);
 		}
@@ -472,7 +460,7 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 		DrawText(0,screenHeight-32-currentTextHeight*(_choice+1),">",fontSize);
 		DrawText(32,screenHeight-32-currentTextHeight*2,"Yes",fontSize);
 		DrawText(32,screenHeight-32-currentTextHeight,"No",fontSize);
-		EndDrawingA();
+		EndDrawing();
 		FpsCapWait();
 	}
 	return 0;
@@ -630,11 +618,11 @@ int DidActuallyConvert(char* filepath){
 
 	int _isConverted=0;
 
-	StartDrawingA();
+	StartDrawing();
 	DrawText(32,50,"Checking if you actually converted the script...",fontSize);
 	DrawText(32,200,filepath,fontSize);
 	//void DrawText(int x, int y, const char* text, float size){
-	EndDrawingA();
+	EndDrawing();
 
 	while (fgets(line, sizeof(line), file)) {
 		printf("%s", line);
@@ -791,9 +779,9 @@ void DrawUntilX(){
 		}
 		ControlsEnd();
 
-		StartDrawingA();
+		StartDrawing();
 		Draw();
-		EndDrawingA();
+		EndDrawing();
 
 		FpsCapWait();
 	}
@@ -1049,22 +1037,22 @@ void RecalculateBustOrder(){
 	}
 }
 
-void MoveFilePointerPastNewline(FILE* fp){
+void MoveFilePointerPastNewline(CROSSFILE* fp){
 	unsigned char _temp;
-	fread(&_temp,1,1,fp);
+	Crossfread(&_temp,1,1,fp);
 	if (_temp==13){
-		fseek(fp,1,SEEK_CUR);
+		Crossfseek(fp,1,SEEK_CUR);
 	}
 }
 
 // LAST ARG IS WHERE THE LENGTH IS STORED
-unsigned char* ReadNumberStringList(FILE *fp, unsigned char* arraysize){
+unsigned char* ReadNumberStringList(CROSSFILE *fp, unsigned char* arraysize){
 	int numScripts;
 	char currentReadNumber[4];
 	// Add null for atoi
 	currentReadNumber[3]=0;
 
-	fread(&currentReadNumber,3,1,fp);
+	Crossfread(&currentReadNumber,3,1,fp);
 	numScripts = atoi(currentReadNumber);
 	MoveFilePointerPastNewline(fp);
 
@@ -1077,7 +1065,7 @@ unsigned char* ReadNumberStringList(FILE *fp, unsigned char* arraysize){
 
 	int i=0;
 	for (i=0;i<numScripts;i++){
-		fread(&currentReadNumber,3,1,fp);
+		Crossfread(&currentReadNumber,3,1,fp);
 		_thelist[i]=atoi(currentReadNumber);
 
 
@@ -1089,7 +1077,7 @@ unsigned char* ReadNumberStringList(FILE *fp, unsigned char* arraysize){
 	return _thelist;
 }
 
-char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
+char** ReadFileStringList(CROSSFILE *fp, unsigned char* arraysize){
 	char currentReadLine[200];
 	char currentReadNumber[4];
 	// Add null for atoi
@@ -1098,7 +1086,7 @@ char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 	int numScripts;
 
 	currentReadNumber[3]='\0';
-	fread(&currentReadNumber,3,1,fp);
+	Crossfread(&currentReadNumber,3,1,fp);
 	numScripts = atoi(currentReadNumber);
 	MoveFilePointerPastNewline(fp);
 	
@@ -1111,7 +1099,7 @@ char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 	int i=0;
 	for (i=0;i<numScripts;i++){
 		while (currentGameStatus!=GAMESTATUS_QUIT){
-			if (fread(&justreadbyte,1,1,fp)!=1){
+			if (Crossfread(&justreadbyte,1,1,fp)!=1){
 				break;
 			}
 			// Newline char
@@ -1139,8 +1127,8 @@ char** ReadFileStringList(FILE *fp, unsigned char* arraysize){
 
 void LoadPreset(char* filename){
 	//currentPresetFileList
-	FILE *fp;
-	fp = fopen(filename, "r");
+	CROSSFILE *fp;
+	fp = Crossfopen(filename, "r");
 	//fprintf(fp,"There are %d music deocoders available\n", Mix_GetNumMusicDecoders());
 	//int i;
 	
@@ -1164,7 +1152,7 @@ void LoadPreset(char* filename){
 	// tipnames
 	// string
 	// If it exists, read the tip's names
-	if (fread(tempreadstring,8,1,fp)==1){
+	if (Crossfread(tempreadstring,8,1,fp)==1){
 		MoveFilePointerPastNewline(fp);
 		if (strcmp(tempreadstring,"tipnames")==0){
 			currentPresetTipNameList.theArray = ReadFileStringList(fp,&currentPresetTipNameList.length);
@@ -1177,7 +1165,7 @@ void LoadPreset(char* filename){
 		tipNamesLoaded=0;
 	}
 
-	if (fread(tempreadstring,12,1,fp)==1){
+	if (Crossfread(tempreadstring,12,1,fp)==1){
 		MoveFilePointerPastNewline(fp);
 		if (strcmp(tempreadstring,"chapternames")==0){
 			currentPresetFileFriendlyList.theArray = ReadFileStringList(fp,&currentPresetFileFriendlyList.length);
@@ -1194,7 +1182,7 @@ void LoadPreset(char* filename){
 	//currentPresetFileFriendlyList
 
 
-	fclose(fp);
+	Crossfclose(fp);
 }
 
 void SetNextScriptName(){
@@ -1213,7 +1201,7 @@ void LazyMessage(const char* stra, const char* strb, const char* strc, const cha
 			break;
 		}
 		ControlsEnd();
-		StartDrawingA();
+		StartDrawing();
 		if (stra!=NULL){
 			DrawText(32,5+currentTextHeight*(0+2),stra,fontSize);
 		}
@@ -1227,7 +1215,7 @@ void LazyMessage(const char* stra, const char* strb, const char* strc, const cha
 			DrawText(32,5+currentTextHeight*(3+2),strd,fontSize);
 		}
 		DrawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.",fontSize);
-		EndDrawingA();
+		EndDrawing();
 		FpsCapWait();
 	}
 }
@@ -1259,16 +1247,15 @@ void SaveGame(){
 // Returns 1 for nonvital file missing
 // Returns 2 for vital file missing
 signed char CheckForUserStuff(){
-	
 	char _oneMissing = 0;
 	#if PLATFORM == PLAT_VITA
 		if (CheckFileExist("app0:a/LiberationSans-Regular.ttf")==0){
 			//LazyMessage("app0:a/LiberationSans-Regular.ttf", "is missing. This should've been in the VPK.","Please download the VPK again.",NULL);
 			CrossTexture* _nofonttext = SafeLoadPNG("app0:sce_sys/icon0.png");
 	
-			StartDrawingA();
+			StartDrawing();
 			DrawTexture(_nofonttext,32,32);
-			EndDrawingA();
+			EndDrawing();
 			
 			Wait(3000);
 			FreeTexture(_nofonttext);
@@ -1276,14 +1263,13 @@ signed char CheckForUserStuff(){
 		}
 	#endif
 
-	// This will make the string whatever prefix / HIGURASHI /
-	FixPath("",globalTempConcat,TYPE_DATA);
-
-	if (DirectoryExists((const char*)globalTempConcat)==0){
-		MakeDirectory((const char*)globalTempConcat);
+	// Make data folder if it doesn't exist
+	if (DirectoryExists(DATAFOLDER)==0){
+		MakeDirectory(DATAFOLDER);
 		_oneMissing=1;
 	}
 
+	// Check if StreamingAssets folder exists
 	FixPath("StreamingAssets/",globalTempConcat,TYPE_DATA);
 	if (DirectoryExists((const char*)globalTempConcat)==0){
 		#if PLATFORM  == PLAT_WINDOWS
@@ -1294,6 +1280,9 @@ signed char CheckForUserStuff(){
 			LazyMessage("Your screen resolution is",_tempResWidthString,"by",_tempResHeightString);
 		#endif
 		LazyMessage((const char*)globalTempConcat,"does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the system. Refer to thread for tutorial.");
+		#if ISUNSAFEBUILD
+			LazyMessage("uma0:data/HIGURASHI/","doesn't exist either.",NULL,NULL);
+		#endif
 		_oneMissing=1;
 	}
 	
@@ -1301,6 +1290,17 @@ signed char CheckForUserStuff(){
 	return _oneMissing;
 }
 
+void TryLoadMenuSoundEffect(){
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/","wa_038",".ogg");
+	if (CheckFileExist(tempstringconcat)){
+		menuSoundLoaded=1;
+		menuSound = LoadSound(tempstringconcat);
+		SetSFXVolume(menuSound,FixSEVolume(256));
+	}else{
+		menuSoundLoaded=0;
+	}
+	free(tempstringconcat);
+}
 
 //===================
 
@@ -1440,7 +1440,7 @@ void DrawScene(const char* _filename, int time){
 			_backgroundAlpha=255;
 		}
 		//int i;
-		StartDrawingA();
+		StartDrawing();
 		
 		if (currentBackground!=NULL){
 			DrawBackground(currentBackground);
@@ -1475,7 +1475,7 @@ void DrawScene(const char* _filename, int time){
 		if (MessageBoxEnabled==1){
 			DrawMessageText();
 		}
-		EndDrawingA();
+		EndDrawing();
 
 		ControlsStart();
 		if (WasJustPressed(SCE_CTRL_CROSS)){
@@ -1624,6 +1624,27 @@ int strlenNO1(char* src){
 		printf("lagometer: %d\n",GetTicks()-_LagTestStart);
 	}
 #endif
+
+// _dirRelativeToStreamingAssetsNoEndSlash should start AND END with a slash
+// Example
+// /SE/
+// DO NOT FIX THE SE VOLUME BEFORE PASSING ARGUMENT
+void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, const char* _dirRelativeToStreamingAssetsNoEndSlash){
+	if (soundEffects[passedSlot]!=NULL){
+		FreeSound(soundEffects[passedSlot]);
+		soundEffects[passedSlot]=NULL;
+	}
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, _dirRelativeToStreamingAssetsNoEndSlash,filename,".ogg");
+	if (CheckFileExist(tempstringconcat)==1){
+		soundEffects[passedSlot] = LoadSound(tempstringconcat);
+		SetSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
+		PlaySound(soundEffects[passedSlot],1);
+	}else{
+		WriteToDebugFile("SE file not found");
+		WriteToDebugFile(tempstringconcat);
+	}
+	free(tempstringconcat);
+}
 
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
 	// 1 when finished displaying the text
@@ -1808,7 +1829,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		}
 		ControlsEnd();
 		
-		StartDrawingA();
+		StartDrawing();
 		if (currentBackground!=NULL){
 			DrawBackground(currentBackground);
 		}
@@ -1847,7 +1868,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				}
 			}
 		}
-		EndDrawingA();
+		EndDrawing();
 		
 		if (_isDone==0){
 			_currentDrawChar++;
@@ -2009,7 +2030,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 		}
 		ControlsEnd();
 
-		StartDrawingA();
+		StartDrawing();
 
 		if (currentBackground!=NULL){
 			DrawBackground(currentBackground);
@@ -2040,38 +2061,10 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 		DrawRectangle((screenWidth-5),0,5,screenHeight,0,0,0,255);
 		DrawRectangle((screenWidth-5),floor(444*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,100,255,0,0,255);
 
-		EndDrawingA();
+		EndDrawing();
 
 		FpsCapWait();
 	}
-}
-
-// Type is TYPE_EMBEDDED for embedded file
-// Type TYPE_DATA is for ux0:data/HIGURASHI folder
-// filename should NOT start with a slash
-void FixPath(char* filename,unsigned char _buffer[], char type){
-	#if SUBPLATFORM == SUB_ANDROID
-		if (type==TYPE_DATA){
-			strcpy((char*)_buffer,"/sdcard/HIGURASHI/");
-		}else if (type==TYPE_EMBEDDED){
-			strcpy((char*)_buffer,"a/");
-		}
-		strcat((char*)_buffer,filename);
-	#elif PLATFORM == PLAT_WINDOWS
-		if (type==TYPE_DATA){
-			strcpy((char*)_buffer,"./");
-		}else if (type==TYPE_EMBEDDED){
-			strcpy((char*)_buffer,"./");
-		}
-		strcat((char*)_buffer,filename);
-	#elif PLATFORM == PLAT_VITA
-		if (type==TYPE_DATA){
-			strcpy((char*)_buffer,"ux0:data/HIGURASHI/");
-		}else if (type==TYPE_EMBEDDED){
-			strcpy((char*)_buffer,"app0:a/");
-		}
-		strcat((char*)_buffer,filename);
-	#endif
 }
 
 void ChangeEasyTouchMode(int _newControlValue){
@@ -2203,6 +2196,34 @@ void ChangeEasyTouchMode(int _newControlValue){
 		}
 	}
 #endif
+
+// FOLDER NAME SHOULD NOT END WITH SLASH
+void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName){
+	free(STREAMINGASSETS);
+	free(PRESETFOLDER);
+	free(SCRIPTFOLDER);
+	free(SAVEFOLDER);
+	
+	STREAMINGASSETS = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+2);
+	PRESETFOLDER = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+strlen("/Presets/")+1);
+	SCRIPTFOLDER = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+strlen("/Scripts/")+1);
+	SAVEFOLDER = malloc(strlen(DATAFOLDER)+strlen("Saves/")+1);
+	strcpy(STREAMINGASSETS,DATAFOLDER);
+	strcat(STREAMINGASSETS,_streamingAssetsFolderName);
+	strcat(STREAMINGASSETS,"/");
+
+	strcpy(PRESETFOLDER,DATAFOLDER);
+	strcat(PRESETFOLDER,_streamingAssetsFolderName);
+	strcat(PRESETFOLDER,"/Presets/");
+
+	strcpy(SCRIPTFOLDER,DATAFOLDER);
+	strcat(SCRIPTFOLDER,_streamingAssetsFolderName);
+	strcat(SCRIPTFOLDER,"/Scripts/");
+
+	strcpy(SAVEFOLDER,DATAFOLDER);
+	strcat(SAVEFOLDER,"Saves/");
+
+}
 
 /*
 =================================================
@@ -2394,24 +2415,16 @@ int L_FadeBustshot(lua_State* passedState){
 
 // Slot, file, volume
 int L_PlaySE(lua_State* passedState){
-	if (seVolume>0){
-		int passedSlot = lua_tonumber(passedState,1);
-		if (isSkipping==0){
-			if (soundEffects[passedSlot]!=NULL){
-				FreeSound(soundEffects[passedSlot]);
-				soundEffects[passedSlot]=NULL;
-			}
-			char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/",lua_tostring(passedState,2),".ogg");
-			if (CheckFileExist(tempstringconcat)==1){
-				soundEffects[passedSlot] = LoadSound(tempstringconcat);
-				SetSFXVolume(soundEffects[passedSlot],FixSEVolume(lua_tonumber(passedState,3)));
-				PlaySound(soundEffects[passedSlot],1);
-			}else{
-				WriteToDebugFile("SE file not found");
-				WriteToDebugFile(tempstringconcat);
-			}
-			free(tempstringconcat);
-		}
+	if (isSkipping==0 && seVolume>0){
+		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"/SE/");
+	}
+	return 0;
+}
+
+// PlayVoice(channel, filename, volume)
+int L_PlayVoice(lua_State* passedState){
+	if (isSkipping==0){
+		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"/voice/");
 	}
 	return 0;
 }
@@ -2548,7 +2561,7 @@ int L_Select(lua_State* passedState){
 			break;
 		}
 		ControlsEnd();
-		StartDrawingA();
+		StartDrawing();
 		DrawBackground(currentBackground);
 		if (MessageBoxEnabled==1){
 			DrawMessageBox();
@@ -2558,7 +2571,7 @@ int L_Select(lua_State* passedState){
 		}
 		DrawText(0,_choice*currentTextHeight,">",fontSize);
 
-		EndDrawingA();
+		EndDrawing();
 		FpsCapWait();
 	}
 
@@ -2775,7 +2788,7 @@ void Draw(){
 	int i;
 	//DrawTexture(testtex,32,32);
 
-	StartDrawingA();
+	StartDrawing();
 
 	if (currentBackground!=NULL){
 		DrawBackground(currentBackground);
@@ -2804,7 +2817,7 @@ void Draw(){
 	if (MessageBoxEnabled==1){
 		DrawMessageText();
 	}
-	EndDrawingA();
+	EndDrawing();
 }
 
 void LuaThread(char* _torun){
@@ -2840,6 +2853,7 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 			free(filenameholder[i]);
 		}
 		free(filenameholder);
+		*_chosenfile = NULL;
 		return 2;
 	}
 
@@ -2906,7 +2920,7 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 				break;		
 			}
 	
-			StartDrawingA();
+			StartDrawing();
 			//DrawText(20,20+TextHeight(fontSize)+i*(TextHeight(fontSize)),currentMessages[i],fontSize);
 			if (promptMessage!=NULL){
 				DrawText(32,5,promptMessage,fontSize);
@@ -2920,7 +2934,7 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 			}
 			DrawTextColored(32,5+currentTextHeight*((_choice-_tmpoffset)+2),filenameholder[_choice],fontSize,0,255,0);
 			DrawText(5,5+currentTextHeight*((_choice-_tmpoffset)+2),">",fontSize);
-			EndDrawingA();
+			EndDrawing();
 			ControlsEnd();
 			FpsCapWait();
 		}
@@ -2969,7 +2983,7 @@ void FontSizeSetup(){
 
 		//void itoa(int _num, char* _buffer, int _uselessBase){
 
-		StartDrawingA();
+		StartDrawing();
 		//void DrawText(int x, int y, const char* text, float size){
 		DrawText(32,currentTextHeight,"Font Size: ",fontSize);
 			DrawText(32+TextWidth(fontSize,"Font Size: "),currentTextHeight,_tempNumberString,fontSize);
@@ -2987,7 +3001,7 @@ void FontSizeSetup(){
 		DrawText(32,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn",fontSize);
 
 		DrawText(5,currentTextHeight*(_choice+1),">",fontSize);
-		EndDrawingA();
+		EndDrawing();
 		FpsCapWait();
 	}
 	SaveFontSizeFile();
@@ -3192,7 +3206,7 @@ void SettingsMenu(){
 		}
 
 		ControlsEnd();
-		StartDrawingA();
+		StartDrawing();
 		// Display sample Rena if changing bust location
 		if (_choice==3){
 			if (_canShowRena==1){
@@ -3241,7 +3255,7 @@ void SettingsMenu(){
 			DrawText(32,5+currentTextHeight*9,"Quit",fontSize);
 		}
 		DrawText(0,5+_choice*currentTextHeight,">",fontSize);
-		EndDrawingA();
+		EndDrawing();
 		FpsCapWait();
 	}
 	SaveSettings();
@@ -3314,7 +3328,9 @@ void TitleScreen(){
 				ControlsEnd();
 				char* _tempManualFileSelectionResult;
 				FileSelector(SCRIPTFOLDER,&_tempManualFileSelectionResult,(char*)"Select a script");
+				printf("got here\n");
 				if (_tempManualFileSelectionResult!=NULL){
+					printf("is here too\n");
 					ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 					currentGameStatus=GAMESTATUS_MAINGAME;
 					RunScript(SCRIPTFOLDER,_tempManualFileSelectionResult,0);
@@ -3336,7 +3352,7 @@ void TitleScreen(){
 		}
 		
 
-		StartDrawingA();
+		StartDrawing();
 
 		DrawText(32,5,"Main Menu",fontSize);
 
@@ -3349,7 +3365,7 @@ void TitleScreen(){
 		DrawText(5,screenHeight-5-currentTextHeight,SYSTEMSTRING,fontSize);
 
 		DrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
-		EndDrawingA();
+		EndDrawing();
 		ControlsEnd();
 		FpsCapWait();
 	}
@@ -3488,7 +3504,7 @@ void TipMenu(){
 
 
 		ControlsEnd();
-		StartDrawingA();
+		StartDrawing();
 		//DrawText(32,5+currentTextHeight*(0+2),"Tip: ",fontSize);
 		//DrawText(32+_tipcollinwidth,5+currentTextHeight*(0+2),_totalSelectedString,fontSize);
 		for (i = 0; i < 3; i++){
@@ -3506,7 +3522,7 @@ void TipMenu(){
 		DrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back",fontSize);
 		DrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select",fontSize);
 
-		EndDrawingA();
+		EndDrawing();
 		FpsCapWait();
 	}
 }
@@ -3593,7 +3609,7 @@ void ChapterJump(){
 			break;
 		}
 		ControlsEnd();
-		StartDrawingA();
+		StartDrawing();
 		
 		if (chapterNamesLoaded==0){
 			DrawText(32,5+currentTextHeight*(0+2),(const char*)globalTempConcat,fontSize);
@@ -3608,7 +3624,7 @@ void ChapterJump(){
 		DrawText(5,screenHeight-5-currentTextHeight*3,"R and Left or Right - Change chapter quickly",fontSize);
 		DrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back",fontSize);
 		DrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select",fontSize);
-		EndDrawingA();
+		EndDrawing();
 		FpsCapWait();
 	}
 }
@@ -3643,7 +3659,7 @@ void SaveGameEditor(){
 			break;
 		}
 		ControlsEnd();
-		StartDrawingA();
+		StartDrawing();
 		if (chapterNamesLoaded==0){
 			DrawText(32, currentTextHeight, _endOfChapterString, fontSize);
 		}else{
@@ -3654,7 +3670,7 @@ void SaveGameEditor(){
 		DrawText(32, screenHeight-currentTextHeight*3, "Welcome to the save file editor!", fontSize);
 		DrawText(32, screenHeight-currentTextHeight*2, SELECTBUTTONNAME" - Finish and save", fontSize);
 		DrawText(32, screenHeight-currentTextHeight, "Left and Right - Change last completed chapter", fontSize);
-		EndDrawingA();
+		EndDrawing();
 		FpsCapWait();
 	}
 }
@@ -3755,7 +3771,7 @@ void NavigationMenu(){
 			}
 		}
 		ControlsEnd();
-		StartDrawingA();
+		StartDrawing();
 
 		DrawText(32,0,"End of script: ",fontSize);
 		if (chapterNamesLoaded==0){
@@ -3773,7 +3789,7 @@ void NavigationMenu(){
 		DrawText(32,5+currentTextHeight*(2+2),"View Tips",fontSize);
 		DrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
 		DrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
-		EndDrawingA();
+		EndDrawing();
 		FpsCapWait();
 	}
 }
@@ -3799,12 +3815,12 @@ void NewGameMenu(){
 		}
 		ControlsEnd();
 
-		StartDrawingA();
+		StartDrawing();
 		DrawText(32,currentTextHeight,"NEW GAME",fontSize);
 		DrawText(32,currentTextHeight*3,"Start from beginning",fontSize);
 		DrawText(32,currentTextHeight*4,"Savegame Editor",fontSize);
 		DrawText(5,currentTextHeight*(_choice+3),">",fontSize);
-		EndDrawingA();
+		EndDrawing();
 
 		FpsCapWait();
 	}
@@ -3917,7 +3933,19 @@ signed char init(){
 	FixPath("Loading.png",globalTempConcat,TYPE_EMBEDDED);
 	loadingImage = LoadPNG((char*)globalTempConcat);
 
+	// Setup DATAFOLDER variable. Defaults to uma0 if it exists and it's unsafe build
+	#if ISUNSAFEBUILD
+		GenerateDefaultDataDirectory(&DATAFOLDER,1);
+		if (!DirectoryExists(DATAFOLDER)){
+			free(DATAFOLDER);
+			GenerateDefaultDataDirectory(&DATAFOLDER,0);
+		}
+	#else
+		GenerateDefaultDataDirectory(&DATAFOLDER,0);
+	#endif
+
 	// This will also load the font size file and therefor must come before font loading
+	// Will not crash if no settings found
 	LoadSettings();
 
 	#if TEXTRENDERER == TEXT_DEBUG
@@ -3960,13 +3988,10 @@ signed char init(){
 		SDL_SetTextureAlphaMod(textlogImage, 100);
 	#endif
 
+	// Checks if StreamingAssets and stuff exists.
+	// Informs the user if they don't.
 	char _tempCheckResult = CheckForUserStuff();
-	#if PLATFORM == PLAT_WINDOWS
-		if (_tempCheckResult==1){
-			return 2;
-		}
-	#endif
-	if (_tempCheckResult==2){
+	if ((_tempCheckResult==1 && PLATFORM == PLAT_WINDOWS) || _tempCheckResult==2){
 		return 2;
 	}
 
@@ -3978,16 +4003,20 @@ signed char init(){
 		Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, 2, 2048 );
 	#endif
 
+	// These will soon be freed
+	STREAMINGASSETS = malloc(1);
+	PRESETFOLDER = malloc(1);
+	SCRIPTFOLDER = malloc(1);
+	SAVEFOLDER = malloc(1);
+	// Make file paths with default StreamingAssets folder
+	GenerateStreamingAssetsPaths("StreamingAssets");
+	printf("%s\n",STREAMINGASSETS);
+	printf("%s\n",SAVEFOLDER);
+	printf("%s\n",PRESETFOLDER);
+	printf("%s\n",SCRIPTFOLDER);
+
 	// Load the menu sound effect if it's present
-	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/","wa_038",".ogg");
-	if (CheckFileExist(tempstringconcat)){
-		menuSoundLoaded=1;
-		menuSound = LoadSound(tempstringconcat);
-		SetSFXVolume(menuSound,FixSEVolume(256));
-	}else{
-		menuSoundLoaded=0;
-	}
-	free(tempstringconcat);
+	TryLoadMenuSoundEffect();
 
 	// Needed for any advanced message display
 	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("unknown.png");
@@ -4037,30 +4066,33 @@ signed char init(){
 int main(int argc, char *argv[]){
 	/* code */
 	if (init()==2){
-		#if SUBPLATFORM == SUB_ANDROID
-			#if RENDERER == REND_SDL
-				SDL_Quit();
-			#endif
-		#endif
-		return 1;
+		currentGameStatus = GAMESTATUS_QUIT;
 	}
 
-	
-
 	// Put stupid test stuff here
-
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
-			case 0:
+			case GAMESTATUS_TITLE:
 				TitleScreen();
 				break;
-			case 1:
+			case GAMESTATUS_LOADPRESET:
 				// Create the string for the full path of the preset file and load it
 				memset(&globalTempConcat,0,sizeof(globalTempConcat));
 				strcpy((char*)globalTempConcat,PRESETFOLDER);
 				strcat((char*)globalTempConcat,currentPresetFilename);
 				LoadPreset((char*)globalTempConcat);
-
+				// Next, we can try to switch the StreamingAssets directory to ux0:data/HIGURASHI/StreamingAssets_FILENAME/ if that directory exists
+				char _tempNewStreamingAssetsPathbuffer[256];
+				strcpy(_tempNewStreamingAssetsPathbuffer,DATAFOLDER);
+				strcat(_tempNewStreamingAssetsPathbuffer,"StreamingAssets_");
+				strcat(_tempNewStreamingAssetsPathbuffer,currentPresetFilename);
+				if (DirectoryExists(_tempNewStreamingAssetsPathbuffer)){
+					// The directory does exist. Construct the string for the new StreamingAssets folder and regenerate the path strings
+					strcpy(_tempNewStreamingAssetsPathbuffer,"StreamingAssets_");
+					strcat(_tempNewStreamingAssetsPathbuffer,currentPresetFilename);
+					GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer);
+				}
+			
 				// Does not load the savefile, I promise.
 				LoadGame();
 
@@ -4083,17 +4115,17 @@ int main(int argc, char *argv[]){
 				}
 				
 				break;
-			case 2:
+			case GAMESTATUS_PRESETSELECTION:
 				if (FileSelector(PRESETFOLDER,&currentPresetFilename,(char*)"Select a preset")==2){
 					ControlsEnd();
 					printf("No files were found\n");
-					StartDrawingA();
+					StartDrawing();
 					DrawText(32,5,"No presets found.",fontSize);
 					DrawText(32,TextHeight(fontSize)+5,(const char*)"If you ran the converter, you should've gotten some.",fontSize);
 					DrawText(32,TextHeight(fontSize)*2+10,(const char*)"You can manually put presets in:",fontSize);
 					DrawText(32,TextHeight(fontSize)*3+15,(const char*)PRESETFOLDER,fontSize);
 					DrawText(32,200,"Press "SELECTBUTTONNAME" to return",fontSize);
-					EndDrawingA();
+					EndDrawing();
 					
 					while (currentGameStatus!=GAMESTATUS_QUIT){
 						FpsCapStart();
@@ -4113,7 +4145,7 @@ int main(int argc, char *argv[]){
 					currentGameStatus=GAMESTATUS_LOADPRESET;
 				}
 				break;
-			case 3:
+			case GAMESTATUS_MAINGAME:
 				LuaThread((char*)nextScriptToLoad);
 
 				// If a preset is loaded, save the game. Otherwise, go to title
@@ -4124,11 +4156,11 @@ int main(int argc, char *argv[]){
 					currentGameStatus=GAMESTATUS_TITLE;
 				}
 				break;
-			case 4:
+			case GAMESTATUS_NAVIGATIONMENU:
 				// Menu for chapter jump, tip selection, and going to the next chapter
 				NavigationMenu();
 				break;
-			case 5:
+			case GAMESTATUS_TIPMENU:
 				// Menu for selecting tip to view
 				TipMenu();
 				break;

@@ -1,11 +1,13 @@
 #ifndef GENERALGOODCONFIGURATION
 #define GENERALGOODCONFIGURATION
 
+	#define ANDROIDPACKAGENAME "com.mylegguy.higurashi"
+	#define VITAAPPID "HIGURASHI"
+
 	#define PRE_UNDEFINED 0
 	#define PRE_WINDOWS 1
 	#define PRE_VITA 2
 	#define PRE_ANDROID 3
-
 
 	#define PLAT_UNDEFINED 0
 	#define PLAT_WINDOWS 1

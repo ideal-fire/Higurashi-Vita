@@ -1,7 +1,33 @@
 #ifndef GENERALGOODSTUFF
 #define GENERALGOODSTUFF
 
+	#ifndef ISUSINGEXTENDED
+		#define ISUSINGEXTENDED 0
+	#endif
+
+	#if ISUSINGEXTENDED == 0
+		int FixX(int x);
+		int FixY(int y);
+	#endif
+
+	#include <stdio.h>
+	#include <math.h>
+	#include <string.h>
+	#include <stdlib.h>
+	#include <unistd.h>
 	
+	#if ISUSINGEXTENDED == 0
+		#if DOFIXCOORDS == 1
+			void FixCoords(int* _x, int* _y){
+				*_x = FixX(*_x);
+				*_y = FixY(*_y);
+			}
+			#define EASYFIXCOORDS(x, y) FixCoords(x,y)
+		#else
+			#define EASYFIXCOORDS(x,y)
+		#endif
+	#endif
+
 	typedef uint8_t 	u8;
 	typedef uint16_t 	u16;
 	typedef uint32_t	u32;
@@ -10,7 +36,6 @@
 	typedef int16_t		s16;
 	typedef int32_t		s32;
 	typedef int64_t		s64;
-
 
 	// Waits for a number of miliseconds.
 	void Wait(int miliseconds){
@@ -68,8 +93,6 @@
 			} else {
 			    return 0;
 			}
-		#elif PLATFORM == PLAT_3DS
-			
 		#endif
 	}
 
@@ -100,6 +123,14 @@
 	== SOUND
 	=================================================
 	*/
+
+	void InitAudio(){
+		#if SOUNDPLAYER == SND_SDL
+			SDL_Init( SDL_INIT_AUDIO );
+			Mix_Init(MIX_INIT_OGG);
+			Mix_OpenAudio( 44100, MIX_DEFAULT_FORMAT, 2, 2048 );
+		#endif
+	}
 
 	int GetMusicVolume(){
 		#if SOUNDPLAYER == SND_SDL
@@ -208,7 +239,7 @@
 	void FreeTexture(CrossTexture* passedTexture){
 		#if RENDERER == REND_VITA2D
 			vita2d_wait_rendering_done();
-			//sceDisplayWaitVblankStart();
+			sceDisplayWaitVblankStart();
 			vita2d_free_texture(passedTexture);
 			passedTexture=NULL;
 		#elif RENDERER == REND_SDL
@@ -262,6 +293,7 @@
 	}
 
 	void DrawRectangle(int x, int y, int w, int h, int r, int g, int b, int a){
+		EASYFIXCOORDS(&x,&y);
 		#if RENDERER == REND_VITA2D
 			vita2d_draw_rectangle(x,y,w,h,RGBA8(r,g,b,a));
 		#elif RENDERER == REND_SDL
@@ -284,6 +316,7 @@
 	}
 	
 	void DrawTexture(CrossTexture* passedTexture, int _destX, int _destY){
+		EASYFIXCOORDS(&_destX,&_destY);
 		#if RENDERER == REND_VITA2D
 			vita2d_draw_texture(passedTexture,_destX,_destY);
 		#elif RENDERER == REND_SDL
@@ -309,6 +342,7 @@
 	
 	////////////////// ALPHA
 		void DrawTextureAlpha(CrossTexture* passedTexture, int _destX, int _destY, unsigned char alpha){
+			EASYFIXCOORDS(&_destX,&_destY);
 			#if RENDERER == REND_VITA2D
 				vita2d_draw_texture_tint(passedTexture,_destX,_destY,RGBA8(255,255,255,alpha));
 			#elif RENDERER == REND_SDL
@@ -336,6 +370,7 @@
 			#endif
 		}
 		void DrawTextureScaleAlpha(CrossTexture* passedTexture, int destX, int destY, float texXScale, float texYScale, unsigned char alpha){
+			EASYFIXCOORDS(&destX,&destY);
 			#if RENDERER == REND_VITA2D
 				vita2d_draw_texture_tint_scale(passedTexture,destX,destY,texXScale,texYScale,RGBA8(255,255,255,alpha));
 			#elif RENDERER == REND_SDL
@@ -363,6 +398,7 @@
 		}
 
 	void DrawTexturePartScale(CrossTexture* passedTexture, int destX, int destY, int texX, int texY, int texW, int texH, float texXScale, float texYScale){
+		EASYFIXCOORDS(&destX,&destY);
 		#if RENDERER == REND_VITA2D
 			vita2d_draw_texture_part_scale(passedTexture,destX,destY,texX,texY,texW, texH, texXScale, texYScale);
 		#elif RENDERER == REND_SDL
@@ -376,7 +412,7 @@
 		
 			_destRect.w=_srcRect.w*texXScale;
 			_destRect.h=_srcRect.h*texYScale;
-	
+			//printf("Dest dimensionds is %dx%d;%.6f;%.6f\n",_destRect.w,_destRect.h,texXScale,texYScale);
 			_destRect.x=destX;
 			_destRect.y=destY;
 	
@@ -387,6 +423,7 @@
 	}
 
 	void DrawTextureScaleTint(CrossTexture* passedTexture, int destX, int destY, float texXScale, float texYScale, unsigned char r, unsigned char g, unsigned char b){
+		EASYFIXCOORDS(&destX,&destY);
 		#if RENDERER == REND_VITA2D
 			vita2d_draw_texture_tint_scale(passedTexture,destX,destY,texXScale,texYScale,RGBA8(r,g,b,255));
 		#elif RENDERER == REND_SDL
@@ -416,6 +453,7 @@
 	}
 
 	void DrawTexturePartScaleTint(CrossTexture* passedTexture, int destX, int destY, int texX, int texY, int texW, int texH, float texXScale, float texYScale, unsigned char r, unsigned char g, unsigned b){
+		EASYFIXCOORDS(&destX,&destY);
 		#if RENDERER == REND_VITA2D
 			vita2d_draw_texture_tint_part_scale(passedTexture,destX,destY,texX,texY,texW, texH, texXScale, texYScale,RGBA8(r,g,b,255));
 		#elif RENDERER == REND_SDL
@@ -446,6 +484,7 @@
 	}
 	
 	void DrawTextureScale(CrossTexture* passedTexture, int destX, int destY, float texXScale, float texYScale){
+		EASYFIXCOORDS(&destX,&destY);
 		#if RENDERER == REND_VITA2D
 			vita2d_draw_texture_scale(passedTexture,destX,destY,texXScale,texYScale);
 		#elif RENDERER == REND_SDL
@@ -469,6 +508,7 @@
 	}
 
 	void DrawTextureScaleSize(CrossTexture* passedTexture, int destX, int destY, float texXScale, float texYScale){
+		EASYFIXCOORDS(&destX,&destY);
 		#if RENDERER == REND_VITA2D
 			vita2d_draw_texture_scale(passedTexture,destX,destY,texXScale/(double)GetTextureWidth(passedTexture),texYScale/(double)GetTextureHeight(passedTexture));
 		#elif RENDERER == REND_SDL
@@ -492,7 +532,8 @@
 	}
 	
 	// TODO MAKE ROTATE ON WINDOWS
-	void DrawTexturePartScaleRotate(CrossTexture* texture, float x, float y, float tex_x, float tex_y, float tex_w, float tex_h, float x_scale, float y_scale, float rad){
+	void DrawTexturePartScaleRotate(CrossTexture* texture, int x, int y, float tex_x, float tex_y, float tex_w, float tex_h, float x_scale, float y_scale, float rad){
+		EASYFIXCOORDS(&x,&y);
 		#if RENDERER == REND_VITA2D
 			vita2d_draw_texture_part_scale_rotate(texture,x,y,tex_x,tex_y,tex_w,tex_h,x_scale,y_scale,rad);
 		#elif RENDERER == REND_SDL
@@ -585,6 +626,102 @@
 			return 0;
 		}
 	}
+	/*
+	==========================================================
+	== CROSS PLATFORM FILE WRITING AND READING
+	==========================================================
+	*/
 
+	#if RENDERER == REND_SDL
+		#define CROSSFILE SDL_RWops
+		#define CROSSFILE_START RW_SEEK_SET
+		#define CROSSFILE_CUR RW_SEEK_CUR
+		#define CROSSFILE_END RW_SEEK_END
+	#else
+		#define CROSSFILE FILE
+		#define CROSSFILE_START SEEK_SET
+		#define CROSSFILE_CUR SEEK_CUR
+		#define CROSSFILE_END SEEK_END
+	#endif
+
+	// Returns number of elements read
+	size_t Crossfread(void* buffer, size_t size, size_t count, CROSSFILE* stream){
+		#if RENDERER == REND_SDL
+			return SDL_RWread(stream,buffer,size,count);
+		#else
+			return fread(buffer,size,count,stream);
+		#endif
+	}
+
+	CROSSFILE* Crossfopen(const char* filename, const char* mode){
+		#if RENDERER == REND_SDL
+			return SDL_RWFromFile(filename,mode);
+		#else
+			return fopen(filename,mode);
+		#endif
+	}
+
+	// Returns 0 on success.
+	// Returns negative number of failure
+	int Crossfclose(CROSSFILE* stream){
+		#if RENDERER == REND_SDL
+			return SDL_RWclose(stream);
+		#else
+			return fclose(stream);
+		#endif
+	}
+
+	// stream, offset, CROSSFILE_START, CROSSFILE_END, CROSSFILE_CUR
+	// For SDL, returns new position
+	// Otherwise, returns 0 when it works
+	int Crossfseek(CROSSFILE* stream, long int offset, int origin){
+		#if RENDERER == REND_SDL
+			return SDL_RWseek(stream,offset,origin);
+		#else
+			return fseek(stream,offset,origin);
+		#endif
+	}
+
+	long int Crossftell(CROSSFILE* fp){
+		#if RENDERER == REND_SDL
+			return Crossfseek(fp,0,CROSSFILE_CUR);
+		#else
+			return ftell(fp);
+		#endif
+	}
+
+	// No platform specific code here
+	int Crossgetc(CROSSFILE* fp){
+		char _readChar;
+		if (Crossfread(&_readChar,1,1,fp)==0){
+			return EOF;
+		}
+		return _readChar;
+	}
+
+	// No platform specific code here
+	char Crossfeof(CROSSFILE* fp){
+		if (Crossgetc(fp)==EOF){
+			return 1;
+		}
+		Crossfseek(fp,-1,CROSSFILE_CUR);
+		return 0;
+	}
+
+	// Checks if the byte is the one for a newline
+	// If it's 0D, it seeks past the 0A that it assumes is next and returns 1
+	// TODO - Add support for \r only new line. It's pre OSX new line
+	signed char IsNewLine(CROSSFILE* fp, unsigned char _temp){
+		if (_temp==0x0D){
+			//fseek(fp,1,SEEK_CUR);
+			Crossfseek(fp,1,CROSSFILE_CUR);
+			return 1;
+		}
+		if (_temp=='\n' || _temp==0x0A){
+			// It seems like the other newline char is skipped for me?
+			return 1;
+		}
+		return 0;
+	}
 
 #endif
