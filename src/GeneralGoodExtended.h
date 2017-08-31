@@ -49,6 +49,7 @@
 		#include <psp2/kernel/processmgr.h>
 		#include <psp2/rtc.h>
 		#include <psp2/types.h>
+		#include <psp2/display.h>
 		#include <psp2/touch.h>
 		#include <psp2/io/fcntl.h>
 		#include <psp2/io/dirent.h>
@@ -502,17 +503,17 @@
 	// Passed string should be freed already
 	void GenerateDefaultDataDirectory(char** _dataDirPointer, char useUma0){
 		#if SUBPLATFORM == SUB_ANDROID
-			*_dataDirPointer = malloc(strlen("/data/data/"ANDROIDPACKAGENAME"/"+1));
+			*_dataDirPointer = malloc(strlen("/data/data/"ANDROIDPACKAGENAME"/")+1);
 			strcpy(*_dataDirPointer,"/data/data/"ANDROIDPACKAGENAME"/"+1);
 		#elif PLATFORM == PLAT_WINDOWS
-			*_dataDirPointer = malloc(strlen("./"+1));
+			*_dataDirPointer = malloc(strlen("./")+1);
 			strcpy(*_dataDirPointer,"./");
 		#elif PLATFORM == PLAT_VITA
 			if (useUma0){\
-				*_dataDirPointer = malloc(strlen("uma0:data/"VITAAPPID"/"+1));
+				*_dataDirPointer = malloc(strlen("uma0:data/"VITAAPPID"/")+1);
 				strcpy(*_dataDirPointer,"uma0:data/"VITAAPPID"/");
 			}else{
-				*_dataDirPointer = malloc(strlen("ux0:data/"VITAAPPID"/"+1));
+				*_dataDirPointer = malloc(strlen("ux0:data/"VITAAPPID"/")+1);
 				strcpy(*_dataDirPointer,"ux0:data/"VITAAPPID"/");
 			}
 		#endif

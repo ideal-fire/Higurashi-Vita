@@ -28,12 +28,19 @@
 
 
 	TODO - Make it so the user can use multiple StreamingAssets folders based on the preset name.
-		When the user chooses manual script selection, it will load the default StreamingAssets folder. If they want a different one, they press triangle and are brough to preset selection screen
+		TODO - When the user chooses manual script selection, it will load the default StreamingAssets folder. If they want a different one, they press triangle and are brough to preset selection screen
+		TODO - If there's a preset folder at root of data directory, use that
 */
 
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
 #include "_GeneralGoodConfiguration.h"
+
+#if PLATFORM == PLAT_VITA
+	// SDL_Vita also has a StartDrawing method?
+	#define StartDrawing NOOBSTARTDRAWING
+	#define EndDrawing NOOBENDDRAWING
+#endif
 
 // main.h
 	void Draw();
@@ -82,8 +89,8 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v1.9"
-#define ISUNSAFEBUILD 0
+#define VERSIONSTRING "v1.9" // This
+#define ISUNSAFEBUILD 0 // This
 #define HISTORYONONESCREEN 13
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
@@ -3965,16 +3972,16 @@ signed char init(){
 	currentTextHeight = TextHeight(fontSize);
 
 	#if PLATFORM == PLAT_WINDOWS
-		controlsUpImage = LoadEmbeddedPNG("controlsUpImage.png");
-		controlsDownImage = LoadEmbeddedPNG("controlsDownImage.png");
-		controlsLeftImage = LoadEmbeddedPNG("controlsLeftImage.png");
-		controlsRightImage = LoadEmbeddedPNG("controlsRightImage.png");
-		controlsBackImage = LoadEmbeddedPNG("controlsBackImage.png");
-		controlsSelectImage = LoadEmbeddedPNG("controlsSelectImage.png");
-		controlsMenuImage = LoadEmbeddedPNG("controlsMenuImage.png");
-		autoImage = LoadEmbeddedPNG("autoImage.png");
-		skipImage = LoadEmbeddedPNG("skipImage.png");
-		textlogImage = LoadEmbeddedPNG("textlogImage.png");
+		controlsUpImage = LoadEmbeddedPNG("a/controlsUpImage.png");
+		controlsDownImage = LoadEmbeddedPNG("a/controlsDownImage.png");
+		controlsLeftImage = LoadEmbeddedPNG("a/controlsLeftImage.png");
+		controlsRightImage = LoadEmbeddedPNG("a/controlsRightImage.png");
+		controlsBackImage = LoadEmbeddedPNG("a/controlsBackImage.png");
+		controlsSelectImage = LoadEmbeddedPNG("a/controlsSelectImage.png");
+		controlsMenuImage = LoadEmbeddedPNG("a/controlsMenuImage.png");
+		autoImage = LoadEmbeddedPNG("a/autoImage.png");
+		skipImage = LoadEmbeddedPNG("a/skipImage.png");
+		textlogImage = LoadEmbeddedPNG("a/textlogImage.png");
 
 		SDL_SetTextureAlphaMod(controlsUpImage, 100);
 		SDL_SetTextureAlphaMod(controlsDownImage, 100);
@@ -4019,9 +4026,9 @@ signed char init(){
 	TryLoadMenuSoundEffect();
 
 	// Needed for any advanced message display
-	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("unknown.png");
-	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("note.png");
-	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("star.png");
+	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("a/unknown.png");
+	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("a/note.png");
+	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("a/star.png");
 
 	// Zero the image char arrray
 	for (i=0;i<MAXIMAGECHAR;i++){
