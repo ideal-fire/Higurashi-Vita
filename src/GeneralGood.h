@@ -107,16 +107,17 @@
 			#endif
 		#endif
 	}
-
-	void QuitApplication(){
-		#if RENDERER == REND_SDL
-			SDL_Quit();
-		#elif PLATFORM == PLAT_VITA
-			sceKernelExitProcess(0);
-		#else
-			printf("No quit function avalible.");
-		#endif
-	}
+	#ifndef ISUSINGEXTENDED
+		void QuitApplication(){
+			#if RENDERER == REND_SDL
+				SDL_Quit();
+			#elif PLATFORM == PLAT_VITA
+				sceKernelExitProcess(0);
+			#else
+				printf("No quit function avalible.");
+			#endif
+		}
+	#endif
 
 	/*
 	================================================

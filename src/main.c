@@ -269,6 +269,8 @@ unsigned char oldestMessage=0;
 #define TOUCHMODE_LEFTRIGHTSELECT 3
 unsigned char easyTouchControlMode = TOUCHMODE_MENU;
 
+char presetsAreInStreamingAssets=1;
+
 float bgmVolume = 0.75;
 float seVolume = 1.0;
 
@@ -374,7 +376,7 @@ void SetDefaultFontSize(){
 void ReloadFont(){
 	DrawLoadingScreen();
 	#if TEXTRENDERER == TEXT_FONTCACHE
-		FixPath("LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
+		FixPath("a/LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
 		FC_FreeFont(fontImage);
 		fontImage = NULL;
 		fontImage = FC_CreateFont();
@@ -688,7 +690,8 @@ void PrintDebugCounter(){
 	_debugCount++;
 }
 
-void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
+// Returns 1 if it worked
+char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	ClearMessageArray();	
 	currentScriptLine=0;
 	char tempstringconcat[strlen(_scriptfolderlocation)+strlen(filename)+strlen(".txt")+1];
@@ -725,7 +728,7 @@ void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 			break;
 		}
 		currentGameStatus=GAMESTATUS_TITLE;
-		return;
+		return 0;
 	}
 	
 	int _pcallResult = lua_pcall(L, 0, LUA_MULTRET, 0);
@@ -733,7 +736,7 @@ void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 		printf("Failed pcall!\n");
 		DisplaypcallError(_pcallResult,"This is the first lua_pcall in RunScript.");
 		currentGameStatus=GAMESTATUS_TITLE;
-		return;
+		return 0;
 	}
 
 	//if (SafeLuaDoFile(L,tempstringconcat)==0){
@@ -747,6 +750,7 @@ void RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	if (_pcallResult!=LUA_OK){
 		DisplaypcallError(_pcallResult,"This is the second lua_pcall in RunScript.");
 	}
+	return 1;
 }
 
 char* CombineStringsPLEASEFREE(const char* first, const char* firstpointfive, const char* second, const char* third){
@@ -1197,6 +1201,20 @@ void SetNextScriptName(){
 	strcpy((char*)nextScriptToLoad,currentPresetFileList.theArray[currentPresetChapter]);
 }
 
+// Generates the default data paths for script, presets, etc
+// Will use uma0 if possible
+void ResetDataDirectory(){
+	#if ISUNSAFEBUILD
+		GenerateDefaultDataDirectory(&DATAFOLDER,1);
+		if (!DirectoryExists(DATAFOLDER)){
+			free(DATAFOLDER);
+			GenerateDefaultDataDirectory(&DATAFOLDER,0);
+		}
+	#else
+		GenerateDefaultDataDirectory(&DATAFOLDER,0);
+	#endif
+}
+
 void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd){
 	ControlsStart();
 	ControlsEnd();
@@ -1204,6 +1222,7 @@ void LazyMessage(const char* stra, const char* strb, const char* strc, const cha
 		FpsCapStart();
 		ControlsStart();
 		if (WasJustPressed(SCE_CTRL_CROSS)){
+			ControlsStart();
 			ControlsEnd();
 			break;
 		}
@@ -1277,20 +1296,22 @@ signed char CheckForUserStuff(){
 	}
 
 	// Check if StreamingAssets folder exists
-	FixPath("StreamingAssets/",globalTempConcat,TYPE_DATA);
-	if (DirectoryExists((const char*)globalTempConcat)==0){
-		#if PLATFORM  == PLAT_WINDOWS
-			char _tempResWidthString[20];
-			char _tempResHeightString[20];
-			itoa(screenWidth,_tempResWidthString,10);
-			itoa(screenHeight,_tempResHeightString,10);
-			LazyMessage("Your screen resolution is",_tempResWidthString,"by",_tempResHeightString);
-		#endif
-		LazyMessage((const char*)globalTempConcat,"does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the system. Refer to thread for tutorial.");
-		#if ISUNSAFEBUILD
-			LazyMessage("uma0:data/HIGURASHI/","doesn't exist either.",NULL,NULL);
-		#endif
-		_oneMissing=1;
+	if (presetsAreInStreamingAssets==0){
+		FixPath("StreamingAssets/",globalTempConcat,TYPE_DATA);
+		if (DirectoryExists((const char*)globalTempConcat)==0){
+			#if PLATFORM  == PLAT_WINDOWS
+				char _tempResWidthString[20];
+				char _tempResHeightString[20];
+				itoa(screenWidth,_tempResWidthString,10);
+				itoa(screenHeight,_tempResHeightString,10);
+				LazyMessage("Your screen resolution is",_tempResWidthString,"by",_tempResHeightString);
+			#endif
+			LazyMessage((const char*)globalTempConcat,"does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the system. Refer to thread for tutorial.");
+			#if ISUNSAFEBUILD
+				LazyMessage("uma0:data/HIGURASHI/","doesn't exist either.",NULL,NULL);
+			#endif
+			_oneMissing=1;
+		}
 	}
 	
 
@@ -2126,7 +2147,6 @@ void ChangeEasyTouchMode(int _newControlValue){
 					if (touchY<screenHeight*.20){
 						if (touchX>screenWidth*.75){
 							ChangeEasyTouchMode(TOUCHMODE_MENU);
-							ControlsReset();
 							SettingsMenu();
 							ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 						}else if (touchX>screenWidth*.50){
@@ -2220,8 +2240,15 @@ void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName){
 	strcat(STREAMINGASSETS,"/");
 
 	strcpy(PRESETFOLDER,DATAFOLDER);
-	strcat(PRESETFOLDER,_streamingAssetsFolderName);
-	strcat(PRESETFOLDER,"/Presets/");
+	strcat(PRESETFOLDER,"Presets/");
+	if (!DirectoryExists(PRESETFOLDER)){
+		strcpy(PRESETFOLDER,DATAFOLDER);
+		strcat(PRESETFOLDER,_streamingAssetsFolderName);
+		strcat(PRESETFOLDER,"/Presets/");
+		presetsAreInStreamingAssets=1;
+	}else{
+		presetsAreInStreamingAssets=0;
+	}
 
 	strcpy(SCRIPTFOLDER,DATAFOLDER);
 	strcat(SCRIPTFOLDER,_streamingAssetsFolderName);
@@ -2229,7 +2256,19 @@ void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName){
 
 	strcpy(SAVEFOLDER,DATAFOLDER);
 	strcat(SAVEFOLDER,"Saves/");
+}
 
+void UpdatePresetStreamingAssetsDir(char* filename){
+	char _tempNewStreamingAssetsPathbuffer[256];
+	strcpy(_tempNewStreamingAssetsPathbuffer,DATAFOLDER);
+	strcat(_tempNewStreamingAssetsPathbuffer,"StreamingAssets_");
+	strcat(_tempNewStreamingAssetsPathbuffer,filename);
+	if (DirectoryExists(_tempNewStreamingAssetsPathbuffer)){
+		// The directory does exist. Construct the string for the new StreamingAssets folder and regenerate the path strings
+		strcpy(_tempNewStreamingAssetsPathbuffer,"StreamingAssets_");
+		strcat(_tempNewStreamingAssetsPathbuffer,filename);
+		GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer);
+	}
 }
 
 /*
@@ -2827,8 +2866,9 @@ void Draw(){
 	EndDrawing();
 }
 
-void LuaThread(char* _torun){
-	RunScript(SCRIPTFOLDER, _torun,1);
+// Returns what RunScript returns
+char LuaThread(char* _torun){
+	return RunScript(SCRIPTFOLDER, _torun,1);
 }
 
 // Returns 0 if normal
@@ -2873,8 +2913,6 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 	DirectoryClose (dir);
 	
 	totalFiles = i;
-	printf("%d files in total\n",totalFiles);
-
 
 	if (totalFiles==0){
 		LazyMessage("No files found.",NULL,NULL,NULL);
@@ -3331,19 +3369,33 @@ void TitleScreen(){
 				break;
 			}else if (_choice==1){
 				PlayMenuSound();
-				printf("Manual script selection\n");
+				if (!DirectoryExists(SCRIPTFOLDER)){
+					ControlsEnd();
+					char* _tempChosenFile;
+					if (FileSelector(PRESETFOLDER,&_tempChosenFile,(char*)"Select a preset to choose StreamingAssets folder")==2){
+						LazyMessage(SCRIPTFOLDER,"does not exist and no files in",PRESETFOLDER,"Do you have any files?");
+						continue;
+					}else{
+						if (_tempChosenFile==NULL){
+							continue;
+						}
+						UpdatePresetStreamingAssetsDir(_tempChosenFile);
+						free(_tempChosenFile);
+					}
+				}
 				ControlsEnd();
 				char* _tempManualFileSelectionResult;
 				FileSelector(SCRIPTFOLDER,&_tempManualFileSelectionResult,(char*)"Select a script");
-				printf("got here\n");
 				if (_tempManualFileSelectionResult!=NULL){
-					printf("is here too\n");
 					ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 					currentGameStatus=GAMESTATUS_MAINGAME;
 					RunScript(SCRIPTFOLDER,_tempManualFileSelectionResult,0);
 					free(_tempManualFileSelectionResult);
 					currentGameStatus=GAMESTATUS_TITLE;
 					ChangeEasyTouchMode(TOUCHMODE_MENU);
+				}
+				if (presetsAreInStreamingAssets==0){ // If the presets are not specific to a StreamingAssets folder, that means that the user could be using a different StreamingAssets folder. Reset paths just in case.
+					GenerateStreamingAssetsPaths("StreamingAssets");
 				}
 			}else if (_choice==3){ // Quit button
 				currentGameStatus=GAMESTATUS_QUIT;
@@ -3379,8 +3431,6 @@ void TitleScreen(){
 }
 
 void TipMenu(){
-	ControlsReset();
-
 	ClearMessageArray();
 	if (currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
 		LazyMessage("No tips unlocked.",NULL,NULL,NULL);
@@ -3937,26 +3987,18 @@ signed char init(){
 	SetClearColor(0,0,0,255);
 
 	// We need this for ReloadFont();
-	FixPath("Loading.png",globalTempConcat,TYPE_EMBEDDED);
+	FixPath("a/Loading.png",globalTempConcat,TYPE_EMBEDDED);
 	loadingImage = LoadPNG((char*)globalTempConcat);
 
 	// Setup DATAFOLDER variable. Defaults to uma0 if it exists and it's unsafe build
-	#if ISUNSAFEBUILD
-		GenerateDefaultDataDirectory(&DATAFOLDER,1);
-		if (!DirectoryExists(DATAFOLDER)){
-			free(DATAFOLDER);
-			GenerateDefaultDataDirectory(&DATAFOLDER,0);
-		}
-	#else
-		GenerateDefaultDataDirectory(&DATAFOLDER,0);
-	#endif
+	ResetDataDirectory();
 
 	// This will also load the font size file and therefor must come before font loading
 	// Will not crash if no settings found
 	LoadSettings();
 
 	#if TEXTRENDERER == TEXT_DEBUG
-		FixPath("Font.png",globalTempConcat,TYPE_EMBEDDED);
+		FixPath("a/Font.png",globalTempConcat,TYPE_EMBEDDED);
 		fontImage=SafeLoadPNG((char*)globalTempConcat);
 	#elif TEXTRENDERER == TEXT_FONTCACHE
 		// Make sure it's null beforehand so the free function in the reload function does nothing
@@ -4089,16 +4131,7 @@ int main(int argc, char *argv[]){
 				strcat((char*)globalTempConcat,currentPresetFilename);
 				LoadPreset((char*)globalTempConcat);
 				// Next, we can try to switch the StreamingAssets directory to ux0:data/HIGURASHI/StreamingAssets_FILENAME/ if that directory exists
-				char _tempNewStreamingAssetsPathbuffer[256];
-				strcpy(_tempNewStreamingAssetsPathbuffer,DATAFOLDER);
-				strcat(_tempNewStreamingAssetsPathbuffer,"StreamingAssets_");
-				strcat(_tempNewStreamingAssetsPathbuffer,currentPresetFilename);
-				if (DirectoryExists(_tempNewStreamingAssetsPathbuffer)){
-					// The directory does exist. Construct the string for the new StreamingAssets folder and regenerate the path strings
-					strcpy(_tempNewStreamingAssetsPathbuffer,"StreamingAssets_");
-					strcat(_tempNewStreamingAssetsPathbuffer,currentPresetFilename);
-					GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer);
-				}
+				UpdatePresetStreamingAssetsDir(currentPresetFilename);
 			
 				// Does not load the savefile, I promise.
 				LoadGame();
@@ -4153,12 +4186,23 @@ int main(int argc, char *argv[]){
 				}
 				break;
 			case GAMESTATUS_MAINGAME:
-				LuaThread((char*)nextScriptToLoad);
-
-				// If a preset is loaded, save the game. Otherwise, go to title
+				; // This blank statement is here to allow me to declare a variable. Variables can not be declared directly after a label.
+				char _didWork = LuaThread((char*)nextScriptToLoad);
 				if (currentPresetFileList.length!=0){
-					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
-					SaveGame();
+					if (_didWork==0){ // If the script didn't run, don't advance the game
+						currentPresetChapter--; // Go back a script
+						if (currentPresetChapter<0 || currentPresetChapter==255){ // o, no, we've gone back too far!
+							LazyMessage("So... the first script failed to launch.","You now have the info on why, so go","try and fix it.","Pressing X will close the application.");
+							currentGameStatus=GAMESTATUS_QUIT;
+						}else{
+							currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
+						}
+					}else{
+						SaveGame();
+					}
+					if (currentGameStatus!=GAMESTATUS_QUIT){
+						currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
+					}
 				}else{
 					currentGameStatus=GAMESTATUS_TITLE;
 				}
@@ -4174,6 +4218,6 @@ int main(int argc, char *argv[]){
 		}
 	}
 	printf("ENDGAME\n");
-	QuitApplication();
+	QuitApplication(L);
 	return 0;
 }

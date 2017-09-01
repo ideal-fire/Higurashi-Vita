@@ -1,6 +1,5 @@
 #ifndef GENERALGOODSTUFFEXTENDED
 #define GENERALGOODSTUFFEXTENDED
-
 	#define ISUSINGEXTENDED 1
 	
 	char* DATAFOLDER;
@@ -180,7 +179,7 @@
 	#endif
 
 	// May not actually quit out of the program. You still need to return from the main function
-	void Quit(lua_State* L){
+	void QuitApplication(lua_State* L){
 		lua_close(L);
 		#if RENDERER == REND_VITA2D
 			vita2d_fini();
@@ -223,11 +222,9 @@
 	}
 	
 	void EndDrawing(){
-
 		#if PLATFORM == PLAT_WINDOWS
-			//DrawTouchControlsHelp();
+			DrawTouchControlsHelp();
 		#endif
-
 		#if RENDERER == REND_VITA2D
 			vita2d_end_drawing();
 			vita2d_swap_buffers();
@@ -443,7 +440,7 @@
 
 		// Platform for ANDROID is also PLAT_WINDOWS
 		#if PLATFORM == PLAT_WINDOWS
-			//CheckTouchControls();
+			CheckTouchControls();
 		#endif
 
 	}
@@ -467,7 +464,8 @@
 	}
 
 	void ControlsReset(){
-		ControlsResetFull();
+		ControlsStart();
+		ControlsEnd();
 	}
 
 	void ControlsResetEmpty(){
