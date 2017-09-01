@@ -26,10 +26,7 @@
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 
-
-	TODO - Make it so the user can use multiple StreamingAssets folders based on the preset name.
-		TODO - When the user chooses manual script selection, it will load the default StreamingAssets folder. If they want a different one, they press triangle and are brough to preset selection screen
-		TODO - If there's a preset folder at root of data directory, use that
+	TODO - Change folder named "a" to "assets" or something
 */
 
 #define SINGLELINEARRAYSIZE 121
