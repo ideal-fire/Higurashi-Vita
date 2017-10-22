@@ -1,31 +1,25 @@
-An unofficial port of Higurashi for the PS Vita.
-
-Needs a modified version of Lua to run the game scripts correctly.
-
+An unofficial port of Higurashi When They Cry for the PS Vita.
 
 Setup
 =====
 Refer to the thread on Wololo for more info on setting this up.
+http://wololo.net/talk/viewtopic.php?f=116&t=48223
+
 Script converter: https://github.com/MyLegGuy/HigurashiVitaCovnerter
 Refer to its README.
 
-Compiling
+Compiling (Vita)
 ========
-You need a version of SDL_Mixer-Vita with OGG support. I will post the one I made, if I have time.
-You need libvorbis. I think it's from the EasyRPG Vita toolchain.
-	https://ci.easyrpg.org/view/Toolchains/job/toolchain-vita/
-You need SDL2_Vita
-You need the modified Lua
+You need SoLoud.
+You need the modified Lua, version 5.3.4.
 	Modified file is in /_Notes/ModifiedLuaSourceFile/
-	I'm not really sure what version of Lua is used in my builds. Whatever Lua version was the latest around 5/20/17.
-	The modified Lua source changes comments in Lua from "--" to "//" so I don't have to change the game's script comments.
 You need libpng.
 You need libvita2d.
-..and probably some other stuff I forgot. Look in the Makefile for a perfect list.
 
-In src/_GeneralGoodConfiguration.h, there are a bunch of constants.
-The one you want to look at is called PRESET. Change this depending on the platform you want to compile for.
-For the Vita, make sure it says
-	#define PRESET PRE_VITA.
+All of those, except Lua, can be obtained with vdpm.
+https://github.com/vitasdk/vdpm
 
-If a miracle happens and you actually get all the libraries that you need, it can be compiled by calling make.
+If a miracle happens and you actually get all the libraries that you need, it can be compiled by doing the following:
+
+cmake CMakeLists.txt
+make

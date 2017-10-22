@@ -81,7 +81,9 @@
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
 #define VERSIONSTRING "v2.0" // This
+#define VERSIONNUMBER 2 // This
 #define ISUNSAFEBUILD 1 // This
+#define VERSIONCOLOR 0,208,138
 #define HISTORYONONESCREEN 13
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
@@ -174,7 +176,7 @@ CROSSPLAYHANDLE currentMusicHandle[MAXMUSICARRAY] = {0};
 //CROSSMUSIC* currentMusic = NULL;
 CROSSSFX* soundEffects[10];
 
-CROSSSFX* menuSound;
+CROSSSFX* menuSound=NULL;
 signed char menuSoundLoaded=0;
 
 // Alpha of black rectangle over screen
@@ -1318,6 +1320,9 @@ signed char CheckForUserStuff(){
 }
 
 void TryLoadMenuSoundEffect(){
+	if (menuSound!=NULL){
+		return;
+	}
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/","wa_038",".ogg");
 	if (checkFileExist(tempstringconcat)){
 		menuSoundLoaded=1;
@@ -2998,6 +3003,9 @@ void FontSizeSetup(){
 			if (_choice==0){
 				fontSize++;
 				itoa(fontSize,_tempNumberString,10);
+				#if PLATFORM == PLAT_VITA
+					currentTextHeight = TextHeight(fontSize);
+				#endif
 			}else if (_choice==1){
 				ReloadFont();
 			}else if (_choice==2){
@@ -3013,6 +3021,9 @@ void FontSizeSetup(){
 					fontSize=6;
 				}
 				itoa(fontSize,_tempNumberString,10);
+				#if PLATFORM == PLAT_VITA
+					currentTextHeight = TextHeight(fontSize);
+				#endif
 			}
 		}
 		ControlsEnd();
@@ -3023,18 +3034,23 @@ void FontSizeSetup(){
 		//void DrawText(int x, int y, const char* text, float size){
 		GoodDrawText(32,currentTextHeight,"Font Size: ",fontSize);
 			GoodDrawText(32+TextWidth(fontSize,"Font Size: "),currentTextHeight,_tempNumberString,fontSize);
-		GoodDrawText(32,currentTextHeight*2,"Test",fontSize);
+		#if PLATFORM != PLAT_VITA
+			GoodDrawText(32,currentTextHeight*2,"Test",fontSize);
+		#endif
 		GoodDrawText(32,currentTextHeight*3,"Done",fontSize);
 
-		
-		GoodDrawText(32,currentTextHeight*5,"You should be able to see this entire line. It shouldn't cut off.",fontSize);
-
-		GoodDrawText(32,currentTextHeight*8,"Press the BACK button to see the controls. Green and red are used",fontSize);
-		GoodDrawText(32,currentTextHeight*9,"to change the font size when you're on the first option.",fontSize);
-
-		GoodDrawText(32,currentTextHeight*11,"You have to select \"Test\" to see the new size.",fontSize);
-
-		GoodDrawText(32,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn",fontSize);
+		#if PLATFORM != PLAT_VITA
+			GoodDrawText(32,currentTextHeight*5,"You should be able to see this entire line. It shouldn't cut off.",fontSize);
+	
+			GoodDrawText(32,currentTextHeight*8,"Press the BACK button to see the controls. Green and red are used",fontSize);
+			GoodDrawText(32,currentTextHeight*9,"to change the font size when you're on the first option.",fontSize);
+	
+			GoodDrawText(32,currentTextHeight*11,"You have to select \"Test\" to see the new size.",fontSize);
+	
+			GoodDrawText(32,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn",fontSize);
+		#endif
+		GoodDrawText(32,currentTextHeight*5,"While the text may look bad now, restarting ",fontSize);
+		GoodDrawText(32,currentTextHeight*6,"after changing it will make it look good.",fontSize);
 
 		GoodDrawText(5,currentTextHeight*(_choice+1),">",fontSize);
 		EndDrawing();
@@ -3117,9 +3133,7 @@ void SettingsMenu(){
 				lua_getglobal(L,"quitxfunction");
 				lua_call(L, 0, 0);
 				break;
-			}else if (_choice==1){ // Restart BGM
-				printf("Removed feature.\n");
-				//RestartBGM();
+			}else if (_choice==1){ // OLD Restart BGM choice. Now an unused spot.
 			}else if (_choice==2){ // Auto mode speed
 				autoModeWait+=500;
 				itoa(autoModeWait,_tempAutoModeString,10);
@@ -3156,6 +3170,7 @@ void SettingsMenu(){
 				_bustlocationcollinspacewidth = TextWidth(fontSize,"Bust location: ");
 				_noobBGMVolumeWidth = TextWidth(fontSize,"BGM Volume  ");
 				_tempStrWidth = TextWidth(fontSize,"Auto Mode Speed: ");
+				currentTextHeight = TextHeight(fontSize);
 			}
 		}
 
@@ -3256,7 +3271,7 @@ void SettingsMenu(){
 		}else{
 			GoodDrawText(32,5,"Resume",fontSize);
 		}
-		GoodDrawText(32,5+currentTextHeight,"Restart BGM",fontSize);
+		GoodDrawText(32,5+currentTextHeight,"===",fontSize);
 		GoodDrawText(32,5+currentTextHeight*2,"Auto Mode Speed: ",fontSize);
 			GoodDrawText(32+_tempStrWidth,5+currentTextHeight*2,_tempAutoModeString,fontSize);
 		
@@ -3412,7 +3427,7 @@ void TitleScreen(){
 		GoodDrawText(32,5+currentTextHeight*(2+2),"Settings",fontSize);
 		GoodDrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
 
-		GoodDrawText((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING,fontSize);
+		GoodDrawTextColored((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING,fontSize,VERSIONCOLOR);
 		GoodDrawText(5,screenHeight-5-currentTextHeight,SYSTEMSTRING,fontSize);
 
 		GoodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
@@ -4115,7 +4130,9 @@ int main(int argc, char *argv[]){
 				LoadPreset((char*)globalTempConcat);
 				// Next, we can try to switch the StreamingAssets directory to ux0:data/HIGURASHI/StreamingAssets_FILENAME/ if that directory exists
 				UpdatePresetStreamingAssetsDir(currentPresetFilename);
-			
+				// This new directory may have the menu sound effect.
+				TryLoadMenuSoundEffect();
+
 				// Does not load the savefile, I promise.
 				LoadGame();
 
