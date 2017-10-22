@@ -2,7 +2,8 @@
 #define GENERALGOODSTUFFEXTENDED
 	#define ISUSINGEXTENDED 1
 	
-	char* DATAFOLDER;
+	char tempPathFixBuffer[256];
+	char* DATAFOLDER=NULL;
 	
 	// For FixPath argument
 	#define TYPE_UNDEFINED 0
@@ -108,61 +109,9 @@
 
 	// Renderer stuff
 	#if RENDERER == REND_SDL
-
-		#define CrossTexture SDL_Texture
-		#include <SDL2/SDL.h>
-		#include <SDL2/SDL_image.h>
-
 		// Stores control data
 		char pad[21]={0};
 		char lastPad[21]={0};
-
-		//The window we'll be rendering to
-		SDL_Window* mainWindow;
-		
-		//The window renderer
-		SDL_Renderer* mainWindowRenderer;
-	#endif
-	#if RENDERER == REND_VITA2D
-		#include <vita2d.h>
-		// CROSS TYPES
-		#define CrossTexture vita2d_texture
-	#endif
-
-	// Sound stuff
-	#if SOUNDPLAYER == SND_SDL
-		#include <SDL2/SDL.h>
-		#include <SDL2/SDL_mixer.h>
-
-		#define CROSSSFX Mix_Chunk
-		#define CROSSMUSIC Mix_Music
-	#endif
-	#if SOUNDPLAYER == SND_NONE
-		#define CROSSSFX int
-		#define CROSSMUSIC int
-	#endif
-
-
-	// Text Stuff
-	#if TEXTRENDERER == TEXT_FONTCACHE
-		#include "SDL_FontCache/SDL_FontCache.h"
-		#define CrossFont FC_Font
-	#elif TEXTRENDERER == TEXT_DEBUG
-		#define CrossFont CrossTexture
-	#elif TEXTRENDERER == TEXT_VITA2D
-		#define CrossFont vita2d_font
-	#endif
-
-	CrossFont* fontImage=NULL;
-	#if TEXTRENDERER == TEXT_DEBUG
-		float fontSize = 1.7;
-	#endif
-	#if TEXTRENDERER == TEXT_FONTCACHE
-		//int fontSize = 20;
-		int fontSize=50;
-	#endif
-	#if TEXTRENDERER == TEXT_VITA2D
-		int fontSize=32;
 	#endif
 	
 
@@ -177,131 +126,6 @@
 			sprintf(_buffer, "%d", _num);
 		}
 	#endif
-
-	// May not actually quit out of the program. You still need to return from the main function
-	void QuitApplication(lua_State* L){
-		lua_close(L);
-		#if RENDERER == REND_VITA2D
-			vita2d_fini();
-		#elif RENDERER == REND_SDL
-			//Destroy window
-			SDL_DestroyRenderer( mainWindowRenderer );
-			SDL_DestroyWindow( mainWindow );
-			mainWindow = NULL;
-			mainWindowRenderer = NULL;
-			// QUit SDL subsystems
-			IMG_Quit();
-		#elif RENDERER == REND_SF2D
-			sf2d_fini();
-		#endif
-		#if SOUNDPLAYER == SND_SDL
-			// TODO sdl mixer quit
-		#endif
-		#if PLATFORM == PLAT_WINDOWS
-			#if RENDERER == REND_SDL
-				SDL_Quit();
-			#else
-				printf("No quit function avalible for Windows without SDL.\n");
-			#endif
-		#elif PLATFORM == PLAT_VITA
-			sceKernelExitProcess(0);
-		#elif PLATFORM == PLAT_3DS
-			// Nothing needed for 3ds?
-		#endif
-	}
-
-	void StartDrawing(){
-		#if RENDERER == REND_VITA2D
-			vita2d_start_drawing();
-			vita2d_clear_screen();
-		#elif RENDERER == REND_SDL
-			SDL_RenderClear(mainWindowRenderer);
-		#elif RENDERER == REND_SF2D
-			sf2d_start_frame(GFX_TOP, GFX_LEFT);
-		#endif
-	}
-	
-	void EndDrawing(){
-		#if PLATFORM == PLAT_WINDOWS
-			DrawTouchControlsHelp();
-		#endif
-		#if RENDERER == REND_VITA2D
-			vita2d_end_drawing();
-			vita2d_swap_buffers();
-			vita2d_wait_rendering_done();
-		#elif RENDERER == REND_SDL
-			SDL_RenderPresent(mainWindowRenderer);
-		#elif RENDERER == REND_SF2D
-			sf2d_end_frame();
-			sf2d_swapbuffers();
-		#endif
-	}
-
-	int TextHeight(float scale){
-		#if TEXTRENDERER == TEXT_DEBUG
-			return (8*scale);
-		#elif TEXTRENDERER == TEXT_VITA2D
-			return vita2d_font_text_height(fontImage,scale,"a");
-		#elif TEXTRENDERER == TEXT_FONTCACHE
-			return floor(FC_GetRealHeight(fontImage));
-		#endif
-	}
-
-	// Please always use the same font size
-	int TextWidth(float scale, const char* message){
-		#if TEXTRENDERER == TEXT_DEBUG
-			return floor((8*scale)*strlen(message)+strlen(message));
-		#elif TEXTRENDERER == TEXT_VITA2D
-			return vita2d_font_text_width(fontImage,scale,message);
-		#elif TEXTRENDERER == TEXT_FONTCACHE
-			return FC_GetWidth(fontImage,"%s",message);
-		#endif
-	}
-	
-	#if TEXTRENDERER == TEXT_DEBUG
-		void DrawLetter(int letterId, int _x, int _y, float size){
-			DrawTexturePartScale(fontImage,_x,_y,(letterId-32)*(8),0,8,8,size,size);
-		}
-		void DrawLetterColor(int letterId, int _x, int _y, float size, unsigned char r, unsigned char g, unsigned char b){
-			DrawTexturePartScaleTint(fontImage,_x,_y,(letterId-32)*(8),0,8,8,size,size,r,g,b);
-		}
-	#endif
-	void DrawText(int x, int y, const char* text, float size){
-		#if TEXTRENDERER == TEXT_VITA2D
-			EASYFIXCOORDS(&x,&y);
-			vita2d_font_draw_text(fontImage,x,y+TextHeight(size), RGBA8(255,255,255,255),floor(size),text);
-		#elif TEXTRENDERER == TEXT_DEBUG
-			int i=0;
-			for (i = 0; i < strlen(text); i++){
-				DrawLetter(text[i],(x+(i*(8*size))+i),(y),size);
-			}
-		#elif TEXTRENDERER == TEXT_FONTCACHE
-			EASYFIXCOORDS(&x,&y);
-			FC_Draw(fontImage, mainWindowRenderer, x, y, "%s", text);
-		#endif
-	}
-	
-	void DrawTextColored(int x, int y, const char* text, float size, unsigned char r, unsigned char g, unsigned char b){
-		#if TEXTRENDERER == TEXT_VITA2D
-			EASYFIXCOORDS(&x,&y);
-			vita2d_font_draw_text(fontImage,x,y+TextHeight(size), RGBA8(r,g,b,255),floor(size),text);
-		#elif TEXTRENDERER == TEXT_DEBUG
-			int i=0;
-			int notICounter=0;
-			for (i = 0; i < strlen(text); i++){
-				DrawLetterColor(text[i],(x+(notICounter*(8*size))+notICounter),(y),size,r,g,b);
-				notICounter++;
-			}
-		#elif TEXTRENDERER == TEXT_FONTCACHE
-			EASYFIXCOORDS(&x,&y);
-			SDL_Color _tempcolor;
-			_tempcolor.r = r;
-			_tempcolor.g = g;
-			_tempcolor.b = b;
-			_tempcolor.a = 255;
-			FC_DrawColor(fontImage, mainWindowRenderer, x, y, _tempcolor ,"%s", text);
-		#endif
-	}
 
 	signed char WasJustReleased(int value){
 		if (InputValidity==1 || isSkipping==1){
@@ -385,7 +209,7 @@
 							pad[SCE_CTRL_SQUARE]=1;
 						}else if (e.key.keysym.sym==SDLK_s){ /* Triangle */
 							pad[SCE_CTRL_TRIANGLE]=1;
-						}else if (e.key.keysym.sym==SDLK_ESCAPE){ /* Start */
+						}else if (e.key.keysym.sym==SDLK_ESCAPE || e.key.keysym.sym==SDLK_RETURN){ /* Start */
 							pad[SCE_CTRL_START]=1;
 						}else if (e.key.keysym.sym==SDLK_e){ /* Select */
 							pad[SCE_CTRL_SELECT]=1;
@@ -409,7 +233,7 @@
 							pad[SCE_CTRL_SQUARE]=0;
 						}else if (e.key.keysym.sym==SDLK_s){ /* Triangle */
 							pad[SCE_CTRL_TRIANGLE]=0;
-						}else if (e.key.keysym.sym==SDLK_ESCAPE){ /* Start */
+						}else if (e.key.keysym.sym==SDLK_ESCAPE || e.key.keysym.sym==SDLK_RETURN){ /* Start */
 							pad[SCE_CTRL_START]=0;
 						}else if (e.key.keysym.sym==SDLK_e){ /* Select */
 							pad[SCE_CTRL_SELECT]=0;
@@ -442,7 +266,6 @@
 		#if PLATFORM == PLAT_WINDOWS
 			CheckTouchControls();
 		#endif
-
 	}
 
 	void ControlsEnd(){
@@ -499,7 +322,7 @@
 	}
 
 	// Passed string should be freed already
-	void GenerateDefaultDataDirectory(char** _dataDirPointer, char useUma0){
+	void GenerateDefaultDataDirectory(char** _dataDirPointer, char _useUma0){
 		#if SUBPLATFORM == SUB_ANDROID
 			*_dataDirPointer = malloc(strlen("/data/data/"ANDROIDPACKAGENAME"/")+1);
 			strcpy(*_dataDirPointer,"/data/data/"ANDROIDPACKAGENAME"/"+1);
@@ -507,7 +330,7 @@
 			*_dataDirPointer = malloc(strlen("./")+1);
 			strcpy(*_dataDirPointer,"./");
 		#elif PLATFORM == PLAT_VITA
-			if (useUma0){\
+			if (_useUma0){
 				*_dataDirPointer = malloc(strlen("uma0:data/"VITAAPPID"/")+1);
 				strcpy(*_dataDirPointer,"uma0:data/"VITAAPPID"/");
 			}else{
@@ -518,6 +341,9 @@
 	}
 
 	void FixPath(char* filename,char _buffer[], char type){
+		if (DATAFOLDER==NULL){
+			GenerateDefaultDataDirectory(&DATAFOLDER,USEUMA0);
+		}
 		#if SUBPLATFORM == SUB_ANDROID
 			if (type==TYPE_DATA){
 				strcpy((char*)_buffer,DATAFOLDER);
@@ -545,8 +371,8 @@
 	void MakeDataDirectory(){
 		char tempPathFixBuffer[256];
 		FixPath("",tempPathFixBuffer,TYPE_DATA);
-		if (DirectoryExists((const char*)tempPathFixBuffer)==0){
-			MakeDirectory((const char*)tempPathFixBuffer);
+		if (directoryExists((const char*)tempPathFixBuffer)==0){
+			createDirectory((const char*)tempPathFixBuffer);
 		}
 	}
 

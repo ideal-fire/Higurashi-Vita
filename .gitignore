@@ -61,9 +61,17 @@ lib-custom/
 *.sfo
 *.velf
 *.bin
+*.self
 
 # File where I put trash
 /src/Graveyard.h
+/_Notes/Trash/
 
 # For Windows build
 /lib-custom/
+
+# cmake stupidity
+CMakeFiles/
+CMakeCache.txt
+HIGURASHI
+cmake_install.cmake

@@ -21,6 +21,7 @@
 
 	#define SND_NONE 0
 	#define SND_SDL 1
+	#define SND_SOLOUD 2
 
 	#define SUB_NONE 0
 	#define SUB_ANDROID 1
@@ -30,15 +31,20 @@
 	#define TEXT_FONTCACHE 2
 	#define TEXT_DEBUG 3
 
-	// CHANGE THIS IF YOU'RE COMPILING FOR A DIFFERENT PLATFORM
-	#define PRESET PRE_VITA
+	#if _WIN32
+		#define PRESET PRE_WINDOWS
+	#else
+		#define PRESET PRE_VITA
+	#endif
+	#define DOFIXCOORDS 0
+	#define USEVSYNC 0
 
 	// Constants that change the code so it runs on a specific platform
 	#if PRESET == PRE_VITA
 		#define RENDERER REND_VITA2D
 		#define PLATFORM PLAT_VITA
 		#define SUBPLATFORM SUB_NONE
-		#define SOUNDPLAYER SND_SDL
+		#define SOUNDPLAYER SND_SOLOUD
 		#define TEXTRENDERER TEXT_VITA2D
 		#define SYSTEMSTRING "Vita"
 		#define SELECTBUTTONNAME "X"

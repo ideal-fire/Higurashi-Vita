@@ -1,4 +1,4 @@
-Every file in this directory ("src") is under the MIT License.
+Every file in this directory ("src"), unless otherwise specified in the file, is under the MIT License.
 This license does not apply to files in subdirectories of this directory.
 ==============
 MIT License

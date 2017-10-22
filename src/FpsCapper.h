@@ -13,7 +13,7 @@ unsigned int frameStartMiliseconds;
 signed char capEnabled = 1;
 
 void FpsCapStart(){
-	frameStartMiliseconds = GetTicks();
+	frameStartMiliseconds = getTicks();
 }
 
 void FpsCapWait(){
@@ -23,11 +23,11 @@ void FpsCapWait(){
 			numberOfFrames=numberOfFrames+1;
 		#endif
 		unsigned int tempHold;
-		tempHold = GetTicks();
+		tempHold = getTicks();
 		//printf("%llu;%llu\n",frameStartMiliseconds,tempHold);
 		// LIMIT FPS
 		if (tempHold-frameStartMiliseconds<MILISECONDSPERFRAME){
-			Wait( (MILISECONDSPERFRAME - (tempHold-frameStartMiliseconds)));
+			wait( (MILISECONDSPERFRAME - (tempHold-frameStartMiliseconds)));
 		}else{
 			//printf("Slowdown %llu\n", tempHold-frameStartMiliseconds);
 			//printf("Slowdown %d\n",MILISECONDSPERFRAME - (tempHold-frameStartMiliseconds));
