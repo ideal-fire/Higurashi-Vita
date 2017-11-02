@@ -23,7 +23,6 @@
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 */
-
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
 #include "GeneralGoodConfig.h"
@@ -166,7 +165,7 @@ CrossTexture* currentBackground = NULL;
 CROSSMUSIC* currentMusic[MAXMUSICARRAY] = {NULL};
 CROSSPLAYHANDLE currentMusicHandle[MAXMUSICARRAY] = {0};
 //CROSSMUSIC* currentMusic = NULL;
-CROSSSFX* soundEffects[10];
+CROSSSFX* soundEffects[10] = {NULL};
 
 CROSSSFX* menuSound=NULL;
 signed char menuSoundLoaded=0;
@@ -406,15 +405,22 @@ char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 
 void WriteToDebugFile(const char* stuff){
 	#if PLATFORM == PLAT_VITA
+		char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
+		strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
+		strcat(_tempDebugFileLocationBuffer,"log.txt");
 		FILE *fp;
-		fp = fopen("ux0:data/HIGURASHI/a.txt", "a");
+		fp = fopen(_tempDebugFileLocationBuffer, "a");
+		if (!fp){
+			LazyMessage("Failed to open debug file.",_tempDebugFileLocationBuffer,NULL,NULL);
+			return;
+		}
 		fprintf(fp,"%s\n",stuff);
 		fclose(fp);
 	#endif
 }
 
 void WriteSDLError(){
-	#if RENDERER == REND_SDL
+	#if RENDERER == REND_SDL || SOUNDPLAYER == SND_SDL
 		WriteToDebugFile(SDL_GetError());
 	#else
 		WriteToDebugFile("Can't write SDL error because not using SDL.");
@@ -560,8 +566,15 @@ int Password(int val, int _shouldHave){
 
 void WriteIntToDebugFile(int a){
 	#if PLATFORM == PLAT_VITA
+		char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
+		strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
+		strcat(_tempDebugFileLocationBuffer,"log.txt");
 		FILE *fp;
-		fp = fopen("ux0:data/HIGURASHI/a.txt", "a");
+		if (!fp){
+			LazyMessage("Failed to open debug file.",_tempDebugFileLocationBuffer,NULL,NULL);
+			return;
+		}
+		fp = fopen(_tempDebugFileLocationBuffer, "a");
 		fprintf(fp,"%d\n", a);
 		fclose(fp);
 	#endif
@@ -580,11 +593,11 @@ void XOutFunction(){
 	}
 }
 
-// Does not clear the debug file at ux0:data/HIGURASHI/a.txt  , I promise.
+// Does not clear the debug file at ux0:data/HIGURASHI/log.txt  , I promise.
 void ClearDebugFile(){
 	#if PLATFORM == PLAT_VITA
 	FILE *fp;
-	fp = fopen("ux0:data/HIGURASHI/a.txt", "w");
+	fp = fopen("ux0:data/HIGURASHI/log.txt", "w");
 	fclose(fp);
 	#endif
 }
@@ -689,7 +702,8 @@ void PrintDebugCounter(){
 
 // Returns 1 if it worked
 char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
-	//ClearMessageArray();	
+	// Hopefully, nobody tries to call a script from a script and wants to keep the current message display.
+	ClearMessageArray();
 	currentScriptLine=0;
 	char tempstringconcat[strlen(_scriptfolderlocation)+strlen(filename)+strlen(".txt")+1];
 	strcpy(tempstringconcat,_scriptfolderlocation);
@@ -752,7 +766,7 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 
 char* CombineStringsPLEASEFREE(const char* first, const char* firstpointfive, const char* second, const char* third){
 	char* tempstringconcat = (char*)calloc(1,strlen(first)+strlen(firstpointfive)+strlen(second)+strlen(third)+1);
-	strcat(tempstringconcat, first);
+	strcpy(tempstringconcat, first);
 	strcat(tempstringconcat, firstpointfive);
 	strcat(tempstringconcat, second);
 	strcat(tempstringconcat, third);
