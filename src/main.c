@@ -1,5 +1,4 @@
 /*
-	
 	TODO - Inversion
 		I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
 	
@@ -28,12 +27,6 @@
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
 #include "GeneralGoodConfig.h"
-
-#if PLATFORM == PLAT_VITA
-	// SDL_Vita also has a StartDrawing method?
-	#define StartDrawing NOOBSTARTDRAWING
-	#define EndDrawing NOOBENDDRAWING
-#endif
 
 // main.h
 	void Draw();
@@ -74,20 +67,19 @@
 #define LOCATION_CGALT 2
 
 /////////////////////////////////////
-#define MAXBUSTS 7
+#define MAXBUSTS 9 // 0 through 8. The slot argument isn't changed from the script anymore.
 #define MAXIMAGECHAR 20
 #define MESSAGETEXTXOFFSET 20
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.0" // This
+#define VERSIONSTRING "v2.0.0.x" // This
 #define VERSIONNUMBER 2 // This
-#define ISUNSAFEBUILD 1 // This
 #define VERSIONCOLOR 0,208,138
 #define HISTORYONONESCREEN 13
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
-#define USEUMA0 ISUNSAFEBUILD
+#define USEUMA0 1 // Doesn't need to be unsafe for this, I guess.
 ////////////////////////////////////
 #define MAXMUSICARRAY 10
 
@@ -597,8 +589,6 @@ void ClearDebugFile(){
 	#endif
 }
 
-
-
 void ResetBustStruct(bust* passedBust, int canfree){
 	if (canfree==1 && passedBust->image!=NULL){
 		FreeTexture(passedBust->image);
@@ -638,7 +628,6 @@ int DidActuallyConvert(char* filepath){
 	StartDrawing();
 	GoodDrawText(32,50,"Checking if you actually converted the script...",fontSize);
 	GoodDrawText(32,200,filepath,fontSize);
-	//void DrawText(int x, int y, const char* text, float size){
 	EndDrawing();
 
 	while (fgets(line, sizeof(line), file)) {
@@ -700,7 +689,7 @@ void PrintDebugCounter(){
 
 // Returns 1 if it worked
 char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
-	ClearMessageArray();	
+	//ClearMessageArray();	
 	currentScriptLine=0;
 	char tempstringconcat[strlen(_scriptfolderlocation)+strlen(filename)+strlen(".txt")+1];
 	strcpy(tempstringconcat,_scriptfolderlocation);
@@ -896,6 +885,7 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 			}
 		}
 		u64 _inBetweenLinesMilisecondsStart = getTicks();
+		char _didPressCircle=0;
 		do{
 			FpsCapStart();
 			ControlsStart();
@@ -903,14 +893,17 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 			Draw();
 
 			if (WasJustPressed(SCE_CTRL_CROSS)){
-				MessageBoxEnabled=1;
+				if (_didPressCircle==1){
+					MessageBoxEnabled=1;
+				}
 				endType = Line_ContinueAfterTyping;
 			}
 			if (WasJustPressed(SCE_CTRL_CIRCLE)){
-				if (MessageBoxEnabled==0){
-					MessageBoxEnabled=1;
-				}else{
+				if (_didPressCircle==1){
+					MessageBoxEnabled = !MessageBoxEnabled;
+				}else if (MessageBoxEnabled==1){
 					MessageBoxEnabled=0;
+					_didPressCircle=1;
 				}
 			}
 			if (WasJustPressed(SCE_CTRL_SQUARE)){
@@ -935,7 +928,8 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 			FpsCapWait();
 			if (autoModeOn==1){
 				if (getTicks()>=(unsigned int)(_inBetweenLinesMilisecondsStart+autoModeWait)){
-					MessageBoxEnabled=1;
+					// TODO - Does this is happy?
+					//MessageBoxEnabled=1;
 					endType = Line_ContinueAfterTyping;
 				}
 			}
@@ -1205,7 +1199,7 @@ void SetNextScriptName(){
 // Generates the default data paths for script, presets, etc
 // Will use uma0 if possible
 void ResetDataDirectory(){
-	#if ISUNSAFEBUILD
+	#if USEUMA0==1
 		GenerateDefaultDataDirectory(&DATAFOLDER,1);
 		if (!directoryExists(DATAFOLDER)){
 			free(DATAFOLDER);
@@ -1308,7 +1302,7 @@ signed char CheckForUserStuff(){
 				LazyMessage("Your screen resolution is",_tempResWidthString,"by",_tempResHeightString);
 			#endif
 			LazyMessage((const char*)globalTempConcat,"does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the system. Refer to thread for tutorial.");
-			#if ISUNSAFEBUILD
+			#if USEUMA0==1
 				LazyMessage("uma0:data/HIGURASHI/","doesn't exist either.",NULL,NULL);
 			#endif
 			_oneMissing=1;
@@ -1552,10 +1546,6 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 		return;
 	}
 
-	
-	
-	
-
 	Busts[passedSlot].xOffset = _xoffset;
 	Busts[passedSlot].yOffset = _yoffset;
 
@@ -1662,6 +1652,10 @@ int strlenNO1(char* src){
 // /SE/
 // DO NOT FIX THE SE VOLUME BEFORE PASSING ARGUMENT
 void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, const char* _dirRelativeToStreamingAssetsNoEndSlash){
+	if (strlen(filename)==0){
+		printf("Sound effect filename empty.\n");
+		return;
+	}
 	if (soundEffects[passedSlot]!=NULL){
 		FreeSound(soundEffects[passedSlot]);
 		soundEffects[passedSlot]=NULL;
@@ -1857,7 +1851,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		}
 
 		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_CROSS)){
+		if (WasJustPressed(SCE_CTRL_CROSS) || capEnabled==0){
 			_isDone=1;
 		}
 		ControlsEnd();
@@ -2269,6 +2263,11 @@ void UpdatePresetStreamingAssetsDir(char* filename){
 =================================================
 */
 
+int L_DisplayWindow(lua_State* passedState){
+	MessageBoxEnabled=0;
+	return 0;
+}
+
 int L_ClearMessage(lua_State* passedState){
 	//system("cls");
 	currentLine=0;
@@ -2289,7 +2288,7 @@ int L_OutputLineAll(lua_State* passedState){
 
 //
 int L_Wait(lua_State* passedState){
-	if (isSkipping!=1){
+	if (isSkipping!=1 && capEnabled==1){
 		wait(lua_tonumber(passedState,1));
 	}
 	return 0;
@@ -2309,7 +2308,7 @@ int L_DrawScene(lua_State* passedState){
 }
 
 int L_NotYet(lua_State* passedState){
-	printf("AN UNIMPLEMENTED LUA FUNCTION WAS JUST EXECUTED!\n");
+	printf("An unimplemented Lua function was just executed!\n");
 	return 0;
 }
 
@@ -2374,7 +2373,7 @@ int L_DrawBustshotWithFiltering(lua_State* passedState){
 	}
 
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(lua_tonumber(passedState,1)-1, lua_tostring(passedState,2), lua_tonumber(passedState,5), lua_tonumber(passedState,6), lua_tonumber(passedState,13), lua_tonumber(passedState,14), lua_toboolean(passedState,15), lua_tonumber(passedState,12));
+	DrawBustshot(lua_tonumber(passedState,1), lua_tostring(passedState,2), lua_tonumber(passedState,5), lua_tonumber(passedState,6), lua_tonumber(passedState,13), lua_tonumber(passedState,14), lua_toboolean(passedState,15), lua_tonumber(passedState,12));
 
 	////SDL_SetTextureAlphaMod(Busts[passedSlot].image, 255);
 	return 0;
@@ -2411,7 +2410,7 @@ int L_DrawBustshot(lua_State* passedState){
 	}
 	
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(lua_tonumber(passedState,1)-1, lua_tostring(passedState,2), lua_tonumber(passedState,3), lua_tonumber(passedState,4), lua_tonumber(passedState,14), lua_tonumber(passedState,15), lua_toboolean(passedState,16), lua_tonumber(passedState,13));
+	DrawBustshot(lua_tonumber(passedState,1), lua_tostring(passedState,2), lua_tonumber(passedState,3), lua_tonumber(passedState,4), lua_tonumber(passedState,14), lua_tonumber(passedState,15), lua_toboolean(passedState,16), lua_tonumber(passedState,13));
 	return 0;
 }
 
@@ -2444,14 +2443,14 @@ int L_DisableWindow(lua_State* passedState){
 }
 
 int L_FadeBustshotWithFiltering(lua_State* passedState){
-	FadeBustshot(lua_tonumber(passedState,1)-1,lua_tonumber(passedState,7),lua_toboolean(passedState,8));
+	FadeBustshot(lua_tonumber(passedState,1),lua_tonumber(passedState,7),lua_toboolean(passedState,8));
 	return 0;
 }
 
 //FadeBustshot( 2, FALSE, 0, 0, 0, 0, 0, TRUE );
 //FadeBustshot( SLOT, MOVE, X, Y, UNKNOWNA, UNKNOWNB, FADETIME, WAIT );
 int L_FadeBustshot(lua_State* passedState){
-	FadeBustshot(lua_tonumber(passedState,1)-1,lua_tonumber(passedState,7),lua_toboolean(passedState,8));
+	FadeBustshot(lua_tonumber(passedState,1),lua_tonumber(passedState,7),lua_toboolean(passedState,8));
 	return 0;
 }
 
@@ -2501,7 +2500,7 @@ int L_ChangeScene(lua_State* passedState){
 	// DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
 int L_DrawSprite(lua_State* passedState){
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(lua_tonumber(passedState,1)-1,lua_tostring(passedState,2),320+lua_tonumber(passedState,4),240+lua_tonumber(passedState,5),lua_tonumber(passedState,14), lua_tonumber(passedState,15),lua_toboolean(passedState,16),0);
+	DrawBustshot(lua_tonumber(passedState,1),lua_tostring(passedState,2),320+lua_tonumber(passedState,4),240+lua_tonumber(passedState,5),lua_tonumber(passedState,14), lua_tonumber(passedState,15),lua_toboolean(passedState,16),0);
 	//DrawBustshot(lua_tonumber(passedState,1)-1, lua_tostring(passedState,2), lua_tonumber(passedState,3), lua_tonumber(passedState,4), lua_tonumber(passedState,14), lua_tonumber(passedState,15), lua_toboolean(passedState,16), lua_tonumber(passedState,13));
 	return 0;
 }
@@ -2511,7 +2510,6 @@ int L_DrawSprite(lua_State* passedState){
 int L_MoveSprite(lua_State* passedState){
 	int _totalTime = lua_tonumber(passedState,9);
 	int _passedSlot = lua_tonumber(passedState,1);
-	_passedSlot--;
 	// Number of x pixles the sprite has to move by the end
 
 	printf("arg2:%d\n",(int)lua_tonumber(passedState,2));
@@ -2569,7 +2567,7 @@ int L_MoveSprite(lua_State* passedState){
 //FadeSprite(slot, time, waitfrocompletion)
 		// FadeSprite(5,700,FALSE)
 int L_FadeSprite(lua_State* passedState){
-	FadeBustshot(lua_tonumber(passedState,1)-1,lua_tonumber(passedState,2),lua_toboolean(passedState,3));	
+	FadeBustshot(lua_tonumber(passedState,1),lua_tonumber(passedState,2),lua_toboolean(passedState,3));	
 	return 0;
 }
 
@@ -2698,7 +2696,7 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_DrawScene,"DrawBG")
 	LUAREGISTER(L_PlaySE,"PlaySE")
 	LUAREGISTER(L_StopBGM,"StopBGM")
-	LUAREGISTER(L_CallScript,"CallScript")
+	LUAREGISTER(L_CallScript,"CallScript") // Somehow, this works. No idea how.
 	LUAREGISTER(L_Select,"Select") // That's right, I programmed selection for the one time in the question arcs where it's used
 	LUAREGISTER(L_LoadValueFromLocalWork,"LoadValueFromLocalWork")
 	LUAREGISTER(L_CallSection,"CallSection")
@@ -2712,6 +2710,7 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_FadeBG,"FadeBG")
 	LUAREGISTER(L_DebugFile,"Debugfile")
 	LUAREGISTER(L_PlayVoice,"PlayVoice")
+	LUAREGISTER(L_DisplayWindow,"DisplayWindow")
 
 	// Functions that do nothing
 	LUAREGISTER(L_NotYet,"SetFontId")
@@ -2725,12 +2724,8 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_NotYet,"SetWindowMargins")
 	LUAREGISTER(L_NotYet,"SetGUIPosition")
 	
-	LUAREGISTER(L_NotYet,"Negative") // Command for color inversion
-									// Negative( 1000, TRUE ); is inveted
-									// FadeFilm( 200, TRUE ); fixes it??!
-									// Name provably means to negate the colors, or replace the colors with their complementary ones on the other side of the color wheel
-									// First arg is maybe time when it fades to inverted and argument is proably if it's inverted
-
+	LUAREGISTER(L_NotYet,"SetValidityOfSaving")
+	LUAREGISTER(L_NotYet,"SetValidityOfLoading")
 
 	//  TEMP
 	LUAREGISTER(L_NotYet,"SetSpeedOfMessage")
@@ -2743,14 +2738,18 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_NotYet,"StopSE")
 
 	LUAREGISTER(L_NotYet,"SetValidityOfTextFade")
-	LUAREGISTER(L_NotYet,"SetValidityOfSaving")
+	
 	LUAREGISTER(L_NotYet,"SetValidityOfSkipping")
 	LUAREGISTER(L_NotYet,"GetAchievement")
 	LUAREGISTER(L_NotYet,"SetFontOfMessage")
-	LUAREGISTER(L_NotYet,"SetValidityOfLoading")
+	
 	LUAREGISTER(L_NotYet,"ActivateScreenEffectForcedly")
 	LUAREGISTER(L_NotYet,"SetValidityOfUserEffectSpeed")
-
+	LUAREGISTER(L_NotYet,"Negative") // Command for color inversion
+									// Negative( 1000, TRUE ); is inveted
+									// FadeFilm( 200, TRUE ); fixes it??!
+									// Name provably means to negate the colors, or replace the colors with their complementary ones on the other side of the color wheel
+									// First arg is maybe time when it fades to inverted and argument is proably if it's inverted
 	// Not investigated yet
 		LUAREGISTER(L_NotYet,"BlurOffOn")
 		LUAREGISTER(L_NotYet,"Break")
@@ -2763,7 +2762,6 @@ void MakeLuaUseful(){
 		LUAREGISTER(L_NotYet,"DisableBlur")
 		LUAREGISTER(L_NotYet,"DisableEffector")
 		LUAREGISTER(L_NotYet,"DisableGradation")
-		LUAREGISTER(L_NotYet,"DisplayWindow")
 		LUAREGISTER(L_NotYet,"DrawBGWithMask")
 		LUAREGISTER(L_NotYet,"DrawBustFace")
 		LUAREGISTER(L_NotYet,"DrawFace")
@@ -3036,6 +3034,8 @@ void FontSizeSetup(){
 			GoodDrawText(32+TextWidth(fontSize,"Font Size: "),currentTextHeight,_tempNumberString,fontSize);
 		#if PLATFORM != PLAT_VITA
 			GoodDrawText(32,currentTextHeight*2,"Test",fontSize);
+			GoodDrawText(32,currentTextHeight*5,"While the text may look bad now, restarting ",fontSize);
+			GoodDrawText(32,currentTextHeight*6,"after changing it will make it look good.",fontSize);
 		#endif
 		GoodDrawText(32,currentTextHeight*3,"Done",fontSize);
 
@@ -3049,8 +3049,7 @@ void FontSizeSetup(){
 	
 			GoodDrawText(32,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn",fontSize);
 		#endif
-		GoodDrawText(32,currentTextHeight*5,"While the text may look bad now, restarting ",fontSize);
-		GoodDrawText(32,currentTextHeight*6,"after changing it will make it look good.",fontSize);
+		
 
 		GoodDrawText(5,currentTextHeight*(_choice+1),">",fontSize);
 		EndDrawing();
