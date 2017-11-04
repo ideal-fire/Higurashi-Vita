@@ -293,7 +293,6 @@ char isActuallyUsingUma0=0;
 /*
 ====================================================
 */
-
 // Give a function name to this. It will tell you if it's new.
 // THIS DOES NOT ACCOUNT FOR FUNCTIONS MADE IN happy.lua
 void DebugLuaReg(char* name){
@@ -304,13 +303,11 @@ void DebugLuaReg(char* name){
 		return;
 	}
 }
-
 void PlayMenuSound(){
 	if (menuSoundLoaded==1){
 		PlaySound(menuSound,1);
 	}
 }
-
 CrossTexture* SafeLoadPNG(const char* path){
 	CrossTexture* _tempTex = LoadPNG((char*)path);
 	if (_tempTex==NULL){
@@ -319,7 +316,6 @@ CrossTexture* SafeLoadPNG(const char* path){
 	}
 	return _tempTex;
 }
-
 CrossTexture* LoadEmbeddedPNG(const char* path){
 	FixPath((char*)path,globalTempConcat,TYPE_EMBEDDED);
 	CrossTexture* _tempTex = LoadPNG((char*)globalTempConcat);
@@ -329,36 +325,30 @@ CrossTexture* LoadEmbeddedPNG(const char* path){
 	}
 	return _tempTex;
 }
-
 void DrawMessageBox(){
 	//if (filterActive==0){
 	DrawRectangle(0,0,screenWidth,screenHeight,0,0,0,MessageBoxAlpha);
 	//}
 }
-
 void DrawCurrentFilter(){
 	DrawRectangle(0,0,screenWidth,screenHeight,filterR,filterG,filterB,filterA);
 	//DrawRectangle(0,0,960,screenHeight,filterR,255-(filterG*filterA*.0011),filterB,255);
 }
-
 u64 waitwithCodeTarget;
 void WaitWithCodeStart(int amount){
 	waitwithCodeTarget = getTicks()+amount;
 }
-
 void WaitWithCodeEnd(int amount){
 	if (getTicks()<waitwithCodeTarget){
 		wait(waitwithCodeTarget-getTicks());
 	}
 }
-
 // Draws the loading screen.
 void DrawLoadingScreen(){
 	StartDrawing();
 	DrawTextureScaleSize(loadingImage,0,0,screenWidth,screenHeight);
 	EndDrawing();
 }
-
 void SetDefaultFontSize(){
 	#if TEXTRENDERER == TEXT_DEBUG
 		fontSize = 1.7;
@@ -370,7 +360,6 @@ void SetDefaultFontSize(){
 		fontSize=32;
 	#endif
 }
-
 void ReloadFont(){
 	DrawLoadingScreen();
 	#if TEXTRENDERER == TEXT_FONTCACHE
@@ -382,7 +371,6 @@ void ReloadFont(){
 		currentTextHeight = TextHeight(fontSize);
 	#endif
 }
-
 char MenuControls(char _choice,int _menuMin, int _menuMax){
 	if (WasJustPressed(SCE_CTRL_UP)){
 		if (_choice!=_menuMin){
@@ -400,7 +388,6 @@ char MenuControls(char _choice,int _menuMin, int _menuMax){
 	}
 	return _choice;
 }
-
 char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 	if (checkFileExist(passedPath)==0){
 		if (showMessage==1){
@@ -411,7 +398,6 @@ char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 	luaL_dofile(passedState,passedPath);
 	return 1;
 }
-
 void WriteToDebugFile(const char* stuff){
 	#if PLATFORM == PLAT_VITA
 		char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
@@ -427,7 +413,6 @@ void WriteToDebugFile(const char* stuff){
 		fclose(fp);
 	#endif
 }
-
 void WriteSDLError(){
 	#if RENDERER == REND_SDL || SOUNDPLAYER == SND_SDL
 		WriteToDebugFile(SDL_GetError());
@@ -435,11 +420,9 @@ void WriteSDLError(){
 		WriteToDebugFile("Can't write SDL error because not using SDL.");
 	#endif
 }
-
 size_t u_strlen(const unsigned char * array){
 	return (const size_t)strlen((const char*)array);
 }
-
 // Returns one if they chose yes
 // Returns zero if they chose no
 int LazyChoice(const char* stra, const char* strb, const char* strc, const char* strd){
@@ -489,7 +472,6 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 	}
 	return 0;
 }
-
 int FixVolumeArg(int _val){
 	if (floor(_val/(float)2)>128){
 		return 128;
@@ -500,14 +482,12 @@ int FixVolumeArg(int _val){
 	}
 	return 255;
 }
-
 int FixBGMVolume(int _val){
 	return FixVolumeArg(_val)*bgmVolume;
 }
 int FixSEVolume(int _val){
 	return FixVolumeArg(_val)*seVolume;
 }
-
 void ClearMessageArray(){
 	currentLine=0;
 	int i,j;
@@ -528,18 +508,15 @@ void ClearMessageArray(){
 		imageCharType[i]=-1;
 	}
 }
-
 void SetAllMusicVolume(int _passedFixedVolume){
 	int i;
 	for (i = 0; i < MAXMUSICARRAY; i++){
 		SetMusicVolume(currentMusicHandle[i],_passedFixedVolume);
 	}
 }
-
 int GetNextCharOnLine(int _linenum){
 	return u_strlen(currentMessages[_linenum]);
 }
-
 void DrawMessageText(){
 	//system("cls");
 	int i;
@@ -553,7 +530,6 @@ void DrawMessageText(){
 		}
 	}
 }
-
 void PrintScreenValues(){
 	system("cls");
 	int i,j;
@@ -564,7 +540,6 @@ void PrintScreenValues(){
 		printf("\n");
 	}
 }
-
 int Password(int val, int _shouldHave){
 	if (val==_shouldHave){
 		return val+1;
@@ -572,7 +547,6 @@ int Password(int val, int _shouldHave){
 		return 0;
 	}
 }
-
 void WriteIntToDebugFile(int a){
 	#if PLATFORM == PLAT_VITA
 		char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
@@ -588,7 +562,6 @@ void WriteIntToDebugFile(int a){
 		fclose(fp);
 	#endif
 }
-
 void XOutFunction(){
 	if (currentGameStatus==GAMESTATUS_MAINGAME){
 		//luaL_error(L,"game stopped\n");
@@ -601,7 +574,6 @@ void XOutFunction(){
 		currentGameStatus=GAMESTATUS_QUIT;
 	}
 }
-
 // Does not clear the debug file at ux0:data/HIGURASHI/log.txt  , I promise.
 void ClearDebugFile(){
 	#if PLATFORM == PLAT_VITA
@@ -610,7 +582,6 @@ void ClearDebugFile(){
 	fclose(fp);
 	#endif
 }
-
 void ResetBustStruct(bust* passedBust, int canfree){
 	if (canfree==1 && passedBust->image!=NULL){
 		FreeTexture(passedBust->image);
@@ -624,18 +595,15 @@ void ResetBustStruct(bust* passedBust, int canfree){
 	passedBust->bustStatus = BUST_STATUS_NORMAL;
 	passedBust->lineCreatedOn=0;
 }
-
 void DisposeOldScript(){
 	// Frees the script main
 	lua_getglobal(L,"FreeTrash");
 	lua_call(L, 0, 0);
 }
-
 char StringStartWith(const char *a, const char *b){
 	if(strncmp(a, b, strlen(b)) == 0) return 1;
 	return 0;
 }
-
 // Give it a full script file path and it will return 1 if the file was converted beforehand
 int DidActuallyConvert(char* filepath){
 	if (checkFileExist(filepath)==0){
@@ -668,21 +636,18 @@ int DidActuallyConvert(char* filepath){
 	fclose(file);
 	return _isConverted;
 }
-
 void SaveFontSizeFile(){
 	FixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
 	FILE* fp = fopen((const char*)globalTempConcat,"w");
 	fwrite(&fontSize,4,1,fp);
 	fclose(fp);
 }
-
 void LoadFontSizeFile(){
 	FixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
 	FILE* fp = fopen((const char*)globalTempConcat,"r");
 	fread(&fontSize,4,1,fp);
 	fclose(fp);
 }
-
 void DisplaypcallError(int val, const char* fourthMessage){
 	switch (val){
 		case LUA_ERRRUN:
@@ -702,13 +667,11 @@ void DisplaypcallError(int val, const char* fourthMessage){
 		break;
 	}
 }
-
 int _debugCount=0;
 void PrintDebugCounter(){
 	printf("DEBUG %d\n",_debugCount);
 	_debugCount++;
 }
-
 // Returns 1 if it worked
 char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	// Hopefully, nobody tries to call a script from a script and wants to keep the current message display.
@@ -772,7 +735,6 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	}
 	return 1;
 }
-
 char* CombineStringsPLEASEFREE(const char* first, const char* firstpointfive, const char* second, const char* third){
 	char* tempstringconcat = (char*)calloc(1,strlen(first)+strlen(firstpointfive)+strlen(second)+strlen(third)+1);
 	strcpy(tempstringconcat, first);
@@ -781,7 +743,6 @@ char* CombineStringsPLEASEFREE(const char* first, const char* firstpointfive, co
 	strcat(tempstringconcat, third);
 	return tempstringconcat;
 }
-
 signed char WaitCanSkip(int amount){
 	int i=0;
 	ControlsStart();
@@ -799,7 +760,6 @@ signed char WaitCanSkip(int amount){
 	wait(amount%50);
 	return 0;
 }
-
 void DrawUntilX(){
 	while (1){
 		FpsCapStart();
@@ -818,7 +778,6 @@ void DrawUntilX(){
 	}
 	ControlsEnd();
 }
-
 void LastLineLazyFix(int* _line){
 	if (*_line==15){
 		DrawUntilX();
@@ -826,7 +785,6 @@ void LastLineLazyFix(int* _line){
 		*_line=0;
 	}
 }
-
 void Update(){
 	int i=0;
 	for (i = 0; i < MAXBUSTS; i++){
@@ -876,7 +834,6 @@ void Update(){
 		}
 	}
 }
-
 int FixHistoryOldSub(int _val, int _scroll){
 	if (_val+_scroll>=MAXMESSAGEHISTORY){
 		return (_val+_scroll)-MAXMESSAGEHISTORY;
@@ -884,7 +841,6 @@ int FixHistoryOldSub(int _val, int _scroll){
 		return _val+_scroll;
 	}
 }
-
 void InBetweenLines(lua_State *L, lua_Debug *ar) {
 	if (currentGameStatus==GAMESTATUS_MAINGAME){
 		currentScriptLine++;
@@ -959,7 +915,6 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 		}while(endType==Line_Normal || endType == Line_WaitForInput);
 	}
 }
-
 void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
 	*_tempXOffset = floor((screenWidth-GetTextureWidth(_tempImg))/2);
 	*_tempYOffset = floor((screenHeight-GetTextureHeight(_tempImg))/2);
@@ -971,21 +926,18 @@ void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int
 		*_tempYOffset=0;
 	}
 }
-
 float GetXOffsetScale(CrossTexture* _tempImg){
 	if (GetTextureWidth(_tempImg)>screenWidth){
 		return (screenWidth/640);
 	}
 	return (GetTextureWidth(_tempImg)/(float)640);
 }
-
 float GetYOffsetScale(CrossTexture* _tempImg){
 	if (GetTextureHeight(_tempImg)>screenHeight){
 		return (screenHeight/480);
 	}
 	return ( GetTextureHeight(_tempImg)/(float)480);
 }
-
 void DrawBackground(CrossTexture* passedBackground){
 
 
@@ -994,7 +946,6 @@ void DrawBackground(CrossTexture* passedBackground){
 	GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
 	DrawTexture(passedBackground,_tempXOffset,_tempYOffset);
 }
-
 void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlpha){
 
 	
@@ -1003,7 +954,6 @@ void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlp
 	GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
 	DrawTextureAlpha(passedBackground,_tempXOffset,_tempYOffset,passedAlpha);
 }
-
 void DrawBust(bust* passedBust){
 	signed int _tempXOffset;
 	signed int _tempYOffset;
@@ -1015,7 +965,6 @@ void DrawBust(bust* passedBust){
 		DrawTextureAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, passedBust->alpha);
 	}	
 }
-
 void RecalculateBustOrder(){
 	int i, j, k;
 
@@ -1065,7 +1014,6 @@ void RecalculateBustOrder(){
 		}
 	}
 }
-
 void MoveFilePointerPastNewline(CROSSFILE* fp){
 	unsigned char _temp;
 	crossfread(&_temp,1,1,fp);
@@ -1073,7 +1021,6 @@ void MoveFilePointerPastNewline(CROSSFILE* fp){
 		crossfseek(fp,1,SEEK_CUR);
 	}
 }
-
 // LAST ARG IS WHERE THE LENGTH IS STORED
 unsigned char* ReadNumberStringList(CROSSFILE *fp, unsigned char* arraysize){
 	int numScripts;
@@ -1105,7 +1052,6 @@ unsigned char* ReadNumberStringList(CROSSFILE *fp, unsigned char* arraysize){
 	(*arraysize) = numScripts;
 	return _thelist;
 }
-
 char** ReadFileStringList(CROSSFILE *fp, unsigned char* arraysize){
 	char currentReadLine[200];
 	char currentReadNumber[4];
@@ -1153,7 +1099,6 @@ char** ReadFileStringList(CROSSFILE *fp, unsigned char* arraysize){
 	(*arraysize) = numScripts;
 	return _thelist;
 }
-
 void LoadPreset(char* filename){
 	//currentPresetFileList
 	CROSSFILE *fp;
@@ -1213,12 +1158,10 @@ void LoadPreset(char* filename){
 
 	crossfclose(fp);
 }
-
 void SetNextScriptName(){
 	memset((char*)(nextScriptToLoad),'\0',sizeof(nextScriptToLoad));
 	strcpy((char*)nextScriptToLoad,currentPresetFileList.theArray[currentPresetChapter]);
 }
-
 // Generates the default data paths for script, presets, etc
 // Will use uma0 if possible
 void ResetDataDirectory(){
@@ -1234,7 +1177,6 @@ void ResetDataDirectory(){
 		GenerateDefaultDataDirectory(&DATAFOLDER,0);
 	#endif
 }
-
 void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd){
 	ControlsStart();
 	ControlsEnd();
@@ -1265,7 +1207,6 @@ void LazyMessage(const char* stra, const char* strb, const char* strc, const cha
 		FpsCapWait();
 	}
 }
-
 void LoadGame(){
 	strcpy((char*)globalTempConcat,SAVEFOLDER);
 	strcat((char*)globalTempConcat,currentPresetFilename);
@@ -1277,7 +1218,6 @@ void LoadGame(){
 		fclose(fp);
 	}
 }
-
 void SaveGame(){
 	strcpy((char*)globalTempConcat,SAVEFOLDER);
 	strcat((char*)globalTempConcat,currentPresetFilename);
@@ -1286,7 +1226,6 @@ void SaveGame(){
 	fwrite(&currentPresetChapter,2,1,fp);
 	fclose(fp);
 }
-
 // We make the user set up stuff by themself, that means that there will be morons who don't do it right.
 // I must protect said morons
 // Returns 0 for everything good
@@ -1337,7 +1276,6 @@ signed char CheckForUserStuff(){
 
 	return _oneMissing;
 }
-
 void TryLoadMenuSoundEffect(){
 	if (menuSound!=NULL){
 		return;
@@ -1352,9 +1290,7 @@ void TryLoadMenuSoundEffect(){
 	}
 	free(tempstringconcat);
 }
-
 //===================
-
 void FadeBustshot(int passedSlot,int _time,char _wait){
 	if (isSkipping==1){
 		_time=0;
@@ -1394,7 +1330,6 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 		}
 	}
 }
-
 void FadeAllBustshots(int _time, char _wait){
 	if (isSkipping==1){
 		_time=0;
@@ -1434,7 +1369,6 @@ void FadeAllBustshots(int _time, char _wait){
 		}
 	}
 }
-
 void LocationStringFallback(char** tempstringconcat, const char* filename){
 	if (checkFileExist(*tempstringconcat)==0){
 		free(*tempstringconcat);
@@ -1447,22 +1381,12 @@ void LocationStringFallback(char** tempstringconcat, const char* filename){
 		}
 	}
 }
-
 void DrawScene(const char* _filename, int time){
 	if (isSkipping==1){
 		time=0;
 	}
-
-
 	int _alphaPerFrame=255;
-	//FadeAllBustshots(time,0);
 	int i=0;
-	//for (i=0;i<MAXBUSTS;i++){
-	//	if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
-	//		FadeBustshot(i,time,0);
-	//	}
-	//}
-
 	signed short _backgroundAlpha=0;
 
 	if (time!=0){
@@ -1549,7 +1473,6 @@ void DrawScene(const char* _filename, int time){
 	}
 	currentBackground=newBackground;
 }
-
 void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
 	if (passedSlot>=MAXBUSTS){
 		LazyMessage("DrawBustshot slot too high.","No action will be taken.",NULL,NULL);
@@ -1637,7 +1560,6 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 		}
 	}
 }
-
 // strcpy, but it won't copy from src to dest if the value is 1.
 // You can use this to exclude certian spots
 // I do not mean the ASCII character 1, which is 49.
@@ -1665,7 +1587,6 @@ int strlenNO1(char* src){
 	}
 	return len;
 }
-
 #if PLATFORM == PLAT_WINDOWS
 	int _LagTestStart;
 	void LagTestStart(){
@@ -1675,7 +1596,6 @@ int strlenNO1(char* src){
 		printf("lagometer: %d\n",getTicks()-_LagTestStart);
 	}
 #endif
-
 // _dirRelativeToStreamingAssetsNoEndSlash should start AND END with a slash
 // Example
 // /SE/
@@ -1705,7 +1625,6 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 	}
 	free(tempstringconcat);
 }
-
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
 	// 1 when finished displaying the text
 	char _isDone=0;
@@ -1950,7 +1869,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	// End of function
 	endType = _endtypetemp;
 }
-
 void FreeBGM(int _slot){
 	if (currentMusic[_slot]!=NULL){
 		StopMusic(currentMusic[_slot]);
@@ -1964,7 +1882,6 @@ void FreeBGM(int _slot){
 		}
 	}
 }
-
 void StopBGM(int _slot){
 	if (currentMusic[_slot]!=NULL){
 		StopMusic(currentMusic[_slot]);
@@ -1992,7 +1909,6 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 	free(tempstringconcat);
 	return;
 }
-
 // Settings file format:
 // OPTIONSFILEFORMAT, 1 byte
 // cpuOverclocked, 1 byte
@@ -2021,7 +1937,6 @@ void SaveSettings(){
 	fclose(fp);
 	printf("SAved settings file.\n");
 }
-
 void LoadSettings(){
 	FixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
 	if (checkFileExist((const char*)globalTempConcat)==0){
@@ -2061,7 +1976,6 @@ void LoadSettings(){
 		printf("Loaded settings file.\n");
 	}
 }
-
 void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 	ControlsEnd();
 	int _noobHeight = TextHeight(fontSize);
@@ -2127,12 +2041,10 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 		FpsCapWait();
 	}
 }
-
 void ChangeEasyTouchMode(int _newControlValue){
 	ControlsReset();
 	easyTouchControlMode = _newControlValue;
 }
-
 #if PLATFORM == PLAT_WINDOWS
 
 	void DrawTouchControlsHelp(){
@@ -2256,7 +2168,6 @@ void ChangeEasyTouchMode(int _newControlValue){
 		}
 	}
 #endif
-
 // FOLDER NAME SHOULD NOT END WITH SLASH
 void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName){
 	free(STREAMINGASSETS);
@@ -2290,7 +2201,6 @@ void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName){
 	strcpy(SAVEFOLDER,DATAFOLDER);
 	strcat(SAVEFOLDER,"Saves/");
 }
-
 void UpdatePresetStreamingAssetsDir(char* filename){
 	char _tempNewStreamingAssetsPathbuffer[256];
 	strcpy(_tempNewStreamingAssetsPathbuffer,DATAFOLDER);
@@ -2303,34 +2213,28 @@ void UpdatePresetStreamingAssetsDir(char* filename){
 		GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer);
 	}
 }
-
 /*
 =================================================
 */
-
 int L_DisplayWindow(lua_State* passedState){
 	MessageBoxEnabled=0;
 	return 0;
 }
-
 int L_ClearMessage(lua_State* passedState){
 	//system("cls");
 	currentLine=0;
 	ClearMessageArray();
 	return 0;
 }
-
 int L_OutputLine(lua_State* passedState){
 	OutputLine((unsigned const char*)lua_tostring(passedState,4),lua_tonumber(passedState,5),0);
 	return 0;
 }
-
 // Null, text, line type
 int L_OutputLineAll(lua_State* passedState){
 	OutputLine((unsigned const char*)lua_tostring(passedState,2),lua_tonumber(passedState,5),1);
 	return 0;
 }
-
 //
 int L_Wait(lua_State* passedState){
 	if (isSkipping!=1 && capEnabled==1){
@@ -2338,25 +2242,22 @@ int L_Wait(lua_State* passedState){
 	}
 	return 0;
 }
-
 // filename, filter, unknown, unknown, time
 int L_DrawSceneWithMask(lua_State* passedState){
 	DrawScene(lua_tostring(passedState,1),lua_tonumber(passedState,5));
 	return 0;
 }
-
 // filename
 // fadein
 int L_DrawScene(lua_State* passedState){
 	DrawScene(lua_tostring(passedState,1),lua_tonumber(passedState,2));
 	return 0;
 }
-
+// Placeholder for unimplemented function
 int L_NotYet(lua_State* passedState){
 	printf("An unimplemented Lua function was just executed!\n");
 	return 0;
 }
-
 // Fist arg seems to be a channel arg.
 	// Usually 1 for msys
 	// Usually 2 for lsys
@@ -2372,7 +2273,6 @@ int L_PlayBGM(lua_State* passedState){
 
 	return 0;
 }
-
 // Some int argument
 // Maybe music slot
 int L_StopBGM(lua_State* passedState){
@@ -2383,7 +2283,6 @@ int L_StopBGM(lua_State* passedState){
 	}
 	return 0;
 }
-
 // Last arg, I was right. Bool for if wait for fadeoutr
 // slot, time, (bool) should wait for finish
 int L_FadeoutBGM(lua_State* passedState){
@@ -2395,7 +2294,6 @@ int L_FadeoutBGM(lua_State* passedState){
 	}
 	return 0;
 }
-
 // Bustshot slot? (Normally 1-3 used, 5 for black, 6 for cinema 7 for title)
 	// Filename
 	// Filter filename
@@ -2427,7 +2325,6 @@ int L_DrawBustshotWithFiltering(lua_State* passedState){
 	////SDL_SetTextureAlphaMod(Busts[passedSlot].image, 255);
 	return 0;
 }
-
 // Butshot slot
 	// Filename
 	// x offset (Character starts in the middle, screen is 640x480)
@@ -2462,7 +2359,6 @@ int L_DrawBustshot(lua_State* passedState){
 	DrawBustshot(lua_tonumber(passedState,1), lua_tostring(passedState,2), lua_tonumber(passedState,3), lua_tonumber(passedState,4), lua_tonumber(passedState,14), lua_tonumber(passedState,15), lua_toboolean(passedState,16), lua_tonumber(passedState,13));
 	return 0;
 }
-
 int L_SetValidityOfInput(lua_State* passedState){
 	if (lua_toboolean(passedState,1)==1){
 		InputValidity=1;
@@ -2471,7 +2367,6 @@ int L_SetValidityOfInput(lua_State* passedState){
 	}
 	return 0;
 }
-
 // Fadeout time
 // Wait for completely fadeout
 int L_FadeAllBustshots(lua_State* passedState){
@@ -2485,24 +2380,20 @@ int L_FadeAllBustshots(lua_State* passedState){
 	//}
 	return 0;
 }
-
 int L_DisableWindow(lua_State* passedState){
 	MessageBoxEnabled=0;
 	return 0;
 }
-
 int L_FadeBustshotWithFiltering(lua_State* passedState){
 	FadeBustshot(lua_tonumber(passedState,1),lua_tonumber(passedState,7),lua_toboolean(passedState,8));
 	return 0;
 }
-
 //FadeBustshot( 2, FALSE, 0, 0, 0, 0, 0, TRUE );
 //FadeBustshot( SLOT, MOVE, X, Y, UNKNOWNA, UNKNOWNB, FADETIME, WAIT );
 int L_FadeBustshot(lua_State* passedState){
 	FadeBustshot(lua_tonumber(passedState,1),lua_tonumber(passedState,7),lua_toboolean(passedState,8));
 	return 0;
 }
-
 // Slot, file, volume
 int L_PlaySE(lua_State* passedState){
 	if (isSkipping==0 && seVolume>0){
@@ -2510,7 +2401,6 @@ int L_PlaySE(lua_State* passedState){
 	}
 	return 0;
 }
-
 // PlayVoice(channel, filename, volume)
 int L_PlayVoice(lua_State* passedState){
 	if (isSkipping==0){
@@ -2518,7 +2408,6 @@ int L_PlayVoice(lua_State* passedState){
 	}
 	return 0;
 }
-
 // Loads a script file
 int L_CallScript(lua_State* passedState){
 	const char* filename = lua_tostring(passedState,1);
@@ -2536,13 +2425,11 @@ int L_CallScript(lua_State* passedState){
 	}
 	return 0;
 }
-
 // "bg_166", 7, 200, 0
 int L_ChangeScene(lua_State* passedState){
 	DrawScene(lua_tostring(passedState,1),0);
 	return 0;
 }
-
 // DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
 // x is relative to -320
 	// y is relative to -240???
@@ -2553,7 +2440,6 @@ int L_DrawSprite(lua_State* passedState){
 	//DrawBustshot(lua_tonumber(passedState,1)-1, lua_tostring(passedState,2), lua_tonumber(passedState,3), lua_tonumber(passedState,4), lua_tonumber(passedState,14), lua_tonumber(passedState,15), lua_toboolean(passedState,16), lua_tonumber(passedState,13));
 	return 0;
 }
-
 //MoveSprite(slot, destinationx, destinationy, ?, ?, ?, ?, ?, timeittakes, waitforcompletion)
 	// MoveSprite(5,-320,-4500,0,0,0,0,0,101400, TRUE)
 int L_MoveSprite(lua_State* passedState){
@@ -2612,14 +2498,12 @@ int L_MoveSprite(lua_State* passedState){
 	}
 	return 0;
 }
-
 //FadeSprite(slot, time, waitfrocompletion)
 		// FadeSprite(5,700,FALSE)
 int L_FadeSprite(lua_State* passedState){
 	FadeBustshot(lua_tonumber(passedState,1),lua_tonumber(passedState,2),lua_toboolean(passedState,3));	
 	return 0;
 }
-
 // Select(numoptions, arrayofstring)
 //		Let's the user make a choice and have this not be a sound novel anymore. :/
 //		First arg is the number of options and the second arg is a string of the names of the options
@@ -2671,7 +2555,6 @@ int L_Select(lua_State* passedState){
 	ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 	return 0;
 }
-
 // Loads a special variable
 int L_LoadValueFromLocalWork(lua_State* passedState){
 	const char* _wordWant = lua_tostring(passedState,1);
@@ -2683,7 +2566,6 @@ int L_LoadValueFromLocalWork(lua_State* passedState){
 	}
 	return 1;
 }
-
 // Calls a function that was made in a script
 int L_CallSection(lua_State* passedState){
 	char buf[256];
@@ -2693,7 +2575,6 @@ int L_CallSection(lua_State* passedState){
 	luaL_dostring(L,buf);
 	return 0;
 }
-
 // I CAN DO THIS EZ-PZ WITH DRAWING RECTANGLES OVER THE SCREEN
 // DrawFilm( 2,  0, 255, 0, 255, 0, 1000, TRUE );
 // DrawFilm (slot?, r, g, b, filer's alpha, ?, fadein time, wait for fadein) <-- Guess
@@ -2720,12 +2601,11 @@ int L_DrawFilm(lua_State* passedState){
 	}
 	return 0;
 }
-
+// I think this just has a time argument and a blocking argument. I've implemented neither.
 int L_FadeFilm(lua_State* passedState){
 	filterActive=0;
 	return 0;
 }
-
 // This command is used so unoften that I didn't bother to make it look good.
 // FadeBG( 3000, TRUE );
 int L_FadeBG(lua_State* passedState){
@@ -2735,12 +2615,11 @@ int L_FadeBG(lua_State* passedState){
 	}
 	return 0;
 }
-
+//
 int L_DebugFile(lua_State* passedState){
 	WriteToDebugFile(lua_tostring(passedState,1));
 	return 0;
 }
-
 void MakeLuaUseful(){
 	LUAREGISTER(L_OutputLine,"OutputLine")
 	LUAREGISTER(L_ClearMessage,"ClearMessage")
@@ -2885,9 +2764,7 @@ void MakeLuaUseful(){
 		LUAREGISTER(L_NotYet,"WaitToFinishSEPlaying")
 		LUAREGISTER(L_NotYet,"WaitToFinishVoicePlaying")
 }
-
 //======================================================
-
 void Draw(){
 	int i;
 	//DrawTexture(testtex,32,32);
@@ -2923,12 +2800,10 @@ void Draw(){
 	}
 	EndDrawing();
 }
-
 // Returns what RunScript returns
 char LuaThread(char* _torun){
 	return RunScript(SCRIPTFOLDER, _torun,1);
 }
-
 // Returns 0 if normal
 // Returns 1 if user quit
 // Returns 2 if no files found
@@ -3050,7 +2925,6 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 	free(filenameholder);
 	return _returnVal;
 }
-
 void FontSizeSetup(){
 	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	char _choice=0;
@@ -3089,20 +2963,15 @@ void FontSizeSetup(){
 			}
 		}
 		ControlsEnd();
-
-		//void itoa(int _num, char* _buffer, int _uselessBase){
-
 		StartDrawing();
-		//void DrawText(int x, int y, const char* text, float size){
 		GoodDrawText(32,currentTextHeight,"Font Size: ",fontSize);
 			GoodDrawText(32+TextWidth(fontSize,"Font Size: "),currentTextHeight,_tempNumberString,fontSize);
-		#if PLATFORM != PLAT_VITA
+		#if PLATFORM == PLAT_VITA
 			GoodDrawText(32,currentTextHeight*2,"Test",fontSize);
 			GoodDrawText(32,currentTextHeight*5,"While the text may look bad now, restarting ",fontSize);
 			GoodDrawText(32,currentTextHeight*6,"after changing it will make it look good.",fontSize);
 		#endif
 		GoodDrawText(32,currentTextHeight*3,"Done",fontSize);
-
 		#if PLATFORM != PLAT_VITA
 			GoodDrawText(32,currentTextHeight*5,"You should be able to see this entire line. It shouldn't cut off.",fontSize);
 	
@@ -3113,15 +2982,12 @@ void FontSizeSetup(){
 	
 			GoodDrawText(32,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn",fontSize);
 		#endif
-		
-
 		GoodDrawText(5,currentTextHeight*(_choice+1),">",fontSize);
 		EndDrawing();
 		FpsCapWait();
 	}
 	SaveFontSizeFile();
 }
-
 void SettingsMenu(){
 	PlayMenuSound();
 	signed char _choice=0;
@@ -3383,7 +3249,6 @@ void SettingsMenu(){
 		}
 	}
 }
-
 void TitleScreen(){
 	signed char _choice=0;
 	
@@ -3499,7 +3364,6 @@ void TitleScreen(){
 		FpsCapWait();
 	}
 }
-
 void TipMenu(){
 	ClearMessageArray();
 	if (currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
@@ -3653,7 +3517,6 @@ void TipMenu(){
 		FpsCapWait();
 	}
 }
-
 void ChapterJump(){
 	ChangeEasyTouchMode(TOUCHMODE_LEFTRIGHTSELECT);
 	//currentGameStatus=3;
@@ -3755,7 +3618,6 @@ void ChapterJump(){
 		FpsCapWait();
 	}
 }
-
 void SaveGameEditor(){
 	ChangeEasyTouchMode(TOUCHMODE_LEFTRIGHTSELECT);
 	char _endOfChapterString[10];
@@ -3801,7 +3663,6 @@ void SaveGameEditor(){
 		FpsCapWait();
 	}
 }
-
 void NavigationMenu(){
 	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	signed char _choice=0;
@@ -3920,7 +3781,6 @@ void NavigationMenu(){
 		FpsCapWait();
 	}
 }
-
 void NewGameMenu(){
 	char _choice=0;
 	ChangeEasyTouchMode(TOUCHMODE_MENU);
@@ -3952,9 +3812,7 @@ void NewGameMenu(){
 		FpsCapWait();
 	}
 }
-
 // =====================================================
-
 // Returns 2 for missing or outdated happy.lua
 // Returns 0 otherwise
 char init_dohappylua(){
