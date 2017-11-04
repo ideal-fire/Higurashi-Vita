@@ -33,11 +33,10 @@ void FpsCapWait(){
 			//printf("Slowdown %d\n",MILISECONDSPERFRAME - (tempHold-frameStartMiliseconds));
 			//printf("Slowdown: %d\n",tempHold-frameStartMiliseconds-MILISECONDSPERFRAME);
 		}
-	}else{
-		#if PLATFORM == PLAT_VITA
-			sceKernelPowerTick(SCE_KERNEL_POWER_TICK_DISABLE_AUTO_SUSPEND);
-		#endif
 	}
+	#if PLATFORM == PLAT_VITA
+		sceKernelPowerTick(SCE_KERNEL_POWER_TICK_DISABLE_AUTO_SUSPEND);
+	#endif
 }
 
 #endif

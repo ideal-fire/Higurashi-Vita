@@ -124,6 +124,14 @@
 			}
 		#endif
 	}
+	void StopSound(CROSSSFX* toStop){
+		#if SOUNDPLAYER == SND_SDL
+			#warning CANT STOP SOUND WITH SDL_MIXER
+		#elif SOUNDPLAYER == SND_SOLOUD
+			Wav_stop(toStop);
+		#endif
+	}
+
 	CROSSPLAYHANDLE PlaySound(CROSSSFX* toPlay, int timesToPlay){
 		#if SOUNDPLAYER == SND_SDL
 			Mix_PlayChannel( -1, toPlay, timesToPlay-1 );

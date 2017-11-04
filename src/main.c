@@ -55,6 +55,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
+#include <pthread.h>
 //
 #include <Lua/lua.h>
 #include <Lua/lualib.h>
@@ -72,7 +73,7 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.0.0.x" // This
+#define VERSIONSTRING "v2.1" // This
 #define VERSIONNUMBER 2 // This
 #define VERSIONCOLOR 0,208,138
 #define HISTORYONONESCREEN 13
@@ -81,6 +82,7 @@
 #define USEUMA0 1 // Doesn't need to be unsafe for this, I guess.
 ////////////////////////////////////
 #define MAXMUSICARRAY 10
+#define MAXSOUNDEFFECTARRAY 10
 
 #include "GeneralGoodExtended.h"
 #include "GeneralGood.h"
@@ -164,8 +166,10 @@ int lastBGMVolume = 128;
 CrossTexture* currentBackground = NULL;
 CROSSMUSIC* currentMusic[MAXMUSICARRAY] = {NULL};
 CROSSPLAYHANDLE currentMusicHandle[MAXMUSICARRAY] = {0};
+char* currentMusicFilepath[MAXMUSICARRAY]={NULL};
+short currentMusicUnfixedVolume[MAXMUSICARRAY] = {0};
 //CROSSMUSIC* currentMusic = NULL;
-CROSSSFX* soundEffects[10] = {NULL};
+CROSSSFX* soundEffects[MAXSOUNDEFFECTARRAY] = {NULL};
 
 CROSSSFX* menuSound=NULL;
 signed char menuSoundLoaded=0;
@@ -282,6 +286,10 @@ int currentTextHeight;
 #endif
 
 CrossTexture* loadingImage;
+
+pthread_t soundProtectThreadId;
+
+char isActuallyUsingUma0=0;
 
 /*
 ====================================================
@@ -1218,6 +1226,8 @@ void ResetDataDirectory(){
 		if (!directoryExists(DATAFOLDER)){
 			free(DATAFOLDER);
 			GenerateDefaultDataDirectory(&DATAFOLDER,0);
+		}else{
+			isActuallyUsingUma0=1;
 		}
 	#else
 		GenerateDefaultDataDirectory(&DATAFOLDER,0);
@@ -1540,6 +1550,10 @@ void DrawScene(const char* _filename, int time){
 }
 
 void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
+	if (passedSlot>=MAXBUSTS){
+		LazyMessage("DrawBustshot slot too high.","No action will be taken.",NULL,NULL);
+		return;
+	}
 	if (isSkipping==1){
 		_fadeintime=0;
 		_waitforfadein=0;
@@ -1666,6 +1680,10 @@ int strlenNO1(char* src){
 // /SE/
 // DO NOT FIX THE SE VOLUME BEFORE PASSING ARGUMENT
 void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, const char* _dirRelativeToStreamingAssetsNoEndSlash){
+	if (passedSlot>=MAXSOUNDEFFECTARRAY){
+		LazyMessage("Sound effect slot too high.","No action will be taken.",NULL,NULL);
+		return;
+	}
 	if (strlen(filename)==0){
 		printf("Sound effect filename empty.\n");
 		return;
@@ -1935,23 +1953,38 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	endType = _endtypetemp;
 }
 
-void StopBGM(int _slot){
-	StopMusic(currentMusic[_slot]);
-	if (currentMusic[_slot]!=NULL){
-		FreeMusic(currentMusic[_slot]);
-		currentMusic[_slot]=NULL;
-	}
-}
-
-void PlayBGM(const char* filename, int _volume, int _slot){
+void FreeBGM(int _slot){
 	if (currentMusic[_slot]!=NULL){
 		StopMusic(currentMusic[_slot]);
 		FreeMusic(currentMusic[_slot]);
 		currentMusic[_slot]=NULL;
 		currentMusicHandle[_slot]=0;
+		if (currentMusicFilepath[_slot]!=NULL){
+			free(currentMusicFilepath[_slot]);
+			currentMusicFilepath[_slot]=NULL;
+			currentMusicUnfixedVolume[_slot] = 0;
+		}
 	}
+}
+
+void StopBGM(int _slot){
+	if (currentMusic[_slot]!=NULL){
+		StopMusic(currentMusic[_slot]);
+	}
+}
+// Unfixed bgm
+void PlayBGM(const char* filename, int _volume, int _slot){
+	if (_slot>=MAXMUSICARRAY){
+		LazyMessage("Music slot too high.","No action will be taken.",NULL,NULL);
+		return;
+	}
+	FreeBGM(_slot);
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/BGM/", filename, ".ogg");
 	if (checkFileExist(tempstringconcat)==1){
+		currentMusicFilepath[_slot] = malloc(strlen(filename)+1);
+		strcpy(currentMusicFilepath[_slot],filename);
+		currentMusicUnfixedVolume[_slot] = _volume;
+
 		currentMusic[_slot] = LoadMusic(tempstringconcat);
 		//SetMusicVolume(currentMusic[_slot],FixBGMVolume(_volume));
 		currentMusicHandle[_slot] = PlayMusic(currentMusic[_slot]);
@@ -2345,7 +2378,11 @@ int L_PlayBGM(lua_State* passedState){
 // Some int argument
 // Maybe music slot
 int L_StopBGM(lua_State* passedState){
-	StopBGM(lua_tonumber(passedState,1));
+	char _slot = lua_tonumber(passedState,1);
+	if (currentMusic[_slot]!=NULL){
+		StopBGM(_slot);
+		FreeBGM(_slot);
+	}
 	return 0;
 }
 
@@ -3962,6 +3999,71 @@ char init_dohappylua(){
 	return 0;
 }
 
+#if PLATFORM == PLAT_VITA
+char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
+	if (_currentPad.buttons & _button){
+		if (!(_lastPad.buttons & _button)){
+			return 1;
+		}
+	}
+	return 0;
+}
+
+// Wait for the user to suspend the game, save them, and be happy.
+void* soundProtectThread(void *arg){
+	if (isActuallyUsingUma0==1){
+		return NULL;
+	}
+	SceCtrlData _currentPad;
+	SceCtrlData _lastPad;
+	sceCtrlPeekBufferPositive(0, &_lastPad, 1);
+	sceCtrlPeekBufferPositive(0, &_currentPad, 1);
+	while (1){
+		sceCtrlPeekBufferPositive(0, &_currentPad, 1);
+		if (wasJustPressedSpecific(_currentPad,_lastPad,SCE_CTRL_PSBUTTON) || wasJustPressedSpecific(_currentPad,_lastPad,SCE_CTRL_POWER)){
+			// Stop with WAV
+			int i;
+			for (i=0;i<MAXMUSICARRAY;i++){
+				StopBGM(i);
+			}
+			for (i=0;i<MAXSOUNDEFFECTARRAY;i++){
+				if (soundEffects[i]!=NULL){
+					StopSound(soundEffects[i]);
+				}
+			}
+			// Wait for the user to return.
+			SceRtcTick _firstPressedButtonTick;
+			sceRtcGetCurrentTick(&_firstPressedButtonTick);
+			SceRtcTick _checkForReturnTick;
+			sceRtcGetCurrentTick(&_checkForReturnTick);
+			uint32_t _rtcTickResolution = sceRtcGetTickResolution();
+			while (1){
+				sceRtcGetCurrentTick(&_checkForReturnTick);
+				// Wait a second, literally
+				if (_checkForReturnTick.tick>_firstPressedButtonTick.tick+_rtcTickResolution){
+					break;
+				}
+				sceKernelDelayThread(1);
+			}
+			// The user has returned.
+			// Load and play
+			for (i=0;i<MAXMUSICARRAY;i++){
+				if (currentMusicFilepath[i]==NULL){
+					continue;
+				}
+				char* _tempHoldBuffer = malloc(strlen(currentMusicFilepath[i])+1);
+				strcpy(_tempHoldBuffer,currentMusicFilepath[i]);
+				PlayBGM(_tempHoldBuffer,currentMusicUnfixedVolume[i],i);
+				free(_tempHoldBuffer);
+			}
+		}
+		_lastPad=_currentPad;
+		sceKernelDelayThread(16);
+	}
+	return NULL;
+}
+#endif
+
 // Please exit if this function returns 2
 // Go ahead as normal if it returns 0
 signed char init(){
@@ -4027,6 +4129,7 @@ signed char init(){
 	#elif TEXTRENDERER == TEXT_VITA2D
 		if (checkFileExist((char*)"app0:assets/LiberationSans-Regular.ttf")==1){
 			fontImage = vita2d_load_font_file((char*)"app0:assets/LiberationSans-Regular.ttf");
+			//fontImage = vita2d_load_font_file("sa0:data/font/pvf/ltn4.pvf");
 		}
 	#endif
 
@@ -4120,6 +4223,14 @@ signed char init(){
 			FontSizeSetup();
 		}
 	#endif
+
+	#if PLATFORM == PLAT_VITA
+		// Create the protection thread.
+		if (pthread_create(&soundProtectThreadId, NULL, &soundProtectThread, NULL) != 0){
+			return 2;
+		}
+	#endif
+
 	return 0;
 }
 
