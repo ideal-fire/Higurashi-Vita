@@ -1,0 +1,10 @@
+// 0 is none, defaults to 1.
+// 1 is "EffectColorMix"
+// 2 is DrainColor
+// 3 is Negative
+// 10 is HorizontalBlur2
+// 12 is GaussianBlur
+
+
+// type, r, g, b, power, (style?), blocking
+DrawFilm( 3, 255, 255, 255, 255, 0, 3000, TRUE );

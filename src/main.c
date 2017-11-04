@@ -1,4 +1,7 @@
 /*
+
+	7:20
+
 	TODO - Inversion
 		I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
 	
@@ -73,7 +76,7 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.1" // This
+#define VERSIONSTRING "v2.1.x" // This
 #define VERSIONNUMBER 2 // This
 #define VERSIONCOLOR 0,208,138
 #define HISTORYONONESCREEN 13
@@ -96,12 +99,8 @@
 #define OPTIONSFILEFORMAT 2
 
 //#define LUAREGISTER(x,y) DebugLuaReg(y);
-
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
 	lua_setglobal(L,y);
-
-// Platform specific headers
-	// Nothing to see here.
 
 ////////////////////////////////////////
 // PLatform specific variables
@@ -332,11 +331,13 @@ CrossTexture* LoadEmbeddedPNG(const char* path){
 }
 
 void DrawMessageBox(){
+	//if (filterActive==0){
 	DrawRectangle(0,0,screenWidth,screenHeight,0,0,0,MessageBoxAlpha);
+	//}
 }
 
 void DrawCurrentFilter(){
-	DrawRectangle(0,0,screenWidth,screenHeight,filterR,filterG,filterB,filterA-100);
+	DrawRectangle(0,0,screenWidth,screenHeight,filterR,filterG,filterB,filterA);
 	//DrawRectangle(0,0,960,screenHeight,filterR,255-(filterG*filterA*.0011),filterB,255);
 }
 
@@ -1857,7 +1858,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				}else{
 					//printf("%d;%s\n",TextWidth(fontSize,&(message[lastNewlinePosition+1])));
 				}
-
 				message[i] = _tempCharCache;
 			}
 			// Copy whatever remains
@@ -1898,8 +1898,10 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				DrawBust(&(Busts[bustOrder[i]]));
 			}
 		}
-		
-		if (MessageBoxEnabled==1 && filterActive==0){
+		if (filterActive==1){
+			DrawCurrentFilter();
+		}
+		if (MessageBoxEnabled==1){
 			DrawMessageBox();
 		}
 		
@@ -1907,10 +1909,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
 				DrawBust(&(Busts[bustOrderOverBox[i]]));
 			}
-		}
-		
-		if (filterActive==1){
-			DrawCurrentFilter();
 		}
 		if (MessageBoxEnabled==1){
 			char _tempCharCache = currentMessages[_currentDrawLine][_currentDrawChar+1];
@@ -2698,19 +2696,34 @@ int L_CallSection(lua_State* passedState){
 
 // I CAN DO THIS EZ-PZ WITH DRAWING RECTANGLES OVER THE SCREEN
 // DrawFilm( 2,  0, 255, 0, 255, 0, 1000, TRUE );
-// DrawFilm (slot?, r, g, b, filer's alpha, ?, fadein time, wait for fadein)
+// DrawFilm (slot?, r, g, b, filer's alpha, ?, fadein time, wait for fadein) <-- Guess
+// DrawFilm ( type, r, g, b, a, style?, fadein time, wait for fadein )
 int L_DrawFilm(lua_State* passedState){
-	filterR = lua_tonumber(passedState,2);
-	filterG = lua_tonumber(passedState,3);
-	filterB = lua_tonumber(passedState,4);
-	filterA = lua_tonumber(passedState,5);
+	// 0 is none, defaults to 1.
+	// 1 is "EffectColorMix"
+	// 2 is DrainColor
+	// 3 is Negative
+	// 10 is HorizontalBlur2
+	// 12 is GaussianBlur
+	char _filterType = lua_tonumber(passedState,1);
 	filterActive=1;
+	if (_filterType<=1){
+		filterR = lua_tonumber(passedState,2);
+		filterG = lua_tonumber(passedState,3);
+		filterB = lua_tonumber(passedState,4);
+		filterA = lua_tonumber(passedState,5);
+	}else{ // For these, we'll just draw a white filter.
+		filterR = 255;
+		filterG = 255;
+		filterB = 255;
+		filterA = 127;
+	}
 	return 0;
 }
 
 int L_FadeFilm(lua_State* passedState){
 	filterActive=0;
-	return 1;
+	return 0;
 }
 
 // This command is used so unoften that I didn't bother to make it look good.
@@ -2890,8 +2903,11 @@ void Draw(){
 			DrawBust(&(Busts[bustOrder[i]]));
 		}
 	}
-
-	if (MessageBoxEnabled==1 && filterActive==0){
+	
+	if (filterActive==1){
+		DrawCurrentFilter();
+	}
+	if (MessageBoxEnabled==1){
 		// This is the message box
 		DrawMessageBox();
 	}
@@ -2901,10 +2917,7 @@ void Draw(){
 			DrawBust(&(Busts[bustOrderOverBox[i]]));
 		}
 	}
-	
-	if (filterActive==1){
-		DrawCurrentFilter();
-	}
+
 	if (MessageBoxEnabled==1){
 		DrawMessageText();
 	}
