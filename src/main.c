@@ -1,7 +1,4 @@
 /*
-
-	7:20
-
 	TODO - Inversion
 		I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
 	
@@ -24,7 +21,7 @@
 				// Make another message array, but store text that is in italics in it
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
-	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
+		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -70,7 +67,6 @@
 #define LOCATION_CGALT 2
 
 /////////////////////////////////////
-#define MAXBUSTS 9 // 0 through 8. The slot argument isn't changed from the script anymore.
 #define MAXIMAGECHAR 20
 #define MESSAGETEXTXOFFSET 20
 #define MAXFILES 50
@@ -143,7 +139,7 @@ typedef struct hauighrehrge{
 	float cacheYOffsetScale;
 }bust;
 
-bust Busts[MAXBUSTS];
+bust* Busts;
 
 lua_State* L;
 /*
@@ -184,9 +180,9 @@ unsigned int currentScriptLine=0;
 // element in array is their bust slot
 // first element in array is highest up
 // so, when drawing, start from the end and go backwards to draw the first element last
-unsigned char bustOrder[MAXBUSTS];
+unsigned char* bustOrder;
 
-unsigned char bustOrderOverBox[MAXBUSTS];
+unsigned char* bustOrderOverBox;
 
 char* locationStrings[3] = {(char*)"CG/",(char*)"CG/",(char*)"CGAlt/"};
 
@@ -267,7 +263,6 @@ float bgmVolume = 0.75;
 float seVolume = 1.0;
 
 int currentTextHeight;
-
 #if PLATFORM == PLAT_WINDOWS
 	CrossTexture* controlsUpImage;
 	CrossTexture* controlsDownImage;
@@ -283,13 +278,10 @@ int currentTextHeight;
 
 	char showControls=0;
 #endif
-
 CrossTexture* loadingImage;
-
 pthread_t soundProtectThreadId;
-
 char isActuallyUsingUma0=0;
-
+int MAXBUSTS = 9;
 /*
 ====================================================
 */
@@ -1290,6 +1282,15 @@ void TryLoadMenuSoundEffect(){
 	}
 	free(tempstringconcat);
 }
+// realloc, but new memory is zeroed out
+void* recalloc(void* _oldBuffer, int _newSize, int _oldSize){
+	void* _newBuffer = realloc(_oldBuffer,_newSize);
+	if (_newSize > _oldSize){
+		void* _startOfNewData = ((char*)_newBuffer)+_oldSize;
+		memset(_startOfNewData,0,_newSize-_oldSize);
+	}
+	return _newBuffer;
+}
 //===================
 void FadeBustshot(int passedSlot,int _time,char _wait){
 	if (isSkipping==1){
@@ -1475,8 +1476,13 @@ void DrawScene(const char* _filename, int time){
 }
 void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
 	if (passedSlot>=MAXBUSTS){
-		LazyMessage("DrawBustshot slot too high.","No action will be taken.",NULL,NULL);
-		return;
+		printf("Increase max bust array to %d\n",passedSlot+1);
+		int _oldMaxBusts = MAXBUSTS;
+		MAXBUSTS = passedSlot+1;
+		Busts = recalloc(Busts, MAXBUSTS * sizeof(bust), _oldMaxBusts * sizeof(bust));
+		bustOrder = recalloc(bustOrder, MAXBUSTS * sizeof(char), _oldMaxBusts * sizeof(char));
+		bustOrderOverBox = recalloc(bustOrderOverBox, MAXBUSTS * sizeof(char), _oldMaxBusts * sizeof(char));
+		RecalculateBustOrder();
 	}
 	if (isSkipping==1){
 		_fadeintime=0;
@@ -1485,10 +1491,7 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	Draw();
 	int i;
 	unsigned char skippedInitialWait=0;
-	//WaitWithCodeStart(_fadeintime);
-
 	ResetBustStruct(&(Busts[passedSlot]),1);
-
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[graphicsLocation],_filename,".png");
 	LocationStringFallback(&tempstringconcat,_filename);
 	Busts[passedSlot].image = SafeLoadPNG(tempstringconcat);
@@ -1497,10 +1500,8 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 		ResetBustStruct(&(Busts[passedSlot]),1);
 		return;
 	}
-
 	Busts[passedSlot].xOffset = _xoffset;
 	Busts[passedSlot].yOffset = _yoffset;
-
 	Busts[passedSlot].cacheXOffsetScale = GetXOffsetScale(Busts[passedSlot].image);
 	Busts[passedSlot].cacheYOffsetScale = GetYOffsetScale(Busts[passedSlot].image);
 
@@ -1510,14 +1511,12 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 		Busts[passedSlot].isInvisible=0;
 	}
 	Busts[passedSlot].layer = _layer;
-
 	// The lineCreatedOn variable is used to know if the bustshot should stay after a scene change. The bustshot can only stay after a scene change if it's created the line before the scene change AND it doesn't wait for fadein completion.
 	if (_waitforfadein==0){
 		Busts[passedSlot].lineCreatedOn = currentScriptLine;
 	}else{
 		Busts[passedSlot].lineCreatedOn = 0;
 	}
-
 	Busts[passedSlot].isActive=1;
 	RecalculateBustOrder();
 	if ((int)_fadeintime!=0){
@@ -3978,6 +3977,11 @@ signed char init(){
 		//fontImageItalics = vita2d_load_font_file("app0:a/LiberationSans-Italic.ttf");
 	#endif
 	SetClearColor(0,0,0,255);
+
+	// Make buffers for busts
+	Busts = calloc(1,sizeof(bust)*MAXBUSTS);
+	bustOrder = calloc(1,sizeof(char)*MAXBUSTS);
+	bustOrderOverBox = calloc(1,sizeof(char)*MAXBUSTS);
 
 	// We need this for ReloadFont();
 	FixPath("assets/Loading.png",globalTempConcat,TYPE_EMBEDDED);
