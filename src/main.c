@@ -22,6 +22,10 @@
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
+
+	TODO - AVD mode option
+	TODO - app0 mode option
+	TODO - Filename cache. If it's the same filename again, don't bother.
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -69,6 +73,7 @@
 /////////////////////////////////////
 #define MAXIMAGECHAR 20
 #define MESSAGETEXTXOFFSET 20
+#define MESSAGEEDGEOFFSET MESSAGETEXTXOFFSET
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
@@ -931,16 +936,12 @@ float GetYOffsetScale(CrossTexture* _tempImg){
 	return ( GetTextureHeight(_tempImg)/(float)480);
 }
 void DrawBackground(CrossTexture* passedBackground){
-
-
 	signed int _tempXOffset;
 	signed int _tempYOffset;
 	GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
 	DrawTexture(passedBackground,_tempXOffset,_tempYOffset);
 }
 void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlpha){
-
-	
 	signed int _tempXOffset;
 	signed int _tempYOffset;
 	GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
@@ -959,12 +960,10 @@ void DrawBust(bust* passedBust){
 }
 void RecalculateBustOrder(){
 	int i, j, k;
-
 	for (i=0;i<MAXBUSTS;i++){
 		bustOrder[i]=255;
 		bustOrderOverBox[i]=255;
 	}
-
 	// This generates the orderOfAction list
 	// i is the the current orderOfAction slot.
 	for (i=0;i<MAXBUSTS;i++){
@@ -985,7 +984,6 @@ void RecalculateBustOrder(){
 			}
 		}
 	}
-
 	// Do another calculation for busts that have a layer greater than 31 and therefor are over the message box
 	for (i=0;i<MAXBUSTS;i++){
 		// j is the current fighter we're testig
@@ -1024,9 +1022,6 @@ unsigned char* ReadNumberStringList(CROSSFILE *fp, unsigned char* arraysize){
 	numScripts = atoi(currentReadNumber);
 	MoveFilePointerPastNewline(fp);
 
-	//fseek(fp,2,SEEK_CUR);
-
-	
 	unsigned char* _thelist;
 	
 	_thelist = (unsigned char*)calloc(numScripts,sizeof(char));
@@ -1035,9 +1030,6 @@ unsigned char* ReadNumberStringList(CROSSFILE *fp, unsigned char* arraysize){
 	for (i=0;i<numScripts;i++){
 		crossfread(&currentReadNumber,3,1,fp);
 		_thelist[i]=atoi(currentReadNumber);
-
-
-
 		MoveFilePointerPastNewline(fp);
 	}
 
@@ -1474,6 +1466,12 @@ void DrawScene(const char* _filename, int time){
 	}
 	currentBackground=newBackground;
 }
+void MoveBustSlot(unsigned char _sourceSlot, unsigned char _destSlot){
+	ResetBustStruct(&(Busts[_destSlot]),1);
+	memcpy(&(Busts[_destSlot]),&(Busts[_sourceSlot]),sizeof(bust));
+	ResetBustStruct(&(Busts[_sourceSlot]),0);
+	RecalculateBustOrder();
+}
 void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
 	if (passedSlot>=MAXBUSTS){
 		printf("Increase max bust array to %d\n",passedSlot+1);
@@ -1658,7 +1656,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		if (message[i]==32){ // Only check when we meet a space. 32 is a space in ASCII
 			message[i]='\0';
 			// Check if the text has gone past the end of the screen OR we're out of array space for this line
-			if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET || i-lastNewlinePosition>=SINGLELINEARRAYSIZE-1){
+			if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET || i-lastNewlinePosition>=SINGLELINEARRAYSIZE-1){
 				char _didWork=0;
 				for (j=i-1;j>lastNewlinePosition+1;j--){
 					//printf("J:%d, M:%c\n",j,message[j]);
@@ -1742,7 +1740,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		LastLineLazyFix(&currentLine);
 	}
 	// This code will make a new line if there needs to be one because of the last word
-	if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET){
+	if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET){
 		char _didWork=0;
 		for (j=totalMessageLength-1;j>lastNewlinePosition+1;j--){
 			if (message[j]==32){
@@ -1765,7 +1763,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			for (i=lastNewlinePosition+1;i<totalMessageLength;i++){
 				char _tempCharCache = message[i];
 				message[i]='\0';
-				if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>screenWidth-MESSAGETEXTXOFFSET){
+				if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET){
 					// What this means is that when only the string UP TO the last character was small enough. Now we have to replicate the behavior of the previous loop to get the shorter string.
 					char _tempCharCache2 = message[i-1];
 					message[i-1]='\0';
@@ -2614,6 +2612,14 @@ int L_FadeBG(lua_State* passedState){
 	}
 	return 0;
 }
+int L_MoveBust(lua_State* passedState){
+	MoveBustSlot(lua_tonumber(passedState,1),lua_tonumber(passedState,2));
+	return 0;
+}
+int L_GetScriptLine(lua_State* passedState){
+	lua_pushnumber(passedState,currentScriptLine);
+	return 1;
+}
 //
 int L_DebugFile(lua_State* passedState){
 	WriteToDebugFile(lua_tostring(passedState,1));
@@ -2653,6 +2659,7 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_DebugFile,"Debugfile")
 	LUAREGISTER(L_PlayVoice,"PlayVoice")
 	LUAREGISTER(L_DisplayWindow,"DisplayWindow")
+	LUAREGISTER(L_MoveBust,"MoveBust")
 
 	// Functions that do nothing
 	LUAREGISTER(L_NotYet,"SetFontId")
@@ -3766,9 +3773,6 @@ void NavigationMenu(){
 		}else{
 			GoodDrawText(_endofscriptwidth+32,0,currentPresetFileFriendlyList.theArray[currentPresetChapter],fontSize);
 		}
-		
-		
-
 		if (_nextChapterExist==1){
 			GoodDrawText(32,5+currentTextHeight*(0+2),"Next",fontSize);
 		}
