@@ -263,9 +263,9 @@
 		#endif
 
 		// Platform for ANDROID is also PLAT_WINDOWS
-		#if PLATFORM == PLAT_WINDOWS
-			CheckTouchControls();
-		#endif
+		//#if PLATFORM == PLAT_WINDOWS
+		//	CheckTouchControls();
+		//#endif
 	}
 
 	void ControlsEnd(){

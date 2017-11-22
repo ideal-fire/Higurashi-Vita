@@ -839,13 +839,12 @@ int FixHistoryOldSub(int _val, int _scroll){
 	}
 }
 void InBetweenLines(lua_State *L, lua_Debug *ar) {
-	if (currentGameStatus==GAMESTATUS_MAINGAME){
+	//if (currentGameStatus==GAMESTATUS_MAINGAME){
 		currentScriptLine++;
 		if (isSkipping==1){
 			ControlsStart();
 			#if PLATFORM != PLAT_WINDOWS
 				if (!IsDown(SCE_CTRL_SQUARE)){
-
 					isSkipping=0;
 				}
 			#endif
@@ -910,7 +909,7 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 				}
 			}
 		}while(endType==Line_Normal || endType == Line_WaitForInput);
-	}
+	//}
 }
 void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
 	*_tempXOffset = floor((screenWidth-GetTextureWidth(_tempImg))/2);
@@ -1447,7 +1446,7 @@ void DrawScene(const char* _filename, int time){
 
 		ControlsStart();
 		if (WasJustPressed(SCE_CTRL_CROSS)){
-			_backgroundAlpha=255;
+			_backgroundAlpha=254;
 		}
 		ControlsEnd();
 
@@ -2073,7 +2072,6 @@ void ChangeEasyTouchMode(int _newControlValue){
 	// Change the variable easyTouchControlMode to one of the constants
 	// Set to TOUCHMODE_NONE for touch controls that are special
 	void CheckTouchControls(){
-
 		if (WasJustPressedRegardless(SCE_ANDROID_BACK)){
 			if (showControls==0){
 				showControls=1;
@@ -2081,11 +2079,9 @@ void ChangeEasyTouchMode(int _newControlValue){
 				showControls=0;
 			}
 		}
-
 		if (easyTouchControlMode!=TOUCHMODE_NONE){
 			if (easyTouchControlMode==TOUCHMODE_MAINGAME){
 				if (WasJustPressed(SCE_TOUCH)){
-
 					if (touchY<screenHeight*.20){
 						if (touchX>screenWidth*.75){
 							ChangeEasyTouchMode(TOUCHMODE_MENU);
@@ -2210,6 +2206,70 @@ void UpdatePresetStreamingAssetsDir(char* filename){
 		GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer);
 	}
 }
+#if PLATFORM == PLAT_VITA
+char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
+	if (_currentPad.buttons & _button){
+		if (!(_lastPad.buttons & _button)){
+			return 1;
+		}
+	}
+	return 0;
+}
+
+// Wait for the user to suspend the game, save them, and be happy.
+void* soundProtectThread(void *arg){
+	if (isActuallyUsingUma0==1){
+		return NULL;
+	}
+	SceCtrlData _currentPad;
+	SceCtrlData _lastPad;
+	sceCtrlPeekBufferPositive(0, &_lastPad, 1);
+	sceCtrlPeekBufferPositive(0, &_currentPad, 1);
+	while (1){
+		sceCtrlPeekBufferPositive(0, &_currentPad, 1);
+		if (wasJustPressedSpecific(_currentPad,_lastPad,SCE_CTRL_PSBUTTON) || wasJustPressedSpecific(_currentPad,_lastPad,SCE_CTRL_POWER)){
+			// Stop with WAV
+			int i;
+			for (i=0;i<MAXMUSICARRAY;i++){
+				StopBGM(i);
+			}
+			for (i=0;i<MAXSOUNDEFFECTARRAY;i++){
+				if (soundEffects[i]!=NULL){
+					StopSound(soundEffects[i]);
+				}
+			}
+			// Wait for the user to return.
+			SceRtcTick _firstPressedButtonTick;
+			sceRtcGetCurrentTick(&_firstPressedButtonTick);
+			SceRtcTick _checkForReturnTick;
+			sceRtcGetCurrentTick(&_checkForReturnTick);
+			uint32_t _rtcTickResolution = sceRtcGetTickResolution();
+			while (1){
+				sceRtcGetCurrentTick(&_checkForReturnTick);
+				// Wait a second, literally
+				if (_checkForReturnTick.tick>_firstPressedButtonTick.tick+_rtcTickResolution){
+					break;
+				}
+				sceKernelDelayThread(1);
+			}
+			// The user has returned.
+			// Load and play
+			for (i=0;i<MAXMUSICARRAY;i++){
+				if (currentMusicFilepath[i]==NULL){
+					continue;
+				}
+				char* _tempHoldBuffer = malloc(strlen(currentMusicFilepath[i])+1);
+				strcpy(_tempHoldBuffer,currentMusicFilepath[i]);
+				PlayBGM(_tempHoldBuffer,currentMusicUnfixedVolume[i],i);
+				free(_tempHoldBuffer);
+			}
+		}
+		_lastPad=_currentPad;
+		sceKernelDelayThread(16);
+	}
+	return NULL;
+}
+#endif
 /*
 =================================================
 */
@@ -2225,11 +2285,13 @@ int L_ClearMessage(lua_State* passedState){
 }
 int L_OutputLine(lua_State* passedState){
 	OutputLine((unsigned const char*)lua_tostring(passedState,4),lua_tonumber(passedState,5),0);
+	InBetweenLines(NULL,NULL);
 	return 0;
 }
 // Null, text, line type
 int L_OutputLineAll(lua_State* passedState){
 	OutputLine((unsigned const char*)lua_tostring(passedState,2),lua_tonumber(passedState,5),1);
+	InBetweenLines(NULL,NULL);
 	return 0;
 }
 //
@@ -3064,7 +3126,6 @@ void SettingsMenu(){
 				}else{
 					currentGameStatus=GAMESTATUS_QUIT;
 				}
-				
 				lua_getglobal(L,"quitxfunction");
 				lua_call(L, 0, 0);
 				break;
@@ -3356,7 +3417,7 @@ void TitleScreen(){
 
 		GoodDrawText(32,5,"Main Menu",fontSize);
 
-		GoodDrawText(32,5+currentTextHeight*(0+2),"Load preset and savefile",fontSize);
+		GoodDrawText(32,5+currentTextHeight*(0+2),"Load game",fontSize);
 		GoodDrawText(32,5+currentTextHeight*(1+2),"Manual mode",fontSize);
 		GoodDrawText(32,5+currentTextHeight*(2+2),"Settings",fontSize);
 		GoodDrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
@@ -3815,6 +3876,18 @@ void NewGameMenu(){
 		FpsCapWait();
 	}
 }
+
+
+void RunGameSpecificLua(){
+	char _completedSpecificLuaPath[strlen(SCRIPTFOLDER)+strlen("_GameSpecific.lua")+1];
+	strcpy(_completedSpecificLuaPath,SCRIPTFOLDER);
+	strcat(_completedSpecificLuaPath,"_GameSpecific.lua");
+	if (checkFileExist(_completedSpecificLuaPath)){
+		printf("Game specific LUA found.");
+		luaL_dofile(L,_completedSpecificLuaPath);
+	}
+}
+
 // =====================================================
 // Returns 2 for missing or outdated happy.lua
 // Returns 0 otherwise
@@ -3830,7 +3903,7 @@ char init_dohappylua(){
 	#elif PLATFORM == PLAT_VITA
 		_didLoadHappyLua = SafeLuaDoFile(L,"app0:assets/happy.lua",0);
 	#endif
-	lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
+	//lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
 
 	if (_didLoadHappyLua==0){
 		#if PLATFORM == PLAT_VITA
@@ -3872,72 +3945,6 @@ char init_dohappylua(){
 
 	return 0;
 }
-
-#if PLATFORM == PLAT_VITA
-char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
-	if (_currentPad.buttons & _button){
-		if (!(_lastPad.buttons & _button)){
-			return 1;
-		}
-	}
-	return 0;
-}
-
-// Wait for the user to suspend the game, save them, and be happy.
-void* soundProtectThread(void *arg){
-	if (isActuallyUsingUma0==1){
-		return NULL;
-	}
-	SceCtrlData _currentPad;
-	SceCtrlData _lastPad;
-	sceCtrlPeekBufferPositive(0, &_lastPad, 1);
-	sceCtrlPeekBufferPositive(0, &_currentPad, 1);
-	while (1){
-		sceCtrlPeekBufferPositive(0, &_currentPad, 1);
-		if (wasJustPressedSpecific(_currentPad,_lastPad,SCE_CTRL_PSBUTTON) || wasJustPressedSpecific(_currentPad,_lastPad,SCE_CTRL_POWER)){
-			// Stop with WAV
-			int i;
-			for (i=0;i<MAXMUSICARRAY;i++){
-				StopBGM(i);
-			}
-			for (i=0;i<MAXSOUNDEFFECTARRAY;i++){
-				if (soundEffects[i]!=NULL){
-					StopSound(soundEffects[i]);
-				}
-			}
-			// Wait for the user to return.
-			SceRtcTick _firstPressedButtonTick;
-			sceRtcGetCurrentTick(&_firstPressedButtonTick);
-			SceRtcTick _checkForReturnTick;
-			sceRtcGetCurrentTick(&_checkForReturnTick);
-			uint32_t _rtcTickResolution = sceRtcGetTickResolution();
-			while (1){
-				sceRtcGetCurrentTick(&_checkForReturnTick);
-				// Wait a second, literally
-				if (_checkForReturnTick.tick>_firstPressedButtonTick.tick+_rtcTickResolution){
-					break;
-				}
-				sceKernelDelayThread(1);
-			}
-			// The user has returned.
-			// Load and play
-			for (i=0;i<MAXMUSICARRAY;i++){
-				if (currentMusicFilepath[i]==NULL){
-					continue;
-				}
-				char* _tempHoldBuffer = malloc(strlen(currentMusicFilepath[i])+1);
-				strcpy(_tempHoldBuffer,currentMusicFilepath[i]);
-				PlayBGM(_tempHoldBuffer,currentMusicUnfixedVolume[i],i);
-				free(_tempHoldBuffer);
-			}
-		}
-		_lastPad=_currentPad;
-		sceKernelDelayThread(16);
-	}
-	return NULL;
-}
-#endif
-
 // Please exit if this function returns 2
 // Go ahead as normal if it returns 0
 signed char init(){
@@ -4112,7 +4119,6 @@ signed char init(){
 
 	return 0;
 }
-
 int main(int argc, char *argv[]){
 	/* code */
 	if (init()==2){
@@ -4135,6 +4141,8 @@ int main(int argc, char *argv[]){
 				UpdatePresetStreamingAssetsDir(currentPresetFilename);
 				// This new directory may have the menu sound effect.
 				TryLoadMenuSoundEffect();
+
+				RunGameSpecificLua();
 
 				// Does not load the savefile, I promise.
 				LoadGame();
