@@ -63,8 +63,6 @@ lib-custom/
 *.bin
 *.self
 
-# File where I put trash
-/src/Graveyard.h
 /_Notes/Trash/
 
 # For Windows build
