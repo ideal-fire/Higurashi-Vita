@@ -18,9 +18,13 @@ set(VITA_TITLEID  "HIGURASHI")
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -std=c++11")
 
-#include_directories(
-#  ../common
-#)
+include_directories(
+  ./Include
+)
+
+link_directories(
+  ./lib/Vita
+)
 
 add_executable(${SHORT_NAME}
   src/soloud_c.cpp
@@ -28,6 +32,7 @@ add_executable(${SHORT_NAME}
 )
 
 target_link_libraries(${SHORT_NAME}
+  -lGeneralGood
   -lsoloud
   -lpthread
   -lScePower_stub

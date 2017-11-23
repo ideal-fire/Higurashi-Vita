@@ -23,9 +23,9 @@
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 
-	TODO - AVD mode option
 	TODO - app0 mode option
-	TODO - Filename cache. If it's the same filename again, don't bother.
+	TODO - Make voice volume controll actually do something
+	TODO - Save voice volume setting
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -77,13 +77,14 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.1.x" // This
+#define VERSIONSTRING "v2.2" // This
 #define VERSIONNUMBER 2 // This
 #define VERSIONCOLOR 0,208,138
 #define HISTORYONONESCREEN 13
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
-#define USEUMA0 1 // Doesn't need to be unsafe for this, I guess.
+#define SELECTBUTTONNAME "X"
+#define BACKBUTTONNAME "O"
 ////////////////////////////////////
 #define MAXMUSICARRAY 10
 #define MAXSOUNDEFFECTARRAY 10
@@ -94,6 +95,17 @@
 #include "GeneralGoodText.h"
 #include "GeneralGoodImages.h"
 #include "GeneralGoodSound.h"
+
+
+#if __UNIX__
+	#define SYSTEMSTRING "Linux"
+#elif __WIN32__
+	#define SYSTEMSTRING "Windows"
+#elif __VITA__
+	#define SYSTEMSTRING "VITA"
+#else
+	#define SYSTEMSTRING "UNKNOWN"
+#endif
 
 // 1 is start
 // 2 adds BGM and SE volume
@@ -251,6 +263,11 @@ int32_t autoModeWait=500;
 
 signed char cpuOverclocked=0;
 
+#define TEXTMODE_NVL 0
+#define TEXTMODE_AVD 1
+char gameTextDisplayMode=TEXTMODE_NVL;
+char hasOwnVoiceSetting=0;
+
 unsigned char graphicsLocation = LOCATION_CGALT;
 
 unsigned char messageHistory[MAXMESSAGEHISTORY][SINGLELINEARRAYSIZE];
@@ -266,9 +283,10 @@ char presetsAreInStreamingAssets=1;
 
 float bgmVolume = 0.75;
 float seVolume = 1.0;
+float voiceVolume = 1.0;
 
 int currentTextHeight;
-#if PLATFORM == PLAT_WINDOWS
+#if PLATFORM == PLAT_COMPUTER
 	CrossTexture* controlsUpImage;
 	CrossTexture* controlsDownImage;
 	CrossTexture* controlsLeftImage;
@@ -287,6 +305,8 @@ CrossTexture* loadingImage;
 pthread_t soundProtectThreadId;
 char isActuallyUsingUma0=0;
 int MAXBUSTS = 9;
+short textboxYOffset=0;
+CrossTexture* currentCustomTextbox=NULL;
 /*
 ====================================================
 */
@@ -302,11 +322,11 @@ void DebugLuaReg(char* name){
 }
 void PlayMenuSound(){
 	if (menuSoundLoaded==1){
-		PlaySound(menuSound,1);
+		playSound(menuSound,1);
 	}
 }
 CrossTexture* SafeLoadPNG(const char* path){
-	CrossTexture* _tempTex = LoadPNG((char*)path);
+	CrossTexture* _tempTex = loadPNG((char*)path);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
 		LazyMessage("Failed to load image",path,"What will happen now?!",NULL);
@@ -314,8 +334,8 @@ CrossTexture* SafeLoadPNG(const char* path){
 	return _tempTex;
 }
 CrossTexture* LoadEmbeddedPNG(const char* path){
-	FixPath((char*)path,globalTempConcat,TYPE_EMBEDDED);
-	CrossTexture* _tempTex = LoadPNG((char*)globalTempConcat);
+	fixPath((char*)path,globalTempConcat,TYPE_EMBEDDED);
+	CrossTexture* _tempTex = loadPNG((char*)globalTempConcat);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
 		LazyMessage("Failed to load image",path,"What will happen now?!","THIS IS SUPPOSED TO BE EMBEDDED!");
@@ -324,11 +344,15 @@ CrossTexture* LoadEmbeddedPNG(const char* path){
 }
 void DrawMessageBox(){
 	//if (filterActive==0){
-	DrawRectangle(0,0,screenWidth,screenHeight,0,0,0,MessageBoxAlpha);
+	if (currentCustomTextbox==NULL){
+		drawRectangle(0,0,screenWidth,screenHeight,0,0,0,MessageBoxAlpha);
+	}else{
+		drawTexture(currentCustomTextbox,0,textboxYOffset);
+	}
 	//}
 }
 void DrawCurrentFilter(){
-	DrawRectangle(0,0,screenWidth,screenHeight,filterR,filterG,filterB,filterA);
+	drawRectangle(0,0,screenWidth,screenHeight,filterR,filterG,filterB,filterA);
 	//DrawRectangle(0,0,960,screenHeight,filterR,255-(filterG*filterA*.0011),filterB,255);
 }
 u64 waitwithCodeTarget;
@@ -342,9 +366,9 @@ void WaitWithCodeEnd(int amount){
 }
 // Draws the loading screen.
 void DrawLoadingScreen(){
-	StartDrawing();
-	DrawTextureScaleSize(loadingImage,0,0,screenWidth,screenHeight);
-	EndDrawing();
+	startDrawing();
+	drawTextureScaleSize(loadingImage,0,0,screenWidth,screenHeight);
+	endDrawing();
 }
 void SetDefaultFontSize(){
 	#if TEXTRENDERER == TEXT_DEBUG
@@ -359,24 +383,18 @@ void SetDefaultFontSize(){
 }
 void ReloadFont(){
 	DrawLoadingScreen();
-	#if TEXTRENDERER == TEXT_FONTCACHE
-		FixPath("assets/LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
-		FC_FreeFont(fontImage);
-		fontImage = NULL;
-		fontImage = FC_CreateFont();
-		FC_LoadFont(fontImage, mainWindowRenderer, (char*)globalTempConcat, fontSize, FC_MakeColor(255,255,255,255), TTF_STYLE_NORMAL);
-		currentTextHeight = TextHeight(fontSize);
-	#endif
+	fixPath("assets/LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
+	loadFont(globalTempConcat);
 }
 char MenuControls(char _choice,int _menuMin, int _menuMax){
-	if (WasJustPressed(SCE_CTRL_UP)){
+	if (wasJustPressed(SCE_CTRL_UP)){
 		if (_choice!=_menuMin){
 			return (_choice-1);
 		}else{
 			return _menuMax;
 		}
 	}
-	if (WasJustPressed(SCE_CTRL_DOWN)){
+	if (wasJustPressed(SCE_CTRL_DOWN)){
 		if (_choice!=_menuMax){
 			return (_choice+1);
 		}else{
@@ -424,47 +442,47 @@ size_t u_strlen(const unsigned char * array){
 // Returns zero if they chose no
 int LazyChoice(const char* stra, const char* strb, const char* strc, const char* strd){
 	int _choice=0;
-	ControlsStart();
-	ControlsEnd();
+	controlsStart();
+	controlsEnd();
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
-		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_CROSS)){
+		controlsStart();
+		if (wasJustPressed(SCE_CTRL_CROSS)){
 			PlayMenuSound();
-			ControlsStart();
-			ControlsEnd();
+			controlsStart();
+			controlsEnd();
 			return _choice;
 		}
-		if (WasJustPressed(SCE_CTRL_DOWN)){
+		if (wasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
 			if (_choice>1){
 				_choice=0;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_UP)){
+		if (wasJustPressed(SCE_CTRL_UP)){
 			_choice--;
 			if (_choice<0){
 				_choice=1;
 			}
 		}
-		ControlsEnd();
-		StartDrawing();
+		controlsEnd();
+		startDrawing();
 		if (stra!=NULL){
-			GoodDrawText(32,5+currentTextHeight*(0+2),stra,fontSize);
+			goodDrawText(32,5+currentTextHeight*(0+2),stra,fontSize);
 		}
 		if (strb!=NULL){
-			GoodDrawText(32,5+currentTextHeight*(1+2),strb,fontSize);
+			goodDrawText(32,5+currentTextHeight*(1+2),strb,fontSize);
 		}
 		if (strc!=NULL){
-			GoodDrawText(32,5+currentTextHeight*(2+2),strc,fontSize);
+			goodDrawText(32,5+currentTextHeight*(2+2),strc,fontSize);
 		}
 		if (strd!=NULL){
-			GoodDrawText(32,5+currentTextHeight*(3+2),strd,fontSize);
+			goodDrawText(32,5+currentTextHeight*(3+2),strd,fontSize);
 		}
-		GoodDrawText(0,screenHeight-32-currentTextHeight*(_choice+1),">",fontSize);
-		GoodDrawText(32,screenHeight-32-currentTextHeight*2,"Yes",fontSize);
-		GoodDrawText(32,screenHeight-32-currentTextHeight,"No",fontSize);
-		EndDrawing();
+		goodDrawText(0,screenHeight-32-currentTextHeight*(_choice+1),">",fontSize);
+		goodDrawText(32,screenHeight-32-currentTextHeight*2,"Yes",fontSize);
+		goodDrawText(32,screenHeight-32-currentTextHeight,"No",fontSize);
+		endDrawing();
 		FpsCapWait();
 	}
 	return 0;
@@ -484,6 +502,12 @@ int FixBGMVolume(int _val){
 }
 int FixSEVolume(int _val){
 	return FixVolumeArg(_val)*seVolume;
+}
+int GenericFixSpecificVolume(int _val, double _scale){
+	return FixVolumeArg(_val)*_scale;
+}
+int FixVoiceVolume(int _val){
+	return FixVolumeArg(_val)*voiceVolume;
 }
 void ClearMessageArray(){
 	currentLine=0;
@@ -508,7 +532,7 @@ void ClearMessageArray(){
 void SetAllMusicVolume(int _passedFixedVolume){
 	int i;
 	for (i = 0; i < MAXMUSICARRAY; i++){
-		SetMusicVolume(currentMusicHandle[i],_passedFixedVolume);
+		setMusicVolume(currentMusicHandle[i],_passedFixedVolume);
 	}
 }
 int GetNextCharOnLine(int _linenum){
@@ -519,11 +543,11 @@ void DrawMessageText(){
 	int i;
 	for (i = 0; i < 15; i++){
 		//printf("%s\n",currentMessages[i]);
-		GoodDrawText(MESSAGETEXTXOFFSET,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+		goodDrawText(MESSAGETEXTXOFFSET,12-currentTextHeight+textboxYOffset+currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 	}
 	for (i=0;i<MAXIMAGECHAR;i++){
 		if (imageCharType[i]!=-1){
-			DrawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)TextWidth(fontSize,"   ")/ GetTextureWidth(imageCharImages[imageCharType[i]])),((double)TextHeight(fontSize)/GetTextureHeight(imageCharImages[imageCharType[i]])));
+			drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(fontSize,"   ")/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
 		}
 	}
 }
@@ -581,7 +605,7 @@ void ClearDebugFile(){
 }
 void ResetBustStruct(bust* passedBust, int canfree){
 	if (canfree==1 && passedBust->image!=NULL){
-		FreeTexture(passedBust->image);
+		freeTexture(passedBust->image);
 	}
 	passedBust->image=NULL;
 	passedBust->xOffset=0;
@@ -612,10 +636,10 @@ int DidActuallyConvert(char* filepath){
 
 	int _isConverted=0;
 
-	StartDrawing();
-	GoodDrawText(32,50,"Checking if you actually converted the script...",fontSize);
-	GoodDrawText(32,200,filepath,fontSize);
-	EndDrawing();
+	startDrawing();
+	goodDrawText(32,50,"Checking if you actually converted the script...",fontSize);
+	goodDrawText(32,200,filepath,fontSize);
+	endDrawing();
 
 	while (fgets(line, sizeof(line), file)) {
 		printf("%s", line);
@@ -634,13 +658,13 @@ int DidActuallyConvert(char* filepath){
 	return _isConverted;
 }
 void SaveFontSizeFile(){
-	FixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
+	fixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
 	FILE* fp = fopen((const char*)globalTempConcat,"w");
 	fwrite(&fontSize,4,1,fp);
 	fclose(fp);
 }
 void LoadFontSizeFile(){
-	FixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
+	fixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
 	FILE* fp = fopen((const char*)globalTempConcat,"r");
 	fread(&fontSize,4,1,fp);
 	fclose(fp);
@@ -742,17 +766,17 @@ char* CombineStringsPLEASEFREE(const char* first, const char* firstpointfive, co
 }
 signed char WaitCanSkip(int amount){
 	int i=0;
-	ControlsStart();
-	ControlsEnd();
+	controlsStart();
+	controlsEnd();
 	for (i = 0; i < floor(amount/50); ++i){
 		wait(50);
-		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_CROSS)){
-			ControlsEnd();
+		controlsStart();
+		if (wasJustPressed(SCE_CTRL_CROSS)){
+			controlsEnd();
 			printf("Skipped with %d left\n",amount-i);
 			return 1;
 		}
-		ControlsEnd();
+		controlsEnd();
 	}
 	wait(amount%50);
 	return 0;
@@ -761,19 +785,19 @@ void DrawUntilX(){
 	while (1){
 		FpsCapStart();
 
-		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_CROSS) || isSkipping==1){
+		controlsStart();
+		if (wasJustPressed(SCE_CTRL_CROSS) || isSkipping==1){
 			break;
 		}
-		ControlsEnd();
+		controlsEnd();
 
-		StartDrawing();
+		startDrawing();
 		Draw();
-		EndDrawing();
+		endDrawing();
 
 		FpsCapWait();
 	}
-	ControlsEnd();
+	controlsEnd();
 }
 void LastLineLazyFix(int* _line){
 	if (*_line==15){
@@ -842,19 +866,19 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 	//if (currentGameStatus==GAMESTATUS_MAINGAME){
 		currentScriptLine++;
 		if (isSkipping==1){
-			ControlsStart();
-			#if PLATFORM != PLAT_WINDOWS
-				if (!IsDown(SCE_CTRL_SQUARE)){
+			controlsStart();
+			#if PLATFORM != PLAT_COMPUTER
+				if (!isDown(SCE_CTRL_SQUARE)){
 					isSkipping=0;
 				}
 			#endif
-			#if PLATFORM == PLAT_WINDOWS
-				if ( (  !(IsDown(SCE_TOUCH) && (touchX<screenWidth*.25 && touchY<screenHeight*.20)) ) && !(IsDown(SCE_CTRL_SQUARE))  ){
+			#if PLATFORM == PLAT_COMPUTER
+				if ( /*(  !(isDown(SCE_TOUCH) && (touchX<screenWidth*.25 && touchY<screenHeight*.20)) ) && */!(isDown(SCE_CTRL_SQUARE))  ){
 					isSkipping=0;
 					PlayMenuSound();
 				}
 			#endif
-			ControlsEnd();
+			controlsEnd();
 			if (isSkipping==1){
 				endType=Line_ContinueAfterTyping;
 			}
@@ -863,17 +887,17 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 		char _didPressCircle=0;
 		do{
 			FpsCapStart();
-			ControlsStart();
+			controlsStart();
 			Update();
 			Draw();
 
-			if (WasJustPressed(SCE_CTRL_CROSS)){
+			if (wasJustPressed(SCE_CTRL_CROSS)){
 				if (_didPressCircle==1){
 					MessageBoxEnabled=1;
 				}
 				endType = Line_ContinueAfterTyping;
 			}
-			if (WasJustPressed(SCE_CTRL_CIRCLE)){
+			if (wasJustPressed(SCE_CTRL_CIRCLE)){
 				if (_didPressCircle==1){
 					MessageBoxEnabled = !MessageBoxEnabled;
 				}else if (MessageBoxEnabled==1){
@@ -881,14 +905,14 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 					_didPressCircle=1;
 				}
 			}
-			if (WasJustPressed(SCE_CTRL_SQUARE)){
+			if (wasJustPressed(SCE_CTRL_SQUARE)){
 				isSkipping=1;
 				endType=Line_ContinueAfterTyping;
 			}
-			if (WasJustPressed(SCE_CTRL_TRIANGLE)){
+			if (wasJustPressed(SCE_CTRL_TRIANGLE)){
 				SettingsMenu();
 			}
-			if (WasJustPressed(SCE_CTRL_SELECT)){
+			if (wasJustPressed(SCE_CTRL_SELECT)){
 				PlayMenuSound();
 				if (autoModeOn==1){
 					autoModeOn=0;
@@ -896,10 +920,10 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 					autoModeOn=1;
 				}
 			}
-			if (WasJustPressed(SCE_CTRL_START)){
+			if (wasJustPressed(SCE_CTRL_START)){
 				DrawHistory(messageHistory);
 			}
-			ControlsEnd();
+			controlsEnd();
 			FpsCapWait();
 			if (autoModeOn==1){
 				if (getTicks()>=(unsigned int)(_inBetweenLinesMilisecondsStart+autoModeWait)){
@@ -912,8 +936,8 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 	//}
 }
 void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
-	*_tempXOffset = floor((screenWidth-GetTextureWidth(_tempImg))/2);
-	*_tempYOffset = floor((screenHeight-GetTextureHeight(_tempImg))/2);
+	*_tempXOffset = floor((screenWidth-getTextureWidth(_tempImg))/2);
+	*_tempYOffset = floor((screenHeight-getTextureHeight(_tempImg))/2);
 	// If they're bigger than the screen, assume that they're supposed to scroll or something
 	if (*_tempXOffset<0){
 		*_tempXOffset=0;
@@ -923,28 +947,28 @@ void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int
 	}
 }
 float GetXOffsetScale(CrossTexture* _tempImg){
-	if (GetTextureWidth(_tempImg)>screenWidth){
+	if (getTextureWidth(_tempImg)>screenWidth){
 		return (screenWidth/640);
 	}
-	return (GetTextureWidth(_tempImg)/(float)640);
+	return (getTextureWidth(_tempImg)/(float)640);
 }
 float GetYOffsetScale(CrossTexture* _tempImg){
-	if (GetTextureHeight(_tempImg)>screenHeight){
+	if (getTextureHeight(_tempImg)>screenHeight){
 		return (screenHeight/480);
 	}
-	return ( GetTextureHeight(_tempImg)/(float)480);
+	return ( getTextureHeight(_tempImg)/(float)480);
 }
 void DrawBackground(CrossTexture* passedBackground){
 	signed int _tempXOffset;
 	signed int _tempYOffset;
 	GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
-	DrawTexture(passedBackground,_tempXOffset,_tempYOffset);
+	drawTexture(passedBackground,_tempXOffset,_tempYOffset);
 }
 void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlpha){
 	signed int _tempXOffset;
 	signed int _tempYOffset;
 	GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
-	DrawTextureAlpha(passedBackground,_tempXOffset,_tempYOffset,passedAlpha);
+	drawTextureAlpha(passedBackground,_tempXOffset,_tempYOffset,passedAlpha);
 }
 void DrawBust(bust* passedBust){
 	signed int _tempXOffset;
@@ -952,9 +976,9 @@ void DrawBust(bust* passedBust){
 	
 	GetXAndYOffset(passedBust->image,&_tempXOffset,&_tempYOffset);
 	if (passedBust->alpha==255){
-		DrawTexture(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale);
+		drawTexture(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale);
 	}else{
-		DrawTextureAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, passedBust->alpha);
+		drawTextureAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, passedBust->alpha);
 	}	
 }
 void RecalculateBustOrder(){
@@ -1149,44 +1173,44 @@ void SetNextScriptName(){
 // Will use uma0 if possible
 void ResetDataDirectory(){
 	#if USEUMA0==1
-		GenerateDefaultDataDirectory(&DATAFOLDER,1);
+		generateDefaultDataDirectory(&DATAFOLDER,1);
 		if (!directoryExists(DATAFOLDER)){
 			free(DATAFOLDER);
-			GenerateDefaultDataDirectory(&DATAFOLDER,0);
+			generateDefaultDataDirectory(&DATAFOLDER,0);
 		}else{
 			isActuallyUsingUma0=1;
 		}
 	#else
-		GenerateDefaultDataDirectory(&DATAFOLDER,0);
+		generateDefaultDataDirectory(&DATAFOLDER,0);
 	#endif
 }
 void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd){
-	ControlsStart();
-	ControlsEnd();
+	controlsStart();
+	controlsEnd();
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
-		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_CROSS)){
-			ControlsStart();
-			ControlsEnd();
+		controlsStart();
+		if (wasJustPressed(SCE_CTRL_CROSS)){
+			controlsStart();
+			controlsEnd();
 			break;
 		}
-		ControlsEnd();
-		StartDrawing();
+		controlsEnd();
+		startDrawing();
 		if (stra!=NULL){
-			GoodDrawText(32,5+currentTextHeight*(0+2),stra,fontSize);
+			goodDrawText(32,5+currentTextHeight*(0+2),stra,fontSize);
 		}
 		if (strb!=NULL){
-			GoodDrawText(32,5+currentTextHeight*(1+2),strb,fontSize);
+			goodDrawText(32,5+currentTextHeight*(1+2),strb,fontSize);
 		}
 		if (strc!=NULL){
-			GoodDrawText(32,5+currentTextHeight*(2+2),strc,fontSize);
+			goodDrawText(32,5+currentTextHeight*(2+2),strc,fontSize);
 		}
 		if (strd!=NULL){
-			GoodDrawText(32,5+currentTextHeight*(3+2),strd,fontSize);
+			goodDrawText(32,5+currentTextHeight*(3+2),strd,fontSize);
 		}
-		GoodDrawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.",fontSize);
-		EndDrawing();
+		goodDrawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.",fontSize);
+		endDrawing();
 		FpsCapWait();
 	}
 }
@@ -1221,12 +1245,12 @@ signed char CheckForUserStuff(){
 			//LazyMessage("app0:a/LiberationSans-Regular.ttf", "is missing. This should've been in the VPK.","Please download the VPK again.",NULL);
 			CrossTexture* _nofonttext = SafeLoadPNG("app0:sce_sys/icon0.png");
 	
-			StartDrawing();
-			DrawTexture(_nofonttext,32,32);
-			EndDrawing();
+			startDrawing();
+			drawTexture(_nofonttext,32,32);
+			endDrawing();
 			
 			wait(3000);
-			FreeTexture(_nofonttext);
+			freeTexture(_nofonttext);
 			return 2;
 		}
 	#endif
@@ -1239,9 +1263,9 @@ signed char CheckForUserStuff(){
 
 	// Check if StreamingAssets folder exists
 	if (presetsAreInStreamingAssets==0){
-		FixPath("StreamingAssets/",globalTempConcat,TYPE_DATA);
+		fixPath("StreamingAssets/",globalTempConcat,TYPE_DATA);
 		if (directoryExists((const char*)globalTempConcat)==0){
-			#if PLATFORM  == PLAT_WINDOWS
+			#if PLATFORM  == PLAT_COMPUTER
 				char _tempResWidthString[20];
 				char _tempResHeightString[20];
 				itoa(screenWidth,_tempResWidthString,10);
@@ -1266,8 +1290,8 @@ void TryLoadMenuSoundEffect(){
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/","wa_038",".ogg");
 	if (checkFileExist(tempstringconcat)){
 		menuSoundLoaded=1;
-		menuSound = LoadSound(tempstringconcat);
-		SetSFXVolumeBefore(menuSound,FixSEVolume(256));
+		menuSound = loadSound(tempstringconcat);
+		setSFXVolumeBefore(menuSound,FixSEVolume(256));
 	}else{
 		menuSoundLoaded=0;
 	}
@@ -1310,13 +1334,13 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 		if (_wait==1){
 			while (Busts[passedSlot].isActive==1){
 				FpsCapStart();
-				ControlsStart();
+				controlsStart();
 				Update();
 				Draw();
-				if (WasJustPressed(SCE_CTRL_CROSS)){
+				if (wasJustPressed(SCE_CTRL_CROSS)){
 					Busts[passedSlot].alpha = 1;
 				}
-				ControlsEnd();
+				controlsEnd();
 				FpsCapWait();
 			}
 		}
@@ -1346,17 +1370,17 @@ void FadeAllBustshots(int _time, char _wait){
 				}
 			}
 			FpsCapStart();
-			ControlsStart();
+			controlsStart();
 			Update();
 			Draw();
-			if (WasJustPressed(SCE_CTRL_CROSS)){
+			if (wasJustPressed(SCE_CTRL_CROSS)){
 				for (i=0;i<MAXBUSTS;i++){
 					if (Busts[i].isActive==1){
 						Busts[i].alpha=1;
 					}
 				}
 			}
-			ControlsEnd();
+			controlsEnd();
 			FpsCapWait();
 		}
 	}
@@ -1407,7 +1431,7 @@ void DrawScene(const char* _filename, int time){
 			_backgroundAlpha=255;
 		}
 		//int i;
-		StartDrawing();
+		startDrawing();
 		
 		if (currentBackground!=NULL){
 			DrawBackground(currentBackground);
@@ -1442,13 +1466,13 @@ void DrawScene(const char* _filename, int time){
 		if (MessageBoxEnabled==1){
 			DrawMessageText();
 		}
-		EndDrawing();
+		endDrawing();
 
-		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_CROSS)){
+		controlsStart();
+		if (wasJustPressed(SCE_CTRL_CROSS)){
 			_backgroundAlpha=254;
 		}
-		ControlsEnd();
+		controlsEnd();
 
 		FpsCapWait();
 	}
@@ -1460,7 +1484,7 @@ void DrawScene(const char* _filename, int time){
 	}
 
 	if (currentBackground!=NULL){
-		FreeTexture(currentBackground);
+		freeTexture(currentBackground);
 		currentBackground=NULL;
 	}
 	currentBackground=newBackground;
@@ -1537,20 +1561,20 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	if (_waitforfadein==1){
 		while (Busts[passedSlot].alpha<255){
 			FpsCapStart();
-			ControlsStart();
+			controlsStart();
 			Update();
 			if (Busts[passedSlot].alpha>255){
 				Busts[passedSlot].alpha=255;
 			}
 			Draw();
-			if (WasJustPressed(SCE_CTRL_CROSS) || skippedInitialWait==1){
+			if (wasJustPressed(SCE_CTRL_CROSS) || skippedInitialWait==1){
 				Busts[passedSlot].alpha = 255;
 				Busts[passedSlot].bustStatus = BUST_STATUS_NORMAL;
-				ControlsEnd();
+				controlsEnd();
 				FpsCapWait();
 				break;
 			}
-			ControlsEnd();
+			controlsEnd();
 			i++;
 			FpsCapWait();
 		}
@@ -1583,7 +1607,7 @@ int strlenNO1(char* src){
 	}
 	return len;
 }
-#if PLATFORM == PLAT_WINDOWS
+#if PLATFORM == PLAT_COMPUTER
 	int _LagTestStart;
 	void LagTestStart(){
 		_LagTestStart = getTicks();
@@ -1606,15 +1630,15 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 		return;
 	}
 	if (soundEffects[passedSlot]!=NULL){
-		FreeSound(soundEffects[passedSlot]);
+		freeSound(soundEffects[passedSlot]);
 		soundEffects[passedSlot]=NULL;
 	}
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, _dirRelativeToStreamingAssetsNoEndSlash,filename,".ogg");
 	if (checkFileExist(tempstringconcat)==1){
-		soundEffects[passedSlot] = LoadSound(tempstringconcat);
-		//SetSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
-		CROSSPLAYHANDLE _tempHandle = PlaySound(soundEffects[passedSlot],1);
-		SetSFXVolume(_tempHandle,FixSEVolume(unfixedVolume));
+		soundEffects[passedSlot] = loadSound(tempstringconcat);
+		//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
+		CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1);
+		setSFXVolume(_tempHandle,FixSEVolume(unfixedVolume));
 	}else{
 		WriteToDebugFile("SE file not found");
 		WriteToDebugFile(tempstringconcat);
@@ -1622,6 +1646,10 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 	free(tempstringconcat);
 }
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
+	if (strlen(_tempMsg)==0){
+		return;
+	}
+
 	// 1 when finished displaying the text
 	char _isDone=0;
 	if (isSkipping==1){
@@ -1655,7 +1683,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		if (message[i]==32){ // Only check when we meet a space. 32 is a space in ASCII
 			message[i]='\0';
 			// Check if the text has gone past the end of the screen OR we're out of array space for this line
-			if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET || i-lastNewlinePosition>=SINGLELINEARRAYSIZE-1){
+			if (textWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET || i-lastNewlinePosition>=SINGLELINEARRAYSIZE-1){
 				char _didWork=0;
 				for (j=i-1;j>lastNewlinePosition+1;j--){
 					//printf("J:%d, M:%c\n",j,message[j]);
@@ -1712,11 +1740,11 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 						printf("Unknown image char! %d;%d\n",message[i+1],message[i+2]);
 						_imagechartype = IMAGECHARUNKNOWN;
 					}
-					message[i]=0; // So we can use TextWidth
+					message[i]=0; // So we can use textWidth
 					for (j=0;j<MAXIMAGECHAR;j++){
 						if (imageCharType[j]==-1){
-							imageCharX[j] = TextWidth(fontSize,&(message[lastNewlinePosition+1]))+MESSAGETEXTXOFFSET;
-							imageCharY[j] = TextHeight(fontSize)*currentLine+TextHeight(fontSize);
+							imageCharX[j] = textWidth(fontSize,&(message[lastNewlinePosition+1]))+MESSAGETEXTXOFFSET;
+							imageCharY[j] = textHeight(fontSize)*currentLine+textHeight(fontSize);
 							imageCharLines[j] = currentLine;
 							message[i]='\0';
 							imageCharCharPositions[j] = strlenNO1(&(message[lastNewlinePosition+1]));
@@ -1739,7 +1767,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		LastLineLazyFix(&currentLine);
 	}
 	// This code will make a new line if there needs to be one because of the last word
-	if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET){
+	if (textWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET){
 		char _didWork=0;
 		for (j=totalMessageLength-1;j>lastNewlinePosition+1;j--){
 			if (message[j]==32){
@@ -1762,7 +1790,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			for (i=lastNewlinePosition+1;i<totalMessageLength;i++){
 				char _tempCharCache = message[i];
 				message[i]='\0';
-				if (TextWidth(fontSize,&(message[lastNewlinePosition+1]))>screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET){
+				if (textWidth(fontSize,&(message[lastNewlinePosition+1]))>screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET){
 					// What this means is that when only the string UP TO the last character was small enough. Now we have to replicate the behavior of the previous loop to get the shorter string.
 					char _tempCharCache2 = message[i-1];
 					message[i-1]='\0';
@@ -1771,7 +1799,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 					currentLine++;
 					lastNewlinePosition=i-2;
 				}else{
-					//printf("%d;%s\n",TextWidth(fontSize,&(message[lastNewlinePosition+1])));
+					//printf("%d;%s\n",textWidth(fontSize,&(message[lastNewlinePosition+1])));
 				}
 				message[i] = _tempCharCache;
 			}
@@ -1785,7 +1813,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
 	}
 	LastLineLazyFix(&currentLine);
-	
 	while(_isDone==0){
 		#if PLATFORM != PLAT_VITA
 			FpsCapStart();
@@ -1797,13 +1824,13 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			_currentDrawChar++;
 		}
 
-		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_CROSS) || capEnabled==0){
+		controlsStart();
+		if (wasJustPressed(SCE_CTRL_CROSS) || capEnabled==0){
 			_isDone=1;
 		}
-		ControlsEnd();
+		controlsEnd();
 		
-		StartDrawing();
+		startDrawing();
 		if (currentBackground!=NULL){
 			DrawBackground(currentBackground);
 		}
@@ -1829,19 +1856,18 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			char _tempCharCache = currentMessages[_currentDrawLine][_currentDrawChar+1];
 			currentMessages[_currentDrawLine][_currentDrawChar+1]='\0';
 			for (i = 0; i <= _currentDrawLine; i++){
-				GoodDrawText(MESSAGETEXTXOFFSET,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+				goodDrawText(MESSAGETEXTXOFFSET,12-currentTextHeight+textboxYOffset+currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 			}
 			currentMessages[_currentDrawLine][_currentDrawChar+1]=_tempCharCache;
 			for (i=0;i<MAXIMAGECHAR;i++){
 				if (imageCharType[i]!=-1){
 					if ((imageCharLines[i]<_currentDrawLine) || (imageCharLines[i]==_currentDrawLine && imageCharCharPositions[i]<=_currentDrawChar)){
-						DrawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)TextWidth(fontSize,"   ")/ GetTextureWidth(imageCharImages[imageCharType[i]])),((double)TextHeight(fontSize)/GetTextureHeight(imageCharImages[imageCharType[i]])));
+						drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(fontSize,"   ")/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
 					}
 				}
 			}
 		}
-		EndDrawing();
-		
+		endDrawing();
 		if (_isDone==0){
 			_currentDrawChar++;
 			// If the next char we're about to display is the end of the line
@@ -1867,8 +1893,8 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 }
 void FreeBGM(int _slot){
 	if (currentMusic[_slot]!=NULL){
-		StopMusic(currentMusic[_slot]);
-		FreeMusic(currentMusic[_slot]);
+		stopMusic(currentMusic[_slot]);
+		freeMusic(currentMusic[_slot]);
 		currentMusic[_slot]=NULL;
 		currentMusicHandle[_slot]=0;
 		if (currentMusicFilepath[_slot]!=NULL){
@@ -1880,7 +1906,7 @@ void FreeBGM(int _slot){
 }
 void StopBGM(int _slot){
 	if (currentMusic[_slot]!=NULL){
-		StopMusic(currentMusic[_slot]);
+		stopMusic(currentMusic[_slot]);
 	}
 }
 // Unfixed bgm
@@ -1896,10 +1922,10 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 		strcpy(currentMusicFilepath[_slot],filename);
 		currentMusicUnfixedVolume[_slot] = _volume;
 
-		currentMusic[_slot] = LoadMusic(tempstringconcat);
-		//SetMusicVolume(currentMusic[_slot],FixBGMVolume(_volume));
-		currentMusicHandle[_slot] = PlayMusic(currentMusic[_slot]);
-		SetMusicVolume(currentMusicHandle[_slot],FixBGMVolume(_volume));
+		currentMusic[_slot] = loadMusic(tempstringconcat);
+		//setMusicVolume(currentMusic[_slot],FixBGMVolume(_volume));
+		currentMusicHandle[_slot] = playMusic(currentMusic[_slot]);
+		setMusicVolume(currentMusicHandle[_slot],FixBGMVolume(_volume));
 		lastBGMVolume=_volume;
 	}
 	free(tempstringconcat);
@@ -1914,7 +1940,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // SE volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
 void SaveSettings(){
 	FILE* fp;
-	FixPath("settings.noob",globalTempConcat,TYPE_DATA);
+	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
 	fp = fopen ((const char*)globalTempConcat, "w");
 	//graphicsLocation
 
@@ -1934,14 +1960,14 @@ void SaveSettings(){
 	printf("SAved settings file.\n");
 }
 void LoadSettings(){
-	FixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
+	fixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
 	if (checkFileExist((const char*)globalTempConcat)==0){
 		SetDefaultFontSize();
 	}else{
 		LoadFontSizeFile();
 	}
 
-	FixPath("settings.noob",globalTempConcat,TYPE_DATA);
+	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
 	if (checkFileExist((const char*)globalTempConcat)==1){
 		FILE* fp;
 		fp = fopen ((const char*)globalTempConcat, "r");
@@ -1973,35 +1999,35 @@ void LoadSettings(){
 	}
 }
 void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
-	ControlsEnd();
-	int _noobHeight = TextHeight(fontSize);
-	int _controlsStringWidth = TextWidth(fontSize,"UP and DOWN to scroll, "BACKBUTTONNAME" to return");
+	controlsEnd();
+	int _noobHeight = textHeight(fontSize);
+	int _controlsStringWidth = textWidth(fontSize,"UP and DOWN to scroll, "BACKBUTTONNAME" to return");
 	int _scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
 
 	int i;
 	while (1){
 		FpsCapStart();
 
-		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_UP)){
+		controlsStart();
+		if (wasJustPressed(SCE_CTRL_UP)){
 			_scrollOffset--;
 			if (_scrollOffset<0){
 				_scrollOffset=0;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_DOWN)){
+		if (wasJustPressed(SCE_CTRL_DOWN)){
 			_scrollOffset++;
 			if (_scrollOffset>MAXMESSAGEHISTORY-HISTORYONONESCREEN){
 				_scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_CIRCLE) || WasJustPressed(SCE_CTRL_START)){
-			ControlsEnd();
+		if (wasJustPressed(SCE_CTRL_CIRCLE) || wasJustPressed(SCE_CTRL_START)){
+			controlsEnd();
 			break;
 		}
-		ControlsEnd();
+		controlsEnd();
 
-		StartDrawing();
+		startDrawing();
 
 		if (currentBackground!=NULL){
 			DrawBackground(currentBackground);
@@ -2019,49 +2045,49 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 			}
 		}
 
-		DrawRectangle(0,0,screenWidth,screenHeight,0,230,255,200);
+		drawRectangle(0,0,screenWidth,screenHeight,0,230,255,200);
 
 		for (i = 0; i < HISTORYONONESCREEN; i++){
-			//void GoodDrawTextColored(int x, int y, const char* text, float size, unsigned char r, unsigned char g, unsigned char b){
-			GoodDrawTextColored(MESSAGETEXTXOFFSET,TextHeight(fontSize)+i*(TextHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
+			//void goodDrawTextColored(int x, int y, const char* text, float size, unsigned char r, unsigned char g, unsigned char b){
+			goodDrawTextColored(MESSAGETEXTXOFFSET,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
 		}
 
-		GoodDrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
-		GoodDrawTextColored(screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, "BACKBUTTONNAME" to return",fontSize,0,0,0);
+		goodDrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
+		goodDrawTextColored(screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, "BACKBUTTONNAME" to return",fontSize,0,0,0);
 
-		DrawRectangle((screenWidth-5),0,5,screenHeight,0,0,0,255);
-		DrawRectangle((screenWidth-5),floor(444*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,100,255,0,0,255);
+		drawRectangle((screenWidth-5),0,5,screenHeight,0,0,0,255);
+		drawRectangle((screenWidth-5),floor(444*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,100,255,0,0,255);
 
-		EndDrawing();
+		endDrawing();
 
 		FpsCapWait();
 	}
 }
 void ChangeEasyTouchMode(int _newControlValue){
-	ControlsReset();
+	controlsStart();
+	controlsEnd();
 	easyTouchControlMode = _newControlValue;
 }
-#if PLATFORM == PLAT_WINDOWS
-
+#ifdef iamamoron
 	void DrawTouchControlsHelp(){
 		if (showControls==1){
 			if (easyTouchControlMode!=TOUCHMODE_NONE){
 				if (easyTouchControlMode==TOUCHMODE_MAINGAME){
-					DrawTextureScaleSize(skipImage,0,0,screenWidth*.25,screenHeight*.20);
-					DrawTextureScaleSize(autoImage,screenWidth*.25,0,screenWidth*.25,screenHeight*.20);
-					DrawTextureScaleSize(textlogImage,screenWidth*.50,0,screenWidth*.25,screenHeight*.20);
-					DrawTextureScaleSize(controlsMenuImage,screenWidth*.75,0,screenWidth*.25,screenHeight*.20);
+					drawTextureScaleSize(skipImage,0,0,screenWidth*.25,screenHeight*.20);
+					drawTextureScaleSize(autoImage,screenWidth*.25,0,screenWidth*.25,screenHeight*.20);
+					drawTextureScaleSize(textlogImage,screenWidth*.50,0,screenWidth*.25,screenHeight*.20);
+					drawTextureScaleSize(controlsMenuImage,screenWidth*.75,0,screenWidth*.25,screenHeight*.20);
 				}else if (easyTouchControlMode==TOUCHMODE_MENU){
-					DrawTextureScaleSize(controlsBackImage,0,0,screenWidth*.20,screenHeight);
-					DrawTextureScaleSize(controlsSelectImage,screenWidth*.80,0,screenWidth*.20,screenHeight);
-					DrawTextureScaleSize(controlsUpImage,screenWidth*.20,0,screenWidth*.60,screenHeight*.50);
-					DrawTextureScaleSize(controlsDownImage,screenWidth*.20,screenHeight*.50,screenWidth*.60,screenHeight*.50);
+					drawTextureScaleSize(controlsBackImage,0,0,screenWidth*.20,screenHeight);
+					drawTextureScaleSize(controlsSelectImage,screenWidth*.80,0,screenWidth*.20,screenHeight);
+					drawTextureScaleSize(controlsUpImage,screenWidth*.20,0,screenWidth*.60,screenHeight*.50);
+					drawTextureScaleSize(controlsDownImage,screenWidth*.20,screenHeight*.50,screenWidth*.60,screenHeight*.50);
 				}else if (easyTouchControlMode == TOUCHMODE_LEFTRIGHTSELECT){
 
-					DrawTextureScaleSize(controlsLeftImage,0,0,screenWidth*.20,screenHeight);
-					DrawTextureScaleSize(controlsRightImage,screenWidth*.80,0,screenWidth*.20,screenHeight);
-					DrawTextureScaleSize(controlsSelectImage,screenWidth*.20,0,screenWidth*.60,screenHeight*.50);
-					DrawTextureScaleSize(controlsBackImage,screenWidth*.20,screenHeight*.50,screenWidth*.60,screenHeight*.50);
+					drawTextureScaleSize(controlsLeftImage,0,0,screenWidth*.20,screenHeight);
+					drawTextureScaleSize(controlsRightImage,screenWidth*.80,0,screenWidth*.20,screenHeight);
+					drawTextureScaleSize(controlsSelectImage,screenWidth*.20,0,screenWidth*.60,screenHeight*.50);
+					drawTextureScaleSize(controlsBackImage,screenWidth*.20,screenHeight*.50,screenWidth*.60,screenHeight*.50);
 				
 				}
 			}
@@ -2072,7 +2098,7 @@ void ChangeEasyTouchMode(int _newControlValue){
 	// Change the variable easyTouchControlMode to one of the constants
 	// Set to TOUCHMODE_NONE for touch controls that are special
 	void CheckTouchControls(){
-		if (WasJustPressedRegardless(SCE_ANDROID_BACK)){
+		if (wasJustPressedRegardless(SCE_ANDROID_BACK)){
 			if (showControls==0){
 				showControls=1;
 			}else{
@@ -2081,7 +2107,7 @@ void ChangeEasyTouchMode(int _newControlValue){
 		}
 		if (easyTouchControlMode!=TOUCHMODE_NONE){
 			if (easyTouchControlMode==TOUCHMODE_MAINGAME){
-				if (WasJustPressed(SCE_TOUCH)){
+				if (wasJustPressed(SCE_TOUCH)){
 					if (touchY<screenHeight*.20){
 						if (touchX>screenWidth*.75){
 							ChangeEasyTouchMode(TOUCHMODE_MENU);
@@ -2110,11 +2136,11 @@ void ChangeEasyTouchMode(int _newControlValue){
 					}
 
 				}
-				if (WasJustReleased(SCE_TOUCH)){
+				if (wasJustReleased(SCE_TOUCH)){
 					pad[SCE_CTRL_CROSS]=0;
 				}
 			}else if (easyTouchControlMode==TOUCHMODE_MENU){
-				if (WasJustPressed(SCE_TOUCH)){
+				if (wasJustPressed(SCE_TOUCH)){
 					if (touchX>screenWidth*.80){
 						pad[SCE_CTRL_CROSS]=1;
 					}else if (touchX<screenWidth*.20){
@@ -2124,7 +2150,7 @@ void ChangeEasyTouchMode(int _newControlValue){
 					}else{
 						pad[SCE_CTRL_UP]=1;
 					}
-				}else if (WasJustReleased(SCE_TOUCH)){
+				}else if (wasJustReleased(SCE_TOUCH)){
 					if (touchX>screenWidth*.80){
 						pad[SCE_CTRL_CROSS]=0;
 					}else if (touchX<screenWidth*.20){
@@ -2136,7 +2162,7 @@ void ChangeEasyTouchMode(int _newControlValue){
 					}
 				}
 			}else if (easyTouchControlMode == TOUCHMODE_LEFTRIGHTSELECT){
-				if (WasJustPressed(SCE_TOUCH)){
+				if (wasJustPressed(SCE_TOUCH)){
 					if (touchX<=screenWidth*.20){
 						pad[SCE_CTRL_LEFT]=1;
 					}else if (touchX>=screenWidth*.80){
@@ -2146,7 +2172,7 @@ void ChangeEasyTouchMode(int _newControlValue){
 					}else{
 						pad[SCE_CTRL_CIRCLE]=1;
 					}
-				}else if (WasJustReleased(SCE_TOUCH)){
+				}else if (wasJustReleased(SCE_TOUCH)){
 					if (touchX<=screenWidth*.20){
 						pad[SCE_CTRL_LEFT]=0;
 					}else if (touchX>=screenWidth*.80){
@@ -2235,7 +2261,7 @@ void* soundProtectThread(void *arg){
 			}
 			for (i=0;i<MAXSOUNDEFFECTARRAY;i++){
 				if (soundEffects[i]!=NULL){
-					StopSound(soundEffects[i]);
+					stopSound(soundEffects[i]);
 				}
 			}
 			// Wait for the user to return.
@@ -2284,14 +2310,18 @@ int L_ClearMessage(lua_State* passedState){
 	return 0;
 }
 int L_OutputLine(lua_State* passedState){
-	OutputLine((unsigned const char*)lua_tostring(passedState,4),lua_tonumber(passedState,5),0);
-	InBetweenLines(NULL,NULL);
+	if (!lua_isnil(passedState,4)){	
+		OutputLine((unsigned const char*)lua_tostring(passedState,4),lua_tonumber(passedState,5),0);
+		InBetweenLines(NULL,NULL);
+	}
 	return 0;
 }
 // Null, text, line type
 int L_OutputLineAll(lua_State* passedState){
-	OutputLine((unsigned const char*)lua_tostring(passedState,2),lua_tonumber(passedState,5),1);
-	InBetweenLines(NULL,NULL);
+	if (!lua_isnil(passedState,2)){
+		OutputLine((unsigned const char*)lua_tostring(passedState,2),lua_tonumber(passedState,5),1);
+		InBetweenLines(NULL,NULL);
+	}
 	return 0;
 }
 //
@@ -2346,7 +2376,7 @@ int L_StopBGM(lua_State* passedState){
 // slot, time, (bool) should wait for finish
 int L_FadeoutBGM(lua_State* passedState){
 	if (currentMusicHandle[(int)lua_tonumber(passedState,1)]!=0){
-		FadeoutMusic(currentMusicHandle[(int)lua_tonumber(passedState,1)],lua_tonumber(passedState,2));
+		fadeoutMusic(currentMusicHandle[(int)lua_tonumber(passedState,1)],lua_tonumber(passedState,2));
 		if (lua_toboolean(passedState,3)==1){
 			wait(lua_tonumber(passedState,2));
 		}
@@ -2433,7 +2463,7 @@ int L_FadeAllBustshots(lua_State* passedState){
 	//int i;
 	//for (i=0;i<MAXBUSTS;i++){
 	//	if (Busts[i].isActive==1){
-	//		FreeTexture(Busts[i].image);
+	//		freeTexture(Busts[i].image);
 	//		ResetBustStruct(&(Busts[i]));
 	//	}
 	//}
@@ -2544,12 +2574,12 @@ int L_MoveSprite(lua_State* passedState){
 	if (_waitforcompletion==1){
 		while(Busts[_passedSlot].bustStatus!=BUST_STATUS_NORMAL){
 			FpsCapStart();
-			ControlsStart();
-			if (WasJustPressed(SCE_CTRL_CROSS)){
+			controlsStart();
+			if (wasJustPressed(SCE_CTRL_CROSS)){
 				Busts[_passedSlot].xOffset=lua_tonumber(passedState,2)+320;
 				Busts[_passedSlot].yOffset=lua_tonumber(passedState,3)+240;
 			}
-			ControlsEnd();
+			controlsEnd();
 			Update();
 			Draw();
 			FpsCapWait();
@@ -2584,26 +2614,26 @@ int L_Select(lua_State* passedState){
 	signed char _choice=0;
 	while (1){
 		FpsCapStart();
-		ControlsStart();
+		controlsStart();
 
 		_choice = MenuControls(_choice,0,_totalOptions-1);
 
-		if (WasJustPressed(SCE_CTRL_CROSS)){
+		if (wasJustPressed(SCE_CTRL_CROSS)){
 			lastSelectionAnswer = _choice;
 			break;
 		}
-		ControlsEnd();
-		StartDrawing();
+		controlsEnd();
+		startDrawing();
 		DrawBackground(currentBackground);
 		if (MessageBoxEnabled==1){
 			DrawMessageBox();
 		}
 		for (i=0;i<_totalOptions;i++){
-			GoodDrawText(32,i*currentTextHeight,noobOptions[i],fontSize);
+			goodDrawText(32,i*currentTextHeight,noobOptions[i],fontSize);
 		}
-		GoodDrawText(0,_choice*currentTextHeight,">",fontSize);
+		goodDrawText(0,_choice*currentTextHeight,">",fontSize);
 
-		EndDrawing();
+		endDrawing();
 		FpsCapWait();
 	}
 
@@ -2669,7 +2699,7 @@ int L_FadeFilm(lua_State* passedState){
 // FadeBG( 3000, TRUE );
 int L_FadeBG(lua_State* passedState){
 	if (currentBackground!=NULL){
-		FreeTexture(currentBackground);
+		freeTexture(currentBackground);
 		currentBackground=NULL;
 	}
 	return 0;
@@ -2837,7 +2867,7 @@ void Draw(){
 	int i;
 	//DrawTexture(testtex,32,32);
 
-	StartDrawing();
+	startDrawing();
 
 	if (currentBackground!=NULL){
 		DrawBackground(currentBackground);
@@ -2866,7 +2896,7 @@ void Draw(){
 	if (MessageBoxEnabled==1){
 		DrawMessageText();
 	}
-	EndDrawing();
+	endDrawing();
 }
 // Returns what RunScript returns
 char LuaThread(char* _torun){
@@ -2928,60 +2958,60 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 		int _tmpoffset=0;
 		while (currentGameStatus!=GAMESTATUS_QUIT){
 			FpsCapStart();
-			ControlsStart();
+			controlsStart();
 	
-			if (WasJustPressed(SCE_CTRL_UP)){
+			if (wasJustPressed(SCE_CTRL_UP)){
 				_choice--;
 				if (_choice<0){
 					_choice=totalFiles-1;
 				}
 			}
-			if (WasJustPressed(SCE_CTRL_DOWN)){
+			if (wasJustPressed(SCE_CTRL_DOWN)){
 				_choice++;
 				if (_choice>=totalFiles){
 					_choice=0;
 				}
 			}
-			if (WasJustPressed(SCE_CTRL_RIGHT)){
+			if (wasJustPressed(SCE_CTRL_RIGHT)){
 				_choice+=5;
 				if (_choice>=totalFiles){
 					_choice=totalFiles-1;
 				}
 			}
-			if (WasJustPressed(SCE_CTRL_LEFT)){
+			if (wasJustPressed(SCE_CTRL_LEFT)){
 				_choice-=5;
 				if (_choice<0){
 					_choice=0;
 				}
 			}
-			if (WasJustPressed(SCE_CTRL_CROSS)){
+			if (wasJustPressed(SCE_CTRL_CROSS)){
 				(*_chosenfile) = (char*)calloc(1,strlen(filenameholder[_choice])+1);
 				memcpy(*_chosenfile,filenameholder[_choice],strlen(filenameholder[_choice])+1);
 				PlayMenuSound();
 				break;		
 			}
-			if (WasJustPressed(SCE_CTRL_CIRCLE)){
+			if (wasJustPressed(SCE_CTRL_CIRCLE)){
 				(*_chosenfile) = NULL;
 				_returnVal=1;
 				break;		
 			}
 	
-			StartDrawing();
-			//DrawText(20,20+TextHeight(fontSize)+i*(TextHeight(fontSize)),currentMessages[i],fontSize);
+			startDrawing();
+			//DrawText(20,20+textHeight(fontSize)+i*(textHeight(fontSize)),currentMessages[i],fontSize);
 			if (promptMessage!=NULL){
-				GoodDrawText(32,5,promptMessage,fontSize);
+				goodDrawText(32,5,promptMessage,fontSize);
 			}
 			_tmpoffset=_choice+1-_maxPerNoScroll;
 			if (_tmpoffset<0){
 				_tmpoffset=0;
 			}
 			for (i=0;i<_maxPerNoScroll;i++){
-				GoodDrawText(32,5+currentTextHeight*(i+2),filenameholder[i+_tmpoffset],fontSize);
+				goodDrawText(32,5+currentTextHeight*(i+2),filenameholder[i+_tmpoffset],fontSize);
 			}
-			GoodDrawTextColored(32,5+currentTextHeight*((_choice-_tmpoffset)+2),filenameholder[_choice],fontSize,0,255,0);
-			GoodDrawText(5,5+currentTextHeight*((_choice-_tmpoffset)+2),">",fontSize);
-			EndDrawing();
-			ControlsEnd();
+			goodDrawTextColored(32,5+currentTextHeight*((_choice-_tmpoffset)+2),filenameholder[_choice],fontSize,0,255,0);
+			goodDrawText(5,5+currentTextHeight*((_choice-_tmpoffset)+2),">",fontSize);
+			endDrawing();
+			controlsEnd();
 			FpsCapWait();
 		}
 	}
@@ -3000,15 +3030,15 @@ void FontSizeSetup(){
 	itoa(fontSize,_tempNumberString,10);
 	while (1){
 		FpsCapStart();
-		ControlsStart();
+		controlsStart();
 		_choice = MenuControls(_choice,0,2);
 
-		if (WasJustPressed(SCE_CTRL_CROSS) || WasJustPressed(SCE_CTRL_RIGHT)){
+		if (wasJustPressed(SCE_CTRL_CROSS) || wasJustPressed(SCE_CTRL_RIGHT)){
 			if (_choice==0){
 				fontSize++;
 				itoa(fontSize,_tempNumberString,10);
 				#if PLATFORM == PLAT_VITA
-					currentTextHeight = TextHeight(fontSize);
+					currentTextHeight = textHeight(fontSize);
 				#endif
 			}else if (_choice==1){
 				ReloadFont();
@@ -3018,7 +3048,7 @@ void FontSizeSetup(){
 				break;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_CIRCLE) || WasJustPressed(SCE_CTRL_LEFT)){
+		if (wasJustPressed(SCE_CTRL_CIRCLE) || wasJustPressed(SCE_CTRL_LEFT)){
 			if (_choice==0){
 				fontSize--;
 				if (fontSize<=5){
@@ -3026,32 +3056,32 @@ void FontSizeSetup(){
 				}
 				itoa(fontSize,_tempNumberString,10);
 				#if PLATFORM == PLAT_VITA
-					currentTextHeight = TextHeight(fontSize);
+					currentTextHeight = textHeight(fontSize);
 				#endif
 			}
 		}
-		ControlsEnd();
-		StartDrawing();
-		GoodDrawText(32,currentTextHeight,"Font Size: ",fontSize);
-			GoodDrawText(32+TextWidth(fontSize,"Font Size: "),currentTextHeight,_tempNumberString,fontSize);
+		controlsEnd();
+		startDrawing();
+		goodDrawText(32,currentTextHeight,"Font Size: ",fontSize);
+			goodDrawText(32+textWidth(fontSize,"Font Size: "),currentTextHeight,_tempNumberString,fontSize);
 		#if PLATFORM == PLAT_VITA
-			GoodDrawText(32,currentTextHeight*2,"Test",fontSize);
-			GoodDrawText(32,currentTextHeight*5,"While the text may look bad now, restarting ",fontSize);
-			GoodDrawText(32,currentTextHeight*6,"after changing it will make it look good.",fontSize);
+			goodDrawText(32,currentTextHeight*2,"Test",fontSize);
+			goodDrawText(32,currentTextHeight*5,"While the text may look bad now, restarting ",fontSize);
+			goodDrawText(32,currentTextHeight*6,"after changing it will make it look good.",fontSize);
 		#endif
-		GoodDrawText(32,currentTextHeight*3,"Done",fontSize);
+		goodDrawText(32,currentTextHeight*3,"Done",fontSize);
 		#if PLATFORM != PLAT_VITA
-			GoodDrawText(32,currentTextHeight*5,"You should be able to see this entire line. It shouldn't cut off.",fontSize);
+			goodDrawText(32,currentTextHeight*5,"You should be able to see this entire line. It shouldn't cut off.",fontSize);
 	
-			GoodDrawText(32,currentTextHeight*8,"Press the BACK button to see the controls. Green and red are used",fontSize);
-			GoodDrawText(32,currentTextHeight*9,"to change the font size when you're on the first option.",fontSize);
+			goodDrawText(32,currentTextHeight*8,"Press the BACK button to see the controls. Green and red are used",fontSize);
+			goodDrawText(32,currentTextHeight*9,"to change the font size when you're on the first option.",fontSize);
 	
-			GoodDrawText(32,currentTextHeight*11,"You have to select \"Test\" to see the new size.",fontSize);
+			goodDrawText(32,currentTextHeight*11,"You have to select \"Test\" to see the new size.",fontSize);
 	
-			GoodDrawText(32,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn",fontSize);
+			goodDrawText(32,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn",fontSize);
 		#endif
-		GoodDrawText(5,currentTextHeight*(_choice+1),">",fontSize);
-		EndDrawing();
+		goodDrawText(5,currentTextHeight*(_choice+1),">",fontSize);
+		endDrawing();
 		FpsCapWait();
 	}
 	SaveFontSizeFile();
@@ -3060,17 +3090,19 @@ void SettingsMenu(){
 	PlayMenuSound();
 	signed char _choice=0;
 	char _tempAutoModeString[10] = {'\0'};
-	int _tempStrWidth = TextWidth(fontSize,"Auto Mode Speed: ");
+	int _tempStrWidth = textWidth(fontSize,"Auto Mode Speed: ");
 	itoa(autoModeWait,_tempAutoModeString,10);
 	char _needResave=0;
-	int _bustlocationcollinspacewidth = TextWidth(fontSize,"Bust location: ");
+	int _bustlocationcollinspacewidth = textWidth(fontSize,"Bust location: ");
 	char _canShowRena=0;
 	// This variable is used to check if the player changed the bust location after exiting
 	char _artBefore=graphicsLocation;
 	CrossTexture* _renaImage=NULL;
-	int _noobBGMVolumeWidth = TextWidth(fontSize,"BGM Volume  ");
+	int _noobBGMVolumeWidth = textWidth(fontSize,"BGM Volume  ");
+	int _noobVoiceVolumeWidth = textWidth(fontSize, "Voice Volume ");
 	char _tempItoaHoldBGM[5] = {'\0'};
 	char _tempItoaHoldSE[5] = {'\0'};
+	char _tempItoaHoldVoice[5] = {'\0'};
 
 	// This checks if we have Rena busts in CG AND CGAlt
 	char* _temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,"CG/","re_se_de_a1.png","");
@@ -3092,10 +3124,11 @@ void SettingsMenu(){
 
 	itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 	itoa(seVolume*4, _tempItoaHoldSE,10);
+	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
 
 	while (1){
 		FpsCapStart();
-		ControlsStart();
+		controlsStart();
 
 		if (currentGameStatus!=GAMESTATUS_TITLE){
 			_choice = MenuControls(_choice,0,9);
@@ -3103,7 +3136,7 @@ void SettingsMenu(){
 			_choice = MenuControls(_choice,0,8);
 		}
 
-		if (WasJustPressed(SCE_CTRL_CIRCLE)){
+		if (wasJustPressed(SCE_CTRL_CIRCLE)){
 			if (_choice==2){
 				autoModeWait-=500;
 				if (autoModeWait<=0){
@@ -3114,7 +3147,7 @@ void SettingsMenu(){
 				break;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_CROSS)){
+		if (wasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){ // Resume
 				PlayMenuSound();
 				break;
@@ -3129,7 +3162,10 @@ void SettingsMenu(){
 				lua_getglobal(L,"quitxfunction");
 				lua_call(L, 0, 0);
 				break;
-			}else if (_choice==1){ // OLD Restart BGM choice. Now an unused spot.
+			}else if (_choice==1){ // The voice volume spot if needed
+				if (hasOwnVoiceSetting==1){
+
+				}
 			}else if (_choice==2){ // Auto mode speed
 				autoModeWait+=500;
 				itoa(autoModeWait,_tempAutoModeString,10);
@@ -3154,25 +3190,27 @@ void SettingsMenu(){
 					cpuOverclocked=0; // We don't actually change the CPU speed. They'll never notice. ;)
 					bgmVolume=.75;
 					seVolume=1.0;
+					voiceVolume=1.0;
 					// Some need to have their strings changed so the user can actually see the changes
 					itoa(autoModeWait,_tempAutoModeString,10);
 					itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 					itoa(seVolume*4, _tempItoaHoldSE,10);
+					itoa(voiceVolume*4, _tempItoaHoldVoice,10);
 					// Update music volume using new default setting
 					SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
 				}
 			}else if (_choice==7){
 				FontSizeSetup();
-				_bustlocationcollinspacewidth = TextWidth(fontSize,"Bust location: ");
-				_noobBGMVolumeWidth = TextWidth(fontSize,"BGM Volume  ");
-				_tempStrWidth = TextWidth(fontSize,"Auto Mode Speed: ");
-				currentTextHeight = TextHeight(fontSize);
+				_bustlocationcollinspacewidth = textWidth(fontSize,"Bust location: ");
+				_noobBGMVolumeWidth = textWidth(fontSize,"BGM Volume  ");
+				_tempStrWidth = textWidth(fontSize,"Auto Mode Speed: ");
+				currentTextHeight = textHeight(fontSize);
 			}
 		}
 
-		if (WasJustPressed(SCE_CTRL_LEFT)){
+		if (wasJustPressed(SCE_CTRL_LEFT)){
 			if (_choice==2){
-				if (IsDown(SCE_CTRL_LTRIGGER)){
+				if (isDown(SCE_CTRL_LTRIGGER)){
 					autoModeWait-=200;
 				}else{
 					autoModeWait-=500;
@@ -3182,6 +3220,12 @@ void SettingsMenu(){
 				}
 				itoa(autoModeWait,_tempAutoModeString,10);
 				_needResave=1;
+			}else if (_choice==1 && hasOwnVoiceSetting){
+				if (voiceVolume==0){
+					voiceVolume=1.25;
+				}
+				voiceVolume-=.25;
+				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
 			}else if (_choice==5){
 				if (bgmVolume==0){
 					bgmVolume=1.25;
@@ -3196,14 +3240,14 @@ void SettingsMenu(){
 				seVolume-=.25;
 				itoa(seVolume*4,_tempItoaHoldSE,10);
 				if (menuSoundLoaded==1){
-					SetSFXVolumeBefore(menuSound,FixSEVolume(256));
+					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_RIGHT)){
+		if (wasJustPressed(SCE_CTRL_RIGHT)){
 			if (_choice==2){
-				if (IsDown(SCE_CTRL_LTRIGGER)){
+				if (isDown(SCE_CTRL_LTRIGGER)){
 					autoModeWait+=200;
 				}else{
 					autoModeWait+=500;
@@ -3212,9 +3256,16 @@ void SettingsMenu(){
 				_needResave=1;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_CROSS) || WasJustPressed(SCE_CTRL_RIGHT) || WasJustPressed(SCE_CTRL_LEFT)){
-			if (!WasJustPressed(SCE_CTRL_LEFT)){
-				if (_choice==5){
+		if (wasJustPressed(SCE_CTRL_CROSS) || wasJustPressed(SCE_CTRL_RIGHT) || wasJustPressed(SCE_CTRL_LEFT)){
+			if (!wasJustPressed(SCE_CTRL_LEFT)){
+				if (_choice==1 && hasOwnVoiceSetting){
+					if (voiceVolume==1){
+						voiceVolume=0;
+					}else{
+						voiceVolume+=.25;
+					}
+					itoa(voiceVolume*4,_tempItoaHoldVoice,10);
+				}else if (_choice==5){
 					if (bgmVolume==1){
 						bgmVolume=0;
 					}else{
@@ -3231,7 +3282,7 @@ void SettingsMenu(){
 					itoa(seVolume*4,_tempItoaHoldSE,10);
 
 					if (menuSoundLoaded==1){
-						SetSFXVolumeBefore(menuSound,FixSEVolume(256));
+						setSFXVolumeBefore(menuSound,FixSEVolume(256));
 					}
 					PlayMenuSound();
 
@@ -3245,7 +3296,7 @@ void SettingsMenu(){
 					graphicsLocation = LOCATION_CG;
 				}
 				if (_canShowRena==1){
-					FreeTexture(_renaImage);
+					freeTexture(_renaImage);
 					_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,locationStrings[graphicsLocation],"re_se_de_a1.png","");
 					_renaImage = SafeLoadPNG(_temppath);
 					free(_temppath);
@@ -3253,62 +3304,69 @@ void SettingsMenu(){
 			}
 		}
 
-		ControlsEnd();
-		StartDrawing();
+		controlsEnd();
+		startDrawing();
 		// Display sample Rena if changing bust location
 		if (_choice==3){
 			if (_canShowRena==1){
-				DrawTexture(_renaImage,screenWidth-GetTextureWidth(_renaImage)-5,screenHeight-GetTextureHeight(_renaImage));
+				drawTexture(_renaImage,screenWidth-getTextureWidth(_renaImage)-5,screenHeight-getTextureHeight(_renaImage));
 			}
 		}
 
 		if (currentGameStatus==GAMESTATUS_TITLE){
-			GoodDrawText(32,5,"Back",fontSize);
+			goodDrawText(32,5,"Back",fontSize);
 		}else{
-			GoodDrawText(32,5,"Resume",fontSize);
+			goodDrawText(32,5,"Resume",fontSize);
 		}
-		GoodDrawText(32,5+currentTextHeight,"===",fontSize);
-		GoodDrawText(32,5+currentTextHeight*2,"Auto Mode Speed: ",fontSize);
-			GoodDrawText(32+_tempStrWidth,5+currentTextHeight*2,_tempAutoModeString,fontSize);
+
+
+		if (hasOwnVoiceSetting==1){
+			goodDrawText(32,5+currentTextHeight,"Voice Volume",fontSize);
+			goodDrawText(32+_noobVoiceVolumeWidth,5+currentTextHeight,_tempItoaHoldVoice,fontSize);
+		}else{
+			goodDrawText(32,5+currentTextHeight,"===",fontSize);
+		}
+		goodDrawText(32,5+currentTextHeight*2,"Auto Mode Speed: ",fontSize);
+			goodDrawText(32+_tempStrWidth,5+currentTextHeight*2,_tempAutoModeString,fontSize);
 		
-		GoodDrawText(32,5+currentTextHeight*3,"Bust location: ",fontSize);
+		goodDrawText(32,5+currentTextHeight*3,"Bust location: ",fontSize);
 			if (graphicsLocation == LOCATION_CGALT){
-				GoodDrawText(32+_bustlocationcollinspacewidth,5+currentTextHeight*3,"CGAlt",fontSize);
+				goodDrawText(32+_bustlocationcollinspacewidth,5+currentTextHeight*3,"CGAlt",fontSize);
 			}else if (graphicsLocation==LOCATION_CG){
-				GoodDrawText(32+_bustlocationcollinspacewidth,5+currentTextHeight*3,"CG",fontSize);
+				goodDrawText(32+_bustlocationcollinspacewidth,5+currentTextHeight*3,"CG",fontSize);
 			}
 
 		// Display CPU overclock option
 			#if PLATFORM == PLAT_VITA
 				if (cpuOverclocked==1){
-					GoodDrawTextColored(32,5+currentTextHeight*4,"Overclock CPU",fontSize,0,255,0);
+					goodDrawTextColored(32,5+currentTextHeight*4,"Overclock CPU",fontSize,0,255,0);
 				}else{
-					GoodDrawText(32,5+currentTextHeight*4,"Overclock CPU",fontSize);
+					goodDrawText(32,5+currentTextHeight*4,"Overclock CPU",fontSize);
 				}
 			#else
 				if (cpuOverclocked==1){
-					GoodDrawTextColored(32,5+currentTextHeight*4,"Green Nothing",fontSize,0,255,0);
+					goodDrawTextColored(32,5+currentTextHeight*4,"Green Nothing",fontSize,0,255,0);
 				}else{
-					GoodDrawText(32,5+currentTextHeight*4,"Nothing",fontSize);
+					goodDrawText(32,5+currentTextHeight*4,"Nothing",fontSize);
 				}
 			#endif
-		GoodDrawText(32,5+currentTextHeight*5,"BGM Volume",fontSize);
-			GoodDrawText(32+_noobBGMVolumeWidth,5+currentTextHeight*5,_tempItoaHoldBGM,fontSize);
-		GoodDrawText(32,5+currentTextHeight*6,"SE Volume",fontSize);
-			GoodDrawText(32+_noobBGMVolumeWidth,5+currentTextHeight*6,_tempItoaHoldSE,fontSize);
+		goodDrawText(32,5+currentTextHeight*5,"BGM Volume",fontSize);
+			goodDrawText(32+_noobBGMVolumeWidth,5+currentTextHeight*5,_tempItoaHoldBGM,fontSize);
+		goodDrawText(32,5+currentTextHeight*6,"SE Volume",fontSize);
+			goodDrawText(32+_noobBGMVolumeWidth,5+currentTextHeight*6,_tempItoaHoldSE,fontSize);
 
-		GoodDrawText(32,5+currentTextHeight*7,"Font Size",fontSize);
-		GoodDrawText(32,5+currentTextHeight*8,"Defaults",fontSize);
+		goodDrawText(32,5+currentTextHeight*7,"Font Size",fontSize);
+		goodDrawText(32,5+currentTextHeight*8,"Defaults",fontSize);
 		if (currentGameStatus!=GAMESTATUS_TITLE){
-			GoodDrawText(32,5+currentTextHeight*9,"Quit",fontSize);
+			goodDrawText(32,5+currentTextHeight*9,"Quit",fontSize);
 		}
-		GoodDrawText(0,5+_choice*currentTextHeight,">",fontSize);
-		EndDrawing();
+		goodDrawText(0,5+_choice*currentTextHeight,">",fontSize);
+		endDrawing();
 		FpsCapWait();
 	}
 	SaveSettings();
 	if (_canShowRena==1){
-		FreeTexture(_renaImage);
+		freeTexture(_renaImage);
 	}
 	if (currentGameStatus!=GAMESTATUS_TITLE){
 		if (_artBefore != graphicsLocation){
@@ -3321,23 +3379,23 @@ void TitleScreen(){
 	
 	signed char _titlePassword=0;
 
-	int _versionStringWidth = TextWidth(fontSize,VERSIONSTRING);
+	int _versionStringWidth = textWidth(fontSize,VERSIONSTRING);
 
 	//SetClearColor(255,255,255,255);
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
-		ControlsStart();
+		controlsStart();
 
 		// Password right left down up square
-			if (WasJustPressed(SCE_CTRL_RIGHT)){
+			if (wasJustPressed(SCE_CTRL_RIGHT)){
 				_titlePassword=1;
-			}else if (WasJustPressed(SCE_CTRL_LEFT)){
+			}else if (wasJustPressed(SCE_CTRL_LEFT)){
 				_titlePassword = Password(_titlePassword,1);
-			}else if (WasJustPressed(SCE_CTRL_DOWN)){
+			}else if (wasJustPressed(SCE_CTRL_DOWN)){
 				_titlePassword = Password(_titlePassword,2);
-			}else if (WasJustPressed(SCE_CTRL_UP)){
+			}else if (wasJustPressed(SCE_CTRL_UP)){
 				_titlePassword = Password(_titlePassword,3);
-			}else if (WasJustPressed(SCE_CTRL_SQUARE)){
+			}else if (wasJustPressed(SCE_CTRL_SQUARE)){
 				_titlePassword = Password(_titlePassword,4);
 				if (_titlePassword==5){
 					if (LazyChoice("Would you like to activate top secret","speedy mode for MyLegGuy's testing?",NULL,NULL)==1){
@@ -3347,32 +3405,32 @@ void TitleScreen(){
 				}
 			}
 
-		if (WasJustPressed(SCE_CTRL_DOWN)){
+		if (wasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
 			if (_choice>3){
 				_choice=0;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_UP)){
+		if (wasJustPressed(SCE_CTRL_UP)){
 			_choice--;
 			if (_choice<0){
 				_choice=3;
 			}
 		}
 
-		if (WasJustPressed(SCE_CTRL_CROSS)){
+		if (wasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
 				PlayMenuSound();
 				if (currentPresetFilename==NULL){
 					currentPresetChapter=0;
-					ControlsEnd();
+					controlsEnd();
 					currentGameStatus=GAMESTATUS_PRESETSELECTION;
 				}
 				break;
 			}else if (_choice==1){
 				PlayMenuSound();
 				if (!directoryExists(SCRIPTFOLDER)){
-					ControlsEnd();
+					controlsEnd();
 					char* _tempChosenFile;
 					if (FileSelector(PRESETFOLDER,&_tempChosenFile,(char*)"Select a preset to choose StreamingAssets folder")==2){
 						LazyMessage(SCRIPTFOLDER,"does not exist and no files in",PRESETFOLDER,"Do you have any files?");
@@ -3385,7 +3443,7 @@ void TitleScreen(){
 						free(_tempChosenFile);
 					}
 				}
-				ControlsEnd();
+				controlsEnd();
 				char* _tempManualFileSelectionResult;
 				FileSelector(SCRIPTFOLDER,&_tempManualFileSelectionResult,(char*)"Select a script");
 				if (_tempManualFileSelectionResult!=NULL){
@@ -3403,9 +3461,9 @@ void TitleScreen(){
 				currentGameStatus=GAMESTATUS_QUIT;
 				break;
 			}else if (_choice==2){ // Go to setting menu
-				ControlsEnd();
+				controlsEnd();
 				SettingsMenu();
-				ControlsEnd();
+				controlsEnd();
 				break;
 			}else{
 				_choice=0;
@@ -3413,21 +3471,21 @@ void TitleScreen(){
 		}
 		
 
-		StartDrawing();
+		startDrawing();
 
-		GoodDrawText(32,5,"Main Menu",fontSize);
+		goodDrawText(32,5,"Main Menu",fontSize);
 
-		GoodDrawText(32,5+currentTextHeight*(0+2),"Load game",fontSize);
-		GoodDrawText(32,5+currentTextHeight*(1+2),"Manual mode",fontSize);
-		GoodDrawText(32,5+currentTextHeight*(2+2),"Settings",fontSize);
-		GoodDrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
+		goodDrawText(32,5+currentTextHeight*(0+2),"Load game",fontSize);
+		goodDrawText(32,5+currentTextHeight*(1+2),"Manual mode",fontSize);
+		goodDrawText(32,5+currentTextHeight*(2+2),"Settings",fontSize);
+		goodDrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
 
-		GoodDrawTextColored((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING,fontSize,VERSIONCOLOR);
-		GoodDrawText(5,screenHeight-5-currentTextHeight,SYSTEMSTRING,fontSize);
+		goodDrawTextColored((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING,fontSize,VERSIONCOLOR);
+		goodDrawText(5,screenHeight-5-currentTextHeight,SYSTEMSTRING,fontSize);
 
-		GoodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
-		EndDrawing();
-		ControlsEnd();
+		goodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
+		endDrawing();
+		controlsEnd();
 		FpsCapWait();
 	}
 }
@@ -3436,7 +3494,7 @@ void TipMenu(){
 	if (currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
 		LazyMessage("No tips unlocked.",NULL,NULL,NULL);
 		currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
-		ControlsEnd();
+		controlsEnd();
 		return;
 	}
 	// The number for the tip the user has selected. Starts at 1. Subtract 1 if using this for an array
@@ -3467,22 +3525,22 @@ void TipMenu(){
 
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
-		ControlsStart();
+		controlsStart();
 
-		if (WasJustPressed(SCE_CTRL_DOWN)){
+		if (wasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
 			if (_choice>1){
 				_choice=0;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_UP)){
+		if (wasJustPressed(SCE_CTRL_UP)){
 			_choice--;
 			if (_choice<0){
 				_choice=1;
 			}
 		}
 
-		if (WasJustPressed(SCE_CTRL_RIGHT)){
+		if (wasJustPressed(SCE_CTRL_RIGHT)){
 			_chosenTip++;
 			if (_chosenTip>currentPresetTipUnlockList.theArray[currentPresetChapter]){
 				_chosenTip=1;
@@ -3510,7 +3568,7 @@ void TipMenu(){
 			luaL_dostring(L,_totalSelectedString);
 			isSkipping=0;
 		}
-		if (WasJustPressed(SCE_CTRL_LEFT) ){
+		if (wasJustPressed(SCE_CTRL_LEFT) ){
 			_chosenTip--;
 			if (_chosenTip<1){
 				_chosenTip=currentPresetTipUnlockList.theArray[currentPresetChapter];
@@ -3538,18 +3596,18 @@ void TipMenu(){
 			luaL_dostring(L,_totalSelectedString);
 			isSkipping=0;
 		}
-		if (WasJustPressed(SCE_CTRL_CROSS)){
+		if (wasJustPressed(SCE_CTRL_CROSS)){
 			ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
-			ControlsEnd();
+			controlsEnd();
 			// This will trick the in between lines functions into thinking that we're in normal script execution mode and not quit
 			currentGameStatus=GAMESTATUS_MAINGAME;
 			RunScript(SCRIPTFOLDER, currentPresetTipList.theArray[_chosenTip-1],1);
-			ControlsEnd();
+			controlsEnd();
 			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			currentGameStatus=GAMESTATUS_TIPMENU;
 			break;
 		}
-		if (WasJustPressed(SCE_CTRL_CIRCLE)){
+		if (wasJustPressed(SCE_CTRL_CIRCLE)){
 			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			ClearMessageArray();
 			currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
@@ -3561,26 +3619,26 @@ void TipMenu(){
 
 
 
-		ControlsEnd();
-		StartDrawing();
-		//GoodDrawText(32,5+currentTextHeight*(0+2),"Tip: ",fontSize);
-		//GoodDrawText(32+_tipcollinwidth,5+currentTextHeight*(0+2),_totalSelectedString,fontSize);
+		controlsEnd();
+		startDrawing();
+		//goodDrawText(32,5+currentTextHeight*(0+2),"Tip: ",fontSize);
+		//goodDrawText(32+_tipcollinwidth,5+currentTextHeight*(0+2),_totalSelectedString,fontSize);
 		for (i = 0; i < 3; i++){
 			//printf("%s\n",currentMessages[i]);
-			GoodDrawText(32,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+			goodDrawText(32,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 		}
 
-		//GoodDrawText(32,currentTextHeight*5,"View TIP",fontSize);
-		//GoodDrawText(32,currentTextHeight*6,"Back",fontSize);
+		//goodDrawText(32,currentTextHeight*5,"View TIP",fontSize);
+		//goodDrawText(32,currentTextHeight*6,"Back",fontSize);
 
-		//GoodDrawText(5,(_choice+5)*currentTextHeight,">",fontSize);
+		//goodDrawText(5,(_choice+5)*currentTextHeight,">",fontSize);
 
-		GoodDrawText(5,screenHeight-5-currentTextHeight*3,"Left and Right - Change TIP",fontSize);
-		//GoodDrawText(5,screenHeight-5-currentTextHeight*3,"Up and Down - Select option",fontSize);
-		GoodDrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back",fontSize);
-		GoodDrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select",fontSize);
+		goodDrawText(5,screenHeight-5-currentTextHeight*3,"Left and Right - Change TIP",fontSize);
+		//goodDrawText(5,screenHeight-5-currentTextHeight*3,"Up and Down - Select option",fontSize);
+		goodDrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back",fontSize);
+		goodDrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select",fontSize);
 
-		EndDrawing();
+		endDrawing();
 		FpsCapWait();
 	}
 }
@@ -3592,7 +3650,7 @@ void ChapterJump(){
 	int _chapterChoice=0;
 	unsigned char _choice=0;
 	char _tempNumberString[15];
-	ControlsEnd();
+	controlsEnd();
 
 	itoa(_chapterChoice,&(_tempNumberString[0]),10);
 	strcpy((char*)globalTempConcat,currentPresetFileList.theArray[_chapterChoice]);
@@ -3602,9 +3660,9 @@ void ChapterJump(){
 
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
-		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_RIGHT)){
-			if (!IsDown(SCE_CTRL_RTRIGGER)){
+		controlsStart();
+		if (wasJustPressed(SCE_CTRL_RIGHT)){
+			if (!isDown(SCE_CTRL_RTRIGGER)){
 				_chapterChoice++;
 			}else{
 				_chapterChoice+=5;
@@ -3619,8 +3677,8 @@ void ChapterJump(){
 			strcat((char*)globalTempConcat,_tempNumberString);
 			strcat((char*)globalTempConcat,")");
 		}
-		if (WasJustPressed(SCE_CTRL_LEFT)){
-			if (!IsDown(SCE_CTRL_RTRIGGER)){
+		if (wasJustPressed(SCE_CTRL_LEFT)){
+			if (!isDown(SCE_CTRL_RTRIGGER)){
 				_chapterChoice--;
 			}else{
 				_chapterChoice-=5;
@@ -3634,25 +3692,25 @@ void ChapterJump(){
 			strcat((char*)globalTempConcat,_tempNumberString);
 			strcat((char*)globalTempConcat,")");
 		}
-		if (WasJustPressed(SCE_CTRL_DOWN)){
+		if (wasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
 			if (_choice>1){
 				_choice=0;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_UP)){
+		if (wasJustPressed(SCE_CTRL_UP)){
 			_choice--;
 			if (_choice>=240){
 				_choice=1;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_CROSS)){
+		if (wasJustPressed(SCE_CTRL_CROSS)){
 			ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 			if (_choice==0){
-				ControlsEnd();
+				controlsEnd();
 				currentGameStatus=GAMESTATUS_MAINGAME;
 				RunScript(SCRIPTFOLDER, currentPresetFileList.theArray[_chapterChoice],1);
-				ControlsEnd();
+				controlsEnd();
 				ChangeEasyTouchMode(TOUCHMODE_MENU);
 				currentGameStatus=GAMESTATUS_TIPMENU;
 				break;
@@ -3661,27 +3719,27 @@ void ChapterJump(){
 				break;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_CIRCLE)){
+		if (wasJustPressed(SCE_CTRL_CIRCLE)){
 			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			break;
 		}
-		ControlsEnd();
-		StartDrawing();
+		controlsEnd();
+		startDrawing();
 		
 		if (chapterNamesLoaded==0){
-			GoodDrawText(32,5+currentTextHeight*(0+2),(const char*)globalTempConcat,fontSize);
+			goodDrawText(32,5+currentTextHeight*(0+2),(const char*)globalTempConcat,fontSize);
 		}else{
-			GoodDrawText(32,5+currentTextHeight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice],fontSize);
+			goodDrawText(32,5+currentTextHeight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice],fontSize);
 		}
 
-		GoodDrawText(32,5+currentTextHeight*(1+2),"Back",fontSize);
-		GoodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
+		goodDrawText(32,5+currentTextHeight*(1+2),"Back",fontSize);
+		goodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
 
-		GoodDrawText(5,screenHeight-5-currentTextHeight*4,"Left and Right - Change chapter",fontSize);
-		GoodDrawText(5,screenHeight-5-currentTextHeight*3,"R and Left or Right - Change chapter quickly",fontSize);
-		GoodDrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back",fontSize);
-		GoodDrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select",fontSize);
-		EndDrawing();
+		goodDrawText(5,screenHeight-5-currentTextHeight*4,"Left and Right - Change chapter",fontSize);
+		goodDrawText(5,screenHeight-5-currentTextHeight*3,"R and Left or Right - Change chapter quickly",fontSize);
+		goodDrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back",fontSize);
+		goodDrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select",fontSize);
+		endDrawing();
 		FpsCapWait();
 	}
 }
@@ -3689,51 +3747,51 @@ void SaveGameEditor(){
 	ChangeEasyTouchMode(TOUCHMODE_LEFTRIGHTSELECT);
 	char _endOfChapterString[10];
 	itoa(currentPresetChapter,_endOfChapterString,10);
-	ControlsEnd();
+	controlsEnd();
 	while (1){
 		FpsCapStart();
 
-		ControlsStart();
-		if (WasJustPressed(SCE_CTRL_RIGHT)){
+		controlsStart();
+		if (wasJustPressed(SCE_CTRL_RIGHT)){
 			currentPresetChapter++;
 			if (currentPresetChapter>currentPresetFileList.length-1){
 				currentPresetChapter=0;
 			}
 			itoa(currentPresetChapter,_endOfChapterString,10);
 		}
-		if (WasJustPressed(SCE_CTRL_LEFT)){
+		if (wasJustPressed(SCE_CTRL_LEFT)){
 			currentPresetChapter--;
 			if (currentPresetChapter<0){
 				currentPresetChapter=currentPresetFileList.length-1;
 			}
 			itoa(currentPresetChapter,_endOfChapterString,10);
 		}
-		if (WasJustPressed(SCE_CTRL_CROSS)){
+		if (wasJustPressed(SCE_CTRL_CROSS)){
 			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			SaveGame();
-			ControlsEnd();
+			controlsEnd();
 			break;
 		}
-		ControlsEnd();
-		StartDrawing();
+		controlsEnd();
+		startDrawing();
 		if (chapterNamesLoaded==0){
-			GoodDrawText(32, currentTextHeight, _endOfChapterString, fontSize);
+			goodDrawText(32, currentTextHeight, _endOfChapterString, fontSize);
 		}else{
-			GoodDrawText(32, currentTextHeight, currentPresetFileFriendlyList.theArray[currentPresetChapter], fontSize);
+			goodDrawText(32, currentTextHeight, currentPresetFileFriendlyList.theArray[currentPresetChapter], fontSize);
 		}
 
 		
-		GoodDrawText(32, screenHeight-currentTextHeight*3, "Welcome to the save file editor!", fontSize);
-		GoodDrawText(32, screenHeight-currentTextHeight*2, SELECTBUTTONNAME" - Finish and save", fontSize);
-		GoodDrawText(32, screenHeight-currentTextHeight, "Left and Right - Change last completed chapter", fontSize);
-		EndDrawing();
+		goodDrawText(32, screenHeight-currentTextHeight*3, "Welcome to the save file editor!", fontSize);
+		goodDrawText(32, screenHeight-currentTextHeight*2, SELECTBUTTONNAME" - Finish and save", fontSize);
+		goodDrawText(32, screenHeight-currentTextHeight, "Left and Right - Change last completed chapter", fontSize);
+		endDrawing();
 		FpsCapWait();
 	}
 }
 void NavigationMenu(){
 	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	signed char _choice=0;
-	int _endofscriptwidth = TextWidth(fontSize,(char*)"End of script: ");
+	int _endofscriptwidth = textWidth(fontSize,(char*)"End of script: ");
 	char _endOfChapterString[10];
 	itoa(currentPresetChapter,_endOfChapterString,10);
 
@@ -3752,20 +3810,20 @@ void NavigationMenu(){
 
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
-		ControlsStart();
+		controlsStart();
 
 		// Editor secret code
-			if (WasJustPressed(SCE_CTRL_UP)){
+			if (wasJustPressed(SCE_CTRL_UP)){
 				_codeProgress = Password(_codeProgress,0);
 			}
-			if (WasJustPressed(SCE_CTRL_DOWN)){
+			if (wasJustPressed(SCE_CTRL_DOWN)){
 				_codeProgress = Password(_codeProgress,1);
 			}
 			//int Password(int val, int _shouldHave){
-			if (WasJustPressed(SCE_CTRL_LEFT)){
+			if (wasJustPressed(SCE_CTRL_LEFT)){
 				_codeProgress = Password(_codeProgress,2);
 			}
-			if (WasJustPressed(SCE_CTRL_RIGHT)){
+			if (wasJustPressed(SCE_CTRL_RIGHT)){
 				_codeProgress = Password(_codeProgress,3);
 				if (_codeProgress==4){
 					SaveGameEditor();
@@ -3775,7 +3833,7 @@ void NavigationMenu(){
 				}
 			}
 
-		if (WasJustPressed(SCE_CTRL_DOWN)){
+		if (wasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
 			if (_choice>3){
 				_choice=0;
@@ -3784,7 +3842,7 @@ void NavigationMenu(){
 				}
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_UP)){
+		if (wasJustPressed(SCE_CTRL_UP)){
 			_choice--;
 			if (_choice<0){
 				_choice=3;
@@ -3793,7 +3851,7 @@ void NavigationMenu(){
 				_choice=3;
 			}
 		}
-		if (WasJustPressed(SCE_CTRL_CROSS)){
+		if (wasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
 				printf("Go to next chapter\n");
 				if (currentPresetChapter+1==currentPresetFileList.length){
@@ -3811,7 +3869,7 @@ void NavigationMenu(){
 			}else if (_choice==2){
 				printf("Viewing tips\n");
 				currentGameStatus=GAMESTATUS_TIPMENU;
-				ControlsEnd();
+				controlsEnd();
 				#if PLAYTIPMUSIC == 1
 					PlayBGM("lsys14",256);
 				#endif
@@ -3825,23 +3883,23 @@ void NavigationMenu(){
 				printf("INVALID SELECTION\n");
 			}
 		}
-		ControlsEnd();
-		StartDrawing();
+		controlsEnd();
+		startDrawing();
 
-		GoodDrawText(32,0,"End of script: ",fontSize);
+		goodDrawText(32,0,"End of script: ",fontSize);
 		if (chapterNamesLoaded==0){
-			GoodDrawText(_endofscriptwidth+32,0,_endOfChapterString,fontSize);
+			goodDrawText(_endofscriptwidth+32,0,_endOfChapterString,fontSize);
 		}else{
-			GoodDrawText(_endofscriptwidth+32,0,currentPresetFileFriendlyList.theArray[currentPresetChapter],fontSize);
+			goodDrawText(_endofscriptwidth+32,0,currentPresetFileFriendlyList.theArray[currentPresetChapter],fontSize);
 		}
 		if (_nextChapterExist==1){
-			GoodDrawText(32,5+currentTextHeight*(0+2),"Next",fontSize);
+			goodDrawText(32,5+currentTextHeight*(0+2),"Next",fontSize);
 		}
-		GoodDrawText(32,5+currentTextHeight*(1+2),"Chapter Jump",fontSize);
-		GoodDrawText(32,5+currentTextHeight*(2+2),"View Tips",fontSize);
-		GoodDrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
-		GoodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
-		EndDrawing();
+		goodDrawText(32,5+currentTextHeight*(1+2),"Chapter Jump",fontSize);
+		goodDrawText(32,5+currentTextHeight*(2+2),"View Tips",fontSize);
+		goodDrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
+		goodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
+		endDrawing();
 		FpsCapWait();
 	}
 }
@@ -3851,33 +3909,31 @@ void NewGameMenu(){
 	while (1){
 		FpsCapStart();
 
-		ControlsStart();
+		controlsStart();
 		_choice = MenuControls(_choice,0,1);
 
-		if (WasJustPressed(SCE_CTRL_CROSS)){
+		if (wasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
 				break;
 			}else{
 				currentPresetChapter=0;
-				ControlsEnd();
+				controlsEnd();
 				SaveGameEditor();
 				break;
 			}
 		}
-		ControlsEnd();
+		controlsEnd();
 
-		StartDrawing();
-		GoodDrawText(32,currentTextHeight,"NEW GAME",fontSize);
-		GoodDrawText(32,currentTextHeight*3,"Start from beginning",fontSize);
-		GoodDrawText(32,currentTextHeight*4,"Savegame Editor",fontSize);
-		GoodDrawText(5,currentTextHeight*(_choice+3),">",fontSize);
-		EndDrawing();
+		startDrawing();
+		goodDrawText(32,currentTextHeight,"NEW GAME",fontSize);
+		goodDrawText(32,currentTextHeight*3,"Start from beginning",fontSize);
+		goodDrawText(32,currentTextHeight*4,"Savegame Editor",fontSize);
+		goodDrawText(5,currentTextHeight*(_choice+3),">",fontSize);
+		endDrawing();
 
 		FpsCapWait();
 	}
 }
-
-
 void RunGameSpecificLua(){
 	char _completedSpecificLuaPath[strlen(SCRIPTFOLDER)+strlen("_GameSpecific.lua")+1];
 	strcpy(_completedSpecificLuaPath,SCRIPTFOLDER);
@@ -3887,14 +3943,54 @@ void RunGameSpecificLua(){
 		luaL_dofile(L,_completedSpecificLuaPath);
 	}
 }
-
+// Load from the file
+// Format:
+// is adv mode? ( 0 or 1 )
+// is seperate voice control? ( 0 or 1 )
+void LoadGameSpecificSettings(){
+	char _tempSettingsFilePathBuffer[strlen(STREAMINGASSETS)+strlen("GameSettings.txt")+1];
+	strcpy(_tempSettingsFilePathBuffer,STREAMINGASSETS);
+	strcat(_tempSettingsFilePathBuffer,"GameSettings.txt");
+	if (checkFileExist(_tempSettingsFilePathBuffer)){
+		FILE* fp = fopen(_tempSettingsFilePathBuffer, "r");
+		char line[10];
+		fgets(line, sizeof(line), fp);
+		if (line[0]=='1'){
+			gameTextDisplayMode=TEXTMODE_AVD;
+		}
+		fgets(line, sizeof(line), fp);
+		if (line[0]=='1'){
+			hasOwnVoiceSetting=1;
+		}
+		fclose(fp);
+	}
+}
+void LoadAdvBox(){
+	char _tempFilepathBuffer[strlen(STREAMINGASSETS)+strlen("GameSpecificAdvBox.png")+1];
+	strcpy(_tempFilepathBuffer,STREAMINGASSETS);
+	strcat(_tempFilepathBuffer,"GameSpecificAdvBox.png");
+	if (checkFileExist(_tempFilepathBuffer)){
+		currentCustomTextbox = loadPNG(_tempFilepathBuffer);
+	}else{
+		currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBox.png");;
+	}
+	textboxYOffset=363;
+}
+void LoadGameSpecificStupidity(){
+	TryLoadMenuSoundEffect();
+	LoadGameSpecificSettings();
+	RunGameSpecificLua();
+	if (gameTextDisplayMode == TEXTMODE_AVD){
+		LoadAdvBox();
+	}
+}
 // =====================================================
 // Returns 2 for missing or outdated happy.lua
 // Returns 0 otherwise
 char init_dohappylua(){
 	// Happy.lua contains functions that both Higurashi script files use and my C code
 	char _didLoadHappyLua;
-	#if PLATFORM == PLAT_WINDOWS
+	#if PLATFORM == PLAT_COMPUTER
 		#if SUBPLATFORM == SUB_ANDROID
 			_didLoadHappyLua = SafeLuaDoFile(L,"/sdcard/HIGURASHI/StreamingAssets/happy.lua",0);
 		#else
@@ -3908,9 +4004,9 @@ char init_dohappylua(){
 	if (_didLoadHappyLua==0){
 		#if PLATFORM == PLAT_VITA
 			LazyMessage("Happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
-		#elif PLATFORM == PLAT_WINDOWS
+		#elif PLATFORM == PLAT_COMPUTER
 			printf("Falling back on happybackup.lua");
-			FixPath("StreamingAssets/happybackup.lua",globalTempConcat,TYPE_DATA);
+			fixPath("StreamingAssets/happybackup.lua",globalTempConcat,TYPE_DATA);
 			_didLoadHappyLua = SafeLuaDoFile(L,(char*)globalTempConcat,0);
 			if (_didLoadHappyLua==0){
 				LazyMessage("/sdcard/HIGURASHI/StreamingAssets/happy.lua","is missing. Did you convert the script files?",(const char*)globalTempConcat,"is also missing. It's from the script converter too.");
@@ -3945,49 +4041,14 @@ char init_dohappylua(){
 
 	return 0;
 }
+
 // Please exit if this function returns 2
 // Go ahead as normal if it returns 0
 signed char init(){
 	printf("====================================================\n===========================================================\n==================================================================\n");
 	int i=0;
-	#if RENDERER == REND_SDL
-		SDL_Init( SDL_INIT_VIDEO );
-		#if SUBPLATFORM == SUB_ANDROID
-			// For knowing screen resolution and stuff.
-			SDL_DisplayMode displayMode;
-			if( SDL_GetCurrentDisplayMode( 0, &displayMode ) == 0 ){
-				mainWindow = SDL_CreateWindow( "HappyWindo", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, displayMode.w, displayMode.h, SDL_WINDOW_SHOWN );
-				screenWidth=displayMode.w;
-				screenHeight=displayMode.h;
-			}else{
-				printf("Failed to get display mode....\n");
-			}
-		#else
-			mainWindow = SDL_CreateWindow( "HappyWindo", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, screenWidth, screenHeight, SDL_WINDOW_SHOWN );
-			showErrorIfNull(mainWindow);
-		#endif
-		
-		if (useVsync==0){
-			mainWindowRenderer = SDL_CreateRenderer( mainWindow, -1, SDL_RENDERER_ACCELERATED);
-		}else{
-			mainWindowRenderer = SDL_CreateRenderer( mainWindow, -1, SDL_RENDERER_PRESENTVSYNC);
-		}
-		showErrorIfNull(mainWindowRenderer);
-		// Check if this fails?
-		IMG_Init( IMG_INIT_PNG );
-
-		SDL_SetRenderDrawBlendMode(mainWindowRenderer,SDL_BLENDMODE_BLEND);
-	#endif
-	#if RENDERER == REND_VITA2D
-		// Init vita2d and set its clear color.
-		vita2d_init();
-
-		// Zero a variable that should already be zero.
-		memset(&pad, 0, sizeof(pad));
-
-		//fontImageItalics = vita2d_load_font_file("app0:a/LiberationSans-Italic.ttf");
-	#endif
-	SetClearColor(0,0,0,255);
+	initGraphics(960,544,&screenWidth,&screenHeight);
+	setClearColor(0,0,0,255);
 
 	// Make buffers for busts
 	Busts = calloc(1,sizeof(bust)*MAXBUSTS);
@@ -3995,8 +4056,8 @@ signed char init(){
 	bustOrderOverBox = calloc(1,sizeof(char)*MAXBUSTS);
 
 	// We need this for ReloadFont();
-	FixPath("assets/Loading.png",globalTempConcat,TYPE_EMBEDDED);
-	loadingImage = LoadPNG((char*)globalTempConcat);
+	fixPath("assets/Loading.png",globalTempConcat,TYPE_EMBEDDED);
+	loadingImage = loadPNG((char*)globalTempConcat);
 
 	// Setup DATAFOLDER variable. Defaults to uma0 if it exists and it's unsafe build
 	ResetDataDirectory();
@@ -4005,24 +4066,13 @@ signed char init(){
 	// Will not crash if no settings found
 	LoadSettings();
 
-	#if TEXTRENDERER == TEXT_DEBUG
-		FixPath("assets/Font.png",globalTempConcat,TYPE_EMBEDDED);
-		fontImage=SafeLoadPNG((char*)globalTempConcat);
-	#elif TEXTRENDERER == TEXT_FONTCACHE
-		// Make sure it's null beforehand so the free function in the reload function does nothing
-		fontImage = NULL;
-		ReloadFont();
-	#elif TEXTRENDERER == TEXT_VITA2D
-		if (checkFileExist((char*)"app0:assets/LiberationSans-Regular.ttf")==1){
-			fontImage = vita2d_load_font_file((char*)"app0:assets/LiberationSans-Regular.ttf");
-			//fontImage = vita2d_load_font_file("sa0:data/font/pvf/ltn4.pvf");
-		}
-	#endif
+	fixPath("assets/LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
+	loadFont(globalTempConcat);
 
 	// We need this for any message display
-	currentTextHeight = TextHeight(fontSize);
+	currentTextHeight = textHeight(fontSize);
 
-	#if PLATFORM == PLAT_WINDOWS
+	#if PLATFORM == PLAT_COMPUTER
 		controlsUpImage = LoadEmbeddedPNG("assets/controlsUpImage.png");
 		controlsDownImage = LoadEmbeddedPNG("assets/controlsDownImage.png");
 		controlsLeftImage = LoadEmbeddedPNG("assets/controlsLeftImage.png");
@@ -4049,11 +4099,10 @@ signed char init(){
 	// Checks if StreamingAssets and stuff exists.
 	// Informs the user if they don't.
 	char _tempCheckResult = CheckForUserStuff();
-	if ((_tempCheckResult==1 && PLATFORM == PLAT_WINDOWS) || _tempCheckResult==2){
+	if ((_tempCheckResult==1 && PLATFORM == PLAT_COMPUTER) || _tempCheckResult==2){
 		return 2;
 	}
-
-	InitAudio();
+	initAudio();
 
 	// These will soon be freed
 	STREAMINGASSETS = malloc(1);
@@ -4103,8 +4152,8 @@ signed char init(){
 
 	// Let the user change the font size if the font size file wasn't saved
 	// We only force this on Android. Not Vita because the size is already perfect.
-	FixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
-	#if PLATFORM == PLAT_WINDOWS
+	fixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
+	#if PLATFORM == PLAT_COMPUTER
 		if (checkFileExist((const char*)globalTempConcat)==0){
 			FontSizeSetup();
 		}
@@ -4116,7 +4165,6 @@ signed char init(){
 			return 2;
 		}
 	#endif
-
 	return 0;
 }
 int main(int argc, char *argv[]){
@@ -4124,7 +4172,6 @@ int main(int argc, char *argv[]){
 	if (init()==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
-
 	// Put stupid test stuff here
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
@@ -4139,22 +4186,17 @@ int main(int argc, char *argv[]){
 				LoadPreset((char*)globalTempConcat);
 				// Next, we can try to switch the StreamingAssets directory to ux0:data/HIGURASHI/StreamingAssets_FILENAME/ if that directory exists
 				UpdatePresetStreamingAssetsDir(currentPresetFilename);
-				// This new directory may have the menu sound effect.
-				TryLoadMenuSoundEffect();
-
-				RunGameSpecificLua();
-
+				LoadGameSpecificStupidity();
 				// Does not load the savefile, I promise.
 				LoadGame();
-
 				// If there is no save game, start a new one at chapter 0
 				// Otherwise, go to the navigation menu
 				if (currentPresetChapter==-1){
-					ControlsEnd();
+					controlsEnd();
 					NewGameMenu();
-					ControlsEnd();
+					controlsEnd();
 					if (currentPresetChapter==-1){
-						ControlsEnd();
+						controlsEnd();
 						currentPresetChapter=0;
 						SetNextScriptName();
 						currentGameStatus=GAMESTATUS_MAINGAME;
@@ -4168,28 +4210,27 @@ int main(int argc, char *argv[]){
 				break;
 			case GAMESTATUS_PRESETSELECTION:
 				if (FileSelector(PRESETFOLDER,&currentPresetFilename,(char*)"Select a preset")==2){
-					ControlsEnd();
+					controlsEnd();
 					printf("No files were found\n");
-					StartDrawing();
-					GoodDrawText(32,5,"No presets found.",fontSize);
-					GoodDrawText(32,TextHeight(fontSize)+5,(const char*)"If you ran the converter, you should've gotten some.",fontSize);
-					GoodDrawText(32,TextHeight(fontSize)*2+10,(const char*)"You can manually put presets in:",fontSize);
-					GoodDrawText(32,TextHeight(fontSize)*3+15,(const char*)PRESETFOLDER,fontSize);
-					GoodDrawText(32,200,"Press "SELECTBUTTONNAME" to return",fontSize);
-					EndDrawing();
-					
+					startDrawing();
+					goodDrawText(32,5,"No presets found.",fontSize);
+					goodDrawText(32,textHeight(fontSize)+5,(const char*)"If you ran the converter, you should've gotten some.",fontSize);
+					goodDrawText(32,textHeight(fontSize)*2+10,(const char*)"You can manually put presets in:",fontSize);
+					goodDrawText(32,textHeight(fontSize)*3+15,(const char*)PRESETFOLDER,fontSize);
+					goodDrawText(32,200,"Press "SELECTBUTTONNAME" to return",fontSize);
+					endDrawing();
 					while (currentGameStatus!=GAMESTATUS_QUIT){
 						FpsCapStart();
-						ControlsStart();
-						if (WasJustPressed(SCE_CTRL_CROSS)){
-							ControlsEnd();
+						controlsStart();
+						if (wasJustPressed(SCE_CTRL_CROSS)){
+							controlsEnd();
 							break;
 						}
-						ControlsEnd();
+						controlsEnd();
 						FpsCapWait();
 					}
 				}
-				ControlsEnd();
+				controlsEnd();
 				if (currentPresetFilename==NULL){
 					currentGameStatus=GAMESTATUS_TITLE;
 				}else{

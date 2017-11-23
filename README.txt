@@ -23,3 +23,5 @@ If a miracle happens and you actually get all the libraries that you need, it ca
 
 cmake CMakeLists.txt
 make
+
+Put the contents of the VpkContents folder into the VPK manually.
