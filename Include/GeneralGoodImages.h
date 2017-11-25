@@ -10,6 +10,14 @@
 	#define CrossTexture vita2d_texture
 	#include <vita2d.h>
 #endif
+#if RENDERER == REND_SF2D
+	#define CrossTexture sf2d_texture
+	#include <3ds.h>
+	#include <stdio.h>
+	#include <sf2d.h>
+	#include <sfil.h>
+	#include <3ds/svc.h>
+#endif
 
 void drawTexturePartScaleRotate(CrossTexture* texture, int x, int y, float tex_x, float tex_y, float tex_w, float tex_h, float x_scale, float y_scale, float rad);
 void drawTexturePartScaleTint(CrossTexture* passedTexture, int destX, int destY, int texX, int texY, int texW, int texH, float texXScale, float texYScale, unsigned char r, unsigned char g, unsigned b);

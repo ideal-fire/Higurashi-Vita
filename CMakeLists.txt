@@ -27,7 +27,7 @@ link_directories(
 )
 
 add_executable(${SHORT_NAME}
-  src/soloud_c.cpp
+  stolenCode/soloud_c.cpp
   src/main.c
 )
 

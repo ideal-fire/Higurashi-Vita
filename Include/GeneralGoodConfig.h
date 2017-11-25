@@ -4,9 +4,9 @@
 		extern char* ANDROIDPACKAGENAME;
 		extern char* VITAAPPID;
 	#else
-		char* ANDROIDPACKAGENAME = "com.mylegguy.higurashi";
+		char* ANDROIDPACKAGENAME = "good.package.name";
 		// 9 characters
-		char* VITAAPPID = "HIGURASHI";
+		char* VITAAPPID = "123456789";
 	#endif
 
 	#define PLAT_VITA 1
@@ -44,13 +44,12 @@
 	//===============================
 	#if _WIN32
 		#define PRESET PRE_COMPUTER
-		#define SUBPLATFORM SUB_WINDOWS
 	#elif __unix__
 		#define PRESET PRE_COMPUTER
-		#define SUBPLATFORM SUB_UNIX
 	#elif __vita__
 		#define PRESET PRE_VITA
-		#define SUBPLATFORM SUB_NONE
+	#elif _3DS
+		#define PRESET PRE_3DS
 	#endif
 	#ifndef PRESET
 		#warning No preset defined. Will use manual settings.

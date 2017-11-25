@@ -62,8 +62,10 @@ lib-custom/
 *.velf
 *.bin
 *.self
+*.3dsx
 
 /_Notes/Trash/
+build3ds/
 
 # For Windows build
 /lib-custom/
@@ -73,3 +75,5 @@ CMakeFiles/
 CMakeCache.txt
 HIGURASHI
 cmake_install.cmake
+Makefile
+Makefile.Vita

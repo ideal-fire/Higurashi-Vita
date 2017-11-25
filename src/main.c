@@ -23,9 +23,13 @@
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 
-	TODO - app0 mode option
-	TODO - Make voice volume controll actually do something
-	TODO - Save voice volume setting
+	(Bonus TODO)
+		TODO - Add voices to the text log
+		TODO - app0 mode option
+
+	TODO - P
+		TODO - 0x81 0x99 is star character in script
+		TODO - 0x81 0xF4 is music note
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -72,8 +76,7 @@
 
 /////////////////////////////////////
 #define MAXIMAGECHAR 20
-#define MESSAGETEXTXOFFSET 20
-#define MESSAGEEDGEOFFSET MESSAGETEXTXOFFSET
+
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
@@ -89,27 +92,40 @@
 #define MAXMUSICARRAY 10
 #define MAXSOUNDEFFECTARRAY 10
 
+#if PLATFORM != PLAT_3DS
+	#define IMAGECHARSPACESTRING "   "
+	#define MESSAGETEXTXOFFSET 20
+#else
+	#define IMAGECHARSPACESTRING " "
+	#define MESSAGETEXTXOFFSET 1
+#endif
+#define MESSAGEEDGEOFFSET MESSAGETEXTXOFFSET
+
 #include "GeneralGoodExtended.h"
 #include "GeneralGood.h"
 #include "GeneralGoodGraphics.h"
 #include "GeneralGoodText.h"
 #include "GeneralGoodImages.h"
 #include "GeneralGoodSound.h"
-
+#include "GeneralGood.h"
+#include "FpsCapper.h"
 
 #if __UNIX__
 	#define SYSTEMSTRING "Linux"
 #elif __WIN32__
 	#define SYSTEMSTRING "Windows"
-#elif __VITA__
+#elif __vita__
 	#define SYSTEMSTRING "VITA"
+#elif _3DS
+	#define SYSTEMSTRING "3DS"
 #else
 	#define SYSTEMSTRING "UNKNOWN"
 #endif
 
 // 1 is start
 // 2 adds BGM and SE volume
-#define OPTIONSFILEFORMAT 2
+// 3 adds voice volume
+#define OPTIONSFILEFORMAT 3
 
 //#define LUAREGISTER(x,y) DebugLuaReg(y);
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
@@ -125,12 +141,6 @@ char* STREAMINGASSETS;
 char* PRESETFOLDER;
 char* SCRIPTFOLDER;
 char* SAVEFOLDER;
-
-/*
-CUSTOM INCLUDES
-*/
-#include "GeneralGood.h"
-#include "FpsCapper.h"
 
 #define BUST_STATUS_NORMAL 0
 #define BUST_STATUS_FADEIN 1 // var 1 is alpha per frame. var 2 is time where 0 alpha
@@ -212,14 +222,6 @@ int16_t currentPresetChapter=0;
 // Made with malloc
 char* currentPresetFilename=NULL;
 
-/*
-0 - title
-1 - Load preset from currentPresetFilename
-2 - Open file selector for preset file selection
-3 - Start Lua thread
-4 - Navigation menu after preset loading
-5 - tip menu
-*/
 #define GAMESTATUS_TITLE 0
 #define GAMESTATUS_LOADPRESET 1
 #define GAMESTATUS_PRESETSELECTION 2
@@ -238,7 +240,7 @@ unsigned char lastSelectionAnswer=0;
 
 // The x position on screen of this image character
 unsigned short imageCharX[MAXIMAGECHAR] = {0};
-// The y position on screeb of this image character
+// The y position on screen of this image character
 unsigned short imageCharY[MAXIMAGECHAR] = {0};
 // The character that the image character is. The values in here are one of the IMAGECHAR constants
 signed char imageCharType[MAXIMAGECHAR] = {0};
@@ -286,23 +288,9 @@ float seVolume = 1.0;
 float voiceVolume = 1.0;
 
 int currentTextHeight;
-#if PLATFORM == PLAT_COMPUTER
-	CrossTexture* controlsUpImage;
-	CrossTexture* controlsDownImage;
-	CrossTexture* controlsLeftImage;
-	CrossTexture* controlsRightImage;
-	CrossTexture* controlsSelectImage;
-	CrossTexture* controlsBackImage;
-
-	CrossTexture* controlsMenuImage;
-	CrossTexture* skipImage;
-	CrossTexture* autoImage;
-	CrossTexture* textlogImage;
-
-	char showControls=0;
+#if PLATFORM == PLAT_VITA
+	pthread_t soundProtectThreadId;
 #endif
-CrossTexture* loadingImage;
-pthread_t soundProtectThreadId;
 char isActuallyUsingUma0=0;
 int MAXBUSTS = 9;
 short textboxYOffset=0;
@@ -364,15 +352,9 @@ void WaitWithCodeEnd(int amount){
 		wait(waitwithCodeTarget-getTicks());
 	}
 }
-// Draws the loading screen.
-void DrawLoadingScreen(){
-	startDrawing();
-	drawTextureScaleSize(loadingImage,0,0,screenWidth,screenHeight);
-	endDrawing();
-}
 void SetDefaultFontSize(){
 	#if TEXTRENDERER == TEXT_DEBUG
-		fontSize = 1.7;
+		fontSize = 1;
 	#endif
 	#if TEXTRENDERER == TEXT_FONTCACHE
 		fontSize = floor(screenWidth/40);
@@ -382,9 +364,18 @@ void SetDefaultFontSize(){
 	#endif
 }
 void ReloadFont(){
-	DrawLoadingScreen();
-	fixPath("assets/LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
+	#if PLATFORM != PLAT_3DS
+		fixPath("assets/LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
+	#elif PLATFORM == PLAT_3DS
+		fixPath("testfont2.png",globalTempConcat,TYPE_EMBEDDED);
+		bitmapFontWidth=14;
+		bitmapFontHeight=15;
+		bitmapFontLettersPerImage=73;
+	#else
+		#error whoops
+	#endif
 	loadFont(globalTempConcat);
+	currentTextHeight = textHeight(fontSize);
 }
 char MenuControls(char _choice,int _menuMin, int _menuMax){
 	if (wasJustPressed(SCE_CTRL_UP)){
@@ -547,7 +538,7 @@ void DrawMessageText(){
 	}
 	for (i=0;i<MAXIMAGECHAR;i++){
 		if (imageCharType[i]!=-1){
-			drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(fontSize,"   ")/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
+			drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(fontSize,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
 		}
 	}
 }
@@ -706,8 +697,6 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	}
 	// Free garbage and old main function if it existed
 	DisposeOldScript();
-	
-	
 	int _loadFileResult = luaL_loadfile(L, tempstringconcat);
 	if (_loadFileResult!=LUA_OK){
 		switch (_loadFileResult){
@@ -1620,7 +1609,7 @@ int strlenNO1(char* src){
 // Example
 // /SE/
 // DO NOT FIX THE SE VOLUME BEFORE PASSING ARGUMENT
-void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, const char* _dirRelativeToStreamingAssetsNoEndSlash){
+void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, const char* _dirRelativeToStreamingAssetsNoEndSlash, float _passedVolumeFixScale){
 	if (passedSlot>=MAXSOUNDEFFECTARRAY){
 		LazyMessage("Sound effect slot too high.","No action will be taken.",NULL,NULL);
 		return;
@@ -1638,7 +1627,7 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 		soundEffects[passedSlot] = loadSound(tempstringconcat);
 		//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
 		CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1);
-		setSFXVolume(_tempHandle,FixSEVolume(unfixedVolume));
+		setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
 	}else{
 		WriteToDebugFile("SE file not found");
 		WriteToDebugFile(tempstringconcat);
@@ -1862,7 +1851,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			for (i=0;i<MAXIMAGECHAR;i++){
 				if (imageCharType[i]!=-1){
 					if ((imageCharLines[i]<_currentDrawLine) || (imageCharLines[i]==_currentDrawLine && imageCharCharPositions[i]<=_currentDrawChar)){
-						drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(fontSize,"   ")/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
+						drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(fontSize,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
 					}
 				}
 			}
@@ -1938,6 +1927,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // autoModeWait, 4 bytes
 // BGM volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
 // SE volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
+// Voice volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
 void SaveSettings(){
 	FILE* fp;
 	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
@@ -1946,6 +1936,7 @@ void SaveSettings(){
 
 	unsigned char _bgmTemp = floor(bgmVolume*4);
 	unsigned char _seTemp = floor(seVolume*4);
+	unsigned char _voiceTemp = floor(voiceVolume*4);
 
 	unsigned char _tempOptionsFormat = OPTIONSFILEFORMAT;
 	fwrite(&_tempOptionsFormat,1,1,fp);
@@ -1955,6 +1946,7 @@ void SaveSettings(){
 
 	fwrite(&_bgmTemp,1,1,fp);
 	fwrite(&_seTemp,1,1,fp);
+	fwrite(&_voiceTemp,1,1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -1987,6 +1979,11 @@ void LoadSettings(){
 			fread(&_seTemp,1,1,fp);
 			bgmVolume = (float)_bgmTemp/4;
 			seVolume = (float)_seTemp/4;
+		}
+		if (_tempOptionsFormat>=3){
+			unsigned char _voiceTemp;
+			fread(&_voiceTemp,1,1,fp);
+			_voiceTemp = (float)_voiceTemp/4;
 		}
 		fclose(fp);
 
@@ -2049,7 +2046,11 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 
 		for (i = 0; i < HISTORYONONESCREEN; i++){
 			//void goodDrawTextColored(int x, int y, const char* text, float size, unsigned char r, unsigned char g, unsigned char b){
-			goodDrawTextColored(MESSAGETEXTXOFFSET,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
+			#if PLATFORM != PLAT_3DS
+				goodDrawTextColored(MESSAGETEXTXOFFSET,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
+			#else
+				goodDrawTextColored(MESSAGETEXTXOFFSET,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,255,255,255);
+			#endif
 		}
 
 		goodDrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
@@ -2068,125 +2069,6 @@ void ChangeEasyTouchMode(int _newControlValue){
 	controlsEnd();
 	easyTouchControlMode = _newControlValue;
 }
-#ifdef iamamoron
-	void DrawTouchControlsHelp(){
-		if (showControls==1){
-			if (easyTouchControlMode!=TOUCHMODE_NONE){
-				if (easyTouchControlMode==TOUCHMODE_MAINGAME){
-					drawTextureScaleSize(skipImage,0,0,screenWidth*.25,screenHeight*.20);
-					drawTextureScaleSize(autoImage,screenWidth*.25,0,screenWidth*.25,screenHeight*.20);
-					drawTextureScaleSize(textlogImage,screenWidth*.50,0,screenWidth*.25,screenHeight*.20);
-					drawTextureScaleSize(controlsMenuImage,screenWidth*.75,0,screenWidth*.25,screenHeight*.20);
-				}else if (easyTouchControlMode==TOUCHMODE_MENU){
-					drawTextureScaleSize(controlsBackImage,0,0,screenWidth*.20,screenHeight);
-					drawTextureScaleSize(controlsSelectImage,screenWidth*.80,0,screenWidth*.20,screenHeight);
-					drawTextureScaleSize(controlsUpImage,screenWidth*.20,0,screenWidth*.60,screenHeight*.50);
-					drawTextureScaleSize(controlsDownImage,screenWidth*.20,screenHeight*.50,screenWidth*.60,screenHeight*.50);
-				}else if (easyTouchControlMode == TOUCHMODE_LEFTRIGHTSELECT){
-
-					drawTextureScaleSize(controlsLeftImage,0,0,screenWidth*.20,screenHeight);
-					drawTextureScaleSize(controlsRightImage,screenWidth*.80,0,screenWidth*.20,screenHeight);
-					drawTextureScaleSize(controlsSelectImage,screenWidth*.20,0,screenWidth*.60,screenHeight*.50);
-					drawTextureScaleSize(controlsBackImage,screenWidth*.20,screenHeight*.50,screenWidth*.60,screenHeight*.50);
-				
-				}
-			}
-		}
-	}
-
-	// These are general control schemes that can be used in multiple areas
-	// Change the variable easyTouchControlMode to one of the constants
-	// Set to TOUCHMODE_NONE for touch controls that are special
-	void CheckTouchControls(){
-		if (wasJustPressedRegardless(SCE_ANDROID_BACK)){
-			if (showControls==0){
-				showControls=1;
-			}else{
-				showControls=0;
-			}
-		}
-		if (easyTouchControlMode!=TOUCHMODE_NONE){
-			if (easyTouchControlMode==TOUCHMODE_MAINGAME){
-				if (wasJustPressed(SCE_TOUCH)){
-					if (touchY<screenHeight*.20){
-						if (touchX>screenWidth*.75){
-							ChangeEasyTouchMode(TOUCHMODE_MENU);
-							SettingsMenu();
-							ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
-						}else if (touchX>screenWidth*.50){
-							//textlog
-							ChangeEasyTouchMode(TOUCHMODE_MENU);
-							DrawHistory(messageHistory);
-							ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
-						}else if (touchX>screenWidth*.25){
-							//auto
-							PlayMenuSound();
-							if (autoModeOn==1){
-								autoModeOn=0;
-							}else{
-								autoModeOn=1;
-							}
-						}else if (touchX>0){
-							endType=Line_ContinueAfterTyping;
-							isSkipping=1;
-							PlayMenuSound();
-						}
-					}else{
-						pad[SCE_CTRL_CROSS]=1;
-					}
-
-				}
-				if (wasJustReleased(SCE_TOUCH)){
-					pad[SCE_CTRL_CROSS]=0;
-				}
-			}else if (easyTouchControlMode==TOUCHMODE_MENU){
-				if (wasJustPressed(SCE_TOUCH)){
-					if (touchX>screenWidth*.80){
-						pad[SCE_CTRL_CROSS]=1;
-					}else if (touchX<screenWidth*.20){
-						pad[SCE_CTRL_CIRCLE]=1;
-					}else if (touchY>screenHeight*.5){
-						pad[SCE_CTRL_DOWN]=1;
-					}else{
-						pad[SCE_CTRL_UP]=1;
-					}
-				}else if (wasJustReleased(SCE_TOUCH)){
-					if (touchX>screenWidth*.80){
-						pad[SCE_CTRL_CROSS]=0;
-					}else if (touchX<screenWidth*.20){
-						pad[SCE_CTRL_CIRCLE]=0;
-					}else if (touchY>screenHeight*.5){
-						pad[SCE_CTRL_DOWN]=0;
-					}else{
-						pad[SCE_CTRL_UP]=0;
-					}
-				}
-			}else if (easyTouchControlMode == TOUCHMODE_LEFTRIGHTSELECT){
-				if (wasJustPressed(SCE_TOUCH)){
-					if (touchX<=screenWidth*.20){
-						pad[SCE_CTRL_LEFT]=1;
-					}else if (touchX>=screenWidth*.80){
-						pad[SCE_CTRL_RIGHT]=1;
-					}else if (touchY<screenHeight*.5){
-						pad[SCE_CTRL_CROSS]=1;
-					}else{
-						pad[SCE_CTRL_CIRCLE]=1;
-					}
-				}else if (wasJustReleased(SCE_TOUCH)){
-					if (touchX<=screenWidth*.20){
-						pad[SCE_CTRL_LEFT]=0;
-					}else if (touchX>=screenWidth*.80){
-						pad[SCE_CTRL_RIGHT]=0;
-					}else if (touchY<screenHeight*.5){
-						pad[SCE_CTRL_CROSS]=0;
-					}else{
-						pad[SCE_CTRL_CIRCLE]=0;
-					}
-				}
-			}
-		}
-	}
-#endif
 // FOLDER NAME SHOULD NOT END WITH SLASH
 void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName){
 	free(STREAMINGASSETS);
@@ -2241,7 +2123,6 @@ char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _
 	}
 	return 0;
 }
-
 // Wait for the user to suspend the game, save them, and be happy.
 void* soundProtectThread(void *arg){
 	if (isActuallyUsingUma0==1){
@@ -2486,14 +2367,14 @@ int L_FadeBustshot(lua_State* passedState){
 // Slot, file, volume
 int L_PlaySE(lua_State* passedState){
 	if (isSkipping==0 && seVolume>0){
-		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"/SE/");
+		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"/SE/",seVolume);
 	}
 	return 0;
 }
 // PlayVoice(channel, filename, volume)
 int L_PlayVoice(lua_State* passedState){
-	if (isSkipping==0){
-		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"/voice/");
+	if (isSkipping==0 && (hasOwnVoiceSetting==1 ? voiceVolume : seVolume)>0){
+		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"/voice/", hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
 	}
 	return 0;
 }
@@ -3306,13 +3187,6 @@ void SettingsMenu(){
 
 		controlsEnd();
 		startDrawing();
-		// Display sample Rena if changing bust location
-		if (_choice==3){
-			if (_canShowRena==1){
-				drawTexture(_renaImage,screenWidth-getTextureWidth(_renaImage)-5,screenHeight-getTextureHeight(_renaImage));
-			}
-		}
-
 		if (currentGameStatus==GAMESTATUS_TITLE){
 			goodDrawText(32,5,"Back",fontSize);
 		}else{
@@ -3361,6 +3235,22 @@ void SettingsMenu(){
 			goodDrawText(32,5+currentTextHeight*9,"Quit",fontSize);
 		}
 		goodDrawText(0,5+_choice*currentTextHeight,">",fontSize);
+
+		// Display sample Rena if changing bust location
+		#if PLATFORM == PLAT_3DS
+			startDrawingBottom();
+			if (_choice==3){
+				if (_canShowRena==1){
+					drawTexture(_renaImage,0,0);
+				}
+			}
+		#else
+			if (_choice==3){
+				if (_canShowRena==1){
+					drawTexture(_renaImage,screenWidth-getTextureWidth(_renaImage)-5,screenHeight-getTextureHeight(_renaImage));
+				}
+			}
+		#endif
 		endDrawing();
 		FpsCapWait();
 	}
@@ -3998,12 +3888,15 @@ char init_dohappylua(){
 		#endif
 	#elif PLATFORM == PLAT_VITA
 		_didLoadHappyLua = SafeLuaDoFile(L,"app0:assets/happy.lua",0);
+	#elif PLATFORM == PLAT_3DS
+		_didLoadHappyLua = SafeLuaDoFile(L,"assets/happy.lua",0);
 	#endif
 	//lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
-
 	if (_didLoadHappyLua==0){
 		#if PLATFORM == PLAT_VITA
 			LazyMessage("Happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
+		#elif PLATFORM == PLAT_3DS
+			LazyMessage("happy.lua missing.",NULL,NULL,NULL);
 		#elif PLATFORM == PLAT_COMPUTER
 			printf("Falling back on happybackup.lua");
 			fixPath("StreamingAssets/happybackup.lua",globalTempConcat,TYPE_DATA);
@@ -4014,7 +3907,6 @@ char init_dohappylua(){
 			}
 		#endif
 	}
-
 	#if SUBPLATFORM == SUB_ANDROID
 		if (_didLoadHappyLua==1){
 			// This checks the version of happy.lua if the user is on Android
@@ -4038,10 +3930,8 @@ char init_dohappylua(){
 			}
 		}
 	#endif
-
 	return 0;
 }
-
 // Please exit if this function returns 2
 // Go ahead as normal if it returns 0
 signed char init(){
@@ -4054,11 +3944,6 @@ signed char init(){
 	Busts = calloc(1,sizeof(bust)*MAXBUSTS);
 	bustOrder = calloc(1,sizeof(char)*MAXBUSTS);
 	bustOrderOverBox = calloc(1,sizeof(char)*MAXBUSTS);
-
-	// We need this for ReloadFont();
-	fixPath("assets/Loading.png",globalTempConcat,TYPE_EMBEDDED);
-	loadingImage = loadPNG((char*)globalTempConcat);
-
 	// Setup DATAFOLDER variable. Defaults to uma0 if it exists and it's unsafe build
 	ResetDataDirectory();
 
@@ -4066,35 +3951,13 @@ signed char init(){
 	// Will not crash if no settings found
 	LoadSettings();
 
-	fixPath("assets/LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
-	loadFont(globalTempConcat);
+	ReloadFont();
+	//while(1){
+	//	startDrawing();
+	//	goodDrawTextColored(0,0,"happy",1,255,0,0);
+	//	endDrawing();
+	//}
 
-	// We need this for any message display
-	currentTextHeight = textHeight(fontSize);
-
-	#if PLATFORM == PLAT_COMPUTER
-		controlsUpImage = LoadEmbeddedPNG("assets/controlsUpImage.png");
-		controlsDownImage = LoadEmbeddedPNG("assets/controlsDownImage.png");
-		controlsLeftImage = LoadEmbeddedPNG("assets/controlsLeftImage.png");
-		controlsRightImage = LoadEmbeddedPNG("assets/controlsRightImage.png");
-		controlsBackImage = LoadEmbeddedPNG("assets/controlsBackImage.png");
-		controlsSelectImage = LoadEmbeddedPNG("assets/controlsSelectImage.png");
-		controlsMenuImage = LoadEmbeddedPNG("assets/controlsMenuImage.png");
-		autoImage = LoadEmbeddedPNG("assets/autoImage.png");
-		skipImage = LoadEmbeddedPNG("assets/skipImage.png");
-		textlogImage = LoadEmbeddedPNG("assets/textlogImage.png");
-
-		SDL_SetTextureAlphaMod(controlsUpImage, 100);
-		SDL_SetTextureAlphaMod(controlsDownImage, 100);
-		SDL_SetTextureAlphaMod(controlsLeftImage, 100);
-		SDL_SetTextureAlphaMod(controlsRightImage, 100);
-		SDL_SetTextureAlphaMod(controlsBackImage, 100);
-		SDL_SetTextureAlphaMod(controlsSelectImage, 100);
-		SDL_SetTextureAlphaMod(controlsMenuImage, 100);
-		SDL_SetTextureAlphaMod(autoImage, 100);
-		SDL_SetTextureAlphaMod(skipImage, 100);
-		SDL_SetTextureAlphaMod(textlogImage, 100);
-	#endif
 
 	// Checks if StreamingAssets and stuff exists.
 	// Informs the user if they don't.
@@ -4142,22 +4005,11 @@ signed char init(){
 	if (init_dohappylua()==2){
 		return 2;
 	}
-
-	// Make the save files directory
 	createDirectory(SAVEFOLDER);
 
 	for (i=0;i<MAXBUSTS;i++){
 		ResetBustStruct(&(Busts[i]),0);
 	}
-
-	// Let the user change the font size if the font size file wasn't saved
-	// We only force this on Android. Not Vita because the size is already perfect.
-	fixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
-	#if PLATFORM == PLAT_COMPUTER
-		if (checkFileExist((const char*)globalTempConcat)==0){
-			FontSizeSetup();
-		}
-	#endif
 
 	#if PLATFORM == PLAT_VITA
 		// Create the protection thread.

@@ -1,6 +1,10 @@
 #ifndef GENERALGOODGRAPHICS_H
 #define GENERALGOODGRAPHICS_H
- 
+
+#if RENDERER == REND_SF2D
+	void startDrawingBottom();
+#endif
+
 void drawRectangle(int x, int y, int w, int h, int r, int g, int b, int a);
 void endDrawing();
 void fixCoords(int* _x, int* _y);

@@ -37,6 +37,19 @@
 	#include <psp2/power.h>
 #endif
 
+#if PLATFORM == PLAT_3DS
+	#define SCE_CTRL_CROSS KEY_A
+	#define SCE_CTRL_CIRCLE KEY_B
+	#define SCE_CTRL_UP KEY_UP
+	#define SCE_CTRL_DOWN KEY_DOWN
+	#define SCE_CTRL_LEFT KEY_LEFT
+	#define SCE_CTRL_RIGHT KEY_RIGHT
+	#define SCE_CTRL_TRIANGLE KEY_X
+	#define SCE_CTRL_SQUARE KEY_Y
+	#define SCE_CTRL_START KEY_START
+	#define SCE_CTRL_SELECT KEY_SELECT
+#endif
+
 extern char tempPathFixBuffer[256];
 extern char* DATAFOLDER;
 
