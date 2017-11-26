@@ -83,22 +83,24 @@
 #define VERSIONSTRING "v2.2" // This
 #define VERSIONNUMBER 2 // This
 #define VERSIONCOLOR 0,208,138
-#define HISTORYONONESCREEN 13
+// Specific constants
+#if PLATFORM != PLAT_3DS
+	#define HISTORYONONESCREEN 13
+	#define MESSAGETEXTXOFFSET 20
+	#define SELECTBUTTONNAME "X"
+	#define BACKBUTTONNAME "O"
+#else
+	#define HISTORYONONESCREEN ((int)((screenHeight-currentTextHeight*2-5)/currentTextHeight))
+	#define MESSAGETEXTXOFFSET 10
+	#define SELECTBUTTONNAME "A"
+	#define BACKBUTTONNAME "B"
+#endif
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
-#define SELECTBUTTONNAME "X"
-#define BACKBUTTONNAME "O"
 ////////////////////////////////////
 #define MAXMUSICARRAY 10
 #define MAXSOUNDEFFECTARRAY 10
-
-#if PLATFORM != PLAT_3DS
-	#define IMAGECHARSPACESTRING "   "
-	#define MESSAGETEXTXOFFSET 20
-#else
-	#define IMAGECHARSPACESTRING " "
-	#define MESSAGETEXTXOFFSET 1
-#endif
+#define IMAGECHARSPACESTRING "   "
 #define MESSAGEEDGEOFFSET MESSAGETEXTXOFFSET
 
 #include "GeneralGoodExtended.h"
@@ -367,10 +369,7 @@ void ReloadFont(){
 	#if PLATFORM != PLAT_3DS
 		fixPath("assets/LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
 	#elif PLATFORM == PLAT_3DS
-		fixPath("testfont2.png",globalTempConcat,TYPE_EMBEDDED);
-		bitmapFontWidth=14;
-		bitmapFontHeight=15;
-		bitmapFontLettersPerImage=73;
+		fixPath("testfont3",globalTempConcat,TYPE_EMBEDDED);
 	#else
 		#error whoops
 	#endif
@@ -1641,7 +1640,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 
 	// 1 when finished displaying the text
 	char _isDone=0;
-	if (isSkipping==1){
+	if (isSkipping==1 || _autoskip==1){
 		_isDone=1;
 	}
 	MessageBoxEnabled=1;
@@ -1995,6 +1994,7 @@ void LoadSettings(){
 		printf("Loaded settings file.\n");
 	}
 }
+#define HISTORYSCROLLBARHEIGHT 32
 void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 	controlsEnd();
 	int _noobHeight = textHeight(fontSize);
@@ -2057,7 +2057,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 		goodDrawTextColored(screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, "BACKBUTTONNAME" to return",fontSize,0,0,0);
 
 		drawRectangle((screenWidth-5),0,5,screenHeight,0,0,0,255);
-		drawRectangle((screenWidth-5),floor(444*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,100,255,0,0,255);
+		drawRectangle((screenWidth-5),floor((screenHeight-HISTORYSCROLLBARHEIGHT)*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,HISTORYSCROLLBARHEIGHT,255,0,0,255);
 
 		endDrawing();
 
@@ -2905,6 +2905,9 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 	return _returnVal;
 }
 void FontSizeSetup(){
+	#if PLATFORM == PLAT_3DS
+		return;
+	#endif
 	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	char _choice=0;
 	char _tempNumberString[10];
@@ -2916,9 +2919,13 @@ void FontSizeSetup(){
 
 		if (wasJustPressed(SCE_CTRL_CROSS) || wasJustPressed(SCE_CTRL_RIGHT)){
 			if (_choice==0){
-				fontSize++;
+				#if PLATFORM != PLAT_3DS
+					fontSize++;
+				#else
+					fontSize+=.1;
+				#endif
 				itoa(fontSize,_tempNumberString,10);
-				#if PLATFORM == PLAT_VITA
+				#if PLATFORM == PLAT_VITA || PLATFORM == PLAT_3DS
 					currentTextHeight = textHeight(fontSize);
 				#endif
 			}else if (_choice==1){
@@ -2931,12 +2938,19 @@ void FontSizeSetup(){
 		}
 		if (wasJustPressed(SCE_CTRL_CIRCLE) || wasJustPressed(SCE_CTRL_LEFT)){
 			if (_choice==0){
-				fontSize--;
-				if (fontSize<=5){
-					fontSize=6;
-				}
+				#if PLATFORM != PLAT_3DS
+					fontSize--;
+					if (fontSize<=5){
+						fontSize=6;
+					}
+				#else
+					fontSize-=.1;
+					if (fontSize<.8){
+						fontSize=.8;
+					}
+				#endif
 				itoa(fontSize,_tempNumberString,10);
-				#if PLATFORM == PLAT_VITA
+				#if PLATFORM == PLAT_VITA || PLATFORM == PLAT_3DS
 					currentTextHeight = textHeight(fontSize);
 				#endif
 			}
@@ -3241,7 +3255,7 @@ void SettingsMenu(){
 			startDrawingBottom();
 			if (_choice==3){
 				if (_canShowRena==1){
-					drawTexture(_renaImage,0,0);
+					drawTexture(_renaImage,0,screenHeight-getTextureHeight(_renaImage));
 				}
 			}
 		#else
@@ -3379,6 +3393,17 @@ void TitleScreen(){
 		FpsCapWait();
 	}
 }
+
+void tipMenuChangeDisplay(char* _passedCurrentName, char* _passedCurrentSlot, char* _passedMaxSlot){
+	ClearMessageArray();
+	char _tempNameBuffer[strlen(_passedCurrentName)+1+1+3+1+3+1+1]; // main name + space + left parentheses + three digit number + slash + three digit number + right parentheses + null
+	if (tipNamesLoaded==0){
+		_passedCurrentName="???";
+	}
+	sprintf(_tempNameBuffer,"%s (%s/%s)",_passedCurrentName,_passedCurrentSlot,_passedMaxSlot);
+	OutputLine(_tempNameBuffer,Line_ContinueAfterTyping,1);
+}
+
 void TipMenu(){
 	ClearMessageArray();
 	if (currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
@@ -3391,23 +3416,8 @@ void TipMenu(){
 	unsigned char _chosenTip=1;
 	char _chosenTipString[4]={48,0,0,0};
 	char _chosenTipStringMax[4]={48,0,0,0};
-	char _totalSelectedString[256]={0};
 	itoa(currentPresetTipUnlockList.theArray[currentPresetChapter],&(_chosenTipStringMax[0]),10);
-	memset(_totalSelectedString,'\0',256);
-	strcpy(_totalSelectedString,"EasyOutputLine(\"");
-	if (tipNamesLoaded==1){
-		strcat(_totalSelectedString,currentPresetTipNameList.theArray[0]);
-		strcat(_totalSelectedString," (1/");
-		strcat(_totalSelectedString,_chosenTipStringMax);
-		strcat(_totalSelectedString,")");
-	}else{
-		strcat(_totalSelectedString,"1/");
-		strcat(_totalSelectedString,_chosenTipStringMax);
-	}
-	strcat(_totalSelectedString,"\");");
-	isSkipping=1;
-	luaL_dostring(L,_totalSelectedString);
-	isSkipping=0;
+	tipMenuChangeDisplay(currentPresetTipNameList.theArray[_chosenTip-1],_chosenTipString,_chosenTipStringMax);
 	int i;
 	signed char _choice=0;
 
@@ -3435,56 +3445,16 @@ void TipMenu(){
 			if (_chosenTip>currentPresetTipUnlockList.theArray[currentPresetChapter]){
 				_chosenTip=1;
 			}
-			// Update the string that is used to show what tip is selected
-			ClearMessageArray();
-			memset(_totalSelectedString,'\0',256);
-			strcpy(_totalSelectedString,"EasyOutputLine(\"");
-			if (tipNamesLoaded==1){
-				itoa(_chosenTip,&(_chosenTipString[0]),10);
-				strcat(_totalSelectedString,currentPresetTipNameList.theArray[_chosenTip-1]);
-				strcat(_totalSelectedString," (");
-				strcat(_totalSelectedString,_chosenTipString);
-				strcat(_totalSelectedString,"/");
-				strcat(_totalSelectedString,_chosenTipStringMax);
-				strcat(_totalSelectedString,")");
-			}else{
-				itoa(_chosenTip,&(_chosenTipString[0]),10);
-				strcat(_totalSelectedString,_chosenTipString);
-				strcat(_totalSelectedString,"/");
-				strcat(_totalSelectedString,_chosenTipStringMax);
-			}
-			strcat(_totalSelectedString,"\");");
-			isSkipping=1;
-			luaL_dostring(L,_totalSelectedString);
-			isSkipping=0;
+			itoa(_chosenTip,&(_chosenTipString[0]),10);
+			tipMenuChangeDisplay(currentPresetTipNameList.theArray[_chosenTip-1],_chosenTipString,_chosenTipStringMax);
 		}
 		if (wasJustPressed(SCE_CTRL_LEFT) ){
 			_chosenTip--;
 			if (_chosenTip<1){
 				_chosenTip=currentPresetTipUnlockList.theArray[currentPresetChapter];
 			}
-			// Update the string that is used to show what tip is selected
-			ClearMessageArray();
-			memset(_totalSelectedString,'\0',256);
-			strcpy(_totalSelectedString,"EasyOutputLine(\"");
-			if (tipNamesLoaded==1){
-				itoa(_chosenTip,&(_chosenTipString[0]),10);
-				strcat(_totalSelectedString,currentPresetTipNameList.theArray[_chosenTip-1]);
-				strcat(_totalSelectedString," (");
-				strcat(_totalSelectedString,_chosenTipString);
-				strcat(_totalSelectedString,"/");
-				strcat(_totalSelectedString,_chosenTipStringMax);
-				strcat(_totalSelectedString,")");
-			}else{
-				itoa(_chosenTip,&(_chosenTipString[0]),10);
-				strcat(_totalSelectedString,_chosenTipString);
-				strcat(_totalSelectedString,"/");
-				strcat(_totalSelectedString,_chosenTipStringMax);
-			}
-			strcat(_totalSelectedString,"\");");
-			isSkipping=1;
-			luaL_dostring(L,_totalSelectedString);
-			isSkipping=0;
+			itoa(_chosenTip,&(_chosenTipString[0]),10);
+			tipMenuChangeDisplay(currentPresetTipNameList.theArray[_chosenTip-1],_chosenTipString,_chosenTipStringMax);
 		}
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
@@ -3506,9 +3476,6 @@ void TipMenu(){
 			#endif
 			break;
 		}
-
-
-
 		controlsEnd();
 		startDrawing();
 		//goodDrawText(32,5+currentTextHeight*(0+2),"Tip: ",fontSize);
@@ -3889,7 +3856,8 @@ char init_dohappylua(){
 	#elif PLATFORM == PLAT_VITA
 		_didLoadHappyLua = SafeLuaDoFile(L,"app0:assets/happy.lua",0);
 	#elif PLATFORM == PLAT_3DS
-		_didLoadHappyLua = SafeLuaDoFile(L,"assets/happy.lua",0);
+		fixPath("assets/happy.lua",globalTempConcat,TYPE_EMBEDDED);
+		_didLoadHappyLua = SafeLuaDoFile(L,globalTempConcat,0);
 	#endif
 	//lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
 	if (_didLoadHappyLua==0){
