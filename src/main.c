@@ -94,6 +94,7 @@
 	#define MESSAGETEXTXOFFSET 10
 	#define SELECTBUTTONNAME "A"
 	#define BACKBUTTONNAME "B"
+	#define cpuOverclocked textIsBottomScreen
 #endif
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
@@ -333,6 +334,11 @@ CrossTexture* LoadEmbeddedPNG(const char* path){
 	return _tempTex;
 }
 void DrawMessageBox(){
+	#if PLATFORM == PLAT_3DS
+		if (textIsBottomScreen==1){
+			return;
+		}
+	#endif
 	//if (filterActive==0){
 	if (currentCustomTextbox==NULL){
 		drawRectangle(0,0,screenWidth,screenHeight,0,0,0,MessageBoxAlpha);
@@ -528,7 +534,22 @@ void SetAllMusicVolume(int _passedFixedVolume){
 int GetNextCharOnLine(int _linenum){
 	return u_strlen(currentMessages[_linenum]);
 }
+#if PLATFORM == PLAT_3DS
+void tempFakeBottomScreenResolution(){
+	screenWidth = 320;
+	screenHeight = 240;
+}
+void tempFixBottomScreenResolution(){
+	screenWidth = 400;
+	screenHeight = 240;
+}
+#endif
 void DrawMessageText(){
+	#if PLATFORM == PLAT_3DS
+		if (textIsBottomScreen==1){
+			startDrawingBottom();
+		}
+	#endif
 	//system("cls");
 	int i;
 	for (i = 0; i < 15; i++){
@@ -1634,6 +1655,11 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 	free(tempstringconcat);
 }
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
+	#if PLATFORM == PLAT_3DS
+		if (textIsBottomScreen==1){
+			tempFakeBottomScreenResolution();
+		}
+	#endif
 	if (strlen(_tempMsg)==0){
 		return;
 	}
@@ -1651,14 +1677,11 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	strcpy(message,currentMessages[currentLine]);
 	strcat(message,_tempMsg);
 	int totalMessageLength=strlen(message);
-
 	//printf("Total assembled: (START)%s(END)\n",message);
-
 	if (totalMessageLength==0){
 		endType = _endtypetemp;
 		return;
 	}
-
 	// These are used when we're displaying the message to the user
 	// Refer to the while loop near the end of this function.
 	int _currentDrawLine = currentLine;
@@ -1801,6 +1824,9 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
 	}
 	LastLineLazyFix(&currentLine);
+	#if PLATFORM == PLAT_3DS
+		tempFixBottomScreenResolution();
+	#endif
 	while(_isDone==0){
 		#if PLATFORM != PLAT_VITA
 			FpsCapStart();
@@ -1840,6 +1866,11 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				DrawBust(&(Busts[bustOrderOverBox[i]]));
 			}
 		}
+		#if PLATFORM == PLAT_3DS
+			if (textIsBottomScreen==1){
+				startDrawingBottom();
+			}
+		#endif
 		if (MessageBoxEnabled==1){
 			char _tempCharCache = currentMessages[_currentDrawLine][_currentDrawChar+1];
 			currentMessages[_currentDrawLine][_currentDrawChar+1]='\0';
@@ -2043,16 +2074,9 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 		}
 
 		drawRectangle(0,0,screenWidth,screenHeight,0,230,255,200);
-
 		for (i = 0; i < HISTORYONONESCREEN; i++){
-			//void goodDrawTextColored(int x, int y, const char* text, float size, unsigned char r, unsigned char g, unsigned char b){
-			#if PLATFORM != PLAT_3DS
-				goodDrawTextColored(MESSAGETEXTXOFFSET,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
-			#else
-				goodDrawTextColored(MESSAGETEXTXOFFSET,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,255,255,255);
-			#endif
+			goodDrawTextColored(MESSAGETEXTXOFFSET,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
 		}
-
 		goodDrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
 		goodDrawTextColored(screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, "BACKBUTTONNAME" to return",fontSize,0,0,0);
 
@@ -2746,34 +2770,26 @@ void MakeLuaUseful(){
 //======================================================
 void Draw(){
 	int i;
-	//DrawTexture(testtex,32,32);
-
 	startDrawing();
-
 	if (currentBackground!=NULL){
 		DrawBackground(currentBackground);
 	}
-
 	for (i = MAXBUSTS-1; i != -1; i--){
 		if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1){
 			DrawBust(&(Busts[bustOrder[i]]));
 		}
 	}
-	
 	if (filterActive==1){
 		DrawCurrentFilter();
 	}
 	if (MessageBoxEnabled==1){
-		// This is the message box
 		DrawMessageBox();
 	}
-
 	for (i = MAXBUSTS-1; i != -1; i--){
 		if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
 			DrawBust(&(Busts[bustOrderOverBox[i]]));
 		}
 	}
-
 	if (MessageBoxEnabled==1){
 		DrawMessageText();
 	}
@@ -2998,7 +3014,6 @@ void SettingsMenu(){
 	char _tempItoaHoldBGM[5] = {'\0'};
 	char _tempItoaHoldSE[5] = {'\0'};
 	char _tempItoaHoldVoice[5] = {'\0'};
-
 	// This checks if we have Rena busts in CG AND CGAlt
 	char* _temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,"CG/","re_se_de_a1.png","");
 	if (checkFileExist(_temppath)==1){
@@ -3016,11 +3031,9 @@ void SettingsMenu(){
 		_renaImage = SafeLoadPNG(_temppath);
 		free(_temppath);
 	}
-
 	itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 	itoa(seVolume*4, _tempItoaHoldSE,10);
 	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
-
 	while (1){
 		FpsCapStart();
 		controlsStart();
@@ -3048,7 +3061,6 @@ void SettingsMenu(){
 				break;
 			}else if (_choice==9){ // Quit
 				endType = Line_ContinueAfterTyping;
-				
 				if (_choice==99){
 					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 				}else{
@@ -3102,7 +3114,6 @@ void SettingsMenu(){
 				currentTextHeight = textHeight(fontSize);
 			}
 		}
-
 		if (wasJustPressed(SCE_CTRL_LEFT)){
 			if (_choice==2){
 				if (isDown(SCE_CTRL_LTRIGGER)){
@@ -3230,6 +3241,12 @@ void SettingsMenu(){
 					goodDrawTextColored(32,5+currentTextHeight*4,"Overclock CPU",fontSize,0,255,0);
 				}else{
 					goodDrawText(32,5+currentTextHeight*4,"Overclock CPU",fontSize);
+				}
+			#elif PLATFORM == PLAT_3DS
+				if (cpuOverclocked==1){
+					goodDrawText(32,5+currentTextHeight*4,"Text: Bottom Screen",fontSize);
+				}else{
+					goodDrawText(32,5+currentTextHeight*4,"Text: Top Screen",fontSize);
 				}
 			#else
 				if (cpuOverclocked==1){
@@ -3393,7 +3410,6 @@ void TitleScreen(){
 		FpsCapWait();
 	}
 }
-
 void tipMenuChangeDisplay(char* _passedCurrentName, char* _passedCurrentSlot, char* _passedMaxSlot){
 	ClearMessageArray();
 	char _tempNameBuffer[strlen(_passedCurrentName)+1+1+3+1+3+1+1]; // main name + space + left parentheses + three digit number + slash + three digit number + right parentheses + null
@@ -3403,7 +3419,6 @@ void tipMenuChangeDisplay(char* _passedCurrentName, char* _passedCurrentSlot, ch
 	sprintf(_tempNameBuffer,"%s (%s/%s)",_passedCurrentName,_passedCurrentSlot,_passedMaxSlot);
 	OutputLine(_tempNameBuffer,Line_ContinueAfterTyping,1);
 }
-
 void TipMenu(){
 	ClearMessageArray();
 	if (currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
