@@ -8,6 +8,14 @@ http://wololo.net/talk/viewtopic.php?f=116&t=48223
 Script converter: https://github.com/MyLegGuy/HigurashiVitaCovnerter
 Refer to its README.
 
+Compiling (3ds)
+========
+make -f Makefile.3ds
+You need Lua, libsfil, and libsf2d, libpng.
+No sound support yet.
+Follow PS Vita setup instructions, but put everything at the root of the SD.
+You also need to put VpkContents/assets at the root of the SD too.
+
 Compiling (Vita)
 ========
 You need SoLoud.
