@@ -313,7 +313,7 @@ void DebugLuaReg(char* name){
 }
 void PlayMenuSound(){
 	if (menuSoundLoaded==1){
-		playSound(menuSound,1);
+		playSound(menuSound,1,10);
 	}
 }
 CrossTexture* SafeLoadPNG(const char* path){
@@ -410,19 +410,17 @@ char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 	return 1;
 }
 void WriteToDebugFile(const char* stuff){
-	#if PLATFORM == PLAT_VITA
-		char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
-		strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
-		strcat(_tempDebugFileLocationBuffer,"log.txt");
-		FILE *fp;
-		fp = fopen(_tempDebugFileLocationBuffer, "a");
-		if (!fp){
-			LazyMessage("Failed to open debug file.",_tempDebugFileLocationBuffer,NULL,NULL);
-			return;
-		}
-		fprintf(fp,"%s\n",stuff);
-		fclose(fp);
-	#endif
+	char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
+	strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
+	strcat(_tempDebugFileLocationBuffer,"log.txt");
+	FILE *fp;
+	fp = fopen(_tempDebugFileLocationBuffer, "a");
+	if (!fp){
+		LazyMessage("Failed to open debug file.",_tempDebugFileLocationBuffer,NULL,NULL);
+		return;
+	}
+	fprintf(fp,"%s\n",stuff);
+	fclose(fp);
 }
 void WriteSDLError(){
 	#if RENDERER == REND_SDL || SOUNDPLAYER == SND_SDL
@@ -579,20 +577,19 @@ int Password(int val, int _shouldHave){
 		return 0;
 	}
 }
+// TODO - Turn number to string and pass to normal method
 void WriteIntToDebugFile(int a){
-	#if PLATFORM == PLAT_VITA
-		char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
-		strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
-		strcat(_tempDebugFileLocationBuffer,"log.txt");
-		FILE *fp;
-		if (!fp){
-			LazyMessage("Failed to open debug file.",_tempDebugFileLocationBuffer,NULL,NULL);
-			return;
-		}
-		fp = fopen(_tempDebugFileLocationBuffer, "a");
-		fprintf(fp,"%d\n", a);
-		fclose(fp);
-	#endif
+	char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
+	strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
+	strcat(_tempDebugFileLocationBuffer,"log.txt");
+	FILE *fp;
+	fp = fopen(_tempDebugFileLocationBuffer, "a");
+	if (!fp){
+		LazyMessage("Failed to open debug file.",_tempDebugFileLocationBuffer,NULL,NULL);
+		return;
+	}
+	fprintf(fp,"%d\n",a);
+	fclose(fp);
 }
 void XOutFunction(){
 	if (currentGameStatus==GAMESTATUS_MAINGAME){
@@ -608,11 +605,16 @@ void XOutFunction(){
 }
 // Does not clear the debug file at ux0:data/HIGURASHI/log.txt  , I promise.
 void ClearDebugFile(){
-	#if PLATFORM == PLAT_VITA
+	char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
+	strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
+	strcat(_tempDebugFileLocationBuffer,"log.txt");
 	FILE *fp;
-	fp = fopen("ux0:data/HIGURASHI/log.txt", "w");
+	fp = fopen(_tempDebugFileLocationBuffer, "w");
+	if (!fp){
+		LazyMessage("Failed to open debug file.",_tempDebugFileLocationBuffer,NULL,NULL);
+		return;
+	}
 	fclose(fp);
-	#endif
 }
 void ResetBustStruct(bust* passedBust, int canfree){
 	if (canfree==1 && passedBust->image!=NULL){
@@ -873,76 +875,75 @@ int FixHistoryOldSub(int _val, int _scroll){
 }
 void InBetweenLines(lua_State *L, lua_Debug *ar) {
 	//if (currentGameStatus==GAMESTATUS_MAINGAME){
-		currentScriptLine++;
+	currentScriptLine++;
+	if (isSkipping==1){
+		controlsStart();
+		#if PLATFORM != PLAT_COMPUTER
+			if (!isDown(SCE_CTRL_SQUARE)){
+				isSkipping=0;
+			}
+		#endif
+		#if PLATFORM == PLAT_COMPUTER
+			if ( /*(  !(isDown(SCE_TOUCH) && (touchX<screenWidth*.25 && touchY<screenHeight*.20)) ) && */!(isDown(SCE_CTRL_SQUARE))  ){
+				isSkipping=0;
+				PlayMenuSound();
+			}
+		#endif
+		controlsEnd();
 		if (isSkipping==1){
-			controlsStart();
-			#if PLATFORM != PLAT_COMPUTER
-				if (!isDown(SCE_CTRL_SQUARE)){
-					isSkipping=0;
-				}
-			#endif
-			#if PLATFORM == PLAT_COMPUTER
-				if ( /*(  !(isDown(SCE_TOUCH) && (touchX<screenWidth*.25 && touchY<screenHeight*.20)) ) && */!(isDown(SCE_CTRL_SQUARE))  ){
-					isSkipping=0;
-					PlayMenuSound();
-				}
-			#endif
-			controlsEnd();
-			if (isSkipping==1){
-				endType=Line_ContinueAfterTyping;
+			endType=Line_ContinueAfterTyping;
+		}
+	}
+	u64 _inBetweenLinesMilisecondsStart = getTicks();
+	char _didPressCircle=0;
+	do{
+		FpsCapStart();
+		controlsStart();
+		Update();
+		Draw();
+
+		if (wasJustPressed(SCE_CTRL_CROSS)){
+			if (_didPressCircle==1){
+				MessageBoxEnabled=1;
+			}
+			endType = Line_ContinueAfterTyping;
+		}
+		if (wasJustPressed(SCE_CTRL_CIRCLE)){
+			if (_didPressCircle==1){
+				MessageBoxEnabled = !MessageBoxEnabled;
+			}else if (MessageBoxEnabled==1){
+				MessageBoxEnabled=0;
+				_didPressCircle=1;
 			}
 		}
-		u64 _inBetweenLinesMilisecondsStart = getTicks();
-		char _didPressCircle=0;
-		do{
-			FpsCapStart();
-			controlsStart();
-			Update();
-			Draw();
-
-			if (wasJustPressed(SCE_CTRL_CROSS)){
-				if (_didPressCircle==1){
-					MessageBoxEnabled=1;
-				}
+		if (wasJustPressed(SCE_CTRL_SQUARE)){
+			isSkipping=1;
+			endType=Line_ContinueAfterTyping;
+		}
+		if (wasJustPressed(SCE_CTRL_TRIANGLE)){
+			SettingsMenu();
+		}
+		if (wasJustPressed(SCE_CTRL_SELECT)){
+			PlayMenuSound();
+			if (autoModeOn==1){
+				autoModeOn=0;
+			}else{
+				autoModeOn=1;
+			}
+		}
+		if (wasJustPressed(SCE_CTRL_START)){
+			DrawHistory(messageHistory);
+		}
+		controlsEnd();
+		FpsCapWait();
+		if (autoModeOn==1){
+			if (getTicks()>=(unsigned int)(_inBetweenLinesMilisecondsStart+autoModeWait)){
+				// TODO - Does this is happy?
+				//MessageBoxEnabled=1;
 				endType = Line_ContinueAfterTyping;
 			}
-			if (wasJustPressed(SCE_CTRL_CIRCLE)){
-				if (_didPressCircle==1){
-					MessageBoxEnabled = !MessageBoxEnabled;
-				}else if (MessageBoxEnabled==1){
-					MessageBoxEnabled=0;
-					_didPressCircle=1;
-				}
-			}
-			if (wasJustPressed(SCE_CTRL_SQUARE)){
-				isSkipping=1;
-				endType=Line_ContinueAfterTyping;
-			}
-			if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-				SettingsMenu();
-			}
-			if (wasJustPressed(SCE_CTRL_SELECT)){
-				PlayMenuSound();
-				if (autoModeOn==1){
-					autoModeOn=0;
-				}else{
-					autoModeOn=1;
-				}
-			}
-			if (wasJustPressed(SCE_CTRL_START)){
-				DrawHistory(messageHistory);
-			}
-			controlsEnd();
-			FpsCapWait();
-			if (autoModeOn==1){
-				if (getTicks()>=(unsigned int)(_inBetweenLinesMilisecondsStart+autoModeWait)){
-					// TODO - Does this is happy?
-					//MessageBoxEnabled=1;
-					endType = Line_ContinueAfterTyping;
-				}
-			}
-		}while(endType==Line_Normal || endType == Line_WaitForInput);
-	//}
+		}
+	}while(endType==Line_Normal || endType == Line_WaitForInput);
 }
 void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
 	*_tempXOffset = floor((screenWidth-getTextureWidth(_tempImg))/2);
@@ -1643,10 +1644,11 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 		soundEffects[passedSlot]=NULL;
 	}
 	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, _dirRelativeToStreamingAssetsNoEndSlash,filename,".ogg");
+	WriteToDebugFile(tempstringconcat);
 	if (checkFileExist(tempstringconcat)==1){
 		soundEffects[passedSlot] = loadSound(tempstringconcat);
 		//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
-		CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1);
+		CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1,passedSlot+10);
 		setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
 	}else{
 		WriteToDebugFile("SE file not found");
@@ -1912,7 +1914,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 }
 void FreeBGM(int _slot){
 	if (currentMusic[_slot]!=NULL){
-		stopMusic(currentMusic[_slot]);
+		stopMusic(currentMusicHandle[_slot]);
 		freeMusic(currentMusic[_slot]);
 		currentMusic[_slot]=NULL;
 		currentMusicHandle[_slot]=0;
@@ -1925,7 +1927,7 @@ void FreeBGM(int _slot){
 }
 void StopBGM(int _slot){
 	if (currentMusic[_slot]!=NULL){
-		stopMusic(currentMusic[_slot]);
+		stopMusic(currentMusicHandle[_slot]);
 	}
 }
 // Unfixed bgm
@@ -1935,15 +1937,15 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 		return;
 	}
 	FreeBGM(_slot);
-	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/BGM/", filename, ".ogg");
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "BGM/", filename, ".ogg");
+	WriteToDebugFile(tempstringconcat);
 	if (checkFileExist(tempstringconcat)==1){
 		currentMusicFilepath[_slot] = malloc(strlen(filename)+1);
 		strcpy(currentMusicFilepath[_slot],filename);
 		currentMusicUnfixedVolume[_slot] = _volume;
-
 		currentMusic[_slot] = loadMusic(tempstringconcat);
 		//setMusicVolume(currentMusic[_slot],FixBGMVolume(_volume));
-		currentMusicHandle[_slot] = playMusic(currentMusic[_slot]);
+		currentMusicHandle[_slot] = playMusic(currentMusic[_slot],_slot);
 		setMusicVolume(currentMusicHandle[_slot],FixBGMVolume(_volume));
 		lastBGMVolume=_volume;
 	}
@@ -2201,6 +2203,19 @@ void* soundProtectThread(void *arg){
 	return NULL;
 }
 #endif
+#if PLATFORM == PLAT_3DS
+	void soundUpdateThread(void *arg){
+		int i;
+		while (1){
+			for (i=0;i<10;i++){
+				if (currentMusic[i]!=NULL){
+					nathanUpdateMusicIfNeeded(currentMusic[i]);
+				}
+			}
+			svcSleepThread(500000000); // Wait half a second
+		}
+	}
+#endif
 /*
 =================================================
 */
@@ -2215,7 +2230,7 @@ int L_ClearMessage(lua_State* passedState){
 	return 0;
 }
 int L_OutputLine(lua_State* passedState){
-	if (!lua_isnil(passedState,4)){	
+	if (!lua_isnil(passedState,4)){
 		OutputLine((unsigned const char*)lua_tostring(passedState,4),lua_tonumber(passedState,5),0);
 		InBetweenLines(NULL,NULL);
 	}
@@ -2391,14 +2406,14 @@ int L_FadeBustshot(lua_State* passedState){
 // Slot, file, volume
 int L_PlaySE(lua_State* passedState){
 	if (isSkipping==0 && seVolume>0){
-		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"/SE/",seVolume);
+		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"SE/",seVolume);
 	}
 	return 0;
 }
 // PlayVoice(channel, filename, volume)
 int L_PlayVoice(lua_State* passedState){
 	if (isSkipping==0 && (hasOwnVoiceSetting==1 ? voiceVolume : seVolume)>0){
-		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"/voice/", hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
+		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"voice/", hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
 	}
 	return 0;
 }
@@ -3948,7 +3963,12 @@ signed char init(){
 	if ((_tempCheckResult==1 && PLATFORM == PLAT_COMPUTER) || _tempCheckResult==2){
 		return 2;
 	}
+
 	initAudio();
+
+	#if PLATFORM == PLAT_3DS
+		osSetSpeedupEnable(1);
+	#endif
 
 	// These will soon be freed
 	STREAMINGASSETS = malloc(1);
@@ -3999,6 +4019,11 @@ signed char init(){
 		if (pthread_create(&soundProtectThreadId, NULL, &soundProtectThread, NULL) != 0){
 			return 2;
 		}
+	#endif
+	#if PLATFORM == PLAT_3DS
+		s32 _foundMainThreadPriority = 0;
+		svcGetThreadPriority(&_foundMainThreadPriority, CUR_THREAD_HANDLE);
+		threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
 	#endif
 	return 0;
 }

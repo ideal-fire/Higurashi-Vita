@@ -21,7 +21,27 @@
 	#define CROSSPLAYHANDLE unsigned int
 	Soloud* mySoLoudEngine;
 #endif
-	
+#if SOUNDPLAYER == SND_3DS
+	#include <3ds.h>
+	#include <ogg/ogg.h>
+	#include <vorbis/codec.h>
+	#include <vorbis/vorbisfile.h>
+	typedef struct{
+		OggVorbis_File _musicOggFile;
+		char* _musicMusicBuffer[10];
+		ndspWaveBuf _musicWaveBuffer[10];
+		int _musicOggCurrentSection; // Use by libvorbis
+		char _musicIsTwoBuffers;
+		unsigned char _musicChannel;
+		unsigned char _musicShoudLoop;
+		char _musicIsDone;
+	}NathanMusic;
+	#define CROSSMUSIC NathanMusic
+	#define CROSSSFX NathanMusic
+	#define CROSSPLAYHANDLE int
+	void nathanUpdateMusicIfNeeded(NathanMusic* _passedMusic);
+#endif
+
 void fadeoutMusic(CROSSPLAYHANDLE _passedHandle,int time);
 void freeMusic(CROSSMUSIC* toFree);
 void freeSound(CROSSSFX* toFree);
@@ -30,14 +50,14 @@ void initAudio();
 CROSSMUSIC* loadMusic(char* filepath);
 CROSSSFX* loadSound(char* filepath);
 void pauseMusic(CROSSPLAYHANDLE _passedHandle);
-CROSSPLAYHANDLE playMusic(CROSSMUSIC* toPlay);
-CROSSPLAYHANDLE playSound(CROSSSFX* toPlay, int timesToPlay);
+CROSSPLAYHANDLE playMusic(CROSSMUSIC* toPlay, unsigned char _passedChannel);
+CROSSPLAYHANDLE playSound(CROSSSFX* toPlay, int timesToPlay, unsigned char _passedChannel);
 void resumeMusic(CROSSPLAYHANDLE _passedHandle);
 void setMusicVolumeBefore(CROSSMUSIC* _passedMusic,int vol);
 void setMusicVolume(CROSSPLAYHANDLE _passedMusic,int vol);
 void setSFXVolumeBefore(CROSSSFX* tochange, int toval);
 void setSFXVolume(CROSSPLAYHANDLE tochange, int toval);
-void stopMusic(CROSSMUSIC* toStop);
+void stopMusic(CROSSPLAYHANDLE toStop);
 void stopSound(CROSSSFX* toStop);
  
 #endif /* GENERALGOODGRAPHICS_H */

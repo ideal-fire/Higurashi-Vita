@@ -1,0 +1,2 @@
+
+curl -T Higurashi.3dsx ftp://192.168.1.222:5000/3ds/Higurashi/Higurashi.3dsx

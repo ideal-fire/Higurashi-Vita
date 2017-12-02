@@ -21,6 +21,7 @@
 	#define SND_NONE 0
 	#define SND_SDL 1
 	#define SND_SOLOUD 2
+	#define SND_3DS 3 // Only OGG supported
 
 	#define REND_UNDEFINED 0
 	#define REND_SDL 1
@@ -89,7 +90,7 @@
 		#endif
 	#elif PRESET == PRE_3DS
 		#define PLATFORM PLAT_3DS
-		#define SOUNDPLAYER SND_NONE
+		#define SOUNDPLAYER SND_3DS
 		#define RENDERER REND_SF2D
 		#define TEXTRENDERER TEXT_DEBUG
 	#elif PRESET == PRE_ANDROID
