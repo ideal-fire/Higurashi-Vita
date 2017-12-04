@@ -509,7 +509,6 @@ int FixVolumeArg(int _val){
 	}else{
 		return floor(_val/(float)2);
 	}
-	return 255;
 }
 int FixBGMVolume(int _val){
 	return FixVolumeArg(_val)*bgmVolume;
@@ -1657,8 +1656,12 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 		freeSound(soundEffects[passedSlot]);
 		soundEffects[passedSlot]=NULL;
 	}
-	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, _dirRelativeToStreamingAssetsNoEndSlash,filename,".ogg");
-	WriteToDebugFile(tempstringconcat);
+	// Play WAV version if found.
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, _dirRelativeToStreamingAssetsNoEndSlash,filename,".wav");
+	if (checkFileExist(tempstringconcat)==0){
+		free(tempstringconcat);
+		tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, _dirRelativeToStreamingAssetsNoEndSlash,filename,".ogg");
+	}
 	if (checkFileExist(tempstringconcat)==1){
 		soundEffects[passedSlot] = loadSound(tempstringconcat);
 		//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
@@ -1953,18 +1956,25 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 		LazyMessage("Music slot too high.","No action will be taken.",NULL,NULL);
 		return;
 	}
-	FreeBGM(_slot);
-	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "BGM/", filename, ".ogg");
-	WriteToDebugFile(tempstringconcat);
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "BGM/", filename, ".wav");
+	if (checkFileExist(tempstringconcat)==0){
+		free(tempstringconcat);
+		tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "BGM/", filename, ".ogg");
+	}
 	if (checkFileExist(tempstringconcat)==1){
-		currentMusicFilepath[_slot] = malloc(strlen(filename)+1);
-		strcpy(currentMusicFilepath[_slot],filename);
+		char* _tempHoldFilepathConcat = malloc(strlen(filename)+1);
+		strcpy(_tempHoldFilepathConcat,filename);
+		CROSSMUSIC* _tempHoldSlot = loadMusic(tempstringconcat);
+		// FreeBGM is right here so the player can listen to the old BGM as the new one loads.
+		FreeBGM(_slot);
+		currentMusic[_slot] = _tempHoldSlot;
+		currentMusicFilepath[_slot] = _tempHoldFilepathConcat;
 		currentMusicUnfixedVolume[_slot] = _volume;
-		currentMusic[_slot] = loadMusic(tempstringconcat);
-		//setMusicVolume(currentMusic[_slot],FixBGMVolume(_volume));
 		currentMusicHandle[_slot] = playMusic(currentMusic[_slot],_slot);
 		setMusicVolume(currentMusicHandle[_slot],FixBGMVolume(_volume));
 		lastBGMVolume=_volume;
+	}else{
+		FreeBGM(_slot);
 	}
 	free(tempstringconcat);
 	return;
@@ -2308,17 +2318,52 @@ int L_StopBGM(lua_State* passedState){
 	}
 	return 0;
 }
-// Last arg, I was right. Bool for if wait for fadeoutr
-// slot, time, (bool) should wait for finish
-int L_FadeoutBGM(lua_State* passedState){
-	if (currentMusicHandle[(int)lua_tonumber(passedState,1)]!=0){
-		fadeoutMusic(currentMusicHandle[(int)lua_tonumber(passedState,1)],lua_tonumber(passedState,2));
-		if (lua_toboolean(passedState,3)==1){
-			wait(lua_tonumber(passedState,2));
+#if SOUNDPLAYER == SND_3DS
+	void nathanSetChannelVolume(unsigned char _a, float _b);
+	// slot, time, should wair
+	int L_FadeoutBGM(lua_State* passedState){
+		if (currentMusic[(int)lua_tonumber(passedState,1)]==NULL){
+			return 0;
 		}
+		if (lua_toboolean(passedState,3)==0){
+			stopMusic(currentMusicHandle[(int)lua_tonumber(passedState,1)]);
+			return 0;
+		}
+		float _perTenthSecond=(float)((float)(1*bgmVolume)/((double)lua_tonumber(passedState,2)/(double)100));
+		//float _perTenthSecond=.1;
+		if (_perTenthSecond==0){
+			_perTenthSecond=.00001;
+		}
+		float _currentFadeoutVolume=((1*((float)currentMusicUnfixedVolume[(int)lua_tonumber(passedState,1)]/(float)256))*bgmVolume);
+		unsigned char _passedHandle = currentMusicHandle[(int)lua_tonumber(passedState,1)];
+		while (_currentFadeoutVolume>0){
+			if (_currentFadeoutVolume<_perTenthSecond){
+				_currentFadeoutVolume=0;
+			}else{
+				_currentFadeoutVolume-=_perTenthSecond;
+			}
+			nathanSetChannelVolume(_passedHandle,_currentFadeoutVolume);
+			svcSleepThread(100000000); // Wait for one tenth of a second
+		}
+		ndspChnWaveBufClear(_passedHandle);
 	}
-	return 0;
-}
+#else
+	// slot, time, (bool) should wait for finish
+	int L_FadeoutBGM(lua_State* passedState){
+		if (currentMusic[(int)lua_tonumber(passedState,1)]!=NULL){
+			#if SOUNDPLAYER == SND_SOLOUD
+				if (currentMusicHandle[(int)lua_tonumber(passedState,1)]==0){
+					return 0;
+				}
+			#endif
+			fadeoutMusic(currentMusicHandle[(int)lua_tonumber(passedState,1)],lua_tonumber(passedState,2));
+			if (lua_toboolean(passedState,3)==1){
+				wait(lua_tonumber(passedState,2));
+			}
+		}
+		return 0;
+	}
+#endif
 // Bustshot slot? (Normally 1-3 used, 5 for black, 6 for cinema 7 for title)
 	// Filename
 	// Filter filename
