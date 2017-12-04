@@ -83,6 +83,7 @@
 #define VERSIONSTRING "v2.2" // This
 #define VERSIONNUMBER 2 // This
 #define VERSIONCOLOR 0,208,138
+#define USEUMA0 1
 // Specific constants
 #if PLATFORM != PLAT_3DS
 	#define HISTORYONONESCREEN 13
@@ -301,6 +302,21 @@ CrossTexture* currentCustomTextbox=NULL;
 /*
 ====================================================
 */
+void XOutFunction(){
+	exit(0);
+}
+char isForceQuit(){
+	#if PLATFORM == PLAT_3DS
+		return !(aptMainLoop());
+	#else
+		return 0;
+	#endif
+}
+void exitIfForceQuit(){
+	if (isForceQuit()==1){
+		XOutFunction();
+	}
+}
 // Give a function name to this. It will tell you if it's new.
 // THIS DOES NOT ACCOUNT FOR FUNCTIONS MADE IN happy.lua
 void DebugLuaReg(char* name){
@@ -329,7 +345,11 @@ CrossTexture* LoadEmbeddedPNG(const char* path){
 	CrossTexture* _tempTex = loadPNG((char*)globalTempConcat);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
-		LazyMessage("Failed to load image",path,"What will happen now?!","THIS IS SUPPOSED TO BE EMBEDDED!");
+		#if PLATFORM != PLAT_3DS
+			LazyMessage("Failed to load image",path,"What will happen now?!","THIS IS SUPPOSED TO BE EMBEDDED!");
+		#else
+			LazyMessage("Failed to load image",path,"What will happen now?!","Check you set up everything correctly.");
+		#endif
 	}
 	return _tempTex;
 }
@@ -349,7 +369,7 @@ void DrawMessageBox(){
 }
 void DrawCurrentFilter(){
 	drawRectangle(0,0,screenWidth,screenHeight,filterR,filterG,filterB,filterA);
-	//DrawRectangle(0,0,960,screenHeight,filterR,255-(filterG*filterA*.0011),filterB,255);
+	//drawRectangle(0,0,960,screenHeight,filterR,255-(filterG*filterA*.0011),filterB,255);
 }
 u64 waitwithCodeTarget;
 void WaitWithCodeStart(int amount){
@@ -375,7 +395,7 @@ void ReloadFont(){
 	#if PLATFORM != PLAT_3DS
 		fixPath("assets/LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
 	#elif PLATFORM == PLAT_3DS
-		fixPath("testfont3",globalTempConcat,TYPE_EMBEDDED);
+		fixPath("assets/Bitmap-LiberationSans-Regular",globalTempConcat,TYPE_EMBEDDED);
 	#else
 		#error whoops
 	#endif
@@ -590,18 +610,6 @@ void WriteIntToDebugFile(int a){
 	}
 	fprintf(fp,"%d\n",a);
 	fclose(fp);
-}
-void XOutFunction(){
-	if (currentGameStatus==GAMESTATUS_MAINGAME){
-		//luaL_error(L,"game stopped\n");
-		// Adds function to stack
-		lua_getglobal(L,"quitxfunction");
-		// Call funciton. Removes function from stack.
-		lua_call(L, 0, 0);
-	}else{
-		printf("normalquit\n");
-		currentGameStatus=GAMESTATUS_QUIT;
-	}
 }
 // Does not clear the debug file at ux0:data/HIGURASHI/log.txt  , I promise.
 void ClearDebugFile(){
@@ -873,9 +881,11 @@ int FixHistoryOldSub(int _val, int _scroll){
 		return _val+_scroll;
 	}
 }
-void InBetweenLines(lua_State *L, lua_Debug *ar) {
-	//if (currentGameStatus==GAMESTATUS_MAINGAME){
+void incrementScriptLineVariable(lua_State *L, lua_Debug *ar){
 	currentScriptLine++;
+}
+void outputLineWait() {
+	//if (currentGameStatus==GAMESTATUS_MAINGAME){
 	if (isSkipping==1){
 		controlsStart();
 		#if PLATFORM != PLAT_COMPUTER
@@ -924,12 +934,14 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 			SettingsMenu();
 		}
 		if (wasJustPressed(SCE_CTRL_SELECT)){
-			PlayMenuSound();
-			if (autoModeOn==1){
-				autoModeOn=0;
-			}else{
-				autoModeOn=1;
-			}
+			#if PLATFORM != PLAT_3DS
+				PlayMenuSound();
+				if (autoModeOn==1){
+					autoModeOn=0;
+				}else{
+					autoModeOn=1;
+				}
+			#endif
 		}
 		if (wasJustPressed(SCE_CTRL_START)){
 			DrawHistory(messageHistory);
@@ -943,6 +955,7 @@ void InBetweenLines(lua_State *L, lua_Debug *ar) {
 				endType = Line_ContinueAfterTyping;
 			}
 		}
+		exitIfForceQuit();
 	}while(endType==Line_Normal || endType == Line_WaitForInput);
 }
 void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
@@ -1222,6 +1235,7 @@ void LazyMessage(const char* stra, const char* strb, const char* strc, const cha
 		goodDrawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.",fontSize);
 		endDrawing();
 		FpsCapWait();
+		exitIfForceQuit();
 	}
 }
 void LoadGame(){
@@ -1297,7 +1311,7 @@ void TryLoadMenuSoundEffect(){
 	if (menuSound!=NULL){
 		return;
 	}
-	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "/SE/","wa_038",".ogg");
+	char* tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, "SE/","wa_038",".ogg");
 	if (checkFileExist(tempstringconcat)){
 		menuSoundLoaded=1;
 		menuSound = loadSound(tempstringconcat);
@@ -1932,6 +1946,9 @@ void StopBGM(int _slot){
 }
 // Unfixed bgm
 void PlayBGM(const char* filename, int _volume, int _slot){
+	if (bgmVolume==0){
+		return;
+	}
 	if (_slot>=MAXMUSICARRAY){
 		LazyMessage("Music slot too high.","No action will be taken.",NULL,NULL);
 		return;
@@ -1990,7 +2007,6 @@ void LoadSettings(){
 	}else{
 		LoadFontSizeFile();
 	}
-
 	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
 	if (checkFileExist((const char*)globalTempConcat)==1){
 		FILE* fp;
@@ -2232,7 +2248,7 @@ int L_ClearMessage(lua_State* passedState){
 int L_OutputLine(lua_State* passedState){
 	if (!lua_isnil(passedState,4)){
 		OutputLine((unsigned const char*)lua_tostring(passedState,4),lua_tonumber(passedState,5),0);
-		InBetweenLines(NULL,NULL);
+		outputLineWait();
 	}
 	return 0;
 }
@@ -2240,7 +2256,7 @@ int L_OutputLine(lua_State* passedState){
 int L_OutputLineAll(lua_State* passedState){
 	if (!lua_isnil(passedState,2)){
 		OutputLine((unsigned const char*)lua_tostring(passedState,2),lua_tonumber(passedState,5),1);
-		InBetweenLines(NULL,NULL);
+		outputLineWait();
 	}
 	return 0;
 }
@@ -3049,7 +3065,7 @@ void SettingsMenu(){
 	itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 	itoa(seVolume*4, _tempItoaHoldSE,10);
 	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
-	while (1){
+	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
 		controlsStart();
 
@@ -3081,8 +3097,7 @@ void SettingsMenu(){
 				}else{
 					currentGameStatus=GAMESTATUS_QUIT;
 				}
-				lua_getglobal(L,"quitxfunction");
-				lua_call(L, 0, 0);
+				exit(0);
 				break;
 			}else if (_choice==1){ // The voice volume spot if needed
 				if (hasOwnVoiceSetting==1){
@@ -3299,6 +3314,7 @@ void SettingsMenu(){
 		#endif
 		endDrawing();
 		FpsCapWait();
+		exitIfForceQuit();
 	}
 	SaveSettings();
 	if (_canShowRena==1){
@@ -3423,6 +3439,7 @@ void TitleScreen(){
 		endDrawing();
 		controlsEnd();
 		FpsCapWait();
+		exitIfForceQuit();
 	}
 }
 void tipMenuChangeDisplay(char* _passedCurrentName, char* _passedCurrentSlot, char* _passedMaxSlot){
@@ -3788,6 +3805,7 @@ void NavigationMenu(){
 		goodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
 		endDrawing();
 		FpsCapWait();
+		exitIfForceQuit();
 	}
 }
 void NewGameMenu(){
@@ -3889,7 +3907,7 @@ char init_dohappylua(){
 		fixPath("assets/happy.lua",globalTempConcat,TYPE_EMBEDDED);
 		_didLoadHappyLua = SafeLuaDoFile(L,globalTempConcat,0);
 	#endif
-	//lua_sethook(L, InBetweenLines, LUA_MASKLINE, 5);
+	lua_sethook(L, incrementScriptLineVariable, LUA_MASKLINE, 5);
 	if (_didLoadHappyLua==0){
 		#if PLATFORM == PLAT_VITA
 			LazyMessage("Happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
@@ -3942,33 +3960,13 @@ signed char init(){
 	Busts = calloc(1,sizeof(bust)*MAXBUSTS);
 	bustOrder = calloc(1,sizeof(char)*MAXBUSTS);
 	bustOrderOverBox = calloc(1,sizeof(char)*MAXBUSTS);
+
 	// Setup DATAFOLDER variable. Defaults to uma0 if it exists and it's unsafe build
 	ResetDataDirectory();
 
 	// This will also load the font size file and therefor must come before font loading
 	// Will not crash if no settings found
 	LoadSettings();
-
-	ReloadFont();
-	//while(1){
-	//	startDrawing();
-	//	goodDrawTextColored(0,0,"happy",1,255,0,0);
-	//	endDrawing();
-	//}
-
-
-	// Checks if StreamingAssets and stuff exists.
-	// Informs the user if they don't.
-	char _tempCheckResult = CheckForUserStuff();
-	if ((_tempCheckResult==1 && PLATFORM == PLAT_COMPUTER) || _tempCheckResult==2){
-		return 2;
-	}
-
-	initAudio();
-
-	#if PLATFORM == PLAT_3DS
-		osSetSpeedupEnable(1);
-	#endif
 
 	// These will soon be freed
 	STREAMINGASSETS = malloc(1);
@@ -3982,6 +3980,35 @@ signed char init(){
 	printf("%s\n",PRESETFOLDER);
 	printf("%s\n",SCRIPTFOLDER);
 
+	// Check for star picture in 3ds data directory to verify that they put the required files there.
+	#if PLATFORM == PLAT_3DS
+		osSetSpeedupEnable(1);
+		fixPath("assets/star.png",globalTempConcat,TYPE_EMBEDDED);
+		if (checkFileExist(globalTempConcat)==0){
+			while(1){
+				startDrawing();
+				drawRectangle(0,0,20,100,255,0,0,255);
+				drawRectangle(20,0,30,15,255,0,0,255);
+				drawRectangle(20,35,30,15,255,0,0,255);
+				endDrawing();
+			}
+		}
+	#endif
+
+	//
+	ClearDebugFile();
+
+	ReloadFont();
+	// Checks if StreamingAssets and stuff exists.
+	// Informs the user if they don't.
+	char _tempCheckResult = CheckForUserStuff();
+	if ((_tempCheckResult==1 && PLATFORM == PLAT_COMPUTER) || _tempCheckResult==2){
+		return 2;
+	}
+	if (initAudio()==0){
+		LazyMessage("dsp init failed Do you have dsp","firm dumped and in","/3ds/dspfirm.cdc","?");
+	}
+
 	// Load the menu sound effect if it's present
 	TryLoadMenuSoundEffect();
 
@@ -3994,8 +4021,6 @@ signed char init(){
 	for (i=0;i<MAXIMAGECHAR;i++){
 		imageCharType[i]=-1;
 	}
-
-	ClearDebugFile();
 
 	// Fill with null char
 	ClearMessageArray();

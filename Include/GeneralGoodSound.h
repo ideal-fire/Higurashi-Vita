@@ -46,7 +46,7 @@ void fadeoutMusic(CROSSPLAYHANDLE _passedHandle,int time);
 void freeMusic(CROSSMUSIC* toFree);
 void freeSound(CROSSSFX* toFree);
 int getMusicVolume(CROSSPLAYHANDLE _passedMusicHandle);
-void initAudio();
+char initAudio();
 CROSSMUSIC* loadMusic(char* filepath);
 CROSSSFX* loadSound(char* filepath);
 void pauseMusic(CROSSPLAYHANDLE _passedHandle);

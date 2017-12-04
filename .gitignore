@@ -64,8 +64,11 @@ lib-custom/
 *.self
 *.3dsx
 *.smdh
+*.cia
+*.banner
 
 /_Notes/Trash/
+/_Notes/icon3ds_old.png
 build3ds/
 
 # For Windows build

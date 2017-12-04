@@ -4,9 +4,9 @@
 		extern char* ANDROIDPACKAGENAME;
 		extern char* VITAAPPID;
 	#else
-		char* ANDROIDPACKAGENAME = "good.package.name";
+		char* ANDROIDPACKAGENAME = "com.mylegguy.higurashi";
 		// 9 characters
-		char* VITAAPPID = "123456789";
+		char* VITAAPPID = "HIGURASHI";
 	#endif
 
 	#define PLAT_VITA 1

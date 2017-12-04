@@ -36,7 +36,7 @@ INCLUDES	:=	Include
 ICON        := 	_Notes/icon3ds.png
 #ROMFS		:=	romfs
 
-APP_TITLE		:= Higurashi
+APP_TITLE		:= Higurashi When They Cry Hou
 APP_DESCRIPTION	:= Higurashi When They Cry Hou
 APP_AUTHOR		:= MyLeGguy
 
@@ -146,7 +146,7 @@ $(BUILD):
 #---------------------------------------------------------------------------------
 clean:
 	@echo clean ...
-	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf $(TARGET)-strip.elf $(TARGET).cia $(TARGET).3ds
+	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf $(TARGET)-strip.elf $(TARGET).cia $(TARGET).3ds $(TARGET).banner
 #---------------------------------------------------------------------------------
 $(TARGET)-strip.elf: $(BUILD)
 	@$(STRIP) --strip-all $(TARGET).elf -o $(TARGET)-strip.elf
@@ -155,9 +155,9 @@ cci: $(TARGET)-strip.elf
 	@makerom -f cci -rsf resources/$(TARGET).rsf -target d -exefslogo -elf $(TARGET)-strip.elf -o $(TARGET).3ds
 	@echo "built ... sf2d_sample.3ds"
 #---------------------------------------------------------------------------------
-cia: $(TARGET)-strip.elf
-	@makerom -f cia -o $(TARGET).cia -elf $(TARGET)-strip.elf -rsf resources/$(TARGET).rsf -icon resources/icon.icn -banner resources/banner.bnr -exefslogo -target t
-	@echo "built ... sf2d_sample.cia"
+cia:
+	@bannertool makebanner -i ./_Notes/3dsBanner.png -a ./_Notes/BannerSound.wav -o Higurashi.banner
+	@makerom -f cia -rsf ./_Notes/cia.rsf -target t -elf Higurashi.elf -o Higurashi.cia -icon Higurashi.smdh -banner Higurashi.banner
 #---------------------------------------------------------------------------------
 send: $(BUILD)
 	@3dslink $(TARGET).3dsx
@@ -172,6 +172,7 @@ noob:
 copy_cia: $(TARGET).cia
 	@cp $(TARGET).cia /mnt/3DS
 	sync
+#---------------------------------------------------------------------------------
 
 #---------------------------------------------------------------------------------
 else
