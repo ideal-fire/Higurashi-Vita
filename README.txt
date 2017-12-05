@@ -1,4 +1,4 @@
-An unofficial port of Higurashi When They Cry for the PS Vita.
+An unofficial port of Higurashi When They Cry for the PS Vita and 3ds.
 
 Setup
 =====
@@ -12,9 +12,7 @@ Compiling (3ds)
 ========
 make -f Makefile.3ds
 You need Lua, libsfil, and libsf2d, libpng.
-No sound support yet.
-Follow PS Vita setup instructions, but put everything at the root of the SD.
-You also need to put VpkContents/assets at the root of the SD too.
+Every library you compile with needs to be compiled with -mfloat-abi=softfp
 
 Compiling (Vita)
 ========

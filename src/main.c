@@ -129,7 +129,8 @@
 // 1 is start
 // 2 adds BGM and SE volume
 // 3 adds voice volume
-#define OPTIONSFILEFORMAT 3
+// 4 adds MessageBoxAlpha
+#define OPTIONSFILEFORMAT 4
 
 //#define LUAREGISTER(x,y) DebugLuaReg(y);
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
@@ -201,7 +202,7 @@ CROSSSFX* menuSound=NULL;
 signed char menuSoundLoaded=0;
 
 // Alpha of black rectangle over screen
-int MessageBoxAlpha = 100;
+unsigned char MessageBoxAlpha = 100;
 
 signed char MessageBoxEnabled=1;
 
@@ -579,16 +580,6 @@ void DrawMessageText(){
 		}
 	}
 }
-void PrintScreenValues(){
-	system("cls");
-	int i,j;
-	for (i = 0; i < 15; i++){
-		for (j = 0; j < SINGLELINEARRAYSIZE; j++){
-			printf("%d;",currentMessages[i][j]);
-		}
-		printf("\n");
-	}
-}
 int Password(int val, int _shouldHave){
 	if (val==_shouldHave){
 		return val+1;
@@ -596,19 +587,10 @@ int Password(int val, int _shouldHave){
 		return 0;
 	}
 }
-// TODO - Turn number to string and pass to normal method
 void WriteIntToDebugFile(int a){
-	char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
-	strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
-	strcat(_tempDebugFileLocationBuffer,"log.txt");
-	FILE *fp;
-	fp = fopen(_tempDebugFileLocationBuffer, "a");
-	if (!fp){
-		LazyMessage("Failed to open debug file.",_tempDebugFileLocationBuffer,NULL,NULL);
-		return;
-	}
-	fprintf(fp,"%d\n",a);
-	fclose(fp);
+	char _tempCompleteNumberBuffer[9]; // 8 000 000 null
+	sprintf(_tempCompleteNumberBuffer,"%d",a);
+	WriteToDebugFile(_tempCompleteNumberBuffer);
 }
 // Does not clear the debug file at ux0:data/HIGURASHI/log.txt  , I promise.
 void ClearDebugFile(){
@@ -883,7 +865,7 @@ int FixHistoryOldSub(int _val, int _scroll){
 void incrementScriptLineVariable(lua_State *L, lua_Debug *ar){
 	currentScriptLine++;
 }
-void outputLineWait() {
+void outputLineWait(){
 	//if (currentGameStatus==GAMESTATUS_MAINGAME){
 	if (isSkipping==1){
 		controlsStart();
@@ -933,14 +915,12 @@ void outputLineWait() {
 			SettingsMenu();
 		}
 		if (wasJustPressed(SCE_CTRL_SELECT)){
-			#if PLATFORM != PLAT_3DS
-				PlayMenuSound();
-				if (autoModeOn==1){
-					autoModeOn=0;
-				}else{
-					autoModeOn=1;
-				}
-			#endif
+			PlayMenuSound();
+			if (autoModeOn==1){
+				autoModeOn=0;
+			}else{
+				autoModeOn=1;
+			}
 		}
 		if (wasJustPressed(SCE_CTRL_START)){
 			DrawHistory(messageHistory);
@@ -948,7 +928,7 @@ void outputLineWait() {
 		controlsEnd();
 		FpsCapWait();
 		if (autoModeOn==1){
-			if (getTicks()>=(unsigned int)(_inBetweenLinesMilisecondsStart+autoModeWait)){
+			if (getTicks()>=(_inBetweenLinesMilisecondsStart+autoModeWait)){
 				// TODO - Does this is happy?
 				//MessageBoxEnabled=1;
 				endType = Line_ContinueAfterTyping;
@@ -1987,6 +1967,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // BGM volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
 // SE volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
 // Voice volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
+// MessageBoxAlpha, 1 byte
 void SaveSettings(){
 	FILE* fp;
 	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
@@ -2006,6 +1987,7 @@ void SaveSettings(){
 	fwrite(&_bgmTemp,1,1,fp);
 	fwrite(&_seTemp,1,1,fp);
 	fwrite(&_voiceTemp,1,1,fp);
+	fwrite(&MessageBoxAlpha,1,1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -2042,6 +2024,9 @@ void LoadSettings(){
 			unsigned char _voiceTemp;
 			fread(&_voiceTemp,1,1,fp);
 			_voiceTemp = (float)_voiceTemp/4;
+		}
+		if (_tempOptionsFormat>=4){
+			fread(&MessageBoxAlpha,1,1,fp);
 		}
 		fclose(fp);
 
@@ -2167,16 +2152,16 @@ void UpdatePresetStreamingAssetsDir(char* filename){
 	}
 }
 #if PLATFORM == PLAT_VITA
-char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
+	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
 	if (_currentPad.buttons & _button){
 		if (!(_lastPad.buttons & _button)){
 			return 1;
 		}
 	}
 	return 0;
-}
-// Wait for the user to suspend the game, save them, and be happy.
-void* soundProtectThread(void *arg){
+	}
+	// Wait for the user to suspend the game, save them, and be happy.
+	void* soundProtectThread(void *arg){
 	if (isActuallyUsingUma0==1){
 		return NULL;
 	}
@@ -2227,7 +2212,7 @@ void* soundProtectThread(void *arg){
 		sceKernelDelayThread(16);
 	}
 	return NULL;
-}
+	}
 #endif
 #if PLATFORM == PLAT_3DS
 	void soundUpdateThread(void *arg){
@@ -2693,7 +2678,6 @@ int L_GetScriptLine(lua_State* passedState){
 	lua_pushnumber(passedState,currentScriptLine);
 	return 1;
 }
-//
 int L_DebugFile(lua_State* passedState){
 	WriteToDebugFile(lua_tostring(passedState,1));
 	return 0;
@@ -2997,9 +2981,6 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 	return _returnVal;
 }
 void FontSizeSetup(){
-	#if PLATFORM == PLAT_3DS
-		return;
-	#endif
 	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	char _choice=0;
 	char _tempNumberString[10];
@@ -3079,7 +3060,6 @@ void SettingsMenu(){
 	char _tempAutoModeString[10] = {'\0'};
 	int _tempStrWidth = textWidth(fontSize,"Auto Mode Speed: ");
 	itoa(autoModeWait,_tempAutoModeString,10);
-	char _needResave=0;
 	int _bustlocationcollinspacewidth = textWidth(fontSize,"Bust location: ");
 	char _canShowRena=0;
 	// This variable is used to check if the player changed the bust location after exiting
@@ -3087,9 +3067,11 @@ void SettingsMenu(){
 	CrossTexture* _renaImage=NULL;
 	int _noobBGMVolumeWidth = textWidth(fontSize,"BGM Volume  ");
 	int _noobVoiceVolumeWidth = textWidth(fontSize, "Voice Volume ");
+	int _noobBoxAlphaWidth = textWidth(fontSize,"Message Box Alpha: ");
 	char _tempItoaHoldBGM[5] = {'\0'};
 	char _tempItoaHoldSE[5] = {'\0'};
 	char _tempItoaHoldVoice[5] = {'\0'};
+	char _tempItoaHoldBoxAlpha[5] = {'\0'};
 	// This checks if we have Rena busts in CG AND CGAlt
 	char* _temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,"CG/","re_se_de_a1.png","");
 	if (checkFileExist(_temppath)==1){
@@ -3110,32 +3092,25 @@ void SettingsMenu(){
 	itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 	itoa(seVolume*4, _tempItoaHoldSE,10);
 	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
+	itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
 		controlsStart();
 
 		if (currentGameStatus!=GAMESTATUS_TITLE){
-			_choice = MenuControls(_choice,0,9);
+			_choice = MenuControls(_choice,0,10);
 		}else{
-			_choice = MenuControls(_choice,0,8);
+			_choice = MenuControls(_choice,0,9); // No quit button if used menu from title screen
 		}
 
 		if (wasJustPressed(SCE_CTRL_CIRCLE)){
-			if (_choice==2){
-				autoModeWait-=500;
-				if (autoModeWait<=0){
-					autoModeWait=500;
-				}
-				itoa(autoModeWait,_tempAutoModeString,10);
-			}else{
-				break;
-			}
+			break;
 		}
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){ // Resume
 				PlayMenuSound();
 				break;
-			}else if (_choice==9){ // Quit
+			}else if (_choice==10){ // Quit
 				endType = Line_ContinueAfterTyping;
 				if (_choice==99){
 					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
@@ -3144,13 +3119,6 @@ void SettingsMenu(){
 				}
 				exit(0);
 				break;
-			}else if (_choice==1){ // The voice volume spot if needed
-				if (hasOwnVoiceSetting==1){
-
-				}
-			}else if (_choice==2){ // Auto mode speed
-				autoModeWait+=500;
-				itoa(autoModeWait,_tempAutoModeString,10);
 			}else if (_choice==4){ // CPU speed
 				PlayMenuSound();
 				if (cpuOverclocked==0){
@@ -3173,11 +3141,13 @@ void SettingsMenu(){
 					bgmVolume=.75;
 					seVolume=1.0;
 					voiceVolume=1.0;
+					MessageBoxAlpha=100;
 					// Some need to have their strings changed so the user can actually see the changes
 					itoa(autoModeWait,_tempAutoModeString,10);
 					itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 					itoa(seVolume*4, _tempItoaHoldSE,10);
 					itoa(voiceVolume*4, _tempItoaHoldVoice,10);
+					itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
 					// Update music volume using new default setting
 					SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
 				}
@@ -3200,7 +3170,6 @@ void SettingsMenu(){
 					autoModeWait=500;
 				}
 				itoa(autoModeWait,_tempAutoModeString,10);
-				_needResave=1;
 			}else if (_choice==1 && hasOwnVoiceSetting){
 				if (voiceVolume==0){
 					voiceVolume=1.25;
@@ -3224,6 +3193,19 @@ void SettingsMenu(){
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
+			}else if (_choice==9){
+				// char will wrap, we don't want that
+				int _tempHoldChar = MessageBoxAlpha;
+				if (isDown(SCE_CTRL_LTRIGGER)){
+					_tempHoldChar-=15;
+				}else{
+					_tempHoldChar-=25;
+				}
+				if (_tempHoldChar<=0){
+					_tempHoldChar=0;
+				}
+				MessageBoxAlpha = _tempHoldChar;
+				itoa(MessageBoxAlpha,_tempItoaHoldBoxAlpha,10);
 			}
 		}
 		if (wasJustPressed(SCE_CTRL_RIGHT)){
@@ -3234,7 +3216,18 @@ void SettingsMenu(){
 					autoModeWait+=500;
 				}
 				itoa(autoModeWait,_tempAutoModeString,10);
-				_needResave=1;
+			}else if (_choice==9){
+				int _tempHoldChar = MessageBoxAlpha;
+				if (isDown(SCE_CTRL_LTRIGGER)){
+					_tempHoldChar+=15;
+				}else{
+					_tempHoldChar+=25;
+				}
+				if (_tempHoldChar>255){
+					_tempHoldChar=255;
+				}
+				MessageBoxAlpha = _tempHoldChar;
+				itoa(_tempHoldChar,_tempItoaHoldBoxAlpha,10);
 			}
 		}
 		if (wasJustPressed(SCE_CTRL_CROSS) || wasJustPressed(SCE_CTRL_RIGHT) || wasJustPressed(SCE_CTRL_LEFT)){
@@ -3266,7 +3259,6 @@ void SettingsMenu(){
 						setSFXVolumeBefore(menuSound,FixSEVolume(256));
 					}
 					PlayMenuSound();
-
 				}
 			}
 			if (_choice==3){
@@ -3292,7 +3284,6 @@ void SettingsMenu(){
 		}else{
 			goodDrawText(32,5,"Resume",fontSize);
 		}
-
 
 		if (hasOwnVoiceSetting==1){
 			goodDrawText(32,5+currentTextHeight,"Voice Volume",fontSize);
@@ -3337,8 +3328,10 @@ void SettingsMenu(){
 
 		goodDrawText(32,5+currentTextHeight*7,"Font Size",fontSize);
 		goodDrawText(32,5+currentTextHeight*8,"Defaults",fontSize);
+		goodDrawText(32,5+currentTextHeight*9,"Message Box Alpha: ",fontSize);
+			goodDrawText(32+_noobBoxAlphaWidth,5+currentTextHeight*9,_tempItoaHoldBoxAlpha,fontSize);
 		if (currentGameStatus!=GAMESTATUS_TITLE){
-			goodDrawText(32,5+currentTextHeight*9,"Quit",fontSize);
+			goodDrawText(32,5+currentTextHeight*10,"Quit",fontSize);
 		}
 		goodDrawText(0,5+_choice*currentTextHeight,">",fontSize);
 
@@ -3956,16 +3949,8 @@ char init_dohappylua(){
 	if (_didLoadHappyLua==0){
 		#if PLATFORM == PLAT_VITA
 			LazyMessage("Happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
-		#elif PLATFORM == PLAT_3DS
+		#else
 			LazyMessage("happy.lua missing.",NULL,NULL,NULL);
-		#elif PLATFORM == PLAT_COMPUTER
-			printf("Falling back on happybackup.lua");
-			fixPath("StreamingAssets/happybackup.lua",globalTempConcat,TYPE_DATA);
-			_didLoadHappyLua = SafeLuaDoFile(L,(char*)globalTempConcat,0);
-			if (_didLoadHappyLua==0){
-				LazyMessage("/sdcard/HIGURASHI/StreamingAssets/happy.lua","is missing. Did you convert the script files?",(const char*)globalTempConcat,"is also missing. It's from the script converter too.");
-				return 2;
-			}
 		#endif
 	}
 	#if SUBPLATFORM == SUB_ANDROID
