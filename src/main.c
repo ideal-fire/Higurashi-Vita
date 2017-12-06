@@ -26,10 +26,6 @@
 	(Bonus TODO)
 		TODO - Add voices to the text log
 		TODO - app0 mode option
-
-	TODO - P
-		TODO - 0x81 0x99 is star character in script
-		TODO - 0x81 0xF4 is music note
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -553,14 +549,14 @@ int GetNextCharOnLine(int _linenum){
 	return u_strlen(currentMessages[_linenum]);
 }
 #if PLATFORM == PLAT_3DS
-void tempFakeBottomScreenResolution(){
+	void tempFakeBottomScreenResolution(){
 	screenWidth = 320;
 	screenHeight = 240;
-}
-void tempFixBottomScreenResolution(){
+	}
+	void tempFixBottomScreenResolution(){
 	screenWidth = 400;
 	screenHeight = 240;
-}
+	}
 #endif
 void DrawMessageText(){
 	#if PLATFORM == PLAT_3DS
@@ -2038,7 +2034,7 @@ void LoadSettings(){
 		printf("Loaded settings file.\n");
 	}
 }
-#define HISTORYSCROLLBARHEIGHT 32
+#define HISTORYSCROLLBARHEIGHT (((double)HISTORYONONESCREEN/(double)MAXMESSAGEHISTORY)*screenHeight)
 void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 	controlsEnd();
 	int _noobHeight = textHeight(fontSize);
@@ -2613,7 +2609,7 @@ int L_Select(lua_State* passedState){
 // Loads a special variable
 int L_LoadValueFromLocalWork(lua_State* passedState){
 	const char* _wordWant = lua_tostring(passedState,1);
-	printf("%s\n",_wordWant);
+	//printf("%s\n",_wordWant);
 	if ( strcmp(_wordWant,"SelectResult")==0){
 		lua_pushnumber(passedState,lastSelectionAnswer);
 	}else{
