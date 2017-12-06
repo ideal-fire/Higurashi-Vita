@@ -1265,7 +1265,7 @@ signed char CheckForUserStuff(){
 	}
 
 	// Check if StreamingAssets folder exists
-	if (presetsAreInStreamingAssets==0){
+	if (presetsAreInStreamingAssets==1){
 		fixPath("StreamingAssets/",globalTempConcat,TYPE_DATA);
 		if (directoryExists((const char*)globalTempConcat)==0){
 			#if PLATFORM  == PLAT_COMPUTER
@@ -1276,7 +1276,7 @@ signed char CheckForUserStuff(){
 				LazyMessage("Your screen resolution is",_tempResWidthString,"by",_tempResHeightString);
 			#endif
 			LazyMessage((const char*)globalTempConcat,"does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the system. Refer to thread for tutorial.");
-			#if USEUMA0==1
+			#if USEUMA0==1 && PLATFORM == PLAT_VITA
 				LazyMessage("uma0:data/HIGURASHI/","doesn't exist either.",NULL,NULL);
 			#endif
 			_oneMissing=1;
@@ -2123,7 +2123,7 @@ void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName){
 
 	strcpy(PRESETFOLDER,DATAFOLDER);
 	strcat(PRESETFOLDER,"Presets/");
-	if (!directoryExists(PRESETFOLDER)){
+	if (!directoryExists(PRESETFOLDER)){ // Check if data folder presets exist
 		strcpy(PRESETFOLDER,DATAFOLDER);
 		strcat(PRESETFOLDER,_streamingAssetsFolderName);
 		strcat(PRESETFOLDER,"/Presets/");
@@ -3933,18 +3933,8 @@ void LoadGameSpecificStupidity(){
 char init_dohappylua(){
 	// Happy.lua contains functions that both Higurashi script files use and my C code
 	char _didLoadHappyLua;
-	#if PLATFORM == PLAT_COMPUTER
-		#if SUBPLATFORM == SUB_ANDROID
-			_didLoadHappyLua = SafeLuaDoFile(L,"/sdcard/HIGURASHI/StreamingAssets/happy.lua",0);
-		#else
-			_didLoadHappyLua = SafeLuaDoFile(L,"./happy.lua",0);
-		#endif
-	#elif PLATFORM == PLAT_VITA
-		_didLoadHappyLua = SafeLuaDoFile(L,"app0:assets/happy.lua",0);
-	#elif PLATFORM == PLAT_3DS
-		fixPath("assets/happy.lua",globalTempConcat,TYPE_EMBEDDED);
-		_didLoadHappyLua = SafeLuaDoFile(L,globalTempConcat,0);
-	#endif
+	fixPath("assets/happy.lua",globalTempConcat,TYPE_EMBEDDED);
+	_didLoadHappyLua = SafeLuaDoFile(L,globalTempConcat,0);
 	lua_sethook(L, incrementScriptLineVariable, LUA_MASKLINE, 5);
 	if (_didLoadHappyLua==0){
 		#if PLATFORM == PLAT_VITA
@@ -3953,29 +3943,6 @@ char init_dohappylua(){
 			LazyMessage("happy.lua missing.",NULL,NULL,NULL);
 		#endif
 	}
-	#if SUBPLATFORM == SUB_ANDROID
-		if (_didLoadHappyLua==1){
-			// This checks the version of happy.lua if the user is on Android
-			// Android users need to put happy.lua on their SD card themselves
-			// I need to make sure they have a compatible version.
-			lua_getglobal(L,"GetHappyLuaVersion");
-			lua_pcall(L,0,1,0);
-			int _returnedHappyVersion = lua_tonumber(L,-1);
-			printf("happy.lua version %d\n", _returnedHappyVersion);
-			if (_returnedHappyVersion<MINHAPPYLUAVERSION){
-				LazyMessage("Your happy.lua file is outdated. Please get it from","https://github.com/MyLegGuy/HigurashiVitaConverter/releases","and put happy.lua at","/sdcard/HIGURASHI/StreamingAssets/happy.lua");
-				char _tempItoa[10];
-				char _tempItoa2[10];
-				itoa(_returnedHappyVersion,_tempItoa,10);
-				itoa(MINHAPPYLUAVERSION,_tempItoa2,10);
-				LazyMessage("By the way, you have happy.lua version",_tempItoa,"and you need happy.lua version",_tempItoa2);
-				return 2;
-			}
-			if (_returnedHappyVersion>MAXHAPPYLUAVERSION){
-				LazyMessage("Your happy.lua file is from the future!","Some things may not work, I don't know.","If you have problems, update the application.",NULL);
-			}
-		}
-	#endif
 	return 0;
 }
 // Please exit if this function returns 2
@@ -4032,7 +3999,7 @@ signed char init(){
 	// Checks if StreamingAssets and stuff exists.
 	// Informs the user if they don't.
 	char _tempCheckResult = CheckForUserStuff();
-	if ((_tempCheckResult==1 && PLATFORM == PLAT_COMPUTER) || _tempCheckResult==2){
+	if (_tempCheckResult==2){
 		return 2;
 	}
 	if (initAudio()==0){

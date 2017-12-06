@@ -2,7 +2,7 @@
 #define GENERALGOODTEXT_H
 // Text Stuff
 	#if TEXTRENDERER == TEXT_FONTCACHE
-		#include <SDL_FontCache.h>
+		//#include <SDL_FontCache.h>
 		#define CrossFont FC_Font
 	#elif TEXTRENDERER == TEXT_DEBUG
 		#define CrossFont CrossTexture

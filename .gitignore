@@ -70,6 +70,7 @@ lib-custom/
 /_Notes/Trash/
 /_Notes/icon3ds_old.png
 build3ds/
+/_Notes/3dsCompile/
 
 # For Windows build
 /lib-custom/

@@ -1,7 +1,3 @@
-// CHANGE THIS WHEN I UPDATE THIS FILE!
-// 1 - for Higurashi-Vita v1.7
-HAPPYFILEVERSION=1;
-
 Line_ContinueAfterTyping=0;
 Line_WaitForInput=1;
 Line_Normal=2;
@@ -9,7 +5,6 @@ NULL=0;
 
 FALSE=false;
 TRUE=true;
-
 
 globalFlags = {};
 globalFlags["GLanguage"]=1;
@@ -30,10 +25,6 @@ function FreeTrash()
 	collectgarbage()
 end
 
-// Returns the version of this very file. This is used for Android.
-function GetHappyLuaVersion()
-	return HAPPYFILEVERSION;
-end
 
 // Sets a global flag for future data stuff
 // If you pass false or true then it will be changed to 0 or 1 
@@ -51,9 +42,7 @@ end
 // Returns 0 if it is an unknown flag
 function GetGlobalFlag(flag)
 	if (globalFlags[flag]==nil) then
-		//print("returning " .. 0 .. " for flag " .. flag)
 		return 0;
 	end
-	//print("returning " .. globalFlags[flag] .. " for flag " .. flag)
 	return globalFlags[flag];
 end
