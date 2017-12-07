@@ -83,12 +83,10 @@
 // Specific constants
 #if PLATFORM != PLAT_3DS
 	#define HISTORYONONESCREEN 13
-	#define MESSAGETEXTXOFFSET 20
 	#define SELECTBUTTONNAME "X"
 	#define BACKBUTTONNAME "O"
 #else
 	#define HISTORYONONESCREEN ((int)((screenHeight-currentTextHeight*2-5)/currentTextHeight))
-	#define MESSAGETEXTXOFFSET 10
 	#define SELECTBUTTONNAME "A"
 	#define BACKBUTTONNAME "B"
 	#define cpuOverclocked textIsBottomScreen
@@ -99,7 +97,7 @@
 #define MAXMUSICARRAY 10
 #define MAXSOUNDEFFECTARRAY 10
 #define IMAGECHARSPACESTRING "   "
-#define MESSAGEEDGEOFFSET MESSAGETEXTXOFFSET
+#define MESSAGEEDGEOFFSET 10
 
 #include "GeneralGoodExtended.h"
 #include "GeneralGood.h"
@@ -295,7 +293,12 @@ int currentTextHeight;
 char isActuallyUsingUma0=0;
 int MAXBUSTS = 9;
 short textboxYOffset=0;
+short textboxXOffset=10;
 CrossTexture* currentCustomTextbox=NULL;
+int outputLineScreenWidth;
+int outputLineScreenHeight;
+int messageInBoxXOffset=0;
+int messageInBoxYOffset=0;
 /*
 ====================================================
 */
@@ -358,9 +361,10 @@ void DrawMessageBox(){
 	#endif
 	//if (filterActive==0){
 	if (currentCustomTextbox==NULL){
-		drawRectangle(0,0,screenWidth,screenHeight,0,0,0,MessageBoxAlpha);
+		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,MessageBoxAlpha);
 	}else{
-		drawTexture(currentCustomTextbox,0,textboxYOffset);
+		//drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (float)(outputLineScreenWidth-textboxXOffset)/(float)getTextureWidth(currentCustomTextbox), 1);
+		drawTexture(currentCustomTextbox,textboxXOffset,textboxYOffset);
 	}
 	//}
 }
@@ -548,16 +552,6 @@ void SetAllMusicVolume(int _passedFixedVolume){
 int GetNextCharOnLine(int _linenum){
 	return u_strlen(currentMessages[_linenum]);
 }
-#if PLATFORM == PLAT_3DS
-	void tempFakeBottomScreenResolution(){
-	screenWidth = 320;
-	screenHeight = 240;
-	}
-	void tempFixBottomScreenResolution(){
-	screenWidth = 400;
-	screenHeight = 240;
-	}
-#endif
 void DrawMessageText(){
 	#if PLATFORM == PLAT_3DS
 		if (textIsBottomScreen==1){
@@ -568,7 +562,7 @@ void DrawMessageText(){
 	int i;
 	for (i = 0; i < 15; i++){
 		//printf("%s\n",currentMessages[i]);
-		goodDrawText(MESSAGETEXTXOFFSET,12-currentTextHeight+textboxYOffset+currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+		goodDrawText(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12-currentTextHeight+textboxYOffset+currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 	}
 	for (i=0;i<MAXIMAGECHAR;i++){
 		if (imageCharType[i]!=-1){
@@ -1396,6 +1390,14 @@ void LocationStringFallback(char** tempstringconcat, const char* filename){
 		}
 	}
 }
+void updateTextPositions(CrossTexture* _passedBackground){
+	if (gameTextDisplayMode == TEXTMODE_AVD){
+		if (_passedBackground!=NULL){
+			textboxXOffset = floor((float)(screenWidth-getTextureWidth(_passedBackground))/2);
+			outputLineScreenWidth = screenWidth - textboxXOffset;
+		}
+	}
+}
 void DrawScene(const char* _filename, int time){
 	if (isSkipping==1){
 		time=0;
@@ -1420,7 +1422,7 @@ void DrawScene(const char* _filename, int time){
 	LocationStringFallback(&tempstringconcat,_filename);
 	CrossTexture* newBackground = SafeLoadPNG(tempstringconcat);
 	free(tempstringconcat);
-
+	updateTextPositions(newBackground);
 	while (_backgroundAlpha<255){
 		FpsCapStart();
 
@@ -1650,11 +1652,6 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 	free(tempstringconcat);
 }
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
-	#if PLATFORM == PLAT_3DS
-		if (textIsBottomScreen==1){
-			tempFakeBottomScreenResolution();
-		}
-	#endif
 	if (strlen(_tempMsg)==0){
 		return;
 	}
@@ -1689,7 +1686,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		if (message[i]==32){ // Only check when we meet a space. 32 is a space in ASCII
 			message[i]='\0';
 			// Check if the text has gone past the end of the screen OR we're out of array space for this line
-			if (textWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET || i-lastNewlinePosition>=SINGLELINEARRAYSIZE-1){
+			if (textWidth(fontSize,&(message[lastNewlinePosition+1]))>=outputLineScreenWidth-textboxXOffset-MESSAGEEDGEOFFSET-messageInBoxXOffset || i-lastNewlinePosition>=SINGLELINEARRAYSIZE-1){
 				char _didWork=0;
 				for (j=i-1;j>lastNewlinePosition+1;j--){
 					//printf("J:%d, M:%c\n",j,message[j]);
@@ -1749,7 +1746,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 					message[i]=0; // So we can use textWidth
 					for (j=0;j<MAXIMAGECHAR;j++){
 						if (imageCharType[j]==-1){
-							imageCharX[j] = textWidth(fontSize,&(message[lastNewlinePosition+1]))+MESSAGETEXTXOFFSET;
+							imageCharX[j] = textWidth(fontSize,&(message[lastNewlinePosition+1]))+textboxXOffset;
 							imageCharY[j] = textHeight(fontSize)*currentLine+textHeight(fontSize);
 							imageCharLines[j] = currentLine;
 							message[i]='\0';
@@ -1773,7 +1770,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		LastLineLazyFix(&currentLine);
 	}
 	// This code will make a new line if there needs to be one because of the last word
-	if (textWidth(fontSize,&(message[lastNewlinePosition+1]))>=screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET){
+	if (textWidth(fontSize,&(message[lastNewlinePosition+1]))>=outputLineScreenWidth-textboxXOffset-MESSAGEEDGEOFFSET-messageInBoxXOffset){
 		char _didWork=0;
 		for (j=totalMessageLength-1;j>lastNewlinePosition+1;j--){
 			if (message[j]==32){
@@ -1796,7 +1793,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			for (i=lastNewlinePosition+1;i<totalMessageLength;i++){
 				char _tempCharCache = message[i];
 				message[i]='\0';
-				if (textWidth(fontSize,&(message[lastNewlinePosition+1]))>screenWidth-MESSAGETEXTXOFFSET-MESSAGEEDGEOFFSET){
+				if (textWidth(fontSize,&(message[lastNewlinePosition+1]))>outputLineScreenWidth-textboxXOffset-MESSAGEEDGEOFFSET-messageInBoxXOffset){
 					// What this means is that when only the string UP TO the last character was small enough. Now we have to replicate the behavior of the previous loop to get the shorter string.
 					char _tempCharCache2 = message[i-1];
 					message[i-1]='\0';
@@ -1819,9 +1816,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
 	}
 	LastLineLazyFix(&currentLine);
-	#if PLATFORM == PLAT_3DS
-		tempFixBottomScreenResolution();
-	#endif
 	while(_isDone==0){
 		#if PLATFORM != PLAT_VITA
 			FpsCapStart();
@@ -1870,7 +1864,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			char _tempCharCache = currentMessages[_currentDrawLine][_currentDrawChar+1];
 			currentMessages[_currentDrawLine][_currentDrawChar+1]='\0';
 			for (i = 0; i <= _currentDrawLine; i++){
-				goodDrawText(MESSAGETEXTXOFFSET,12-currentTextHeight+textboxYOffset+currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+				goodDrawText(textboxXOffset+messageInBoxXOffset,12+messageInBoxYOffset-currentTextHeight+textboxYOffset+currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 			}
 			currentMessages[_currentDrawLine][_currentDrawChar+1]=_tempCharCache;
 			for (i=0;i<MAXIMAGECHAR;i++){
@@ -2030,11 +2024,16 @@ void LoadSettings(){
 			#if PLATFORM == PLAT_VITA
 				scePowerSetArmClockFrequency(444);
 			#endif
+			#if PLATFORM == PLAT_3DS
+				outputLineScreenWidth = 320;
+				outputLineScreenHeight = 240;
+			#endif
 		}
 		printf("Loaded settings file.\n");
 	}
 }
 #define HISTORYSCROLLBARHEIGHT (((double)HISTORYONONESCREEN/(double)MAXMESSAGEHISTORY)*screenHeight)
+#define HISTORYSCROLLRATE (floor((double)MAXMESSAGEHISTORY/15))
 void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 	controlsEnd();
 	int _noobHeight = textHeight(fontSize);
@@ -2046,14 +2045,14 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 		FpsCapStart();
 
 		controlsStart();
-		if (wasJustPressed(SCE_CTRL_UP)){
-			_scrollOffset--;
+		if (wasJustPressed(SCE_CTRL_UP) || wasJustPressed(SCE_CTRL_LEFT)){
+			_scrollOffset-=wasJustPressed(SCE_CTRL_LEFT) ? HISTORYSCROLLRATE*2 : HISTORYSCROLLRATE;;
 			if (_scrollOffset<0){
 				_scrollOffset=0;
 			}
 		}
-		if (wasJustPressed(SCE_CTRL_DOWN)){
-			_scrollOffset++;
+		if (wasJustPressed(SCE_CTRL_DOWN) || wasJustPressed(SCE_CTRL_RIGHT)){
+			_scrollOffset+=wasJustPressed(SCE_CTRL_RIGHT) ? HISTORYSCROLLRATE*2 : HISTORYSCROLLRATE;
 			if (_scrollOffset>MAXMESSAGEHISTORY-HISTORYONONESCREEN){
 				_scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
 			}
@@ -2084,7 +2083,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 
 		drawRectangle(0,0,screenWidth,screenHeight,0,230,255,200);
 		for (i = 0; i < HISTORYONONESCREEN; i++){
-			goodDrawTextColored(MESSAGETEXTXOFFSET,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
+			goodDrawTextColored(textboxXOffset,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
 		}
 		goodDrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
 		goodDrawTextColored(screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, "BACKBUTTONNAME" to return",fontSize,0,0,0);
@@ -3359,6 +3358,15 @@ void SettingsMenu(){
 			LazyMessage("You changed the character art location.","The next time a character is loaded,","it will load from",locationStrings[graphicsLocation]);
 		}
 	}
+	#if PLATFORM == PLAT_3DS
+		if (textIsBottomScreen==1){
+			outputLineScreenWidth = 320;
+			outputLineScreenHeight = 240;
+		}else{
+			outputLineScreenWidth = 400;
+			outputLineScreenHeight = 240;
+		}
+	#endif
 }
 void TitleScreen(){
 	signed char _choice=0;
@@ -3896,6 +3904,8 @@ void LoadGameSpecificSettings(){
 		fgets(line, sizeof(line), fp);
 		if (line[0]=='1'){
 			gameTextDisplayMode=TEXTMODE_AVD;
+			messageInBoxXOffset=15;
+			messageInBoxYOffset=4;
 		}
 		fgets(line, sizeof(line), fp);
 		if (line[0]=='1'){
@@ -3948,6 +3958,9 @@ signed char init(){
 	int i=0;
 	initGraphics(960,544,&screenWidth,&screenHeight);
 	setClearColor(0,0,0,255);
+
+	outputLineScreenWidth = screenWidth;
+	outputLineScreenHeight = screenHeight;
 
 	// Make buffers for busts
 	Busts = calloc(1,sizeof(bust)*MAXBUSTS);
