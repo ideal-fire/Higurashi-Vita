@@ -359,14 +359,11 @@ void DrawMessageBox(){
 			return;
 		}
 	#endif
-	//if (filterActive==0){
 	if (currentCustomTextbox==NULL){
 		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,MessageBoxAlpha);
 	}else{
-		//drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (float)(outputLineScreenWidth-textboxXOffset)/(float)getTextureWidth(currentCustomTextbox), 1);
-		drawTexture(currentCustomTextbox,textboxXOffset,textboxYOffset);
+		drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (float)(outputLineScreenWidth-textboxXOffset)/(float)getTextureWidth(currentCustomTextbox), 1);
 	}
-	//}
 }
 void DrawCurrentFilter(){
 	drawRectangle(0,0,screenWidth,screenHeight,filterR,filterG,filterB,filterA);
