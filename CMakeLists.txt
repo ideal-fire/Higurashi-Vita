@@ -12,7 +12,7 @@ set(SHORT_NAME HIGURASHI)
 project(${SHORT_NAME})
 include("${VITASDK}/share/vita.cmake" REQUIRED)
 
-set(VITA_APP_NAME "Higurahsi When They Cry Hou") # Can change this when Meakashi is added
+set(VITA_APP_NAME "Higurahsi When They Cry Hou")
 set(VITA_TITLEID  "HIGURASHI")
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -std=gnu11")

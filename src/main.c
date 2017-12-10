@@ -1,9 +1,4 @@
 /*
-	TODO - Inversion
-		I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
-	
-	TODO - These are films. Look at the DrawFilm function please.
-		TODO - The functions I made don't work well for some reason.
 	
 	(OPTIONAL TODO)
 		TODO - (optional) Garbage collector won't collect functions made in script files??? i.e: function hima_tips_09_b()
@@ -22,10 +17,12 @@
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
-
+		TODO - Inversion
+			I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
 	(Bonus TODO)
 		TODO - Add voices to the text log
 		TODO - app0 mode option
+	TODO - ADV mode for converter
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -85,11 +82,13 @@
 	#define HISTORYONONESCREEN 13
 	#define SELECTBUTTONNAME "X"
 	#define BACKBUTTONNAME "O"
+	#define ADVBOXHEIGHT 181
 #else
 	#define HISTORYONONESCREEN ((int)((screenHeight-currentTextHeight*2-5)/currentTextHeight))
 	#define SELECTBUTTONNAME "A"
 	#define BACKBUTTONNAME "B"
 	#define cpuOverclocked textIsBottomScreen
+	#define ADVBOXHEIGHT 75
 #endif
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
@@ -108,10 +107,11 @@
 #include "GeneralGood.h"
 #include "FpsCapper.h"
 
+// System string
 #if __UNIX__
-	#define SYSTEMSTRING "Linux"
+	#define SYSTEMSTRING "LINUX"
 #elif __WIN32__
-	#define SYSTEMSTRING "Windows"
+	#define SYSTEMSTRING "WINDOWS"
 #elif __vita__
 	#define SYSTEMSTRING "VITA"
 #elif _3DS
@@ -297,8 +297,10 @@ short textboxXOffset=10;
 CrossTexture* currentCustomTextbox=NULL;
 int outputLineScreenWidth;
 int outputLineScreenHeight;
-int messageInBoxXOffset=0;
+int messageInBoxXOffset=10;
 int messageInBoxYOffset=0;
+// 1 by default to retain compatibility with games converted before game specific Lua 
+char gameHasTips=1;
 /*
 ====================================================
 */
@@ -362,7 +364,7 @@ void DrawMessageBox(){
 	if (currentCustomTextbox==NULL){
 		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,MessageBoxAlpha);
 	}else{
-		drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (float)(outputLineScreenWidth-textboxXOffset)/(float)getTextureWidth(currentCustomTextbox), 1);
+		drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (float)(outputLineScreenWidth-textboxXOffset)/(float)getTextureWidth(currentCustomTextbox), (float)(ADVBOXHEIGHT)/(float)getTextureHeight(currentCustomTextbox));
 	}
 }
 void DrawCurrentFilter(){
@@ -550,16 +552,23 @@ int GetNextCharOnLine(int _linenum){
 	return u_strlen(currentMessages[_linenum]);
 }
 void DrawMessageText(){
+	int i;
 	#if PLATFORM == PLAT_3DS
 		if (textIsBottomScreen==1){
 			startDrawingBottom();
+			for (i = 0; i < 15; i++){
+				goodDrawText(0,12+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+			}
+			for (i=0;i<MAXIMAGECHAR;i++){
+				if (imageCharType[i]!=-1){
+					drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i]-textboxXOffset-messageInBoxXOffset,imageCharY[i]-messageInBoxYOffset-textboxYOffset,((double)textWidth(fontSize,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
+				}
+			}
+			return;
 		}
 	#endif
-	//system("cls");
-	int i;
 	for (i = 0; i < 15; i++){
-		//printf("%s\n",currentMessages[i]);
-		goodDrawText(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12-currentTextHeight+textboxYOffset+currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+		goodDrawText(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 	}
 	for (i=0;i<MAXIMAGECHAR;i++){
 		if (imageCharType[i]!=-1){
@@ -852,6 +861,23 @@ int FixHistoryOldSub(int _val, int _scroll){
 void incrementScriptLineVariable(lua_State *L, lua_Debug *ar){
 	currentScriptLine++;
 }
+void updateControlsGeneral(){
+	if (wasJustPressed(SCE_CTRL_SQUARE)){
+		isSkipping=1;
+		endType=Line_ContinueAfterTyping;
+	}
+	if (wasJustPressed(SCE_CTRL_TRIANGLE)){
+		SettingsMenu();
+	}
+	if (wasJustPressed(SCE_CTRL_SELECT)){
+		PlayMenuSound();
+		if (autoModeOn==1){
+			autoModeOn=0;
+		}else{
+			autoModeOn=1;
+		}
+	}
+}
 void outputLineWait(){
 	//if (currentGameStatus==GAMESTATUS_MAINGAME){
 	if (isSkipping==1){
@@ -894,21 +920,7 @@ void outputLineWait(){
 				_didPressCircle=1;
 			}
 		}
-		if (wasJustPressed(SCE_CTRL_SQUARE)){
-			isSkipping=1;
-			endType=Line_ContinueAfterTyping;
-		}
-		if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-			SettingsMenu();
-		}
-		if (wasJustPressed(SCE_CTRL_SELECT)){
-			PlayMenuSound();
-			if (autoModeOn==1){
-				autoModeOn=0;
-			}else{
-				autoModeOn=1;
-			}
-		}
+		updateControlsGeneral();
 		if (wasJustPressed(SCE_CTRL_START)){
 			DrawHistory(messageHistory);
 		}
@@ -916,8 +928,6 @@ void outputLineWait(){
 		FpsCapWait();
 		if (autoModeOn==1){
 			if (getTicks()>=(_inBetweenLinesMilisecondsStart+autoModeWait)){
-				// TODO - Does this is happy?
-				//MessageBoxEnabled=1;
 				endType = Line_ContinueAfterTyping;
 			}
 		}
@@ -1388,12 +1398,22 @@ void LocationStringFallback(char** tempstringconcat, const char* filename){
 	}
 }
 void updateTextPositions(CrossTexture* _passedBackground){
+	WriteToDebugFile("1");
 	if (gameTextDisplayMode == TEXTMODE_AVD){
-		if (_passedBackground!=NULL){
+		WriteToDebugFile("2");
+		if (_passedBackground!=NULL && currentCustomTextbox!=NULL){
+			WriteToDebugFile("3");
 			textboxXOffset = floor((float)(screenWidth-getTextureWidth(_passedBackground))/2);
+			WriteIntToDebugFile(textboxXOffset);
 			outputLineScreenWidth = screenWidth - textboxXOffset;
 		}
 	}
+	#if PLATFORM == PLAT_3DS
+		if (textIsBottomScreen==1){
+			outputLineScreenWidth=320;
+			outputLineScreenHeight=240;
+		}
+	#endif
 }
 void DrawScene(const char* _filename, int time){
 	if (isSkipping==1){
@@ -1743,8 +1763,8 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 					message[i]=0; // So we can use textWidth
 					for (j=0;j<MAXIMAGECHAR;j++){
 						if (imageCharType[j]==-1){
-							imageCharX[j] = textWidth(fontSize,&(message[lastNewlinePosition+1]))+textboxXOffset;
-							imageCharY[j] = textHeight(fontSize)*currentLine+textHeight(fontSize);
+							imageCharX[j] = textWidth(fontSize,&(message[lastNewlinePosition+1]))+textboxXOffset+messageInBoxXOffset;
+							imageCharY[j] = messageInBoxYOffset+12+textboxYOffset+currentLine*(currentTextHeight);
 							imageCharLines[j] = currentLine;
 							message[i]='\0';
 							imageCharCharPositions[j] = strlenNO1(&(message[lastNewlinePosition+1]));
@@ -1813,6 +1833,18 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
 	}
 	LastLineLazyFix(&currentLine);
+	#if PLATFORM == PLAT_3DS
+		int _oldMessageXOffset=textboxXOffset;
+		int _oldMessageInBoxXOffset=messageInBoxXOffset;
+		int _oldMessageYOffset=textboxYOffset;
+		int _oldMessageInBoxYOffset=messageInBoxYOffset;
+		if (textIsBottomScreen==1){
+			textboxXOffset=0;
+			messageInBoxXOffset=0;
+			textboxYOffset=0;
+			messageInBoxYOffset=0;
+		}
+	#endif
 	while(_isDone==0){
 		#if PLATFORM != PLAT_VITA
 			FpsCapStart();
@@ -1828,6 +1860,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		if (wasJustPressed(SCE_CTRL_CROSS) || capEnabled==0){
 			_isDone=1;
 		}
+		updateControlsGeneral();
 		controlsEnd();
 		
 		startDrawing();
@@ -1861,7 +1894,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			char _tempCharCache = currentMessages[_currentDrawLine][_currentDrawChar+1];
 			currentMessages[_currentDrawLine][_currentDrawChar+1]='\0';
 			for (i = 0; i <= _currentDrawLine; i++){
-				goodDrawText(textboxXOffset+messageInBoxXOffset,12+messageInBoxYOffset-currentTextHeight+textboxYOffset+currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+				goodDrawText(textboxXOffset+messageInBoxXOffset,12+messageInBoxYOffset+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 			}
 			currentMessages[_currentDrawLine][_currentDrawChar+1]=_tempCharCache;
 			for (i=0;i<MAXIMAGECHAR;i++){
@@ -1892,7 +1925,14 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			FpsCapWait();
 		#endif
 	}
-
+	#if PLATFORM == PLAT_3DS
+		if (textIsBottomScreen==1){
+			textboxXOffset=_oldMessageXOffset;
+			messageInBoxXOffset=_oldMessageInBoxXOffset;
+			textboxYOffset=_oldMessageYOffset;
+			messageInBoxYOffset=_oldMessageInBoxYOffset;
+		}
+	#endif
 	// End of function
 	endType = _endtypetemp;
 }
@@ -2030,7 +2070,8 @@ void LoadSettings(){
 	}
 }
 #define HISTORYSCROLLBARHEIGHT (((double)HISTORYONONESCREEN/(double)MAXMESSAGEHISTORY)*screenHeight)
-#define HISTORYSCROLLRATE (floor((double)MAXMESSAGEHISTORY/15))
+//#define HISTORYSCROLLRATE (floor((double)MAXMESSAGEHISTORY/15))
+#define HISTORYSCROLLRATE 1
 void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 	controlsEnd();
 	int _noobHeight = textHeight(fontSize);
@@ -2078,13 +2119,14 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 			}
 		}
 
-		drawRectangle(0,0,screenWidth,screenHeight,0,230,255,200);
+		drawRectangle(textboxXOffset,0,outputLineScreenWidth-textboxXOffset,screenHeight,0,230,255,200);
 		for (i = 0; i < HISTORYONONESCREEN; i++){
 			goodDrawTextColored(textboxXOffset,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
 		}
-		goodDrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
-		goodDrawTextColored(screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, "BACKBUTTONNAME" to return",fontSize,0,0,0);
-
+		if (outputLineScreenWidth == screenWidth){
+			goodDrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",fontSize,0,0,0);
+			goodDrawTextColored(screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, "BACKBUTTONNAME" to return",fontSize,0,0,0);
+		}
 		drawRectangle((screenWidth-5),0,5,screenHeight,0,0,0,255);
 		drawRectangle((screenWidth-5),floor((screenHeight-HISTORYSCROLLBARHEIGHT)*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,HISTORYSCROLLBARHEIGHT,255,0,0,255);
 
@@ -2142,6 +2184,47 @@ void UpdatePresetStreamingAssetsDir(char* filename){
 		strcat(_tempNewStreamingAssetsPathbuffer,filename);
 		GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer);
 	}
+}
+void RunGameSpecificLua(){
+	char _completedSpecificLuaPath[strlen(SCRIPTFOLDER)+strlen("_GameSpecific.lua")+1];
+	strcpy(_completedSpecificLuaPath,SCRIPTFOLDER);
+	strcat(_completedSpecificLuaPath,"_GameSpecific.lua");
+	if (checkFileExist(_completedSpecificLuaPath)){
+		printf("Game specific LUA found.");
+		luaL_dofile(L,_completedSpecificLuaPath);
+	}
+}
+void generateADVBoxPath(char* _passedStringBuffer, char* _passedSystemString){
+	strcpy(_passedStringBuffer,STREAMINGASSETS);
+	strcat(_passedStringBuffer,"GameSpecificAdvBox");
+	strcat(_passedStringBuffer,_passedSystemString);
+	strcat(_passedStringBuffer,".png");
+}
+void loadADVBox(){
+	if (currentCustomTextbox==NULL){
+		freeTexture(currentCustomTextbox);
+		currentCustomTextbox=NULL;
+	}
+	char _tempFilepathBuffer[strlen(STREAMINGASSETS)+strlen("GameSpecificAdvBox.png")+( strlen("DEFAULT")>strlen(SYSTEMSTRING) ? strlen("DEFAULT") : strlen(SYSTEMSTRING) )+1];
+	generateADVBoxPath(_tempFilepathBuffer,SYSTEMSTRING);
+	if (!checkFileExist(_tempFilepathBuffer)){
+		generateADVBoxPath(_tempFilepathBuffer,"DEFAULT");
+	}
+	if (checkFileExist(_tempFilepathBuffer)){
+		currentCustomTextbox = loadPNG(_tempFilepathBuffer);
+	}else{
+		#if PLATFORM != PLAT_3DS
+			currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBox.png");
+		#else
+			currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBoxLowRes.png");
+		#endif
+	}
+	//textboxYOffset=screenHeight - getTextureHeight(currentCustomTextbox);
+	textboxYOffset=screenHeight - ADVBOXHEIGHT;
+}
+void LoadGameSpecificStupidity(){
+	TryLoadMenuSoundEffect();
+	RunGameSpecificLua();
 }
 #if PLATFORM == PLAT_VITA
 	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
@@ -2674,6 +2757,22 @@ int L_DebugFile(lua_State* passedState){
 	WriteToDebugFile(lua_tostring(passedState,1));
 	return 0;
 }
+int L_OptionsEnableVoiceSetting(lua_State* passedState){
+	hasOwnVoiceSetting=1;
+	return 0;
+}
+int L_OptionsSetTextMode(lua_State* passedState){
+	gameTextDisplayMode = lua_tonumber(passedState,1);
+	return 0;
+}
+int L_LoadADVBox(lua_State* passedState){
+	loadADVBox();
+	return 0;
+}
+int L_OptionsSetTips(lua_State* passedState){
+	gameHasTips=lua_toboolean(passedState,1);
+	return 0;
+}
 void MakeLuaUseful(){
 	LUAREGISTER(L_OutputLine,"OutputLine")
 	LUAREGISTER(L_ClearMessage,"ClearMessage")
@@ -2710,6 +2809,12 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_DisplayWindow,"DisplayWindow")
 	LUAREGISTER(L_MoveBust,"MoveBust")
 
+	// Custom stuff
+	LUAREGISTER(L_OptionsEnableVoiceSetting,"OptionsEnableVoiceSetting");
+	LUAREGISTER(L_LoadADVBox,"OptionsLoadADVBox");
+	LUAREGISTER(L_OptionsSetTextMode,"OptionsSetTextMode");
+	LUAREGISTER(L_OptionsSetTips,"OptionsSetTipExist");
+
 	// Functions that do nothing
 	LUAREGISTER(L_NotYet,"SetFontId")
 	LUAREGISTER(L_NotYet,"SetCharSpacing")
@@ -2721,11 +2826,10 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_NotYet,"SetWindowSize")
 	LUAREGISTER(L_NotYet,"SetWindowMargins")
 	LUAREGISTER(L_NotYet,"SetGUIPosition")
-	
 	LUAREGISTER(L_NotYet,"SetValidityOfSaving")
 	LUAREGISTER(L_NotYet,"SetValidityOfLoading")
 
-	//  TEMP
+	// Functions I should implement
 	LUAREGISTER(L_NotYet,"SetSpeedOfMessage")
 	LUAREGISTER(L_NotYet,"ShakeScreen")
 	LUAREGISTER(L_NotYet,"ShakeScreenSx")
@@ -2734,13 +2838,10 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_NotYet,"SetValidityOfWindowDisablingWhenGraphicsControl")
 	LUAREGISTER(L_NotYet,"EnableJumpingOfReturnIcon")
 	LUAREGISTER(L_NotYet,"StopSE")
-
 	LUAREGISTER(L_NotYet,"SetValidityOfTextFade")
-	
 	LUAREGISTER(L_NotYet,"SetValidityOfSkipping")
 	LUAREGISTER(L_NotYet,"GetAchievement")
 	LUAREGISTER(L_NotYet,"SetFontOfMessage")
-	
 	LUAREGISTER(L_NotYet,"ActivateScreenEffectForcedly")
 	LUAREGISTER(L_NotYet,"SetValidityOfUserEffectSpeed")
 	LUAREGISTER(L_NotYet,"Negative") // Command for color inversion
@@ -3500,7 +3601,7 @@ void TipMenu(){
 	}
 	// The number for the tip the user has selected. Starts at 1. Subtract 1 if using this for an array
 	unsigned char _chosenTip=1;
-	char _chosenTipString[4]={48,0,0,0};
+	char _chosenTipString[4]={49,0,0,0};
 	char _chosenTipStringMax[4]={48,0,0,0};
 	itoa(currentPresetTipUnlockList.theArray[currentPresetChapter],&(_chosenTipStringMax[0]),10);
 	tipMenuChangeDisplay(currentPresetTipNameList.theArray[_chosenTip-1],_chosenTipString,_chosenTipStringMax);
@@ -3551,7 +3652,9 @@ void TipMenu(){
 			controlsEnd();
 			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			currentGameStatus=GAMESTATUS_TIPMENU;
-			break;
+			// Fix display after it's been cleared by the TIP
+			itoa(_chosenTip,&(_chosenTipString[0]),10);
+			tipMenuChangeDisplay(currentPresetTipNameList.theArray[_chosenTip-1],_chosenTipString,_chosenTipStringMax);
 		}
 		if (wasJustPressed(SCE_CTRL_CIRCLE)){
 			ChangeEasyTouchMode(TOUCHMODE_MENU);
@@ -3564,20 +3667,10 @@ void TipMenu(){
 		}
 		controlsEnd();
 		startDrawing();
-		//goodDrawText(32,5+currentTextHeight*(0+2),"Tip: ",fontSize);
-		//goodDrawText(32+_tipcollinwidth,5+currentTextHeight*(0+2),_totalSelectedString,fontSize);
 		for (i = 0; i < 3; i++){
-			//printf("%s\n",currentMessages[i]);
 			goodDrawText(32,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 		}
-
-		//goodDrawText(32,currentTextHeight*5,"View TIP",fontSize);
-		//goodDrawText(32,currentTextHeight*6,"Back",fontSize);
-
-		//goodDrawText(5,(_choice+5)*currentTextHeight,">",fontSize);
-
 		goodDrawText(5,screenHeight-5-currentTextHeight*3,"Left and Right - Change TIP",fontSize);
-		//goodDrawText(5,screenHeight-5-currentTextHeight*3,"Up and Down - Select option",fontSize);
 		goodDrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back",fontSize);
 		goodDrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select",fontSize);
 
@@ -3745,12 +3838,32 @@ void NavigationMenu(){
 	}else{
 		// This is the default value. I just put this line of code here so I can remember
 		_nextChapterExist=0;
-		// Start on the first choice because "next" doesn't exist
-		_choice=1;
 	}
 
 	unsigned char _codeProgress=0;
-
+	char _maxListSlot=1; // For chapter jump and exit
+	if (_nextChapterExist==1){
+		_maxListSlot++;
+	}
+	if (gameHasTips==1){
+		_maxListSlot++;
+	}
+	char _nextButtonSlot, _chapterButtonSlot, _tipButtonSlot, _quitButtonSlot, _slotAssignIndex = 0;
+	if (_nextChapterExist==1){
+		_nextButtonSlot=_slotAssignIndex;
+		_slotAssignIndex++;
+	}else{
+		_nextButtonSlot=99;
+	}
+	_chapterButtonSlot = _slotAssignIndex;
+	_slotAssignIndex++;
+	if (gameHasTips==1){
+		_tipButtonSlot=_slotAssignIndex;
+		_slotAssignIndex++;
+	}else{
+		_tipButtonSlot=99;
+	}
+	_quitButtonSlot=_slotAssignIndex;
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
 		controlsStart();
@@ -3762,7 +3875,6 @@ void NavigationMenu(){
 			if (wasJustPressed(SCE_CTRL_DOWN)){
 				_codeProgress = Password(_codeProgress,1);
 			}
-			//int Password(int val, int _shouldHave){
 			if (wasJustPressed(SCE_CTRL_LEFT)){
 				_codeProgress = Password(_codeProgress,2);
 			}
@@ -3778,24 +3890,18 @@ void NavigationMenu(){
 
 		if (wasJustPressed(SCE_CTRL_DOWN)){
 			_choice++;
-			if (_choice>3){
+			if (_choice>_maxListSlot){
 				_choice=0;
-				if (_nextChapterExist==0){
-					_choice=1;
-				}
 			}
 		}
 		if (wasJustPressed(SCE_CTRL_UP)){
 			_choice--;
 			if (_choice<0){
-				_choice=3;
-			}
-			if (_choice==0 && _nextChapterExist==0){
-				_choice=3;
+				_choice=_maxListSlot;
 			}
 		}
 		if (wasJustPressed(SCE_CTRL_CROSS)){
-			if (_choice==0){
+			if (_choice==_nextButtonSlot){
 				printf("Go to next chapter\n");
 				if (currentPresetChapter+1==currentPresetFileList.length){
 					LazyMessage("There is no next chapter.", NULL, NULL, NULL);
@@ -3807,18 +3913,17 @@ void NavigationMenu(){
 					currentGameStatus=GAMESTATUS_MAINGAME;
 					break;
 				}
-			}else if (_choice==1){
+			}else if (_choice==_chapterButtonSlot){
 				ChapterJump();
-			}else if (_choice==2){
+			}else if (_choice==_tipButtonSlot){
 				printf("Viewing tips\n");
 				currentGameStatus=GAMESTATUS_TIPMENU;
 				controlsEnd();
 				#if PLAYTIPMUSIC == 1
 					PlayBGM("lsys14",256);
 				#endif
-
 				break;
-			}else if (_choice==3){
+			}else if (_choice==_quitButtonSlot){
 				printf("Exiting\n");
 				currentGameStatus=GAMESTATUS_QUIT;
 				break;
@@ -3835,12 +3940,19 @@ void NavigationMenu(){
 		}else{
 			goodDrawText(_endofscriptwidth+32,0,currentPresetFileFriendlyList.theArray[currentPresetChapter],fontSize);
 		}
+
+		char _currentListDrawPosition=0;
 		if (_nextChapterExist==1){
-			goodDrawText(32,5+currentTextHeight*(0+2),"Next",fontSize);
+			goodDrawText(32,5+currentTextHeight*(_currentListDrawPosition+2),"Next",fontSize);
+			_currentListDrawPosition++;
 		}
-		goodDrawText(32,5+currentTextHeight*(1+2),"Chapter Jump",fontSize);
-		goodDrawText(32,5+currentTextHeight*(2+2),"View Tips",fontSize);
-		goodDrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
+		goodDrawText(32,5+currentTextHeight*(_currentListDrawPosition+2),"Chapter Jump",fontSize);
+		if (gameHasTips==1){
+			_currentListDrawPosition++;
+			goodDrawText(32,5+currentTextHeight*(_currentListDrawPosition+2),"View Tips",fontSize);
+		}
+		_currentListDrawPosition++;
+		goodDrawText(32,5+currentTextHeight*(_currentListDrawPosition+2),"Exit",fontSize);
 		goodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
 		endDrawing();
 		FpsCapWait();
@@ -3876,58 +3988,6 @@ void NewGameMenu(){
 		endDrawing();
 
 		FpsCapWait();
-	}
-}
-void RunGameSpecificLua(){
-	char _completedSpecificLuaPath[strlen(SCRIPTFOLDER)+strlen("_GameSpecific.lua")+1];
-	strcpy(_completedSpecificLuaPath,SCRIPTFOLDER);
-	strcat(_completedSpecificLuaPath,"_GameSpecific.lua");
-	if (checkFileExist(_completedSpecificLuaPath)){
-		printf("Game specific LUA found.");
-		luaL_dofile(L,_completedSpecificLuaPath);
-	}
-}
-// Load from the file
-// Format:
-// is adv mode? ( 0 or 1 )
-// is seperate voice control? ( 0 or 1 )
-void LoadGameSpecificSettings(){
-	char _tempSettingsFilePathBuffer[strlen(STREAMINGASSETS)+strlen("GameSettings.txt")+1];
-	strcpy(_tempSettingsFilePathBuffer,STREAMINGASSETS);
-	strcat(_tempSettingsFilePathBuffer,"GameSettings.txt");
-	if (checkFileExist(_tempSettingsFilePathBuffer)){
-		FILE* fp = fopen(_tempSettingsFilePathBuffer, "r");
-		char line[10];
-		fgets(line, sizeof(line), fp);
-		if (line[0]=='1'){
-			gameTextDisplayMode=TEXTMODE_AVD;
-			messageInBoxXOffset=15;
-			messageInBoxYOffset=4;
-		}
-		fgets(line, sizeof(line), fp);
-		if (line[0]=='1'){
-			hasOwnVoiceSetting=1;
-		}
-		fclose(fp);
-	}
-}
-void LoadAdvBox(){
-	char _tempFilepathBuffer[strlen(STREAMINGASSETS)+strlen("GameSpecificAdvBox.png")+1];
-	strcpy(_tempFilepathBuffer,STREAMINGASSETS);
-	strcat(_tempFilepathBuffer,"GameSpecificAdvBox.png");
-	if (checkFileExist(_tempFilepathBuffer)){
-		currentCustomTextbox = loadPNG(_tempFilepathBuffer);
-	}else{
-		currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBox.png");;
-	}
-	textboxYOffset=363;
-}
-void LoadGameSpecificStupidity(){
-	TryLoadMenuSoundEffect();
-	LoadGameSpecificSettings();
-	RunGameSpecificLua();
-	if (gameTextDisplayMode == TEXTMODE_AVD){
-		LoadAdvBox();
 	}
 }
 // =====================================================
@@ -4042,7 +4102,7 @@ signed char init(){
 		ResetBustStruct(&(Busts[i]),0);
 	}
 
-	#if PLATFORM == PLAT_VITA
+	#if PLATFORM == PLAT_VITA && SOUNDPLAYER == SND_SOLOUD
 		// Create the protection thread.
 		if (pthread_create(&soundProtectThreadId, NULL, &soundProtectThread, NULL) != 0){
 			return 2;

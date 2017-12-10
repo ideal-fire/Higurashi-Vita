@@ -1,3 +1,6 @@
+TEXTMODE_NVL = 0;
+TEXTMODE_AVD = 1;
+
 Line_ContinueAfterTyping=0;
 Line_WaitForInput=1;
 Line_Normal=2;

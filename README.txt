@@ -12,6 +12,7 @@ Compiling (3ds)
 ========
 make -f Makefile.3ds
 You need Lua, libsfil, and libsf2d, libpng.
+	Modified Lua source code file is in /_Notes/ModifiedLuaSourceFile/
 Every library you compile with needs to be compiled with -mfloat-abi=softfp
 
 Compiling (Vita)
@@ -30,4 +31,4 @@ If a miracle happens and you actually get all the libraries that you need, it ca
 cmake CMakeLists.txt
 make
 
-Put the contents of the VpkContents/Vita folder into the VPK manually.
+Put the contents of the VpkContents/Vita and VpkContents/Shared folders into the VPK manually.
