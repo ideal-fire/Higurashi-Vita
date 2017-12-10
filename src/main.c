@@ -2317,6 +2317,9 @@ int L_ClearMessage(lua_State* passedState){
 }
 int L_OutputLine(lua_State* passedState){
 	if (!lua_isnil(passedState,4)){
+		if (strcmp(lua_tostring(passedState,4),"0")==0){
+			return 0;
+		}
 		OutputLine((unsigned const char*)lua_tostring(passedState,4),lua_tonumber(passedState,5),0);
 		outputLineWait();
 	}
@@ -2325,6 +2328,9 @@ int L_OutputLine(lua_State* passedState){
 // Null, text, line type
 int L_OutputLineAll(lua_State* passedState){
 	if (!lua_isnil(passedState,2)){
+		if (strcmp(lua_tostring(passedState,2),"0")==0){
+			return 0;
+		}
 		OutputLine((unsigned const char*)lua_tostring(passedState,2),lua_tonumber(passedState,5),1);
 		outputLineWait();
 	}
