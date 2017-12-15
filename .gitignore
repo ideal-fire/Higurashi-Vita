@@ -75,6 +75,9 @@ build3ds/
 # For Windows build
 /lib-custom/
 
+_Compiled3dsRelease/
+_3dsRelease.zip
+
 # cmake stupidity
 CMakeFiles/
 CMakeCache.txt

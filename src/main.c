@@ -302,12 +302,6 @@ char gameHasTips=1;
 /*
 ====================================================
 */
-char getIsCiaBuild(){
-	if (checkFileExist("romfs:/assets/star.png")){
-		return 1;
-	}
-	return 0;
-}
 void XOutFunction(){
 	exit(0);
 }
@@ -2294,6 +2288,12 @@ void LoadGameSpecificStupidity(){
 	}
 #endif
 #if PLATFORM == PLAT_3DS
+	char getIsCiaBuild(){
+		if (checkFileExist("romfs:/assets/star.png")){
+			return 1;
+		}
+		return 0;
+	}
 	void soundUpdateThread(void *arg){
 		int i;
 		while (1){
