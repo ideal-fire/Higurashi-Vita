@@ -22,7 +22,6 @@
 	(Bonus TODO)
 		TODO - Add voices to the text log
 		TODO - app0 mode option
-	TODO - ADV mode for converter
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -69,7 +68,6 @@
 
 /////////////////////////////////////
 #define MAXIMAGECHAR 20
-
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
@@ -87,8 +85,8 @@
 	#define HISTORYONONESCREEN ((int)((screenHeight-currentTextHeight*2-5)/currentTextHeight))
 	#define SELECTBUTTONNAME "A"
 	#define BACKBUTTONNAME "B"
-	#define cpuOverclocked textIsBottomScreen
 	#define ADVBOXHEIGHT 75
+	#define cpuOverclocked textIsBottomScreen
 #endif
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
@@ -304,6 +302,12 @@ char gameHasTips=1;
 /*
 ====================================================
 */
+char getIsCiaBuild(){
+	if (checkFileExist("romfs:/assets/star.png")){
+		return 1;
+	}
+	return 0;
+}
 void XOutFunction(){
 	exit(0);
 }
@@ -1272,7 +1276,11 @@ signed char CheckForUserStuff(){
 				itoa(screenHeight,_tempResHeightString,10);
 				LazyMessage("Your screen resolution is",_tempResWidthString,"by",_tempResHeightString);
 			#endif
-			LazyMessage((const char*)globalTempConcat,"does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the system. Refer to thread for tutorial.");
+			#if PLATFORM != PLAT_3DS
+				LazyMessage((const char*)globalTempConcat,"does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the system. Refer to thread for tutorial.");
+			#else
+				LazyMessage((const char*)globalTempConcat,"does not exist. You must get StreamingAssets from a","Higurashi game and convert the files with my program.","Refer to thread for good tutorial.");
+			#endif
 			#if USEUMA0==1 && PLATFORM == PLAT_VITA
 				LazyMessage("uma0:data/HIGURASHI/","doesn't exist either.",NULL,NULL);
 			#endif
@@ -1398,13 +1406,9 @@ void LocationStringFallback(char** tempstringconcat, const char* filename){
 	}
 }
 void updateTextPositions(CrossTexture* _passedBackground){
-	WriteToDebugFile("1");
 	if (gameTextDisplayMode == TEXTMODE_AVD){
-		WriteToDebugFile("2");
 		if (_passedBackground!=NULL && currentCustomTextbox!=NULL){
-			WriteToDebugFile("3");
 			textboxXOffset = floor((float)(screenWidth-getTextureWidth(_passedBackground))/2);
-			WriteIntToDebugFile(textboxXOffset);
 			outputLineScreenWidth = screenWidth - textboxXOffset;
 		}
 	}
@@ -2201,7 +2205,7 @@ void generateADVBoxPath(char* _passedStringBuffer, char* _passedSystemString){
 	strcat(_passedStringBuffer,".png");
 }
 void loadADVBox(){
-	if (currentCustomTextbox==NULL){
+	if (currentCustomTextbox!=NULL){
 		freeTexture(currentCustomTextbox);
 		currentCustomTextbox=NULL;
 	}
@@ -2306,7 +2310,7 @@ void LoadGameSpecificStupidity(){
 =================================================
 */
 int L_DisplayWindow(lua_State* passedState){
-	MessageBoxEnabled=0;
+	MessageBoxEnabled=1;
 	return 0;
 }
 int L_ClearMessage(lua_State* passedState){
@@ -2331,7 +2335,7 @@ int L_OutputLineAll(lua_State* passedState){
 		if (strcmp(lua_tostring(passedState,2),"0")==0){
 			return 0;
 		}
-		OutputLine((unsigned const char*)lua_tostring(passedState,2),lua_tonumber(passedState,5),1);
+		OutputLine((unsigned const char*)lua_tostring(passedState,2),lua_tonumber(passedState,3),1);
 		outputLineWait();
 	}
 	return 0;
@@ -2454,11 +2458,7 @@ int L_DrawBustshotWithFiltering(lua_State* passedState){
 			printf("***********************IMPORTANT INFORMATION***************************\nAn argument I know nothing about was just used in DrawBustshotWithFiltering!\n***********************************************\n");
 		}
 	}
-
-	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
 	DrawBustshot(lua_tonumber(passedState,1), lua_tostring(passedState,2), lua_tonumber(passedState,5), lua_tonumber(passedState,6), lua_tonumber(passedState,13), lua_tonumber(passedState,14), lua_toboolean(passedState,15), lua_tonumber(passedState,12));
-
-	////SDL_SetTextureAlphaMod(Busts[passedSlot].image, 255);
 	return 0;
 }
 // Butshot slot
@@ -2764,7 +2764,11 @@ int L_DebugFile(lua_State* passedState){
 	return 0;
 }
 int L_OptionsEnableVoiceSetting(lua_State* passedState){
-	hasOwnVoiceSetting=1;
+	if (lua_gettop(passedState)==0){
+		hasOwnVoiceSetting=1;
+	}else{
+		hasOwnVoiceSetting = lua_toboolean(passedState,1);
+	}
 	return 0;
 }
 int L_OptionsSetTextMode(lua_State* passedState){
@@ -3133,8 +3137,8 @@ void FontSizeSetup(){
 			goodDrawText(32+textWidth(fontSize,"Font Size: "),currentTextHeight,_tempNumberString,fontSize);
 		#if PLATFORM == PLAT_VITA
 			goodDrawText(32,currentTextHeight*2,"Test",fontSize);
-			goodDrawText(32,currentTextHeight*5,"While the text may look bad now, restarting ",fontSize);
-			goodDrawText(32,currentTextHeight*6,"after changing it will make it look good.",fontSize);
+			goodDrawText(32,currentTextHeight*5,"Press the \"Test\" button to ",fontSize);
+			goodDrawText(32,currentTextHeight*6,"make the text look good. 32 is default.",fontSize);
 		#endif
 		goodDrawText(32,currentTextHeight*3,"Done",fontSize);
 		#if PLATFORM != PLAT_VITA
@@ -4007,7 +4011,7 @@ char init_dohappylua(){
 	lua_sethook(L, incrementScriptLineVariable, LUA_MASKLINE, 5);
 	if (_didLoadHappyLua==0){
 		#if PLATFORM == PLAT_VITA
-			LazyMessage("Happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
+			LazyMessage("happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
 		#else
 			LazyMessage("happy.lua missing.",NULL,NULL,NULL);
 		#endif
@@ -4019,8 +4023,15 @@ char init_dohappylua(){
 signed char init(){
 	printf("====================================================\n===========================================================\n==================================================================\n");
 	int i=0;
+	generalGoodInit();
 	initGraphics(960,544,&screenWidth,&screenHeight);
 	setClearColor(0,0,0,255);
+	// These directories need to be made if it's CIA version
+	#if PLATFORM == PLAT_3DS
+		createDirectory("/3ds/");
+		createDirectory("/3ds/data/");
+		createDirectory("/3ds/data/HIGURASHI/");
+	#endif
 
 	outputLineScreenWidth = screenWidth;
 	outputLineScreenHeight = screenHeight;
@@ -4053,8 +4064,10 @@ signed char init(){
 	#if PLATFORM == PLAT_3DS
 		osSetSpeedupEnable(1);
 		fixPath("assets/star.png",globalTempConcat,TYPE_EMBEDDED);
+		WriteToDebugFile(globalTempConcat);
 		if (checkFileExist(globalTempConcat)==0){
 			while(1){
+				exitIfForceQuit();
 				startDrawing();
 				drawRectangle(0,0,20,100,255,0,0,255);
 				drawRectangle(20,0,30,15,255,0,0,255);
@@ -4075,7 +4088,11 @@ signed char init(){
 		return 2;
 	}
 	if (initAudio()==0){
-		LazyMessage("dsp init failed Do you have dsp","firm dumped and in","/3ds/dspfirm.cdc","?");
+		#if PLATFORM == PLAT_3DS
+			LazyMessage("dsp init failed Do you have dsp","firm dumped and in","/3ds/dspfirm.cdc","?");
+		#else
+			LazyMessage("but it not worked",NULL,NULL,NULL);
+		#endif
 	}
 
 	// Load the menu sound effect if it's present

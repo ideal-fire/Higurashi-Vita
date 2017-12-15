@@ -27,18 +27,16 @@ include $(DEVKITARM)/3ds_rules
 #     - icon.png
 #     - <libctru folder>/default_icon.png
 #---------------------------------------------------------------------------------
-#NO_SMDH		:= nob
 TARGET		:=	Higurashi
 BUILD		:=	build3ds
 SOURCES		:=	src
 DATA		:=	
 INCLUDES	:=	Include
 ICON        := 	_Notes/icon3ds.png
-#ROMFS		:=	romfs
 
 APP_TITLE		:= Higurashi When They Cry Hou
 APP_DESCRIPTION	:= Higurashi When They Cry Hou
-APP_AUTHOR		:= MyLeGguy
+APP_AUTHOR		:= MyLegGuy
 
 #---------------------------------------------------------------------------------
 # options for code generation
@@ -134,7 +132,7 @@ ifneq ($(ROMFS),)
 	export _3DSXFLAGS += --romfs=$(CURDIR)/$(ROMFS)
 endif
 
-.PHONY: $(BUILD) clean all
+.PHONY: $(BUILD) clean all cia
 
 #---------------------------------------------------------------------------------
 all: $(BUILD)
@@ -156,8 +154,27 @@ cci: $(TARGET)-strip.elf
 	@echo "built ... sf2d_sample.3ds"
 #---------------------------------------------------------------------------------
 cia:
+	@echo make romfs dir
+	mkdir _tempRomfsCompileDir
+	cp -r $(CURDIR)/VpkContents/3ds/. $(CURDIR)/_tempRomfsCompileDir
+	cp -r $(CURDIR)/VpkContents/Shared/. $(CURDIR)/_tempRomfsCompileDir
+	@echo make banner
 	@bannertool makebanner -i ./_Notes/3dsBanner.png -a ./_Notes/BannerSound.wav -o Higurashi.banner
-	@makerom -f cia -rsf ./_Notes/cia.rsf -target t -elf Higurashi.elf -o Higurashi.cia -icon Higurashi.smdh -banner Higurashi.banner
+	@echo make romfs
+	@3dstool -c -t romfs -f romfs.bin --romfs-dir $(CURDIR)/_tempRomfsCompileDir
+	@echo make cia
+	@makerom -f cia -target t -o Higurashi.cia -rsf ./_Notes/cia.rsf -elf Higurashi.elf -icon Higurashi.smdh -banner Higurashi.banner -exefslogo -romfs romfs.bin
+	@echo remove temp dir
+	rm -r $(CURDIR)/_tempRomfsCompileDir
+	@echo done
+
+ciatest2:
+
+
+#-------------
+dotesthappy:
+	echo "$@"
+
 #---------------------------------------------------------------------------------
 send: $(BUILD)
 	@3dslink $(TARGET).3dsx

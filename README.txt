@@ -1,4 +1,5 @@
 An unofficial port of Higurashi When They Cry for the PS Vita and 3ds.
+Refer to the wiki for scripting API and more.
 
 Setup
 =====
