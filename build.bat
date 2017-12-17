@@ -1,1 +1,1 @@
-gcc -IInclude -Llib/Windows src/main.c -lmingw32 -lGeneralGood -lSDLFontCache -lSDL2_ttf -lSDL2_mixer -llua -lSDL2main -lSDL2 -lSDL2_image -o ./build/a.exe
+gcc -IInclude -Llib src/main.c -lmingw32 -lGeneralGoodWindows -lSDLFontCacheWindows -lSDL2_ttf -lSDL2_mixer -lluaWindows -lSDL2main -lSDL2 -lSDL2_image -o ./build/a.exe

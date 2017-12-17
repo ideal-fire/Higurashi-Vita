@@ -121,7 +121,7 @@
 // 1 is start
 // 2 adds BGM and SE volume
 // 3 adds voice volume
-// 4 adds MessageBoxAlpha
+// 4 adds MessageBoxAlpha and textOverOnlyBackground
 #define OPTIONSFILEFORMAT 4
 
 //#define LUAREGISTER(x,y) DebugLuaReg(y);
@@ -291,7 +291,7 @@ int currentTextHeight;
 char isActuallyUsingUma0=0;
 int MAXBUSTS = 9;
 short textboxYOffset=0;
-short textboxXOffset=10;
+short textboxXOffset=0;
 CrossTexture* currentCustomTextbox=NULL;
 int outputLineScreenWidth;
 int outputLineScreenHeight;
@@ -299,6 +299,7 @@ int messageInBoxXOffset=10;
 int messageInBoxYOffset=0;
 // 1 by default to retain compatibility with games converted before game specific Lua 
 char gameHasTips=1;
+char textOverOnlyBackground=0;
 /*
 ====================================================
 */
@@ -362,7 +363,7 @@ void DrawMessageBox(){
 	if (currentCustomTextbox==NULL){
 		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,MessageBoxAlpha);
 	}else{
-		drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (float)(outputLineScreenWidth-textboxXOffset)/(float)getTextureWidth(currentCustomTextbox), (float)(ADVBOXHEIGHT)/(float)getTextureHeight(currentCustomTextbox));
+		drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (double)(outputLineScreenWidth-textboxXOffset)/(double)getTextureWidth(currentCustomTextbox), (double)(ADVBOXHEIGHT)/(double)getTextureHeight(currentCustomTextbox));
 	}
 }
 void DrawCurrentFilter(){
@@ -1308,6 +1309,34 @@ void* recalloc(void* _oldBuffer, int _newSize, int _oldSize){
 	}
 	return _newBuffer;
 }
+void updateTextPositions(CrossTexture* _passedBackground){
+	if (textOverOnlyBackground){
+		if (_passedBackground!=NULL){
+			textboxXOffset = floor((float)(screenWidth-getTextureWidth(_passedBackground))/2);
+			outputLineScreenWidth = screenWidth - textboxXOffset;
+		}
+	}
+	#if PLATFORM == PLAT_3DS
+		if (textIsBottomScreen==1){
+			outputLineScreenWidth=320;
+			outputLineScreenHeight=240;
+		}
+	#endif
+}
+void setTextOverOnlyBackground(char _newValue){
+	textOverOnlyBackground=_newValue;
+	if (gameTextDisplayMode == TEXTMODE_AVD){
+		textboxYOffset=screenHeight-ADVBOXHEIGHT;
+	}else{
+		textboxYOffset=0;
+	}
+	if (textOverOnlyBackground==0){
+		textboxXOffset=0;
+		outputLineScreenWidth = screenWidth;
+	}else{
+		updateTextPositions(currentBackground);
+	}
+}
 //===================
 void FadeBustshot(int passedSlot,int _time,char _wait){
 	if (isSkipping==1){
@@ -1398,20 +1427,6 @@ void LocationStringFallback(char** tempstringconcat, const char* filename){
 			*tempstringconcat = CombineStringsPLEASEFREE(STREAMINGASSETS, locationStrings[LOCATION_CGALT],filename,".png");
 		}
 	}
-}
-void updateTextPositions(CrossTexture* _passedBackground){
-	if (gameTextDisplayMode == TEXTMODE_AVD){
-		if (_passedBackground!=NULL && currentCustomTextbox!=NULL){
-			textboxXOffset = floor((float)(screenWidth-getTextureWidth(_passedBackground))/2);
-			outputLineScreenWidth = screenWidth - textboxXOffset;
-		}
-	}
-	#if PLATFORM == PLAT_3DS
-		if (textIsBottomScreen==1){
-			outputLineScreenWidth=320;
-			outputLineScreenHeight=240;
-		}
-	#endif
 }
 void DrawScene(const char* _filename, int time){
 	if (isSkipping==1){
@@ -1586,8 +1601,8 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 			if (wasJustPressed(SCE_CTRL_CROSS) || skippedInitialWait==1){
 				Busts[passedSlot].alpha = 255;
 				Busts[passedSlot].bustStatus = BUST_STATUS_NORMAL;
+				Draw(); // Draw once more with the bust gone.
 				controlsEnd();
-				FpsCapWait();
 				break;
 			}
 			controlsEnd();
@@ -1745,9 +1760,9 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 						i+=(k-i-1);
 					}
 				}else if (message[i]==226 && message[i+1]==128 && message[i+2]==148){ // Weird hyphen replace
-					i=i+2;
 					memset(&(message[i]),45,1); // Replace it with a normal hyphen
 					memset(&(message[i+1]),1,2); // Replace these with value 1
+					i=i+2;
 				}else if (message[i]==226){ // COde for special image character
 					unsigned char _imagechartype;
 					if (message[i+1]==153 && message[i+2]==170){ // ♪
@@ -1993,6 +2008,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // SE volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
 // Voice volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
 // MessageBoxAlpha, 1 byte
+// textOverOnlyBackground, 1 byte
 void SaveSettings(){
 	FILE* fp;
 	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
@@ -2013,6 +2029,7 @@ void SaveSettings(){
 	fwrite(&_seTemp,1,1,fp);
 	fwrite(&_voiceTemp,1,1,fp);
 	fwrite(&MessageBoxAlpha,1,1,fp);
+	fwrite(&textOverOnlyBackground,1,1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -2052,6 +2069,7 @@ void LoadSettings(){
 		}
 		if (_tempOptionsFormat>=4){
 			fread(&MessageBoxAlpha,1,1,fp);
+			fread(&textOverOnlyBackground,1,1,fp);
 		}
 		fclose(fp);
 
@@ -2064,6 +2082,7 @@ void LoadSettings(){
 				outputLineScreenHeight = 240;
 			#endif
 		}
+		setTextOverOnlyBackground(textOverOnlyBackground);
 		printf("Loaded settings file.\n");
 	}
 }
@@ -2217,8 +2236,7 @@ void loadADVBox(){
 			currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBoxLowRes.png");
 		#endif
 	}
-	//textboxYOffset=screenHeight - getTextureHeight(currentCustomTextbox);
-	textboxYOffset=screenHeight - ADVBOXHEIGHT;
+	setTextOverOnlyBackground(textOverOnlyBackground);
 }
 void LoadGameSpecificStupidity(){
 	TryLoadMenuSoundEffect();
@@ -3157,6 +3175,7 @@ void FontSizeSetup(){
 	}
 	SaveFontSizeFile();
 }
+#define SETTINGSQUITSLOT 11
 void SettingsMenu(){
 	PlayMenuSound();
 	signed char _choice=0;
@@ -3201,9 +3220,9 @@ void SettingsMenu(){
 		controlsStart();
 
 		if (currentGameStatus!=GAMESTATUS_TITLE){
-			_choice = MenuControls(_choice,0,10);
+			_choice = MenuControls(_choice,0,SETTINGSQUITSLOT);
 		}else{
-			_choice = MenuControls(_choice,0,9); // No quit button if used menu from title screen
+			_choice = MenuControls(_choice,0,SETTINGSQUITSLOT-1); // No quit button if used menu from title screen
 		}
 
 		if (wasJustPressed(SCE_CTRL_CIRCLE)){
@@ -3213,7 +3232,7 @@ void SettingsMenu(){
 			if (_choice==0){ // Resume
 				PlayMenuSound();
 				break;
-			}else if (_choice==10){ // Quit
+			}else if (_choice==SETTINGSQUITSLOT){ // Quit
 				endType = Line_ContinueAfterTyping;
 				if (_choice==99){
 					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
@@ -3245,6 +3264,7 @@ void SettingsMenu(){
 					seVolume=1.0;
 					voiceVolume=1.0;
 					MessageBoxAlpha=100;
+					textOverOnlyBackground=0;
 					// Some need to have their strings changed so the user can actually see the changes
 					itoa(autoModeWait,_tempAutoModeString,10);
 					itoa(bgmVolume*4,_tempItoaHoldBGM,10);
@@ -3333,36 +3353,36 @@ void SettingsMenu(){
 				itoa(_tempHoldChar,_tempItoaHoldBoxAlpha,10);
 			}
 		}
-		if (wasJustPressed(SCE_CTRL_CROSS) || wasJustPressed(SCE_CTRL_RIGHT) || wasJustPressed(SCE_CTRL_LEFT)){
-			if (!wasJustPressed(SCE_CTRL_LEFT)){
-				if (_choice==1 && hasOwnVoiceSetting){
-					if (voiceVolume==1){
-						voiceVolume=0;
-					}else{
-						voiceVolume+=.25;
-					}
-					itoa(voiceVolume*4,_tempItoaHoldVoice,10);
-				}else if (_choice==5){
-					if (bgmVolume==1){
-						bgmVolume=0;
-					}else{
-						bgmVolume+=.25;
-					}
-					itoa(bgmVolume*4,_tempItoaHoldBGM,10);
-					SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
-				}else if (_choice==6){
-					if (seVolume==1){
-						seVolume=0;
-					}else{
-						seVolume+=.25;
-					}
-					itoa(seVolume*4,_tempItoaHoldSE,10);
-
-					if (menuSoundLoaded==1){
-						setSFXVolumeBefore(menuSound,FixSEVolume(256));
-					}
-					PlayMenuSound();
+		if (wasJustPressed(SCE_CTRL_CROSS) || wasJustPressed(SCE_CTRL_RIGHT)){
+			if (_choice==1 && hasOwnVoiceSetting){
+				if (voiceVolume==1){
+					voiceVolume=0;
+				}else{
+					voiceVolume+=.25;
 				}
+				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
+			}else if (_choice==5){
+				if (bgmVolume==1){
+					bgmVolume=0;
+				}else{
+					bgmVolume+=.25;
+				}
+				itoa(bgmVolume*4,_tempItoaHoldBGM,10);
+				SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
+			}else if (_choice==6){
+				if (seVolume==1){
+					seVolume=0;
+				}else{
+					seVolume+=.25;
+				}
+				itoa(seVolume*4,_tempItoaHoldSE,10);
+
+				if (menuSoundLoaded==1){
+					setSFXVolumeBefore(menuSound,FixSEVolume(256));
+				}
+				PlayMenuSound();
+			}else if (_choice==10){
+				setTextOverOnlyBackground(!textOverOnlyBackground);
 			}
 			if (_choice==3){
 				PlayMenuSound();
@@ -3433,8 +3453,13 @@ void SettingsMenu(){
 		goodDrawText(32,5+currentTextHeight*8,"Defaults",fontSize);
 		goodDrawText(32,5+currentTextHeight*9,"Message Box Alpha: ",fontSize);
 			goodDrawText(32+_noobBoxAlphaWidth,5+currentTextHeight*9,_tempItoaHoldBoxAlpha,fontSize);
+		if (textOverOnlyBackground){
+			goodDrawText(32,5+currentTextHeight*10,"Textbox: Small",fontSize);
+		}else{
+			goodDrawText(32,5+currentTextHeight*10,"Textbox: Full",fontSize);
+		}
 		if (currentGameStatus!=GAMESTATUS_TITLE){
-			goodDrawText(32,5+currentTextHeight*10,"Quit",fontSize);
+			goodDrawText(32,5+currentTextHeight*SETTINGSQUITSLOT,"Quit",fontSize);
 		}
 		goodDrawText(0,5+_choice*currentTextHeight,">",fontSize);
 

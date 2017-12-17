@@ -23,7 +23,7 @@ include_directories(
 )
 
 link_directories(
-  ./lib/Vita
+  ./lib
 )
 
 add_executable(${SHORT_NAME}
@@ -32,7 +32,7 @@ add_executable(${SHORT_NAME}
 )
 
 target_link_libraries(${SHORT_NAME}
-  -lGeneralGood
+  -lGeneralGoodVita
   -lsoloud
   -lpthread
   -lScePower_stub
@@ -51,7 +51,7 @@ target_link_libraries(${SHORT_NAME}
   -lz
   -lm
   -lc
-  -lluaHIGURASHI
+  -lluaVita
   -lm
 )
 
