@@ -288,6 +288,10 @@ int currentTextHeight;
 #if PLATFORM == PLAT_VITA
 	pthread_t soundProtectThreadId;
 #endif
+#if PLATFORM == PLAT_3DS
+	char _3dsSoundProtectThreadIsAlive=1;
+	Thread _3dsSoundUpdateThread;
+#endif
 char isActuallyUsingUma0=0;
 int MAXBUSTS = 9;
 short textboxYOffset=0;
@@ -304,6 +308,11 @@ char textOverOnlyBackground=0;
 ====================================================
 */
 void XOutFunction(){
+	#if PLATFORM == PLAT_3DS
+		_3dsSoundProtectThreadIsAlive=0;
+		threadJoin(_3dsSoundUpdateThread,30000000000);
+	#endif
+	quitGraphics();
 	exit(0);
 }
 char isForceQuit(){
@@ -1282,8 +1291,6 @@ signed char CheckForUserStuff(){
 			_oneMissing=1;
 		}
 	}
-	
-
 	return _oneMissing;
 }
 void TryLoadMenuSoundEffect(){
@@ -2314,7 +2321,7 @@ void LoadGameSpecificStupidity(){
 	}
 	void soundUpdateThread(void *arg){
 		int i;
-		while (1){
+		while (_3dsSoundProtectThreadIsAlive){
 			for (i=0;i<10;i++){
 				if (currentMusic[i]!=NULL){
 					nathanUpdateMusicIfNeeded(currentMusic[i]);
@@ -4078,12 +4085,44 @@ signed char init(){
 	PRESETFOLDER = malloc(1);
 	SCRIPTFOLDER = malloc(1);
 	SAVEFOLDER = malloc(1);
+
 	// Make file paths with default StreamingAssets folder
 	GenerateStreamingAssetsPaths("StreamingAssets");
 	printf("%s\n",STREAMINGASSETS);
 	printf("%s\n",SAVEFOLDER);
 	printf("%s\n",PRESETFOLDER);
 	printf("%s\n",SCRIPTFOLDER);
+
+	fixPath("isEmbedded.txt",globalTempConcat,TYPE_EMBEDDED);
+	if (checkFileExist(globalTempConcat)){
+		FILE* fp;
+		char _tempReadPresetFilename[50];
+		fp = fopen (globalTempConcat, "r");
+ 		fgets (_tempReadPresetFilename , 100 , fp);
+		fclose (fp);
+		removeNewline(_tempReadPresetFilename);
+		fixPath(_tempReadPresetFilename,globalTempConcat,TYPE_EMBEDDED);
+		currentPresetFilename = malloc(strlen(globalTempConcat)+1);
+		strcpy(currentPresetFilename,globalTempConcat);
+		printf("%s\n",currentPresetFilename);
+
+		free(STREAMINGASSETS);
+		fixPath("game/",globalTempConcat,TYPE_EMBEDDED);
+		STREAMINGASSETS = malloc(strlen(globalTempConcat)+1);
+		strcpy(STREAMINGASSETS,globalTempConcat);
+
+		free(SCRIPTFOLDER);
+		fixPath("game/Scripts/",globalTempConcat,TYPE_EMBEDDED);
+		SCRIPTFOLDER = malloc(strlen(globalTempConcat)+1);
+		strcpy(SCRIPTFOLDER,globalTempConcat);
+
+		free(PRESETFOLDER);
+		fixPath("",globalTempConcat,TYPE_EMBEDDED);
+		PRESETFOLDER = malloc(strlen(globalTempConcat)+1);
+		strcpy(PRESETFOLDER,globalTempConcat);
+
+		currentGameStatus = GAMESTATUS_LOADPRESET;
+	}
 
 	// Check for star picture in 3ds data directory to verify that they put the required files there.
 	#if PLATFORM == PLAT_3DS
@@ -4116,7 +4155,7 @@ signed char init(){
 		#if PLATFORM == PLAT_3DS
 			LazyMessage("dsp init failed Do you have dsp","firm dumped and in","/3ds/dspfirm.cdc","?");
 		#else
-			LazyMessage("but it not worked",NULL,NULL,NULL);
+			LazyMessage("...but it not worked",NULL,NULL,NULL);
 		#endif
 	}
 
@@ -4159,7 +4198,7 @@ signed char init(){
 	#if PLATFORM == PLAT_3DS
 		s32 _foundMainThreadPriority = 0;
 		svcGetThreadPriority(&_foundMainThreadPriority, CUR_THREAD_HANDLE);
-		threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
+		_3dsSoundUpdateThread = threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
 	#endif
 	return 0;
 }
@@ -4176,7 +4215,6 @@ int main(int argc, char *argv[]){
 				break;
 			case GAMESTATUS_LOADPRESET:
 				// Create the string for the full path of the preset file and load it
-				memset(&globalTempConcat,0,sizeof(globalTempConcat));
 				strcpy((char*)globalTempConcat,PRESETFOLDER);
 				strcat((char*)globalTempConcat,currentPresetFilename);
 				LoadPreset((char*)globalTempConcat);

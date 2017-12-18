@@ -67,6 +67,9 @@ lib-custom/
 *.cia
 *.banner
 
+# for 3ds release stupidity
+*.zip
+
 /_Notes/Trash/
 /_Notes/icon3ds_old.png
 build3ds/
