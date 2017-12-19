@@ -85,7 +85,7 @@ typedef int16_t		s16;
 typedef int32_t		s32;
 typedef int64_t		s64;
 
-void generalGoodExit();
+void generalGoodQuit();
 void generalGoodInit();
 signed char checkFileExist(const char* location);
 void createDirectory(const char* path);

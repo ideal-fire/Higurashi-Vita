@@ -19,9 +19,6 @@
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 		TODO - Inversion
 			I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
-	(Bonus TODO)
-		TODO - Add voices to the text log
-		TODO - app0 mode option
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -81,12 +78,14 @@
 	#define SELECTBUTTONNAME "X"
 	#define BACKBUTTONNAME "O"
 	#define ADVBOXHEIGHT 181
+	#define VERSIONSTRINGSUFFIX ""
 #else
 	#define HISTORYONONESCREEN ((int)((screenHeight-currentTextHeight*2-5)/currentTextHeight))
 	#define SELECTBUTTONNAME "A"
 	#define BACKBUTTONNAME "B"
 	#define ADVBOXHEIGHT 75
 	#define cpuOverclocked textIsBottomScreen
+	#define VERSIONSTRINGSUFFIX ""
 #endif
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
@@ -122,7 +121,8 @@
 // 2 adds BGM and SE volume
 // 3 adds voice volume
 // 4 adds MessageBoxAlpha and textOverOnlyBackground
-#define OPTIONSFILEFORMAT 4
+// 5 adds textSpeed
+#define OPTIONSFILEFORMAT 5
 
 //#define LUAREGISTER(x,y) DebugLuaReg(y);
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
@@ -291,6 +291,7 @@ int currentTextHeight;
 #if PLATFORM == PLAT_3DS
 	char _3dsSoundProtectThreadIsAlive=1;
 	Thread _3dsSoundUpdateThread;
+	char _bgmIsLock=0;
 #endif
 char isActuallyUsingUma0=0;
 int MAXBUSTS = 9;
@@ -304,6 +305,8 @@ int messageInBoxYOffset=0;
 // 1 by default to retain compatibility with games converted before game specific Lua 
 char gameHasTips=1;
 char textOverOnlyBackground=0;
+#define TEXTSPEED_INSTANT 100
+signed char textSpeed=1;
 /*
 ====================================================
 */
@@ -313,6 +316,8 @@ void XOutFunction(){
 		threadJoin(_3dsSoundUpdateThread,30000000000);
 	#endif
 	quitGraphics();
+	quitAudio();
+	generalGoodQuit();
 	exit(0);
 }
 char isForceQuit(){
@@ -1695,7 +1700,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 
 	// 1 when finished displaying the text
 	char _isDone=0;
-	if (isSkipping==1 || _autoskip==1){
+	if (isSkipping==1 || _autoskip==1 || textSpeed==TEXTSPEED_INSTANT){
 		_isDone=1;
 	}
 	MessageBoxEnabled=1;
@@ -1865,6 +1870,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			messageInBoxYOffset=0;
 		}
 	#endif
+	char _slowTextSpeed=0;
 	while(_isDone==0){
 		#if PLATFORM != PLAT_VITA
 			FpsCapStart();
@@ -1926,18 +1932,22 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			}
 		}
 		endDrawing();
-		if (_isDone==0){
-			_currentDrawChar++;
-			// If the next char we're about to display is the end of the line
-			if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){
-				_currentDrawLine++;
-				// If we just passed the line we'll be writing to next time then we're done
-				if (_currentDrawLine==currentLine+1){
-					_isDone=1; // We will no longer increment the current character
-					_currentDrawLine-=1; // Fix this variable as we passed where we wanted to be
-					_currentDrawChar=strlen(currentMessages[_currentDrawLine]); // The character we're displaying is at the end
-				}else{ // Otherwise, start displaying at the start of the next line
-					_currentDrawChar=0;
+		if (_isDone==0 && ( (textSpeed>0) || (_slowTextSpeed++ == abs(textSpeed)) )){
+			_slowTextSpeed=0;
+			for (i=0;i<(textSpeed>0 ? textSpeed : 1);i++){
+				_currentDrawChar++;
+				// If the next char we're about to display is the end of the line
+				if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){
+					_currentDrawLine++;
+					// If we just passed the line we'll be writing to next time then we're done
+					if (_currentDrawLine==currentLine+1){
+						_isDone=1; // We will no longer increment the current character
+						_currentDrawLine-=1; // Fix this variable as we passed where we wanted to be
+						_currentDrawChar=strlen(currentMessages[_currentDrawLine]); // The character we're displaying is at the end
+						break;
+					}else{ // Otherwise, start displaying at the start of the next line
+						_currentDrawChar=0;
+					}
 				}
 			}
 		}
@@ -1957,6 +1967,12 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	endType = _endtypetemp;
 }
 void FreeBGM(int _slot){
+	#if PLATFORM == PLAT_3DS
+		// Wait for BGM to be unlocked.
+		while (_bgmIsLock){
+			wait(1);
+		}
+	#endif
 	if (currentMusic[_slot]!=NULL){
 		stopMusic(currentMusicHandle[_slot]);
 		freeMusic(currentMusic[_slot]);
@@ -1970,12 +1986,24 @@ void FreeBGM(int _slot){
 	}
 }
 void StopBGM(int _slot){
+	#if PLATFORM == PLAT_3DS
+		// Wait for BGM to be unlocked.
+		while (_bgmIsLock){
+			wait(1);
+		}
+	#endif
 	if (currentMusic[_slot]!=NULL){
 		stopMusic(currentMusicHandle[_slot]);
 	}
 }
 // Unfixed bgm
 void PlayBGM(const char* filename, int _volume, int _slot){
+	#if PLATFORM == PLAT_3DS
+		// Wait for BGM to be unlocked.
+		while (_bgmIsLock){
+			wait(1);
+		}
+	#endif
 	if (bgmVolume==0){
 		return;
 	}
@@ -2020,7 +2048,7 @@ void SaveSettings(){
 	FILE* fp;
 	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
 	fp = fopen ((const char*)globalTempConcat, "w");
-	//graphicsLocation
+// textSpeed, 1 byte
 
 	unsigned char _bgmTemp = floor(bgmVolume*4);
 	unsigned char _seTemp = floor(seVolume*4);
@@ -2037,6 +2065,7 @@ void SaveSettings(){
 	fwrite(&_voiceTemp,1,1,fp);
 	fwrite(&MessageBoxAlpha,1,1,fp);
 	fwrite(&textOverOnlyBackground,1,1,fp);
+	fwrite(&textSpeed,1,1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -2077,6 +2106,9 @@ void LoadSettings(){
 		if (_tempOptionsFormat>=4){
 			fread(&MessageBoxAlpha,1,1,fp);
 			fread(&textOverOnlyBackground,1,1,fp);
+		}
+		if (_tempOptionsFormat>=5){
+			fread(&textSpeed,1,1,fp);
 		}
 		fclose(fp);
 
@@ -2249,6 +2281,19 @@ void LoadGameSpecificStupidity(){
 	TryLoadMenuSoundEffect();
 	RunGameSpecificLua();
 }
+void resetSettings(){
+	autoModeWait=500;
+	graphicsLocation = LOCATION_CGALT;
+	cpuOverclocked=0; // We don't actually change the CPU speed. They'll never notice. ;)
+	bgmVolume=.75;
+	seVolume=1.0;
+	voiceVolume=1.0;
+	MessageBoxAlpha=100;
+	textOverOnlyBackground=0;
+	textSpeed=1;
+	// Update music volume using new default setting
+	SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
+}
 #if PLATFORM == PLAT_VITA
 	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
 	if (_currentPad.buttons & _button){
@@ -2322,11 +2367,13 @@ void LoadGameSpecificStupidity(){
 	void soundUpdateThread(void *arg){
 		int i;
 		while (_3dsSoundProtectThreadIsAlive){
+			_bgmIsLock=1;
 			for (i=0;i<10;i++){
 				if (currentMusic[i]!=NULL){
 					nathanUpdateMusicIfNeeded(currentMusic[i]);
 				}
 			}
+			_bgmIsLock=0;
 			svcSleepThread(500000000); // Wait half a second
 		}
 	}
@@ -3182,7 +3229,7 @@ void FontSizeSetup(){
 	}
 	SaveFontSizeFile();
 }
-#define SETTINGSQUITSLOT 11
+#define SETTINGSQUITSLOT 12
 void SettingsMenu(){
 	PlayMenuSound();
 	signed char _choice=0;
@@ -3211,7 +3258,6 @@ void SettingsMenu(){
 		}
 	}
 	free(_temppath);
-	
 	// Loads Rena, if possible
 	if (_canShowRena==1){
 		_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,locationStrings[graphicsLocation],"re_se_de_a1.png","");
@@ -3225,70 +3271,15 @@ void SettingsMenu(){
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
 		controlsStart();
-
 		if (currentGameStatus!=GAMESTATUS_TITLE){
 			_choice = MenuControls(_choice,0,SETTINGSQUITSLOT);
 		}else{
 			_choice = MenuControls(_choice,0,SETTINGSQUITSLOT-1); // No quit button if used menu from title screen
 		}
-
 		if (wasJustPressed(SCE_CTRL_CIRCLE)){
 			break;
 		}
-		if (wasJustPressed(SCE_CTRL_CROSS)){
-			if (_choice==0){ // Resume
-				PlayMenuSound();
-				break;
-			}else if (_choice==SETTINGSQUITSLOT){ // Quit
-				endType = Line_ContinueAfterTyping;
-				if (_choice==99){
-					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
-				}else{
-					currentGameStatus=GAMESTATUS_QUIT;
-				}
-				exit(0);
-				break;
-			}else if (_choice==4){ // CPU speed
-				PlayMenuSound();
-				if (cpuOverclocked==0){
-					cpuOverclocked=1;
-					#if PLATFORM == PLAT_VITA
-						scePowerSetArmClockFrequency(444);
-					#endif
-				}else if (cpuOverclocked==1){
-					cpuOverclocked=0;
-					#if PLATFORM == PLAT_VITA
-						scePowerSetArmClockFrequency(333);
-					#endif
-				}
-			}else if (_choice==8){
-				PlayMenuSound();
-				if (LazyChoice("This will reset your settings.","Is this okay?",NULL,NULL)==1){
-					autoModeWait=500;
-					graphicsLocation = LOCATION_CGALT;
-					cpuOverclocked=0; // We don't actually change the CPU speed. They'll never notice. ;)
-					bgmVolume=.75;
-					seVolume=1.0;
-					voiceVolume=1.0;
-					MessageBoxAlpha=100;
-					textOverOnlyBackground=0;
-					// Some need to have their strings changed so the user can actually see the changes
-					itoa(autoModeWait,_tempAutoModeString,10);
-					itoa(bgmVolume*4,_tempItoaHoldBGM,10);
-					itoa(seVolume*4, _tempItoaHoldSE,10);
-					itoa(voiceVolume*4, _tempItoaHoldVoice,10);
-					itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
-					// Update music volume using new default setting
-					SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
-				}
-			}else if (_choice==7){
-				FontSizeSetup();
-				_bustlocationcollinspacewidth = textWidth(fontSize,"Bust location: ");
-				_noobBGMVolumeWidth = textWidth(fontSize,"BGM Volume  ");
-				_tempStrWidth = textWidth(fontSize,"Auto Mode Speed: ");
-				currentTextHeight = textHeight(fontSize);
-			}
-		}
+		// TODO - Make the switch to switch statements here
 		if (wasJustPressed(SCE_CTRL_LEFT)){
 			if (_choice==2){
 				if (isDown(SCE_CTRL_LTRIGGER)){
@@ -3336,38 +3327,61 @@ void SettingsMenu(){
 				}
 				MessageBoxAlpha = _tempHoldChar;
 				itoa(MessageBoxAlpha,_tempItoaHoldBoxAlpha,10);
-			}
-		}
-		if (wasJustPressed(SCE_CTRL_RIGHT)){
-			if (_choice==2){
-				if (isDown(SCE_CTRL_LTRIGGER)){
-					autoModeWait+=200;
-				}else{
-					autoModeWait+=500;
+			}else if (_choice==11){
+				textSpeed--;
+				if (textSpeed==-11){
+					textSpeed=-10;
+				}else if (textSpeed==TEXTSPEED_INSTANT-1){
+					textSpeed=10;
+				}else if (textSpeed==0){
+					textSpeed=-1;
 				}
-				itoa(autoModeWait,_tempAutoModeString,10);
-			}else if (_choice==9){
-				int _tempHoldChar = MessageBoxAlpha;
-				if (isDown(SCE_CTRL_LTRIGGER)){
-					_tempHoldChar+=15;
-				}else{
-					_tempHoldChar+=25;
-				}
-				if (_tempHoldChar>255){
-					_tempHoldChar=255;
-				}
-				MessageBoxAlpha = _tempHoldChar;
-				itoa(_tempHoldChar,_tempItoaHoldBoxAlpha,10);
 			}
 		}
 		if (wasJustPressed(SCE_CTRL_CROSS) || wasJustPressed(SCE_CTRL_RIGHT)){
-			if (_choice==1 && hasOwnVoiceSetting){
+			if (_choice==0){ // Resume
+				PlayMenuSound();
+				break;
+			}else if (_choice==1 && hasOwnVoiceSetting){
 				if (voiceVolume==1){
 					voiceVolume=0;
 				}else{
 					voiceVolume+=.25;
 				}
 				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
+			}else if (_choice==2){
+				if (isDown(SCE_CTRL_LTRIGGER)){
+					autoModeWait+=200;
+				}else{
+					autoModeWait+=500;
+				}
+				itoa(autoModeWait,_tempAutoModeString,10);
+			}else if (_choice==3){
+				PlayMenuSound();
+				if (graphicsLocation == LOCATION_CG){
+					graphicsLocation = LOCATION_CGALT;
+				}else if (graphicsLocation == LOCATION_CGALT){
+					graphicsLocation = LOCATION_CG;
+				}
+				if (_canShowRena==1){
+					freeTexture(_renaImage);
+					_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,locationStrings[graphicsLocation],"re_se_de_a1.png","");
+					_renaImage = SafeLoadPNG(_temppath);
+					free(_temppath);
+				}
+			}else if (_choice==4){ // CPU speed
+				PlayMenuSound();
+				if (cpuOverclocked==0){
+					cpuOverclocked=1;
+					#if PLATFORM == PLAT_VITA
+						scePowerSetArmClockFrequency(444);
+					#endif
+				}else if (cpuOverclocked==1){
+					cpuOverclocked=0;
+					#if PLATFORM == PLAT_VITA
+						scePowerSetArmClockFrequency(333);
+					#endif
+				}
 			}else if (_choice==5){
 				if (bgmVolume==1){
 					bgmVolume=0;
@@ -3388,25 +3402,57 @@ void SettingsMenu(){
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
+			}else if (_choice==7){
+				FontSizeSetup();
+				_bustlocationcollinspacewidth = textWidth(fontSize,"Bust location: ");
+				_noobBGMVolumeWidth = textWidth(fontSize,"BGM Volume  ");
+				_tempStrWidth = textWidth(fontSize,"Auto Mode Speed: ");
+				currentTextHeight = textHeight(fontSize);
+			}else if (_choice==8){
+				PlayMenuSound();
+				if (LazyChoice("This will reset your settings.","Is this okay?",NULL,NULL)==1){
+					resetSettings();
+					// Some need to have their strings changed so the user can actually see the changes
+					itoa(autoModeWait,_tempAutoModeString,10);
+					itoa(bgmVolume*4,_tempItoaHoldBGM,10);
+					itoa(seVolume*4, _tempItoaHoldSE,10);
+					itoa(voiceVolume*4, _tempItoaHoldVoice,10);
+					itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
+				}
+			}else if (_choice==9){
+				int _tempHoldChar = MessageBoxAlpha;
+				if (isDown(SCE_CTRL_LTRIGGER)){
+					_tempHoldChar+=15;
+				}else{
+					_tempHoldChar+=25;
+				}
+				if (_tempHoldChar>255){
+					_tempHoldChar=255;
+				}
+				MessageBoxAlpha = _tempHoldChar;
+				itoa(_tempHoldChar,_tempItoaHoldBoxAlpha,10);
 			}else if (_choice==10){
 				setTextOverOnlyBackground(!textOverOnlyBackground);
-			}
-			if (_choice==3){
-				PlayMenuSound();
-				if (graphicsLocation == LOCATION_CG){
-					graphicsLocation = LOCATION_CGALT;
-				}else if (graphicsLocation == LOCATION_CGALT){
-					graphicsLocation = LOCATION_CG;
+			}else if (_choice==11){
+				textSpeed++;
+				if (textSpeed==11){
+					textSpeed=TEXTSPEED_INSTANT;
+				}else if (textSpeed==TEXTSPEED_INSTANT+1){
+					textSpeed=TEXTSPEED_INSTANT;
+				}else if (textSpeed==0){
+					textSpeed=1;
 				}
-				if (_canShowRena==1){
-					freeTexture(_renaImage);
-					_temppath = CombineStringsPLEASEFREE(STREAMINGASSETS,locationStrings[graphicsLocation],"re_se_de_a1.png","");
-					_renaImage = SafeLoadPNG(_temppath);
-					free(_temppath);
+			}else if (_choice==SETTINGSQUITSLOT){ // Quit
+				endType = Line_ContinueAfterTyping;
+				if (_choice==99){
+					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
+				}else{
+					currentGameStatus=GAMESTATUS_QUIT;
 				}
+				exit(0);
+				break;
 			}
 		}
-
 		controlsEnd();
 		startDrawing();
 		if (currentGameStatus==GAMESTATUS_TITLE){
@@ -3430,7 +3476,6 @@ void SettingsMenu(){
 			}else if (graphicsLocation==LOCATION_CG){
 				goodDrawText(32+_bustlocationcollinspacewidth,5+currentTextHeight*3,"CG",fontSize);
 			}
-
 		// Display CPU overclock option
 			#if PLATFORM == PLAT_VITA
 				if (cpuOverclocked==1){
@@ -3468,8 +3513,17 @@ void SettingsMenu(){
 		if (currentGameStatus!=GAMESTATUS_TITLE){
 			goodDrawText(32,5+currentTextHeight*SETTINGSQUITSLOT,"Quit",fontSize);
 		}
+		// Text Speed bar
+			drawRectangle(32,5+currentTextHeight*11,screenWidth*.30,currentTextHeight,79,0,215,255);
+			if (textSpeed==100){
+				drawRectangle(32,5+currentTextHeight*11,screenWidth*.30+(screenWidth*.30)*.05,currentTextHeight,50,0,210,255);
+			}else if (textSpeed==1){
+				drawRectangle(32,5+currentTextHeight*11,(screenWidth*.30)*.525,currentTextHeight,168,0,210,255);
+			}else{
+				drawRectangle(32,5+currentTextHeight*11,(screenWidth*.30)*((textSpeed+10)/20.0),currentTextHeight,125,0,200,255);
+			}
+			goodDrawText(32,5+currentTextHeight*11,"Text Speed",fontSize);
 		goodDrawText(0,5+_choice*currentTextHeight,">",fontSize);
-
 		// Display sample Rena if changing bust location
 		#if PLATFORM == PLAT_3DS
 			startDrawingBottom();
@@ -3513,7 +3567,7 @@ void TitleScreen(){
 	
 	signed char _titlePassword=0;
 
-	int _versionStringWidth = textWidth(fontSize,VERSIONSTRING);
+	int _versionStringWidth = textWidth(fontSize,VERSIONSTRING VERSIONSTRINGSUFFIX);
 
 	//SetClearColor(255,255,255,255);
 	while (currentGameStatus!=GAMESTATUS_QUIT){
@@ -3614,7 +3668,7 @@ void TitleScreen(){
 		goodDrawText(32,5+currentTextHeight*(2+2),"Settings",fontSize);
 		goodDrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
 
-		goodDrawTextColored((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING,fontSize,VERSIONCOLOR);
+		goodDrawTextColored((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING VERSIONSTRINGSUFFIX,fontSize,VERSIONCOLOR);
 		goodDrawText(5,screenHeight-5-currentTextHeight,SYSTEMSTRING,fontSize);
 
 		goodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
@@ -4155,7 +4209,7 @@ signed char init(){
 		#if PLATFORM == PLAT_3DS
 			LazyMessage("dsp init failed Do you have dsp","firm dumped and in","/3ds/dspfirm.cdc","?");
 		#else
-			LazyMessage("...but it not worked",NULL,NULL,NULL);
+			LazyMessage("...but it not worked?",NULL,NULL,NULL);
 		#endif
 	}
 
@@ -4278,7 +4332,7 @@ int main(int argc, char *argv[]){
 					if (_didWork==0){ // If the script didn't run, don't advance the game
 						currentPresetChapter--; // Go back a script
 						if (currentPresetChapter<0 || currentPresetChapter==255){ // o, no, we've gone back too far!
-							LazyMessage("So... the first script failed to launch.","You now have the info on why, so go","try and fix it.","Pressing X will close the application.");
+							LazyMessage("So... the first script failed to launch.","You now have the info on why, so go","try and fix it.","Pressing "SELECTBUTTONNAME" will close the application.");
 							currentGameStatus=GAMESTATUS_QUIT;
 						}else{
 							currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
@@ -4305,5 +4359,8 @@ int main(int argc, char *argv[]){
 	}
 	printf("ENDGAME\n");
 	//QuitApplication(L);
+	quitGraphics();
+	quitAudio();
+	generalGoodQuit();
 	return 0;
 }

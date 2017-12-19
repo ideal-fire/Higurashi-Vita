@@ -196,8 +196,8 @@ compilerelease:
 	cp README.txt ./_Compiled3dsRelease/CIA/3ds/data/HIGURASHI/log.txt
 	cp Higurashi.3dsx ./_Compiled3dsRelease/3dsx/3ds/Higurashi/
 	cp Higurashi.smdh ./_Compiled3dsRelease/3dsx/3ds/Higurashi/
-	cp -r $(CURDIR)/VpkContents/3ds/. ./_Compiled3dsRelease/3dsx/3ds/data/HIGURASHI
 	cp -r $(CURDIR)/VpkContents/Shared/. ./_Compiled3dsRelease/3dsx/3ds/data/HIGURASHI
+	cp -r $(CURDIR)/VpkContents/3ds/. ./_Compiled3dsRelease/3dsx/3ds/data/HIGURASHI
 	# make zip
 	cd _Compiled3dsRelease; \
 	zip -r ./../_3dsRelease.zip *

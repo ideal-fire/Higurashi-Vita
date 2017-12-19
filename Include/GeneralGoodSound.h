@@ -42,6 +42,7 @@
 	void nathanUpdateMusicIfNeeded(NathanMusic* _passedMusic);
 #endif
 
+void quitAudio();
 void fadeoutMusic(CROSSPLAYHANDLE _passedHandle,int time);
 void freeMusic(CROSSMUSIC* toFree);
 void freeSound(CROSSSFX* toFree);
