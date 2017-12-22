@@ -68,8 +68,8 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.2" // This
-#define VERSIONNUMBER 2 // This
+#define VERSIONSTRING "v2.3" // This
+#define VERSIONNUMBER 3 // This
 #define VERSIONCOLOR 0,208,138
 #define USEUMA0 1
 // Specific constants
