@@ -1,13 +1,15 @@
 An unofficial port of Higurashi When They Cry for the PS Vita and 3ds.
 Refer to the wiki for scripting API and more.
 
-Setup
+Setup (Vita)
 =====
-Refer to the thread on Wololo for more info on setting this up.
 http://wololo.net/talk/viewtopic.php?f=116&t=48223
 
+Setup (3ds)
+=====
+(Coming soon)
+
 Script converter: https://github.com/MyLegGuy/HigurashiVitaCovnerter
-Refer to its README.
 
 Compiling (3ds)
 ========
