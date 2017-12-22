@@ -2320,6 +2320,19 @@ void createRequiredDirectories(){
 	createDirectory(saveFolder);
 	createDirectory(DATAFOLDER);
 }
+void startLoadPresetSpecifiedInFile(char* _presetFilenameFile){
+	FILE* fp;
+	char _tempReadPresetFilename[50];
+	fp = fopen (_presetFilenameFile, "r");
+ 	fgets (_tempReadPresetFilename, 50, fp);
+	fclose (fp);
+
+	removeNewline(_tempReadPresetFilename);
+	currentPresetFilename = malloc(strlen(_tempReadPresetFilename)+1);
+	strcpy(currentPresetFilename,_tempReadPresetFilename);
+
+	currentGameStatus = GAMESTATUS_LOADPRESET;
+}
 #if PLATFORM == PLAT_VITA
 	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
 	if (_currentPad.buttons & _button){
@@ -4135,21 +4148,6 @@ char init_dohappylua(){
 	}
 	return 0;
 }
-
-void startLoadPresetSpecifiedInFile(char* _presetFilenameFile){
-	FILE* fp;
-	char _tempReadPresetFilename[50];
-	fp = fopen (_presetFilenameFile, "r");
- 	fgets (_tempReadPresetFilename, 50, fp);
-	fclose (fp);
-
-	removeNewline(_tempReadPresetFilename);
-	currentPresetFilename = malloc(strlen(_tempReadPresetFilename)+1);
-	strcpy(currentPresetFilename,_tempReadPresetFilename);
-
-	currentGameStatus = GAMESTATUS_LOADPRESET;
-}
-
 // Please exit if this function returns 2
 // Go ahead as normal if it returns 0
 signed char init(){
