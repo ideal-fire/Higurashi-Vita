@@ -19,6 +19,7 @@
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 		TODO - Inversion
 			I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
+	TODO - Make it so the user can choose a default game.
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -32,7 +33,6 @@
 	void SaveSettings();
 	void XOutFunction();
 	void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]);
-	//void FixPath(char* filename,unsigned char _buffer[], char type);
 	void CheckTouchControls();
 	void DrawTouchControlsHelp();
 	void SaveGameEditor();
@@ -1249,57 +1249,6 @@ void SaveGame(){
 	fwrite(&currentPresetChapter,2,1,fp);
 	fclose(fp);
 }
-// We make the user set up stuff by themself, that means that there will be morons who don't do it right.
-// I must protect said morons
-// Returns 0 for everything good
-// Returns 1 for nonvital file missing
-// Returns 2 for vital file missing
-signed char CheckForUserStuff(){
-	char _oneMissing = 0;
-	#if PLATFORM == PLAT_VITA
-		if (checkFileExist("app0:assets/LiberationSans-Regular.ttf")==0){
-			//LazyMessage("app0:a/LiberationSans-Regular.ttf", "is missing. This should've been in the VPK.","Please download the VPK again.",NULL);
-			CrossTexture* _nofonttext = SafeLoadPNG("app0:sce_sys/icon0.png");
-	
-			startDrawing();
-			drawTexture(_nofonttext,32,32);
-			endDrawing();
-			
-			wait(3000);
-			freeTexture(_nofonttext);
-			return 2;
-		}
-	#endif
-
-	// Make data folder if it doesn't exist
-	if (directoryExists(DATAFOLDER)==0){
-		_oneMissing=1;
-	}
-
-	// Check if StreamingAssets folder exists
-	if (presetsAreInStreamingAssets==1){
-		fixPath("StreamingAssets/",globalTempConcat,TYPE_DATA);
-		if (directoryExists((const char*)globalTempConcat)==0){
-			#if PLATFORM  == PLAT_COMPUTER
-				char _tempResWidthString[20];
-				char _tempResHeightString[20];
-				itoa(screenWidth,_tempResWidthString,10);
-				itoa(screenHeight,_tempResHeightString,10);
-				LazyMessage("Your screen resolution is",_tempResWidthString,"by",_tempResHeightString);
-			#endif
-			#if PLATFORM != PLAT_3DS
-				LazyMessage((const char*)globalTempConcat,"does not exist. You must get StreamingAssets from a Higurashi","game, convert the files with my program, and then put the folder","in the correct place on the system. Refer to thread for tutorial.");
-			#else
-				LazyMessage((const char*)globalTempConcat,"does not exist. You must get StreamingAssets from a","Higurashi game and convert the files with my program.","Refer to thread for good tutorial.");
-			#endif
-			#if USEUMA0==1 && PLATFORM == PLAT_VITA
-				LazyMessage("uma0:data/HIGURASHI/","doesn't exist either.",NULL,NULL);
-			#endif
-			_oneMissing=1;
-		}
-	}
-	return _oneMissing;
-}
 void TryLoadMenuSoundEffect(){
 	if (menuSound!=NULL){
 		return;
@@ -2244,7 +2193,7 @@ void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName){
 	strcat(gamesFolder,"Games/");
 }
 void UpdatePresetStreamingAssetsDir(char* filename){
-	char _tempNewStreamingAssetsPathbuffer[256];
+	char _tempNewStreamingAssetsPathbuffer[strlen(DATAFOLDER)+strlen("StreamingAssets_")+strlen(filename)+1];
 	strcpy(_tempNewStreamingAssetsPathbuffer,DATAFOLDER);
 	strcat(_tempNewStreamingAssetsPathbuffer,"StreamingAssets_");
 	strcat(_tempNewStreamingAssetsPathbuffer,filename);
@@ -3661,6 +3610,25 @@ void TitleScreen(){
 				break;
 			}else if (_choice==1){
 				PlayMenuSound();
+				controlsEnd();
+				if (isGameFolderMode){
+					char* _chosenGameFolder;
+					if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a preset")==2 || _chosenGameFolder==NULL){
+						continue;
+					}
+					free(streamingAssets);
+					streamingAssets = malloc(strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/")+1);
+					strcpy(streamingAssets,gamesFolder);
+					strcat(streamingAssets,_chosenGameFolder);
+					strcat(streamingAssets,"/");
+					
+					free(scriptFolder);
+					scriptFolder = malloc(strlen(streamingAssets)+strlen("Scripts/")+1);
+					strcpy(scriptFolder,streamingAssets);
+					strcat(scriptFolder,"Scripts/");
+
+					free(_chosenGameFolder);
+				}
 				if (!directoryExists(scriptFolder)){
 					controlsEnd();
 					char* _tempChosenFile;
@@ -3716,6 +3684,9 @@ void TitleScreen(){
 		goodDrawText(5,screenHeight-5-currentTextHeight,SYSTEMSTRING,fontSize);
 
 		goodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
+		#if PLATFORM == PLAT_3DS
+			startDrawingBottom();
+		#endif
 		endDrawing();
 		controlsEnd();
 		FpsCapWait();
@@ -4168,13 +4139,6 @@ signed char init(){
 	// Setup DATAFOLDER variable. Defaults to uma0 if it exists and it's unsafe build
 	ResetDataDirectory();
 
-	//
-	ClearDebugFile();
-
-	// This will also load the font size file and therefor must come before font loading
-	// Will not crash if no settings found
-	LoadSettings();
-	
 	// These will soon be freed
 	streamingAssets = malloc(1);
 	presetFolder = malloc(1);
@@ -4187,6 +4151,13 @@ signed char init(){
 
 	// Save folder, data folder, and others
 	createRequiredDirectories();
+
+	//
+	ClearDebugFile();
+
+	// This will also load the font size file and therefor must come before font loading
+	// Will not crash if no settings found
+	LoadSettings();
 
 	// Check if the application came with a game embedded. If so, load it.
 	fixPath("isEmbedded.txt",globalTempConcat,TYPE_EMBEDDED);
@@ -4216,8 +4187,18 @@ signed char init(){
 	if (directoryExists(globalTempConcat)==1){
 		isGameFolderMode=1;
 	}else{
-		// Maybe, one day, I'll make it so it's 1 by default, so I'll have to have this here.
-		isGameFolderMode=0;
+		// On 3ds, only disable game folder mode if preset folder is there.
+		fixPath("Presets/",globalTempConcat,TYPE_DATA);
+		if (directoryExists(globalTempConcat)==1){
+			// Maybe, one day, I'll make it so it's 1 by default, so I'll have to have this here.
+			isGameFolderMode=0;
+		}else{
+			#if PLATFORM == PLAT_3DS
+				isGameFolderMode=1;
+			#else
+				isGameFolderMode=0;
+			#endif
+		}
 	}
 
 	// Check for star picture in 3ds data directory to verify that they put the required files there.
@@ -4237,12 +4218,6 @@ signed char init(){
 	#endif
 
 	ReloadFont();
-	// Checks if StreamingAssets and stuff exists.
-	// Informs the user if they don't.
-	char _tempCheckResult = CheckForUserStuff();
-	if (_tempCheckResult==2){
-		return 2;
-	}
 	if (initAudio()==0){
 		#if PLATFORM == PLAT_3DS
 			LazyMessage("dsp init failed Do you have dsp","firm dumped and in","/3ds/dspfirm.cdc","?");
@@ -4279,6 +4254,7 @@ signed char init(){
 	for (i=0;i<MAXBUSTS;i++){
 		ResetBustStruct(&(Busts[i]),0);
 	}
+
 	#if PLATFORM == PLAT_VITA && SOUNDPLAYER == SND_SOLOUD
 		// Create the protection thread.
 		if (pthread_create(&soundProtectThreadId, NULL, &soundProtectThread, NULL) != 0){
@@ -4286,6 +4262,7 @@ signed char init(){
 		}
 	#endif
 	#if PLATFORM == PLAT_3DS
+		// Create the sound update thread
 		s32 _foundMainThreadPriority = 0;
 		svcGetThreadPriority(&_foundMainThreadPriority, CUR_THREAD_HANDLE);
 		_3dsSoundUpdateThread = threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
@@ -4417,19 +4394,24 @@ int main(int argc, char *argv[]){
 				if (_chosenGameFolder==NULL){
 					currentGameStatus=GAMESTATUS_TITLE;
 				}else{
+					if (strcmp(_chosenGameFolder,"PLACEHOLDER.txt")==0){
+						LazyMessage("Feel free to delete this file,","PLACEHOLDER.txt","in",gamesFolder);
+						free(_chosenGameFolder);
+						break;
+					}
 					char _fileWithPresetFilenamePath[strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/includedPreset.txt")+1];
 					strcpy(_fileWithPresetFilenamePath,gamesFolder);
 					strcat(_fileWithPresetFilenamePath,_chosenGameFolder);
 					strcat(_fileWithPresetFilenamePath,"/includedPreset.txt");
-	
+
 					startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
-	
+
 					free(presetFolder);
 					presetFolder = malloc(strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/")+1);
 					strcpy(presetFolder,gamesFolder);
 					strcat(presetFolder,_chosenGameFolder);
 					strcat(presetFolder,"/");
-	
+	 
 					free(streamingAssets);
 					streamingAssets = malloc(strlen(presetFolder)+1);
 					strcpy(streamingAssets,presetFolder);
