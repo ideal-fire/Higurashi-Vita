@@ -3725,12 +3725,12 @@ void TitleScreen(){
 
 		startDrawing();
 
-		goodDrawText(5+menuCursorSpaceWidth,5,"Main Menu",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5,"Main Menu",fontSize);
 
-		goodDrawText(5+menuCursorSpaceWidth,5+currentTextHeight*(0+2),"Load game",fontSize);
-		goodDrawText(5+menuCursorSpaceWidth,5+currentTextHeight*(1+2),"Manual mode",fontSize);
-		goodDrawText(5+menuCursorSpaceWidth,5+currentTextHeight*(2+2),"Settings",fontSize);
-		goodDrawText(5+menuCursorSpaceWidth,5+currentTextHeight*(3+2),"Exit",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load game",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Manual mode",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"Settings",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit",fontSize);
 
 		goodDrawTextColored((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING VERSIONSTRINGSUFFIX,fontSize,VERSIONCOLOR);
 		goodDrawText(5,screenHeight-5-currentTextHeight,SYSTEMSTRING,fontSize);
