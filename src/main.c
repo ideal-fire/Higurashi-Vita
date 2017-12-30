@@ -87,6 +87,8 @@
 	#define cpuOverclocked textIsBottomScreen
 	#define VERSIONSTRINGSUFFIX ""
 #endif
+#define MENUCURSOR ">"
+#define MENUOPTIONOFFSET menuCursorSpaceWidth+5
 #define MINHAPPYLUAVERSION 1
 #define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
 ////////////////////////////////////
@@ -307,9 +309,11 @@ int messageInBoxYOffset=0;
 // 1 by default to retain compatibility with games converted before game specific Lua 
 char gameHasTips=1;
 char textOnlyOverBackground=0;
+// A constant values between 0 and 127 that means that the text should be instantly displayed
 #define TEXTSPEED_INSTANT 100
 signed char textSpeed=1;
 char isGameFolderMode=0;
+int menuCursorSpaceWidth;
 /*
 ====================================================
 */
@@ -384,7 +388,7 @@ void DrawMessageBox(){
 	}
 }
 void DrawCurrentFilter(){
-	drawRectangle(0,0,screenWidth,screenHeight,filterR,filterG,filterB,filterA);
+	drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,filterR,filterG,filterB,filterA);
 	//drawRectangle(0,0,960,screenHeight,filterR,255-(filterG*filterA*.0011),filterB,255);
 }
 u64 waitwithCodeTarget;
@@ -498,20 +502,20 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 		controlsEnd();
 		startDrawing();
 		if (stra!=NULL){
-			goodDrawText(32,5+currentTextHeight*(0+2),stra,fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),stra,fontSize);
 		}
 		if (strb!=NULL){
-			goodDrawText(32,5+currentTextHeight*(1+2),strb,fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),strb,fontSize);
 		}
 		if (strc!=NULL){
-			goodDrawText(32,5+currentTextHeight*(2+2),strc,fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),strc,fontSize);
 		}
 		if (strd!=NULL){
-			goodDrawText(32,5+currentTextHeight*(3+2),strd,fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),strd,fontSize);
 		}
-		goodDrawText(0,screenHeight-32-currentTextHeight*(_choice+1),">",fontSize);
-		goodDrawText(32,screenHeight-32-currentTextHeight*2,"Yes",fontSize);
-		goodDrawText(32,screenHeight-32-currentTextHeight,"No",fontSize);
+		goodDrawText(0,screenHeight-32-currentTextHeight*(_choice+1),MENUCURSOR,fontSize);
+		goodDrawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight*2,"Yes",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight,"No",fontSize);
 		endDrawing();
 		FpsCapWait();
 	}
@@ -2209,7 +2213,7 @@ void RunGameSpecificLua(){
 	strcpy(_completedSpecificLuaPath,scriptFolder);
 	strcat(_completedSpecificLuaPath,"_GameSpecific.lua");
 	if (checkFileExist(_completedSpecificLuaPath)){
-		printf("Game specific LUA found.");
+		printf("Game specific LUA found.\n");
 		luaL_dofile(L,_completedSpecificLuaPath);
 	}
 }
@@ -2281,6 +2285,31 @@ void startLoadPresetSpecifiedInFile(char* _presetFilenameFile){
 	strcpy(currentPresetFilename,_tempReadPresetFilename);
 
 	currentGameStatus = GAMESTATUS_LOADPRESET;
+}
+void startLoadingGameFolder(char* _chosenGameFolder){
+	char _fileWithPresetFilenamePath[strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/includedPreset.txt")+1];
+	strcpy(_fileWithPresetFilenamePath,gamesFolder);
+	strcat(_fileWithPresetFilenamePath,_chosenGameFolder);
+	strcat(_fileWithPresetFilenamePath,"/includedPreset.txt");
+
+	startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
+
+	free(presetFolder);
+	presetFolder = malloc(strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/")+1);
+	strcpy(presetFolder,gamesFolder);
+	strcat(presetFolder,_chosenGameFolder);
+	strcat(presetFolder,"/");
+	 
+	free(streamingAssets);
+	streamingAssets = malloc(strlen(presetFolder)+1);
+	strcpy(streamingAssets,presetFolder);
+	
+	free(scriptFolder);
+	scriptFolder = malloc(strlen(streamingAssets)+strlen("Scripts/")+1);
+	strcpy(scriptFolder,streamingAssets);
+	strcat(scriptFolder,"Scripts/");
+	
+	startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
 }
 #if PLATFORM == PLAT_VITA
 	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
@@ -2736,9 +2765,9 @@ int L_Select(lua_State* passedState){
 			DrawMessageBox();
 		}
 		for (i=0;i<_totalOptions;i++){
-			goodDrawText(32,i*currentTextHeight,noobOptions[i],fontSize);
+			goodDrawText(MENUOPTIONOFFSET,i*currentTextHeight,noobOptions[i],fontSize);
 		}
-		goodDrawText(0,_choice*currentTextHeight,">",fontSize);
+		goodDrawText(0,_choice*currentTextHeight,MENUCURSOR,fontSize);
 
 		endDrawing();
 		FpsCapWait();
@@ -2886,7 +2915,7 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_OptionsSetTextMode,"OptionsSetTextMode");
 	LUAREGISTER(L_OptionsSetTips,"OptionsSetTipExist");
 
-	// Functions that do nothing
+	// Functions that intentionally do nothing
 	LUAREGISTER(L_NotYet,"SetFontId")
 	LUAREGISTER(L_NotYet,"SetCharSpacing")
 	LUAREGISTER(L_NotYet,"SetLineSpacing")
@@ -3120,17 +3149,17 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 			startDrawing();
 			//DrawText(20,20+textHeight(fontSize)+i*(textHeight(fontSize)),currentMessages[i],fontSize);
 			if (promptMessage!=NULL){
-				goodDrawText(32,5,promptMessage,fontSize);
+				goodDrawText(MENUOPTIONOFFSET,5,promptMessage,fontSize);
 			}
 			_tmpoffset=_choice+1-_maxPerNoScroll;
 			if (_tmpoffset<0){
 				_tmpoffset=0;
 			}
 			for (i=0;i<_maxPerNoScroll;i++){
-				goodDrawText(32,5+currentTextHeight*(i+2),filenameholder[i+_tmpoffset],fontSize);
+				goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(i+2),filenameholder[i+_tmpoffset],fontSize);
 			}
-			goodDrawTextColored(32,5+currentTextHeight*((_choice-_tmpoffset)+2),filenameholder[_choice],fontSize,0,255,0);
-			goodDrawText(5,5+currentTextHeight*((_choice-_tmpoffset)+2),">",fontSize);
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*((_choice-_tmpoffset)+2),filenameholder[_choice],fontSize,0,255,0);
+			goodDrawText(5,5+currentTextHeight*((_choice-_tmpoffset)+2),MENUCURSOR,fontSize);
 			endDrawing();
 			controlsEnd();
 			FpsCapWait();
@@ -3194,31 +3223,39 @@ void FontSizeSetup(){
 		}
 		controlsEnd();
 		startDrawing();
-		goodDrawText(32,currentTextHeight,"Font Size: ",fontSize);
-			goodDrawText(32+textWidth(fontSize,"Font Size: "),currentTextHeight,_tempNumberString,fontSize);
+		goodDrawText(MENUOPTIONOFFSET,currentTextHeight,"Font Size: ",fontSize);
+			goodDrawText(MENUOPTIONOFFSET+textWidth(fontSize,"Font Size: "),currentTextHeight,_tempNumberString,fontSize);
 		#if PLATFORM == PLAT_VITA
-			goodDrawText(32,currentTextHeight*2,"Test",fontSize);
-			goodDrawText(32,currentTextHeight*5,"Press the \"Test\" button to ",fontSize);
-			goodDrawText(32,currentTextHeight*6,"make the text look good. 32 is default.",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*2,"Test",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*5,"Press the \"Test\" button to ",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*6,"make the text look good. 32 is default.",fontSize);
 		#endif
-		goodDrawText(32,currentTextHeight*3,"Done",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,currentTextHeight*3,"Done",fontSize);
 		#if PLATFORM != PLAT_VITA
-			goodDrawText(32,currentTextHeight*5,"You should be able to see this entire line. It shouldn't cut off.",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*5,"You should be able to see this entire line. It shouldn't cut off.",fontSize);
 	
-			goodDrawText(32,currentTextHeight*8,"Press the BACK button to see the controls. Green and red are used",fontSize);
-			goodDrawText(32,currentTextHeight*9,"to change the font size when you're on the first option.",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*8,"Press the BACK button to see the controls. Green and red are used",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*9,"to change the font size when you're on the first option.",fontSize);
 	
-			goodDrawText(32,currentTextHeight*11,"You have to select \"Test\" to see the new size.",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*11,"You have to select \"Test\" to see the new size.",fontSize);
 	
-			goodDrawText(32,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn",fontSize);
 		#endif
-		goodDrawText(5,currentTextHeight*(_choice+1),">",fontSize);
+		goodDrawText(5,currentTextHeight*(_choice+1),MENUCURSOR,fontSize);
 		endDrawing();
 		FpsCapWait();
 	}
 	SaveFontSizeFile();
 }
+void makeTextSpeedString(char* _textSpeedStringBuffer, signed char _newTextSpeed){
+	if (_newTextSpeed!=TEXTSPEED_INSTANT){
+		itoa(_newTextSpeed,_textSpeedStringBuffer,10);
+	}else{
+		strcpy(_textSpeedStringBuffer,"Instant");
+	}
+}
 #define SETTINGSQUITSLOT 12
+#define ISTEXTSPEEDBAR 0
 void SettingsMenu(){
 	PlayMenuSound();
 	signed char _choice=0;
@@ -3226,6 +3263,7 @@ void SettingsMenu(){
 	int _tempStrWidth = textWidth(fontSize,"Auto Mode Speed: ");
 	itoa(autoModeWait,_tempAutoModeString,10);
 	int _bustlocationcollinspacewidth = textWidth(fontSize,"Bust location: ");
+	int _textSpeedStringWidth = textWidth(fontSize,"Text Speed: ");
 	char _canShowRena=0;
 	// This variable is used to check if the player changed the bust location after exiting
 	char _artBefore=graphicsLocation;
@@ -3237,6 +3275,7 @@ void SettingsMenu(){
 	char _tempItoaHoldSE[5] = {'\0'};
 	char _tempItoaHoldVoice[5] = {'\0'};
 	char _tempItoaHoldBoxAlpha[5] = {'\0'};
+	char _tempItoaHoldTextSpeed[8] = {'\0'}; // Needs to be big enough to hold "instant"
 	// This checks if we have Rena busts in CG AND CGAlt
 	char* _temppath = CombineStringsPLEASEFREE(streamingAssets,"CG/","re_se_de_a1.png","");
 	if (checkFileExist(_temppath)==1){
@@ -3257,6 +3296,7 @@ void SettingsMenu(){
 	itoa(seVolume*4, _tempItoaHoldSE,10);
 	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
 	itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
+	makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		FpsCapStart();
 		controlsStart();
@@ -3325,6 +3365,7 @@ void SettingsMenu(){
 				}else if (textSpeed==0){
 					textSpeed=-1;
 				}
+				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
 			}
 		}
 		if (wasJustPressed(SCE_CTRL_CROSS) || wasJustPressed(SCE_CTRL_RIGHT)){
@@ -3431,6 +3472,7 @@ void SettingsMenu(){
 				}else if (textSpeed==0){
 					textSpeed=1;
 				}
+				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
 			}else if (_choice==SETTINGSQUITSLOT){ // Quit
 				endType = Line_ContinueAfterTyping;
 				if (_choice==99){
@@ -3445,74 +3487,84 @@ void SettingsMenu(){
 		controlsEnd();
 		startDrawing();
 		if (currentGameStatus==GAMESTATUS_TITLE){
-			goodDrawText(32,5,"Back",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5,"Back",fontSize);
 		}else{
-			goodDrawText(32,5,"Resume",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5,"Resume",fontSize);
 		}
 
 		if (hasOwnVoiceSetting==1){
-			goodDrawText(32,5+currentTextHeight,"Voice Volume",fontSize);
-			goodDrawText(32+_noobVoiceVolumeWidth,5+currentTextHeight,_tempItoaHoldVoice,fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight,"Voice Volume",fontSize);
+			goodDrawText(MENUOPTIONOFFSET+_noobVoiceVolumeWidth,5+currentTextHeight,_tempItoaHoldVoice,fontSize);
 		}else{
-			goodDrawText(32,5+currentTextHeight,"===",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight,"===",fontSize);
 		}
-		goodDrawText(32,5+currentTextHeight*2,"Auto Mode Speed: ",fontSize);
-			goodDrawText(32+_tempStrWidth,5+currentTextHeight*2,_tempAutoModeString,fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*2,"Auto Mode Speed: ",fontSize);
+			goodDrawText(MENUOPTIONOFFSET+_tempStrWidth,5+currentTextHeight*2,_tempAutoModeString,fontSize);
 		
-		goodDrawText(32,5+currentTextHeight*3,"Bust location: ",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*3,"Bust location: ",fontSize);
 			if (graphicsLocation == LOCATION_CGALT){
-				goodDrawText(32+_bustlocationcollinspacewidth,5+currentTextHeight*3,"CGAlt",fontSize);
+				goodDrawText(MENUOPTIONOFFSET+_bustlocationcollinspacewidth,5+currentTextHeight*3,"CGAlt",fontSize);
 			}else if (graphicsLocation==LOCATION_CG){
-				goodDrawText(32+_bustlocationcollinspacewidth,5+currentTextHeight*3,"CG",fontSize);
+				goodDrawText(MENUOPTIONOFFSET+_bustlocationcollinspacewidth,5+currentTextHeight*3,"CG",fontSize);
 			}
 		// Display CPU overclock option
 			#if PLATFORM == PLAT_VITA
 				if (cpuOverclocked==1){
-					goodDrawTextColored(32,5+currentTextHeight*4,"Overclock CPU",fontSize,0,255,0);
+					goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*4,"Overclock CPU",fontSize,0,255,0);
 				}else{
-					goodDrawText(32,5+currentTextHeight*4,"Overclock CPU",fontSize);
+					goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*4,"Overclock CPU",fontSize);
 				}
 			#elif PLATFORM == PLAT_3DS
 				if (cpuOverclocked==1){
-					goodDrawText(32,5+currentTextHeight*4,"Text: Bottom Screen",fontSize);
+					goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*4,"Text: Bottom Screen",fontSize);
 				}else{
-					goodDrawText(32,5+currentTextHeight*4,"Text: Top Screen",fontSize);
+					goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*4,"Text: Top Screen",fontSize);
 				}
 			#else
 				if (cpuOverclocked==1){
-					goodDrawTextColored(32,5+currentTextHeight*4,"Green Nothing",fontSize,0,255,0);
+					goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*4,"Green Nothing",fontSize,0,255,0);
 				}else{
-					goodDrawText(32,5+currentTextHeight*4,"Nothing",fontSize);
+					goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*4,"Nothing",fontSize);
 				}
 			#endif
-		goodDrawText(32,5+currentTextHeight*5,"BGM Volume",fontSize);
-			goodDrawText(32+_noobBGMVolumeWidth,5+currentTextHeight*5,_tempItoaHoldBGM,fontSize);
-		goodDrawText(32,5+currentTextHeight*6,"SE Volume",fontSize);
-			goodDrawText(32+_noobBGMVolumeWidth,5+currentTextHeight*6,_tempItoaHoldSE,fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*5,"BGM Volume",fontSize);
+			goodDrawText(MENUOPTIONOFFSET+_noobBGMVolumeWidth,5+currentTextHeight*5,_tempItoaHoldBGM,fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*6,"SE Volume",fontSize);
+			goodDrawText(MENUOPTIONOFFSET+_noobBGMVolumeWidth,5+currentTextHeight*6,_tempItoaHoldSE,fontSize);
 
-		goodDrawText(32,5+currentTextHeight*7,"Font Size",fontSize);
-		goodDrawText(32,5+currentTextHeight*8,"Defaults",fontSize);
-		goodDrawText(32,5+currentTextHeight*9,"Message Box Alpha: ",fontSize);
-			goodDrawText(32+_noobBoxAlphaWidth,5+currentTextHeight*9,_tempItoaHoldBoxAlpha,fontSize);
-		if (textOnlyOverBackground){
-			goodDrawText(32,5+currentTextHeight*10,"Textbox: Small",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*7,"Font Size",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*8,"Defaults",fontSize);
+		if (gameTextDisplayMode==TEXTMODE_AVD && _choice==9){
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*9,"Message Box Alpha: ",fontSize, 255, 0, 0);
 		}else{
-			goodDrawText(32,5+currentTextHeight*10,"Textbox: Full",fontSize);
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*9,"Message Box Alpha: ",fontSize, 255, 255, 255);
+		}
+			goodDrawText(MENUOPTIONOFFSET+_noobBoxAlphaWidth,5+currentTextHeight*9,_tempItoaHoldBoxAlpha,fontSize);
+		
+		if (textOnlyOverBackground){
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*10,"Textbox: Small",fontSize);
+		}else{
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*10,"Textbox: Full",fontSize);
 		}
 		if (currentGameStatus!=GAMESTATUS_TITLE){
-			goodDrawText(32,5+currentTextHeight*SETTINGSQUITSLOT,"Quit",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*SETTINGSQUITSLOT,"Quit",fontSize);
 		}
 		// Text Speed bar
-			drawRectangle(32,5+currentTextHeight*11,screenWidth*.30,currentTextHeight,79,0,215,255);
-			if (textSpeed==100){
-				drawRectangle(32,5+currentTextHeight*11,screenWidth*.30+(screenWidth*.30)*.05,currentTextHeight,50,0,210,255);
-			}else if (textSpeed==1){
-				drawRectangle(32,5+currentTextHeight*11,(screenWidth*.30)*.525,currentTextHeight,168,0,210,255);
-			}else{
-				drawRectangle(32,5+currentTextHeight*11,(screenWidth*.30)*((textSpeed+10)/20.0),currentTextHeight,125,0,200,255);
-			}
-			goodDrawText(32,5+currentTextHeight*11,"Text Speed",fontSize);
-		goodDrawText(0,5+_choice*currentTextHeight,">",fontSize);
+			#if ISTEXTSPEEDBAR==1
+				drawRectangle(MENUOPTIONOFFSET,5+currentTextHeight*11,screenWidth*.30,currentTextHeight,79,0,215,255);
+				if (textSpeed==100){
+					drawRectangle(MENUOPTIONOFFSET,5+currentTextHeight*11,screenWidth*.30+(screenWidth*.30)*.05,currentTextHeight,50,0,210,255);
+				}else if (textSpeed==1){
+					drawRectangle(MENUOPTIONOFFSET,5+currentTextHeight*11,(screenWidth*.30)*.525,currentTextHeight,168,0,210,255);
+				}else{
+					drawRectangle(MENUOPTIONOFFSET,5+currentTextHeight*11,(screenWidth*.30)*((textSpeed+10)/20.0),currentTextHeight,125,0,200,255);
+				}
+			#else
+				goodDrawText(MENUOPTIONOFFSET+_textSpeedStringWidth,5+currentTextHeight*11,_tempItoaHoldTextSpeed,fontSize);
+			#endif
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*11,ISTEXTSPEEDBAR ? "Text Speed" : "Text Speed:",fontSize);
+
+		goodDrawText(5,5+_choice*currentTextHeight,MENUCURSOR,fontSize);
 		// Display sample Rena if changing bust location
 		#if PLATFORM == PLAT_3DS
 			startDrawingBottom();
@@ -3673,17 +3725,17 @@ void TitleScreen(){
 
 		startDrawing();
 
-		goodDrawText(32,5,"Main Menu",fontSize);
+		goodDrawText(5+menuCursorSpaceWidth,5,"Main Menu",fontSize);
 
-		goodDrawText(32,5+currentTextHeight*(0+2),"Load game",fontSize);
-		goodDrawText(32,5+currentTextHeight*(1+2),"Manual mode",fontSize);
-		goodDrawText(32,5+currentTextHeight*(2+2),"Settings",fontSize);
-		goodDrawText(32,5+currentTextHeight*(3+2),"Exit",fontSize);
+		goodDrawText(5+menuCursorSpaceWidth,5+currentTextHeight*(0+2),"Load game",fontSize);
+		goodDrawText(5+menuCursorSpaceWidth,5+currentTextHeight*(1+2),"Manual mode",fontSize);
+		goodDrawText(5+menuCursorSpaceWidth,5+currentTextHeight*(2+2),"Settings",fontSize);
+		goodDrawText(5+menuCursorSpaceWidth,5+currentTextHeight*(3+2),"Exit",fontSize);
 
 		goodDrawTextColored((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING VERSIONSTRINGSUFFIX,fontSize,VERSIONCOLOR);
 		goodDrawText(5,screenHeight-5-currentTextHeight,SYSTEMSTRING,fontSize);
 
-		goodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
+		goodDrawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR,fontSize);
 		#if PLATFORM == PLAT_3DS
 			startDrawingBottom();
 		#endif
@@ -3779,7 +3831,7 @@ void TipMenu(){
 		controlsEnd();
 		startDrawing();
 		for (i = 0; i < 3; i++){
-			goodDrawText(32,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+			goodDrawText(MENUOPTIONOFFSET,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 		}
 		goodDrawText(5,screenHeight-5-currentTextHeight*3,"Left and Right - Change TIP",fontSize);
 		goodDrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back",fontSize);
@@ -3874,13 +3926,13 @@ void ChapterJump(){
 		startDrawing();
 		
 		if (chapterNamesLoaded==0){
-			goodDrawText(32,5+currentTextHeight*(0+2),(const char*)globalTempConcat,fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),(const char*)globalTempConcat,fontSize);
 		}else{
-			goodDrawText(32,5+currentTextHeight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice],fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice],fontSize);
 		}
 
-		goodDrawText(32,5+currentTextHeight*(1+2),"Back",fontSize);
-		goodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Back",fontSize);
+		goodDrawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR,fontSize);
 
 		goodDrawText(5,screenHeight-5-currentTextHeight*4,"Left and Right - Change chapter",fontSize);
 		goodDrawText(5,screenHeight-5-currentTextHeight*3,"R and Left or Right - Change chapter quickly",fontSize);
@@ -3922,15 +3974,15 @@ void SaveGameEditor(){
 		controlsEnd();
 		startDrawing();
 		if (chapterNamesLoaded==0){
-			goodDrawText(32, currentTextHeight, _endOfChapterString, fontSize);
+			goodDrawText(MENUOPTIONOFFSET, currentTextHeight, _endOfChapterString, fontSize);
 		}else{
-			goodDrawText(32, currentTextHeight, currentPresetFileFriendlyList.theArray[currentPresetChapter], fontSize);
+			goodDrawText(MENUOPTIONOFFSET, currentTextHeight, currentPresetFileFriendlyList.theArray[currentPresetChapter], fontSize);
 		}
 
 		
-		goodDrawText(32, screenHeight-currentTextHeight*3, "Welcome to the save file editor!", fontSize);
-		goodDrawText(32, screenHeight-currentTextHeight*2, SELECTBUTTONNAME" - Finish and save", fontSize);
-		goodDrawText(32, screenHeight-currentTextHeight, "Left and Right - Change last completed chapter", fontSize);
+		goodDrawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight*3, "Welcome to the save file editor!", fontSize);
+		goodDrawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight*2, SELECTBUTTONNAME" - Finish and save", fontSize);
+		goodDrawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight, "Left and Right - Change last completed chapter", fontSize);
 		endDrawing();
 		FpsCapWait();
 	}
@@ -4044,26 +4096,26 @@ void NavigationMenu(){
 		controlsEnd();
 		startDrawing();
 
-		goodDrawText(32,0,"End of script: ",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,0,"End of script: ",fontSize);
 		if (chapterNamesLoaded==0){
-			goodDrawText(_endofscriptwidth+32,0,_endOfChapterString,fontSize);
+			goodDrawText(_endofscriptwidth+MENUOPTIONOFFSET,0,_endOfChapterString,fontSize);
 		}else{
-			goodDrawText(_endofscriptwidth+32,0,currentPresetFileFriendlyList.theArray[currentPresetChapter],fontSize);
+			goodDrawText(_endofscriptwidth+MENUOPTIONOFFSET,0,currentPresetFileFriendlyList.theArray[currentPresetChapter],fontSize);
 		}
 
 		char _currentListDrawPosition=0;
 		if (_nextChapterExist==1){
-			goodDrawText(32,5+currentTextHeight*(_currentListDrawPosition+2),"Next",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Next",fontSize);
 			_currentListDrawPosition++;
 		}
-		goodDrawText(32,5+currentTextHeight*(_currentListDrawPosition+2),"Chapter Jump",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Chapter Jump",fontSize);
 		if (gameHasTips==1){
 			_currentListDrawPosition++;
-			goodDrawText(32,5+currentTextHeight*(_currentListDrawPosition+2),"View Tips",fontSize);
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"View Tips",fontSize);
 		}
 		_currentListDrawPosition++;
-		goodDrawText(32,5+currentTextHeight*(_currentListDrawPosition+2),"Exit",fontSize);
-		goodDrawText(5,5+currentTextHeight*(_choice+2),">",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Exit",fontSize);
+		goodDrawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR,fontSize);
 		endDrawing();
 		FpsCapWait();
 		exitIfForceQuit();
@@ -4091,10 +4143,10 @@ void NewGameMenu(){
 		controlsEnd();
 
 		startDrawing();
-		goodDrawText(32,currentTextHeight,"NEW GAME",fontSize);
-		goodDrawText(32,currentTextHeight*3,"Start from beginning",fontSize);
-		goodDrawText(32,currentTextHeight*4,"Savegame Editor",fontSize);
-		goodDrawText(5,currentTextHeight*(_choice+3),">",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,currentTextHeight,"NEW GAME",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,currentTextHeight*3,"Start from beginning",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,currentTextHeight*4,"Savegame Editor",fontSize);
+		goodDrawText(5,currentTextHeight*(_choice+3),MENUCURSOR,fontSize);
 		endDrawing();
 
 		FpsCapWait();
@@ -4122,8 +4174,10 @@ char init_dohappylua(){
 // Please exit if this function returns 2
 // Go ahead as normal if it returns 0
 signed char init(){
-	printf("====================================================\n===========================================================\n==================================================================\n");
 	int i;
+	for (i=0;i<3;i++){
+		printf("====================================================\n");
+	}
 	generalGoodInit();
 	initGraphics(960,544,&screenWidth,&screenHeight);
 	setClearColor(0,0,0,255);
@@ -4220,11 +4274,13 @@ signed char init(){
 	ReloadFont();
 	if (initAudio()==0){
 		#if PLATFORM == PLAT_3DS
-			LazyMessage("dsp init failed Do you have dsp","firm dumped and in","/3ds/dspfirm.cdc","?");
+			LazyMessage("dsp init failed. Do you have dsp","firm dumped and in","/3ds/dspfirm.cdc","?");
 		#else
 			LazyMessage("...but it not worked?",NULL,NULL,NULL);
 		#endif
 	}
+
+	menuCursorSpaceWidth = textWidth(fontSize,MENUCURSOR" ");
 
 	// Load the menu sound effect if it's present
 	TryLoadMenuSoundEffect();
@@ -4311,25 +4367,8 @@ int main(int argc, char *argv[]){
 				break;
 			case GAMESTATUS_PRESETSELECTION:
 				if (FileSelector(presetFolder,&currentPresetFilename,(char*)"Select a preset")==2){
-					controlsEnd();
-					printf("No files were found\n");
-					startDrawing();
-					goodDrawText(32,5,"No presets found.",fontSize);
-					goodDrawText(32,textHeight(fontSize)+5,(const char*)"If you ran the converter, you should've gotten some.",fontSize);
-					goodDrawText(32,textHeight(fontSize)*2+10,(const char*)"You can manually put presets in:",fontSize);
-					goodDrawText(32,textHeight(fontSize)*3+15,(const char*)presetFolder,fontSize);
-					goodDrawText(32,200,"Press "SELECTBUTTONNAME" to return",fontSize);
-					endDrawing();
-					while (currentGameStatus!=GAMESTATUS_QUIT){
-						FpsCapStart();
-						controlsStart();
-						if (wasJustPressed(SCE_CTRL_CROSS)){
-							controlsEnd();
-							break;
-						}
-						controlsEnd();
-						FpsCapWait();
-					}
+					LazyMessage("No presets found.","If you ran the converter, you should've gotten some.","You can manually put presets in:",presetFolder);
+					break;
 				}
 				controlsEnd();
 				if (currentPresetFilename==NULL){
@@ -4372,58 +4411,18 @@ int main(int argc, char *argv[]){
 				;
 				char* _chosenGameFolder;
 				if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a preset")==2){
-					controlsEnd();
-					startDrawing();
-					goodDrawText(32,5,"No folders found.",fontSize);
-					goodDrawText(32,textHeight(fontSize)+5,(const char*)"After running the script converter,",fontSize);
-					goodDrawText(32,textHeight(fontSize)*2+10,(const char*)"you should've put the converted files in",fontSize);
-					goodDrawText(32,textHeight(fontSize)*3+15,(const char*)gamesFolder,fontSize);
-					goodDrawText(32,200,"Press "SELECTBUTTONNAME" to return",fontSize);
-					endDrawing();
-					while (currentGameStatus!=GAMESTATUS_QUIT){
-						FpsCapStart();
-						controlsStart();
-						if (wasJustPressed(SCE_CTRL_CROSS)){
-							controlsEnd();
-							break;
-						}
-						controlsEnd();
-						FpsCapWait();
-					}
+					LazyMessage("No folders found.","After running the script converter,","you should've put the converted files in",gamesFolder);
+					break;
 				}
 				if (_chosenGameFolder==NULL){
 					currentGameStatus=GAMESTATUS_TITLE;
 				}else{
-					if (strcmp(_chosenGameFolder,"PLACEHOLDER.txt")==0){
+					if (strcmp(_chosenGameFolder,"PLACEHOLDER.txt")==0){ // TODO - Either automatically delete this, or delete it when it's selected.
 						LazyMessage("Feel free to delete this file,","PLACEHOLDER.txt","in",gamesFolder);
 						free(_chosenGameFolder);
 						break;
 					}
-					char _fileWithPresetFilenamePath[strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/includedPreset.txt")+1];
-					strcpy(_fileWithPresetFilenamePath,gamesFolder);
-					strcat(_fileWithPresetFilenamePath,_chosenGameFolder);
-					strcat(_fileWithPresetFilenamePath,"/includedPreset.txt");
-
-					startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
-
-					free(presetFolder);
-					presetFolder = malloc(strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/")+1);
-					strcpy(presetFolder,gamesFolder);
-					strcat(presetFolder,_chosenGameFolder);
-					strcat(presetFolder,"/");
-	 
-					free(streamingAssets);
-					streamingAssets = malloc(strlen(presetFolder)+1);
-					strcpy(streamingAssets,presetFolder);
-	
-					free(scriptFolder);
-					scriptFolder = malloc(strlen(streamingAssets)+strlen("Scripts/")+1);
-					strcpy(scriptFolder,streamingAssets);
-					strcat(scriptFolder,"Scripts/");
-	
-					startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
-	
-					controlsEnd();
+					startLoadingGameFolder(_chosenGameFolder);
 					free(_chosenGameFolder);
 					currentGameStatus=GAMESTATUS_LOADPRESET;
 				}
