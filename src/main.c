@@ -19,7 +19,6 @@
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 		TODO - Inversion
 			I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
-	TODO - Make it so the user can choose a default game.
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -68,8 +67,8 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.3" // This
-#define VERSIONNUMBER 3 // This
+#define VERSIONSTRING "v2.4" // This
+#define VERSIONNUMBER 4 // This
 #define VERSIONCOLOR 0,208,138
 #define USEUMA0 1
 // Specific constants
@@ -89,8 +88,6 @@
 #endif
 #define MENUCURSOR ">"
 #define MENUOPTIONOFFSET menuCursorSpaceWidth+5
-#define MINHAPPYLUAVERSION 1
-#define MAXHAPPYLUAVERSION MINHAPPYLUAVERSION
 ////////////////////////////////////
 #define MAXMUSICARRAY 10
 #define MAXSOUNDEFFECTARRAY 10
@@ -219,8 +216,10 @@ goodStringMallocArray currentPresetTipNameList;
 goodStringMallocArray currentPresetFileFriendlyList;
 goodu8MallocArray currentPresetTipUnlockList;
 int16_t currentPresetChapter=0;
-// Made with malloc
+// Both of these are made with malloc
 char* currentPresetFilename=NULL;
+// This may not be set because the user can choose to use the legacy preset folder mode.
+char* currentGameFolderName=NULL;
 
 #define GAMESTATUS_TITLE 0
 #define GAMESTATUS_LOADPRESET 1
@@ -312,8 +311,11 @@ char textOnlyOverBackground=0;
 // A constant values between 0 and 127 that means that the text should be instantly displayed
 #define TEXTSPEED_INSTANT 100
 signed char textSpeed=1;
-char isGameFolderMode=0;
+char isGameFolderMode;
+char isEmbedMode;
 int menuCursorSpaceWidth;
+// When this variable is 1, we can assume that the current game is the default game because the user can't chose a different game when a default is set.
+char defaultGameIsSet;
 /*
 ====================================================
 */
@@ -2286,6 +2288,7 @@ void startLoadPresetSpecifiedInFile(char* _presetFilenameFile){
 
 	currentGameStatus = GAMESTATUS_LOADPRESET;
 }
+// Also starts loading the preset file
 void startLoadingGameFolder(char* _chosenGameFolder){
 	char _fileWithPresetFilenamePath[strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/includedPreset.txt")+1];
 	strcpy(_fileWithPresetFilenamePath,gamesFolder);
@@ -2310,6 +2313,20 @@ void startLoadingGameFolder(char* _chosenGameFolder){
 	strcat(scriptFolder,"Scripts/");
 	
 	startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
+}
+void setDefaultGame(char* _defaultGameFolderName){
+	char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("/_defaultGame")+1];
+	strcpy(_defaultGameSaveFilenameBuffer,saveFolder);
+	strcat(_defaultGameSaveFilenameBuffer,"/defaultGame");
+
+	FILE* fp;
+	fp = fopen(_defaultGameSaveFilenameBuffer, "w");
+	if (!fp){
+		LazyMessage("Failed to open default game save file.",_defaultGameSaveFilenameBuffer,NULL,NULL);
+		return;
+	}
+	fwrite(_defaultGameFolderName,strlen(_defaultGameFolderName),1,fp);
+	fclose(fp);
 }
 #if PLATFORM == PLAT_VITA
 	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
@@ -4093,6 +4110,12 @@ void NavigationMenu(){
 				printf("INVALID SELECTION\n");
 			}
 		}
+		if (wasJustPressed(SCE_CTRL_TRIANGLE)){
+			if (isGameFolderMode && !isEmbedMode && LazyChoice(defaultGameIsSet ? "Unset this game as the default?" : "Set this game as the default game?",NULL,NULL,NULL)){
+				defaultGameIsSet = !defaultGameIsSet;
+				setDefaultGame(defaultGameIsSet ? currentGameFolderName : "NONE");
+			}
+		}
 		controlsEnd();
 		startDrawing();
 
@@ -4216,6 +4239,7 @@ signed char init(){
 	// Check if the application came with a game embedded. If so, load it.
 	fixPath("isEmbedded.txt",globalTempConcat,TYPE_EMBEDDED);
 	if (checkFileExist(globalTempConcat)){
+		isEmbedMode=1;
 		startLoadPresetSpecifiedInFile(globalTempConcat);
 
 		free(streamingAssets);
@@ -4234,6 +4258,24 @@ signed char init(){
 		strcpy(presetFolder,globalTempConcat);
 
 		currentGameStatus = GAMESTATUS_LOADPRESET;
+	}else{
+		char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("/_defaultGame")+1];
+		strcpy(_defaultGameSaveFilenameBuffer,saveFolder);
+		strcat(_defaultGameSaveFilenameBuffer,"/defaultGame");
+		if (checkFileExist(_defaultGameSaveFilenameBuffer)){
+			FILE* fp;
+			fp = fopen(_defaultGameSaveFilenameBuffer,"r");
+			char _readGameFolderName[256];
+			fgets(_readGameFolderName,256,fp);
+			fclose(fp);
+			if (strcmp(_readGameFolderName,"NONE")!=0){
+				defaultGameIsSet=1;
+				currentGameFolderName = malloc(strlen(_readGameFolderName)+1);
+				strcpy(currentGameFolderName,_readGameFolderName);
+				startLoadingGameFolder(currentGameFolderName);
+				currentGameStatus=GAMESTATUS_LOADPRESET;
+			}
+		}
 	}
 
 	// Check if this is the new game folder mode or the old preset file mode.
@@ -4423,7 +4465,7 @@ int main(int argc, char *argv[]){
 						break;
 					}
 					startLoadingGameFolder(_chosenGameFolder);
-					free(_chosenGameFolder);
+					currentGameFolderName = _chosenGameFolder; // Do not free _chosenGameFolder
 					currentGameStatus=GAMESTATUS_LOADPRESET;
 				}
 				break;
