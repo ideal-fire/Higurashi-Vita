@@ -12,11 +12,11 @@ unsigned int frameStartMiliseconds;
 #endif
 signed char capEnabled = 1;
 
-void FpsCapStart(){
+void fpsCapStart(){
 	frameStartMiliseconds = getTicks();
 }
 
-void FpsCapWait(){
+void fpsCapWait(){
 	if (capEnabled==1){
 		#if COUNTFRAMES == 1
 			// I just hope I only use this at the end of a frame....

@@ -19,13 +19,15 @@
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 		TODO - Inversion
 			I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
+	TODO - Inform user of errors in game specific Lua
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
 #include "GeneralGoodConfig.h"
 
 // main.h
-	void Draw();
+	void startDrawing();
+	void Draw(char _shouldDrawMessageBox);
 	void RecalculateBustOrder();
 	void PlayBGM(const char* filename, int _volume, int _slot);
 	void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd);
@@ -314,6 +316,7 @@ signed char textSpeed=1;
 char isGameFolderMode;
 char isEmbedMode;
 int menuCursorSpaceWidth;
+char canChangeBoxAlpha=1;
 // When this variable is 1, we can assume that the current game is the default game because the user can't chose a different game when a default is set.
 char defaultGameIsSet;
 /*
@@ -386,7 +389,11 @@ void DrawMessageBox(){
 	if (gameTextDisplayMode == TEXTMODE_NVL || currentCustomTextbox==NULL){
 		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,MessageBoxAlpha);
 	}else{
-		drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (double)(outputLineScreenWidth-textboxXOffset)/(double)getTextureWidth(currentCustomTextbox), (double)(ADVBOXHEIGHT)/(double)getTextureHeight(currentCustomTextbox));
+		if (canChangeBoxAlpha){
+			drawTextureScaleAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset, (double)(outputLineScreenWidth-textboxXOffset)/(double)getTextureWidth(currentCustomTextbox), (double)(ADVBOXHEIGHT)/(double)getTextureHeight(currentCustomTextbox),MessageBoxAlpha);
+		}else{
+			drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (double)(outputLineScreenWidth-textboxXOffset)/(double)getTextureWidth(currentCustomTextbox), (double)(ADVBOXHEIGHT)/(double)getTextureHeight(currentCustomTextbox));
+		}
 	}
 }
 void DrawCurrentFilter(){
@@ -481,7 +488,7 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 	controlsStart();
 	controlsEnd();
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		FpsCapStart();
+		fpsCapStart();
 		controlsStart();
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			PlayMenuSound();
@@ -519,7 +526,7 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 		goodDrawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight*2,"Yes",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight,"No",fontSize);
 		endDrawing();
-		FpsCapWait();
+		fpsCapWait();
 	}
 	return 0;
 }
@@ -801,7 +808,7 @@ signed char WaitCanSkip(int amount){
 }
 void DrawUntilX(){
 	while (1){
-		FpsCapStart();
+		fpsCapStart();
 
 		controlsStart();
 		if (wasJustPressed(SCE_CTRL_CROSS) || isSkipping==1){
@@ -810,10 +817,10 @@ void DrawUntilX(){
 		controlsEnd();
 
 		startDrawing();
-		Draw();
+		Draw(MessageBoxEnabled);
 		endDrawing();
 
-		FpsCapWait();
+		fpsCapWait();
 	}
 	controlsEnd();
 }
@@ -923,10 +930,12 @@ void outputLineWait(){
 	u64 _inBetweenLinesMilisecondsStart = getTicks();
 	char _didPressCircle=0;
 	do{
-		FpsCapStart();
+		fpsCapStart();
 		controlsStart();
 		Update();
-		Draw();
+		startDrawing();
+		Draw(MessageBoxEnabled);
+		endDrawing();
 
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			if (_didPressCircle==1){
@@ -947,7 +956,7 @@ void outputLineWait(){
 			DrawHistory(messageHistory);
 		}
 		controlsEnd();
-		FpsCapWait();
+		fpsCapWait();
 		if (autoModeOn==1){
 			if (getTicks()>=(_inBetweenLinesMilisecondsStart+autoModeWait)){
 				endType = Line_ContinueAfterTyping;
@@ -1060,7 +1069,7 @@ unsigned char* ReadNumberStringList(CROSSFILE *fp, unsigned char* arraysize){
 	int numScripts;
 	char currentReadNumber[4];
 	// Add null for atoi
-	currentReadNumber[3]=0;
+	currentReadNumber[4]='\0';
 
 	crossfread(&currentReadNumber,3,1,fp);
 	numScripts = atoi(currentReadNumber);
@@ -1088,7 +1097,7 @@ char** ReadFileStringList(CROSSFILE *fp, unsigned char* arraysize){
 	int linePosition=0;
 	int numScripts;
 
-	currentReadNumber[3]='\0';
+	currentReadNumber[4]='\0';
 	crossfread(&currentReadNumber,3,1,fp);
 	numScripts = atoi(currentReadNumber);
 	MoveFilePointerPastNewline(fp);
@@ -1107,7 +1116,6 @@ char** ReadFileStringList(CROSSFILE *fp, unsigned char* arraysize){
 			}
 			// Newline char
 			// By some black magic, even though newline is two bytes, I can still detect it?
-			
 			if (isNewLine(fp,justreadbyte)==1){
 				break;
 			}
@@ -1138,33 +1146,40 @@ void LoadPreset(char* filename){
 	//for (i=0;i<currentPresetFileList.length;i++){
 	//	printf("%s\n",currentPresetFileList.theArray[i]);
 	//}
-	currentPresetTipList.theArray = ReadFileStringList(fp,&currentPresetTipList.length);
-	//for (i=0;i<currentPresetTipList.length;i++){
-	//	printf("%s\n",currentPresetTipList.theArray[i]);
-	//}
-	//printf("Is %s\n",currentReadNumber);
 
-	currentPresetTipUnlockList.theArray = ReadNumberStringList(fp,&(currentPresetTipUnlockList.length));
-	//for (i=0;i<currentPresetTipUnlockList.length;i++){
-	//	printf("%d\n",currentPresetTipUnlockList.theArray[i]);
-	//}
+
+	if (gameHasTips==1){
+		currentPresetTipList.theArray = ReadFileStringList(fp,&currentPresetTipList.length);
+		//for (i=0;i<currentPresetTipList.length;i++){
+		//	printf("%s\n",currentPresetTipList.theArray[i]);
+		//}
+		//printf("Is %s\n",currentReadNumber);
+	
+		currentPresetTipUnlockList.theArray = ReadNumberStringList(fp,&(currentPresetTipUnlockList.length));
+		//for (i=0;i<currentPresetTipUnlockList.length;i++){
+		//	printf("%d\n",currentPresetTipUnlockList.theArray[i]);
+		//}
+	}
+
 	char tempreadstring[15] = {'\0'};
 
-	// Check for the
-	// tipnames
-	// string
-	// If it exists, read the tip's names
-	if (crossfread(tempreadstring,8,1,fp)==1){
-		MoveFilePointerPastNewline(fp);
-		if (strcmp(tempreadstring,"tipnames")==0){
-			currentPresetTipNameList.theArray = ReadFileStringList(fp,&currentPresetTipNameList.length);
-			tipNamesLoaded=1;
+	if (gameHasTips==1){
+		// Check for the
+		// tipnames
+		// string
+		// If it exists, read the tip's names
+		if (crossfread(tempreadstring,8,1,fp)==1){
+			MoveFilePointerPastNewline(fp);
+			if (strcmp(tempreadstring,"tipnames")==0){
+				currentPresetTipNameList.theArray = ReadFileStringList(fp,&currentPresetTipNameList.length);
+				tipNamesLoaded=1;
+			}else{
+				tipNamesLoaded=0;
+			}
 		}else{
+			MoveFilePointerPastNewline(fp);
 			tipNamesLoaded=0;
 		}
-	}else{
-		MoveFilePointerPastNewline(fp);
-		tipNamesLoaded=0;
 	}
 
 	if (crossfread(tempreadstring,12,1,fp)==1){
@@ -1209,7 +1224,7 @@ void LazyMessage(const char* stra, const char* strb, const char* strc, const cha
 	controlsStart();
 	controlsEnd();
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		FpsCapStart();
+		fpsCapStart();
 		controlsStart();
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			controlsStart();
@@ -1232,7 +1247,7 @@ void LazyMessage(const char* stra, const char* strb, const char* strc, const cha
 		}
 		goodDrawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.",fontSize);
 		endDrawing();
-		FpsCapWait();
+		fpsCapWait();
 		exitIfForceQuit();
 	}
 }
@@ -1306,6 +1321,31 @@ void setTextOnlyOverBackground(char _newValue){
 		updateTextPositions(currentBackground);
 	}
 }
+char* LocationStringFallback(const char* filename, char _folderPreference){
+	char* _returnFoundString;
+	if (_folderPreference==LOCATION_CGALT){
+		_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, locationStrings[LOCATION_CGALT],filename,".png");
+	}else{
+		_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, locationStrings[LOCATION_CG],filename,".png");
+	}
+	if (checkFileExist(_returnFoundString)==0){
+		free(_returnFoundString);
+		if (_folderPreference == LOCATION_CGALT){
+			_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, locationStrings[LOCATION_CG],filename,".png");
+		}else if (_folderPreference == LOCATION_CG){
+			_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, locationStrings[LOCATION_CGALT],filename,".png");
+		}
+	}
+	return _returnFoundString;
+}
+// Will load a PNG from CG or CGAlt
+CrossTexture* safeLoadGamePNG(const char* filename, char _folderPreference){
+	char* _tempFoundFilename;
+	_tempFoundFilename = LocationStringFallback(filename,_folderPreference);
+	CrossTexture* _returnLoadedPNG = SafeLoadPNG(_tempFoundFilename);
+	free(_tempFoundFilename);
+	return _returnLoadedPNG;
+}
 //===================
 void FadeBustshot(int passedSlot,int _time,char _wait){
 	if (isSkipping==1){
@@ -1333,15 +1373,17 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 
 		if (_wait==1){
 			while (Busts[passedSlot].isActive==1){
-				FpsCapStart();
+				fpsCapStart();
 				controlsStart();
 				Update();
-				Draw();
+				startDrawing();
+				Draw(MessageBoxEnabled);
+				endDrawing();
 				if (wasJustPressed(SCE_CTRL_CROSS)){
 					Busts[passedSlot].alpha = 1;
 				}
 				controlsEnd();
-				FpsCapWait();
+				fpsCapWait();
 			}
 		}
 	}
@@ -1369,10 +1411,12 @@ void FadeAllBustshots(int _time, char _wait){
 					}
 				}
 			}
-			FpsCapStart();
+			fpsCapStart();
 			controlsStart();
 			Update();
-			Draw();
+			startDrawing();
+			Draw(MessageBoxEnabled);
+			endDrawing();
 			if (wasJustPressed(SCE_CTRL_CROSS)){
 				for (i=0;i<MAXBUSTS;i++){
 					if (Busts[i].isActive==1){
@@ -1381,19 +1425,7 @@ void FadeAllBustshots(int _time, char _wait){
 				}
 			}
 			controlsEnd();
-			FpsCapWait();
-		}
-	}
-}
-void LocationStringFallback(char** tempstringconcat, const char* filename){
-	if (checkFileExist(*tempstringconcat)==0){
-		free(*tempstringconcat);
-		if (graphicsLocation == LOCATION_CGALT){
-			printf("Switching to cg\n");
-			*tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, locationStrings[LOCATION_CG],filename,".png");
-		}else if (graphicsLocation == LOCATION_CG){
-			printf("Falling back on cgalt.\n");
-			*tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, locationStrings[LOCATION_CGALT],filename,".png");
+			fpsCapWait();
 		}
 	}
 }
@@ -1417,13 +1449,10 @@ void DrawScene(const char* _filename, int time){
 		}
 	}
 
-	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, locationStrings[graphicsLocation],_filename,".png");
-	LocationStringFallback(&tempstringconcat,_filename);
-	CrossTexture* newBackground = SafeLoadPNG(tempstringconcat);
-	free(tempstringconcat);
+	CrossTexture* newBackground = safeLoadGamePNG(_filename,graphicsLocation);
 	updateTextPositions(newBackground);
 	while (_backgroundAlpha<255){
-		FpsCapStart();
+		fpsCapStart();
 
 		Update();
 		_backgroundAlpha+=_alphaPerFrame;
@@ -1474,7 +1503,7 @@ void DrawScene(const char* _filename, int time){
 		}
 		controlsEnd();
 
-		FpsCapWait();
+		fpsCapWait();
 	}
 
 	for (i=0;i<MAXBUSTS;i++){
@@ -1509,14 +1538,13 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 		_fadeintime=0;
 		_waitforfadein=0;
 	}
-	Draw();
+	startDrawing();
+	Draw(MessageBoxEnabled);
+	endDrawing();
 	int i;
 	unsigned char skippedInitialWait=0;
-	ResetBustStruct(&(Busts[passedSlot]),1);
-	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, locationStrings[graphicsLocation],_filename,".png");
-	LocationStringFallback(&tempstringconcat,_filename);
-	Busts[passedSlot].image = SafeLoadPNG(tempstringconcat);
-	free(tempstringconcat);
+	ResetBustStruct(&(Busts[passedSlot]),1); 
+	Busts[passedSlot].image = safeLoadGamePNG(_filename,graphicsLocation);
 	if (Busts[passedSlot].image==NULL){
 		ResetBustStruct(&(Busts[passedSlot]),1);
 		return;
@@ -1560,23 +1588,27 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	i=1;
 	if (_waitforfadein==1){
 		while (Busts[passedSlot].alpha<255){
-			FpsCapStart();
+			fpsCapStart();
 			controlsStart();
 			Update();
 			if (Busts[passedSlot].alpha>255){
 				Busts[passedSlot].alpha=255;
 			}
-			Draw();
+			startDrawing();
+			Draw(MessageBoxEnabled);
+			endDrawing();
 			if (wasJustPressed(SCE_CTRL_CROSS) || skippedInitialWait==1){
 				Busts[passedSlot].alpha = 255;
 				Busts[passedSlot].bustStatus = BUST_STATUS_NORMAL;
-				Draw(); // Draw once more with the bust gone.
+				startDrawing();
+				Draw(MessageBoxEnabled);
+				endDrawing(); // Draw once more with the bust gone.
 				controlsEnd();
 				break;
 			}
 			controlsEnd();
 			i++;
-			FpsCapWait();
+			fpsCapWait();
 		}
 	}
 }
@@ -1830,7 +1862,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	char _slowTextSpeed=0;
 	while(_isDone==0){
 		#if PLATFORM != PLAT_VITA
-			FpsCapStart();
+			fpsCapStart();
 		#endif
 
 		// The first one that takes two bytes is U+0080, or 0xC2 0x80
@@ -1909,7 +1941,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			}
 		}
 		#if PLATFORM != PLAT_VITA
-			FpsCapWait();
+			fpsCapWait();
 		#endif
 	}
 	#if PLATFORM == PLAT_3DS
@@ -2101,7 +2133,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 
 	int i;
 	while (1){
-		FpsCapStart();
+		fpsCapStart();
 
 		controlsStart();
 		if (wasJustPressed(SCE_CTRL_UP) || wasJustPressed(SCE_CTRL_LEFT)){
@@ -2153,7 +2185,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 
 		endDrawing();
 
-		FpsCapWait();
+		fpsCapWait();
 	}
 }
 void ChangeEasyTouchMode(int _newControlValue){
@@ -2588,7 +2620,9 @@ int L_DrawBustshotWithFiltering(lua_State* passedState){
 	//
 	// * The bustshot can only stay after a scene change if it's created the line before the scene change AND it doesn't wait for fadein completion.
 int L_DrawBustshot(lua_State* passedState){
-	Draw();
+	startDrawing();
+	Draw(MessageBoxEnabled);
+	endDrawing();
 
 	int i;
 	for (i=8;i!=12;i++){
@@ -2726,7 +2760,7 @@ int L_MoveSprite(lua_State* passedState){
 
 	if (_waitforcompletion==1){
 		while(Busts[_passedSlot].bustStatus!=BUST_STATUS_NORMAL){
-			FpsCapStart();
+			fpsCapStart();
 			controlsStart();
 			if (wasJustPressed(SCE_CTRL_CROSS)){
 				Busts[_passedSlot].xOffset=lua_tonumber(passedState,2)+320;
@@ -2734,8 +2768,10 @@ int L_MoveSprite(lua_State* passedState){
 			}
 			controlsEnd();
 			Update();
-			Draw();
-			FpsCapWait();
+			startDrawing();
+			Draw(MessageBoxEnabled);
+			endDrawing();
+			fpsCapWait();
 		}
 	}
 	return 0;
@@ -2766,7 +2802,7 @@ int L_Select(lua_State* passedState){
 	// This is the actual loop for choosing the choice
 	signed char _choice=0;
 	while (1){
-		FpsCapStart();
+		fpsCapStart();
 		controlsStart();
 
 		_choice = MenuControls(_choice,0,_totalOptions-1);
@@ -2787,7 +2823,7 @@ int L_Select(lua_State* passedState){
 		goodDrawText(0,_choice*currentTextHeight,MENUCURSOR,fontSize);
 
 		endDrawing();
-		FpsCapWait();
+		fpsCapWait();
 	}
 
 	// Free strings that were made with calloc earlier
@@ -2890,6 +2926,95 @@ int L_OptionsSetTips(lua_State* passedState){
 	gameHasTips=lua_toboolean(passedState,1);
 	return 0;
 }
+int L_OptionsCanChangeBoxAlpha(lua_State* passedState){
+	canChangeBoxAlpha = lua_toboolean(passedState,1);
+	return 0;
+}
+// normal image 1, hover image 1, select image 1, normal image 2, hover image 2, select image 2
+int L_ImageChoice(lua_State* passedState){
+	int i;
+	// When you are not interacting with that choice
+	CrossTexture** _passedNormalImages;
+	// When your cursor is over that choice
+	CrossTexture** _passedHoverImages;
+	// When you've selected that choice
+	CrossTexture** _passedSelectImages;
+	int _numberOfChoices = lua_gettop(passedState)/3;
+	printf("Found %d choices\n",_numberOfChoices);
+	_passedNormalImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
+	_passedHoverImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
+	_passedSelectImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
+
+	for (i=0;i<_numberOfChoices;i++){
+		_passedNormalImages[i] = safeLoadGamePNG(lua_tostring(passedState,i*3+1),graphicsLocation);
+		_passedHoverImages[i] = safeLoadGamePNG(lua_tostring(passedState,i*3+2),graphicsLocation);
+		_passedSelectImages[i] = safeLoadGamePNG(lua_tostring(passedState,i*3+3),graphicsLocation);
+	}
+
+	// Y position of the first choice graphic
+	int _startDrawY;
+	// X position of every choice graphic
+	int _startDrawX;
+	int _spaceBetweenChoices;
+
+	int _firstChoiceWidth = getTextureWidth(_passedNormalImages[0]);
+	int _firstChoiceHeight = getTextureHeight(_passedNormalImages[0]);
+	int _halfFirstChoiceHeight = _firstChoiceHeight/2.0;
+	char _userChoice=0;
+	char _isHoldSelect=0;
+
+
+	_startDrawX = (screenWidth - _firstChoiceWidth)/2.0;
+	_startDrawY = (textboxYOffset/2.0)-((_numberOfChoices)*_firstChoiceHeight+(_numberOfChoices-1)*_halfFirstChoiceHeight)/2.0;
+	while (1){
+		fpsCapStart();
+
+		controlsStart();
+		_userChoice = MenuControls(_userChoice,0,_numberOfChoices-1);
+		if (wasJustPressed(SCE_CTRL_CROSS)){
+			_isHoldSelect=1;
+		}
+		if (wasJustPressed(SCE_CTRL_UP) || wasJustPressed(SCE_CTRL_DOWN)){
+			_isHoldSelect=0;
+		}		
+		if (wasJustPressed(SCE_CTRL_CIRCLE)){
+			break;
+		}
+		if (wasJustReleased(SCE_CTRL_CROSS)){
+			if (_isHoldSelect==1){
+				controlsEnd();
+				break;
+			}
+		}
+		controlsEnd();
+
+		startDrawing();
+		Draw(1);
+		for (i=0;i<_numberOfChoices;i++){
+			drawTexture(_passedNormalImages[i],0,_startDrawY+_firstChoiceHeight*i+_halfFirstChoiceHeight*i);
+		}
+		if (_isHoldSelect==0){
+			drawTexture(_passedHoverImages[_userChoice],0,_startDrawY+_firstChoiceHeight*_userChoice+_halfFirstChoiceHeight*_userChoice);
+		}else{
+			drawTexture(_passedSelectImages[_userChoice],0,_startDrawY+_firstChoiceHeight*_userChoice+_halfFirstChoiceHeight*_userChoice);
+		}
+		endDrawing();
+
+		fpsCapWait();
+	}
+
+	for (i=0;i<_numberOfChoices;i++){
+		freeTexture(_passedNormalImages[i]);
+		freeTexture(_passedHoverImages[i]);
+		freeTexture(_passedSelectImages[i]);
+	}
+	free(_passedNormalImages);
+	free(_passedHoverImages);
+	free(_passedSelectImages);
+
+	lua_pushnumber(passedState,_userChoice);
+	return 1;
+}
 void MakeLuaUseful(){
 	LUAREGISTER(L_OutputLine,"OutputLine")
 	LUAREGISTER(L_ClearMessage,"ClearMessage")
@@ -2910,7 +3035,7 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_PlaySE,"PlaySE")
 	LUAREGISTER(L_StopBGM,"StopBGM")
 	LUAREGISTER(L_CallScript,"CallScript") // Somehow, this works. No idea how.
-	LUAREGISTER(L_Select,"Select") // That's right, I programmed selection for the one time in the question arcs where it's used
+	LUAREGISTER(L_Select,"Select")
 	LUAREGISTER(L_LoadValueFromLocalWork,"LoadValueFromLocalWork")
 	LUAREGISTER(L_CallSection,"CallSection")
 	LUAREGISTER(L_CallSection,"JumpSection") // TODO - Is this correct?
@@ -2921,16 +3046,20 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_DrawFilm,"DrawFilm")
 	LUAREGISTER(L_FadeFilm,"FadeFilm") // Used for fixing negative and removing films?
 	LUAREGISTER(L_FadeBG,"FadeBG")
-	LUAREGISTER(L_DebugFile,"Debugfile")
 	LUAREGISTER(L_PlayVoice,"PlayVoice")
 	LUAREGISTER(L_DisplayWindow,"DisplayWindow")
-	LUAREGISTER(L_MoveBust,"MoveBust")
 
-	// Custom stuff
+	// Options changing commands
 	LUAREGISTER(L_OptionsEnableVoiceSetting,"OptionsEnableVoiceSetting");
 	LUAREGISTER(L_LoadADVBox,"OptionsLoadADVBox");
 	LUAREGISTER(L_OptionsSetTextMode,"OptionsSetTextMode");
 	LUAREGISTER(L_OptionsSetTips,"OptionsSetTipExist");
+	LUAREGISTER(L_OptionsCanChangeBoxAlpha,"OptionsCanChangeBoxAlpha");
+
+	// Commands exclusive to my engine
+	LUAREGISTER(L_DebugFile,"Debugfile")
+	LUAREGISTER(L_MoveBust,"MoveBust")
+	LUAREGISTER(L_ImageChoice,"ImageChoice");
 
 	// Functions that intentionally do nothing
 	LUAREGISTER(L_NotYet,"SetFontId")
@@ -2945,6 +3074,7 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_NotYet,"SetGUIPosition")
 	LUAREGISTER(L_NotYet,"SetValidityOfSaving")
 	LUAREGISTER(L_NotYet,"SetValidityOfLoading")
+	LUAREGISTER(L_NotYet,"EnableJumpingOfReturnIcon")
 
 	// Functions I should implement
 	LUAREGISTER(L_NotYet,"SetSpeedOfMessage")
@@ -2953,7 +3083,6 @@ void MakeLuaUseful(){
 	LUAREGISTER(L_NotYet,"SetDrawingPointOfMessage")
 	LUAREGISTER(L_NotYet,"SetStyleOfMessageSwinging")
 	LUAREGISTER(L_NotYet,"SetValidityOfWindowDisablingWhenGraphicsControl")
-	LUAREGISTER(L_NotYet,"EnableJumpingOfReturnIcon")
 	LUAREGISTER(L_NotYet,"StopSE")
 	LUAREGISTER(L_NotYet,"SetValidityOfTextFade")
 	LUAREGISTER(L_NotYet,"SetValidityOfSkipping")
@@ -3038,9 +3167,8 @@ void MakeLuaUseful(){
 		LUAREGISTER(L_NotYet,"WaitToFinishVoicePlaying")
 }
 //======================================================
-void Draw(){
+void Draw(char _shouldDrawMessageBox){
 	int i;
-	startDrawing();
 	if (currentBackground!=NULL){
 		DrawBackground(currentBackground);
 	}
@@ -3052,7 +3180,7 @@ void Draw(){
 	if (filterActive==1){
 		DrawCurrentFilter();
 	}
-	if (MessageBoxEnabled==1){
+	if (_shouldDrawMessageBox==1){
 		DrawMessageBox();
 	}
 	for (i = MAXBUSTS-1; i != -1; i--){
@@ -3060,10 +3188,9 @@ void Draw(){
 			DrawBust(&(Busts[bustOrderOverBox[i]]));
 		}
 	}
-	if (MessageBoxEnabled==1){
+	if (_shouldDrawMessageBox==1){
 		DrawMessageText();
 	}
-	endDrawing();
 }
 // Returns what RunScript returns
 char LuaThread(char* _torun){
@@ -3124,7 +3251,7 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 		}
 		int _tmpoffset=0;
 		while (currentGameStatus!=GAMESTATUS_QUIT){
-			FpsCapStart();
+			fpsCapStart();
 			controlsStart();
 	
 			if (wasJustPressed(SCE_CTRL_UP)){
@@ -3179,7 +3306,7 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 			goodDrawText(5,5+currentTextHeight*((_choice-_tmpoffset)+2),MENUCURSOR,fontSize);
 			endDrawing();
 			controlsEnd();
-			FpsCapWait();
+			fpsCapWait();
 		}
 	}
 
@@ -3196,7 +3323,7 @@ void FontSizeSetup(){
 	char _tempNumberString[10];
 	itoa(fontSize,_tempNumberString,10);
 	while (1){
-		FpsCapStart();
+		fpsCapStart();
 		controlsStart();
 		_choice = MenuControls(_choice,0,2);
 
@@ -3260,7 +3387,7 @@ void FontSizeSetup(){
 		#endif
 		goodDrawText(5,currentTextHeight*(_choice+1),MENUCURSOR,fontSize);
 		endDrawing();
-		FpsCapWait();
+		fpsCapWait();
 	}
 	SaveFontSizeFile();
 }
@@ -3315,7 +3442,7 @@ void SettingsMenu(){
 	itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
 	makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		FpsCapStart();
+		fpsCapStart();
 		controlsStart();
 		if (currentGameStatus!=GAMESTATUS_TITLE){
 			_choice = MenuControls(_choice,0,SETTINGSQUITSLOT);
@@ -3551,10 +3678,10 @@ void SettingsMenu(){
 
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*7,"Font Size",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*8,"Defaults",fontSize);
-		if (gameTextDisplayMode==TEXTMODE_AVD && _choice==9){
-			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*9,"Message Box Alpha: ",fontSize, 255, 0, 0);
-		}else{
+		if (canChangeBoxAlpha || _choice!=9){
 			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*9,"Message Box Alpha: ",fontSize, 255, 255, 255);
+		}else{
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*9,"Message Box Alpha: ",fontSize, 255, 0, 0);
 		}
 			goodDrawText(MENUOPTIONOFFSET+_noobBoxAlphaWidth,5+currentTextHeight*9,_tempItoaHoldBoxAlpha,fontSize);
 		
@@ -3598,7 +3725,7 @@ void SettingsMenu(){
 			}
 		#endif
 		endDrawing();
-		FpsCapWait();
+		fpsCapWait();
 		exitIfForceQuit();
 	}
 	SaveSettings();
@@ -3629,7 +3756,7 @@ void TitleScreen(){
 
 	//SetClearColor(255,255,255,255);
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		FpsCapStart();
+		fpsCapStart();
 		controlsStart();
 
 		// Password right left down up square
@@ -3758,7 +3885,7 @@ void TitleScreen(){
 		#endif
 		endDrawing();
 		controlsEnd();
-		FpsCapWait();
+		fpsCapWait();
 		exitIfForceQuit();
 	}
 }
@@ -3791,7 +3918,7 @@ void TipMenu(){
 	ChangeEasyTouchMode(TOUCHMODE_LEFTRIGHTSELECT);
 
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		FpsCapStart();
+		fpsCapStart();
 		controlsStart();
 
 		if (wasJustPressed(SCE_CTRL_DOWN)){
@@ -3855,7 +3982,7 @@ void TipMenu(){
 		goodDrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select",fontSize);
 
 		endDrawing();
-		FpsCapWait();
+		fpsCapWait();
 	}
 }
 void ChapterJump(){
@@ -3875,7 +4002,7 @@ void ChapterJump(){
 	strcat((char*)globalTempConcat,")");
 
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		FpsCapStart();
+		fpsCapStart();
 		controlsStart();
 		if (wasJustPressed(SCE_CTRL_RIGHT)){
 			if (!isDown(SCE_CTRL_RTRIGGER)){
@@ -3956,7 +4083,7 @@ void ChapterJump(){
 		goodDrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back",fontSize);
 		goodDrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select",fontSize);
 		endDrawing();
-		FpsCapWait();
+		fpsCapWait();
 	}
 }
 void SaveGameEditor(){
@@ -3965,7 +4092,7 @@ void SaveGameEditor(){
 	itoa(currentPresetChapter,_endOfChapterString,10);
 	controlsEnd();
 	while (1){
-		FpsCapStart();
+		fpsCapStart();
 
 		controlsStart();
 		if (wasJustPressed(SCE_CTRL_RIGHT)){
@@ -4001,7 +4128,7 @@ void SaveGameEditor(){
 		goodDrawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight*2, SELECTBUTTONNAME" - Finish and save", fontSize);
 		goodDrawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight, "Left and Right - Change last completed chapter", fontSize);
 		endDrawing();
-		FpsCapWait();
+		fpsCapWait();
 	}
 }
 void NavigationMenu(){
@@ -4045,7 +4172,7 @@ void NavigationMenu(){
 	}
 	_quitButtonSlot=_slotAssignIndex;
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		FpsCapStart();
+		fpsCapStart();
 		controlsStart();
 
 		// Editor secret code
@@ -4140,7 +4267,7 @@ void NavigationMenu(){
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Exit",fontSize);
 		goodDrawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR,fontSize);
 		endDrawing();
-		FpsCapWait();
+		fpsCapWait();
 		exitIfForceQuit();
 	}
 }
@@ -4148,7 +4275,7 @@ void NewGameMenu(){
 	char _choice=0;
 	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	while (1){
-		FpsCapStart();
+		fpsCapStart();
 
 		controlsStart();
 		_choice = MenuControls(_choice,0,1);
@@ -4172,7 +4299,7 @@ void NewGameMenu(){
 		goodDrawText(5,currentTextHeight*(_choice+3),MENUCURSOR,fontSize);
 		endDrawing();
 
-		FpsCapWait();
+		fpsCapWait();
 	}
 }
 // =====================================================
@@ -4379,13 +4506,13 @@ int main(int argc, char *argv[]){
 				TitleScreen();
 				break;
 			case GAMESTATUS_LOADPRESET:
+				// Next, we can try to switch the StreamingAssets directory to ux0:data/HIGURASHI/StreamingAssets_FILENAME/ if that directory exists
+				UpdatePresetStreamingAssetsDir(currentPresetFilename);
+				LoadGameSpecificStupidity();
 				// Create the string for the full path of the preset file and load it
 				strcpy((char*)globalTempConcat,presetFolder);
 				strcat((char*)globalTempConcat,currentPresetFilename);
 				LoadPreset((char*)globalTempConcat);
-				// Next, we can try to switch the StreamingAssets directory to ux0:data/HIGURASHI/StreamingAssets_FILENAME/ if that directory exists
-				UpdatePresetStreamingAssetsDir(currentPresetFilename);
-				LoadGameSpecificStupidity();
 				// Does not load the savefile, I promise.
 				LoadGame();
 				// If there is no save game, start a new one at chapter 0
