@@ -7,7 +7,7 @@ http://wololo.net/talk/viewtopic.php?f=116&t=48223
 
 Setup (3ds)
 =====
-(Coming soon)
+https://gbatemp.net/threads/release-higurashi-when-they-cry-3ds-port.492390/
 
 Script converter: https://github.com/MyLegGuy/HigurashiVitaCovnerter
 
