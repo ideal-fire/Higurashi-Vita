@@ -20,6 +20,12 @@
 		TODO - Inversion
 			I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
 	TODO - Inform user of errors in game specific Lua
+	TODO - Make another scripting language that can share functions with my existing Lua language. 
+		- Make a bunch of normal functions for script things
+			- These normal functions take two arguments. One argument is the number of arguments passed from the script call. The second argument is a void* array of malloc'd arguments
+			- I guess the array can be created and freed in a method I call from my Lua wrapper functions
+		- Lua wrapper functions
+			- A macro will make this really easy
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -75,19 +81,18 @@
 #define USEUMA0 1
 // Specific constants
 #if PLATFORM != PLAT_3DS
-	#define HISTORYONONESCREEN 13
 	#define SELECTBUTTONNAME "X"
 	#define BACKBUTTONNAME "O"
 	#define ADVBOXHEIGHT 181
 	#define VERSIONSTRINGSUFFIX ""
 #else
-	#define HISTORYONONESCREEN ((int)((screenHeight-currentTextHeight*2-5)/currentTextHeight))
 	#define SELECTBUTTONNAME "A"
 	#define BACKBUTTONNAME "B"
 	#define ADVBOXHEIGHT 75
 	#define cpuOverclocked textIsBottomScreen
 	#define VERSIONSTRINGSUFFIX ""
 #endif
+#define HISTORYONONESCREEN ((int)((screenHeight-currentTextHeight*2-5)/currentTextHeight))
 #define MENUCURSOR ">"
 #define MENUOPTIONOFFSET menuCursorSpaceWidth+5
 ////////////////////////////////////
@@ -1352,14 +1357,14 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 		_time=0;
 	}
 
-	//int passedSlot = lua_tonumber(passedState,1)-1;
+	//int passedSlot = SCRIPT_TONUMBER(_passedArguments,1)-1;
 	//Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
 	//Busts[passedSlot].statusVariable = 
 	Busts[passedSlot].alpha=0;
 	Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
 	if (_time!=0){
 		Busts[passedSlot].alpha=255;
-		//int _time = floor(lua_tonumber(passedState,7));
+		//int _time = floor(SCRIPT_TONUMBER(_passedArguments,7));
 		int _totalFrames = floor(60*(_time/(double)1000));
 		if (_totalFrames==0){
 			_totalFrames=1;
@@ -2156,21 +2161,9 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 
 		startDrawing();
 
-		if (currentBackground!=NULL){
-			DrawBackground(currentBackground);
-		}
-	
-		for (i = MAXBUSTS-1; i != -1; i--){
-			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1){
-				DrawBust(&(Busts[bustOrder[i]]));
-			}
-		}
-	
-		for (i = MAXBUSTS-1; i != -1; i--){
-			if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
-				DrawBust(&(Busts[bustOrderOverBox[i]]));
-			}
-		}
+		Draw(0);
+
+
 
 		drawRectangle(textboxXOffset,0,outputLineScreenWidth-textboxXOffset,screenHeight,0,230,255,200);
 		for (i = 0; i < HISTORYONONESCREEN; i++){
@@ -2444,60 +2437,60 @@ void setDefaultGame(char* _defaultGameFolderName){
 		}
 	}
 #endif
+#include "LuaWrapperHelpers.h"
 /*
 =================================================
 */
-int L_DisplayWindow(lua_State* passedState){
+int scriptDisplayWindow(void** _passedArguments, int _numArguments){
 	MessageBoxEnabled=1;
 	return 0;
 }
-int L_ClearMessage(lua_State* passedState){
-	//system("cls");
+int scriptClearMessage(void** _passedArguments, int _numArguments){
 	currentLine=0;
 	ClearMessageArray();
 	return 0;
 }
-int L_OutputLine(lua_State* passedState){
-	if (!lua_isnil(passedState,4)){
-		if (strcmp(lua_tostring(passedState,4),"0")==0){
+int scriptOutputLine(void** _passedArguments, int _numArguments){
+	if (!SCRIPT_ISMAYBENULL(_passedArguments,3)){
+		if (strcmp(SCRIPT_TOSTRING(_passedArguments,3),"0")==0){
 			return 0;
 		}
-		OutputLine((unsigned const char*)lua_tostring(passedState,4),lua_tonumber(passedState,5),0);
+		OutputLine((unsigned const char*)SCRIPT_TOSTRING(_passedArguments,3),SCRIPT_TONUMBER(_passedArguments,4),0);
 		outputLineWait();
 	}
 	return 0;
 }
 // Null, text, line type
-int L_OutputLineAll(lua_State* passedState){
-	if (!lua_isnil(passedState,2)){
-		if (strcmp(lua_tostring(passedState,2),"0")==0){
+int scriptOutputLineAll(void** _passedArguments, int _numArguments){
+	if (!SCRIPT_ISMAYBENULL(_passedArguments,1)){
+		if (strcmp(SCRIPT_TOSTRING(_passedArguments,1),"0")==0){
 			return 0;
 		}
-		OutputLine((unsigned const char*)lua_tostring(passedState,2),lua_tonumber(passedState,3),1);
+		OutputLine((unsigned const char*)SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TONUMBER(_passedArguments,2),1);
 		outputLineWait();
 	}
 	return 0;
 }
 //
-int L_Wait(lua_State* passedState){
+int scriptWait(void** _passedArguments, int _numArguments){
 	if (isSkipping!=1 && capEnabled==1){
-		wait(lua_tonumber(passedState,1));
+		wait(SCRIPT_TONUMBER(_passedArguments,0));
 	}
 	return 0;
 }
 // filename, filter, unknown, unknown, time
-int L_DrawSceneWithMask(lua_State* passedState){
-	DrawScene(lua_tostring(passedState,1),lua_tonumber(passedState,5));
+int scriptDrawSceneWithMask(void** _passedArguments, int _numArguments){
+	DrawScene(SCRIPT_TOSTRING(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,4));
 	return 0;
 }
 // filename
 // fadein
-int L_DrawScene(lua_State* passedState){
-	DrawScene(lua_tostring(passedState,1),lua_tonumber(passedState,2));
+int scriptDrawScene(void** _passedArguments, int _numArguments){
+	DrawScene(SCRIPT_TOSTRING(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,1));
 	return 0;
 }
 // Placeholder for unimplemented function
-int L_NotYet(lua_State* passedState){
+int scriptNotYet(void** _passedArguments, int _numArguments){
 	printf("An unimplemented Lua function was just executed!\n");
 	return 0;
 }
@@ -2507,10 +2500,10 @@ int L_NotYet(lua_State* passedState){
 // Second arg is path in BGM folder without extention
 // Third arg is volume. 128 seems to be average. I can hardly hear 8 with computer volume on 10.
 // Fourth arg is unknown
-int L_PlayBGM(lua_State* passedState){
-	PlayBGM(lua_tostring(passedState,2),lua_tonumber(passedState,3),lua_tonumber(passedState,1));
+int scriptPlayBGM(void** _passedArguments, int _numArguments){
+	PlayBGM(SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TONUMBER(_passedArguments,2),SCRIPT_TONUMBER(_passedArguments,0));
 
-	if (lua_tonumber(passedState,4)!=0){
+	if (SCRIPT_TONUMBER(_passedArguments,3)!=0){
 		printf("*************** VERY IMPORTANT *******************\nThe last PlayBGM call didn't have 0 for the fourth argument! This is a good place to investigate!\n");
 	}
 
@@ -2518,8 +2511,8 @@ int L_PlayBGM(lua_State* passedState){
 }
 // Some int argument
 // Maybe music slot
-int L_StopBGM(lua_State* passedState){
-	char _slot = lua_tonumber(passedState,1);
+int scriptStopBGM(void** _passedArguments, int _numArguments){
+	char _slot = SCRIPT_TONUMBER(_passedArguments,0);
 	if (currentMusic[_slot]!=NULL){
 		StopBGM(_slot);
 		FreeBGM(_slot);
@@ -2529,21 +2522,21 @@ int L_StopBGM(lua_State* passedState){
 #if SOUNDPLAYER == SND_3DS
 	void nathanSetChannelVolume(unsigned char _a, float _b);
 	// slot, time, should wair
-	int L_FadeoutBGM(lua_State* passedState){
-		if (currentMusic[(int)lua_tonumber(passedState,1)]==NULL){
+	int scriptFadeoutBGM(void** _passedArguments, int _numArguments){
+		if (currentMusic[(int)SCRIPT_TONUMBER(_passedArguments,0)]==NULL){
 			return 0;
 		}
-		if (lua_toboolean(passedState,3)==0){
-			stopMusic(currentMusicHandle[(int)lua_tonumber(passedState,1)]);
+		if (SCRIPT_TOBOOL(_passedArguments,2)==0){
+			stopMusic(currentMusicHandle[(int)SCRIPT_TONUMBER(_passedArguments,0)]);
 			return 0;
 		}
-		float _perTenthSecond=(float)((float)(1*bgmVolume)/((double)lua_tonumber(passedState,2)/(double)100));
+		float _perTenthSecond=(float)((float)(1*bgmVolume)/((double)SCRIPT_TONUMBER(_passedArguments,1)/(double)100));
 		//float _perTenthSecond=.1;
 		if (_perTenthSecond==0){
 			_perTenthSecond=.00001;
 		}
-		float _currentFadeoutVolume=((1*((float)currentMusicUnfixedVolume[(int)lua_tonumber(passedState,1)]/(float)256))*bgmVolume);
-		unsigned char _passedHandle = currentMusicHandle[(int)lua_tonumber(passedState,1)];
+		float _currentFadeoutVolume=((1*((float)currentMusicUnfixedVolume[(int)SCRIPT_TONUMBER(_passedArguments,0)]/(float)256))*bgmVolume);
+		unsigned char _passedHandle = currentMusicHandle[(int)SCRIPT_TONUMBER(_passedArguments,0)];
 		while (_currentFadeoutVolume>0){
 			if (_currentFadeoutVolume<_perTenthSecond){
 				_currentFadeoutVolume=0;
@@ -2557,16 +2550,16 @@ int L_StopBGM(lua_State* passedState){
 	}
 #else
 	// slot, time, (bool) should wait for finish
-	int L_FadeoutBGM(lua_State* passedState){
-		if (currentMusic[(int)lua_tonumber(passedState,1)]!=NULL){
+	int scriptFadeoutBGM(void** _passedArguments, int _numArguments){
+		if (currentMusic[(int)SCRIPT_TONUMBER(_passedArguments,0)]!=NULL){
 			#if SOUNDPLAYER == SND_SOLOUD
-				if (currentMusicHandle[(int)lua_tonumber(passedState,1)]==0){
+				if (currentMusicHandle[(int)SCRIPT_TONUMBER(_passedArguments,0)]==0){
 					return 0;
 				}
 			#endif
-			fadeoutMusic(currentMusicHandle[(int)lua_tonumber(passedState,1)],lua_tonumber(passedState,2));
-			if (lua_toboolean(passedState,3)==1){
-				wait(lua_tonumber(passedState,2));
+			fadeoutMusic(currentMusicHandle[(int)SCRIPT_TONUMBER(_passedArguments,0)],SCRIPT_TONUMBER(_passedArguments,1));
+			if (SCRIPT_TOBOOL(_passedArguments,2)==1){
+				wait(SCRIPT_TONUMBER(_passedArguments,1));
 			}
 		}
 		return 0;
@@ -2589,14 +2582,14 @@ int L_StopBGM(lua_State* passedState){
 		// Textbox's layer is 31. >31 layer shows a not darkened sprite.
 	// Fadein time
 	// (bool) wait for fadein? (15)
-int L_DrawBustshotWithFiltering(lua_State* passedState){
+int scriptDrawBustshotWithFiltering(void** _passedArguments, int _numArguments){
 	int i;
 	for (i=8;i!=12;i++){
-		if (lua_tonumber(passedState,i)!=0){
+		if (SCRIPT_TONUMBER(_passedArguments,i-1)!=0){
 			printf("***********************IMPORTANT INFORMATION***************************\nAn argument I know nothing about was just used in DrawBustshotWithFiltering!\n***********************************************\n");
 		}
 	}
-	DrawBustshot(lua_tonumber(passedState,1), lua_tostring(passedState,2), lua_tonumber(passedState,5), lua_tonumber(passedState,6), lua_tonumber(passedState,13), lua_tonumber(passedState,14), lua_toboolean(passedState,15), lua_tonumber(passedState,12));
+	DrawBustshot(SCRIPT_TONUMBER(_passedArguments,0), SCRIPT_TOSTRING(_passedArguments,1), SCRIPT_TONUMBER(_passedArguments,4), SCRIPT_TONUMBER(_passedArguments,5), SCRIPT_TONUMBER(_passedArguments,12), SCRIPT_TONUMBER(_passedArguments,13), SCRIPT_TOBOOL(_passedArguments,14), SCRIPT_TONUMBER(_passedArguments,11));
 	return 0;
 }
 // Butshot slot
@@ -2619,24 +2612,24 @@ int L_DrawBustshotWithFiltering(lua_State* passedState){
 	// (bool) wait for fadein? (16)
 	//
 	// * The bustshot can only stay after a scene change if it's created the line before the scene change AND it doesn't wait for fadein completion.
-int L_DrawBustshot(lua_State* passedState){
+int scriptDrawBustshot(void** _passedArguments, int _numArguments){
 	startDrawing();
 	Draw(MessageBoxEnabled);
 	endDrawing();
 
 	int i;
 	for (i=8;i!=12;i++){
-		if (lua_tonumber(passedState,i)!=0){
+		if (SCRIPT_TONUMBER(_passedArguments,i-1)!=0){
 			printf("***********************IMPORTANT INFORMATION***************************\nAn argument I know nothing about was just used in DrawBustshotWithFiltering!\n***********************************************\n");
 		}
 	}
 	
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(lua_tonumber(passedState,1), lua_tostring(passedState,2), lua_tonumber(passedState,3), lua_tonumber(passedState,4), lua_tonumber(passedState,14), lua_tonumber(passedState,15), lua_toboolean(passedState,16), lua_tonumber(passedState,13));
+	DrawBustshot(SCRIPT_TONUMBER(_passedArguments,0), SCRIPT_TOSTRING(_passedArguments,1), SCRIPT_TONUMBER(_passedArguments,2), SCRIPT_TONUMBER(_passedArguments,3), SCRIPT_TONUMBER(_passedArguments,13), SCRIPT_TONUMBER(_passedArguments,14), SCRIPT_TOBOOL(_passedArguments,15), SCRIPT_TONUMBER(_passedArguments,12));
 	return 0;
 }
-int L_SetValidityOfInput(lua_State* passedState){
-	if (lua_toboolean(passedState,1)==1){
+int scriptSetValidityOfInput(void** _passedArguments, int _numArguments){
+	if (SCRIPT_TOBOOL(_passedArguments,0)==1){
 		InputValidity=1;
 	}else{
 		InputValidity=0;
@@ -2645,8 +2638,8 @@ int L_SetValidityOfInput(lua_State* passedState){
 }
 // Fadeout time
 // Wait for completely fadeout
-int L_FadeAllBustshots(lua_State* passedState){
-	FadeAllBustshots(lua_tonumber(passedState,1),lua_toboolean(passedState,2));
+int scriptFadeAllBustshots(void** _passedArguments, int _numArguments){
+	FadeAllBustshots(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TOBOOL(_passedArguments,1));
 	//int i;
 	//for (i=0;i<MAXBUSTS;i++){
 	//	if (Busts[i].isActive==1){
@@ -2656,37 +2649,37 @@ int L_FadeAllBustshots(lua_State* passedState){
 	//}
 	return 0;
 }
-int L_DisableWindow(lua_State* passedState){
+int scriptDisableWindow(void** _passedArguments, int _numArguments){
 	MessageBoxEnabled=0;
 	return 0;
 }
-int L_FadeBustshotWithFiltering(lua_State* passedState){
-	FadeBustshot(lua_tonumber(passedState,1),lua_tonumber(passedState,7),lua_toboolean(passedState,8));
+int scriptFadeBustshotWithFiltering(void** _passedArguments, int _numArguments){
+	FadeBustshot(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,6),SCRIPT_TOBOOL(_passedArguments,7));
 	return 0;
 }
 //FadeBustshot( 2, FALSE, 0, 0, 0, 0, 0, TRUE );
 //FadeBustshot( SLOT, MOVE, X, Y, UNKNOWNA, UNKNOWNB, FADETIME, WAIT );
-int L_FadeBustshot(lua_State* passedState){
-	FadeBustshot(lua_tonumber(passedState,1),lua_tonumber(passedState,7),lua_toboolean(passedState,8));
+int scriptFadeBustshot(void** _passedArguments, int _numArguments){
+	FadeBustshot(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,6),SCRIPT_TOBOOL(_passedArguments,7));
 	return 0;
 }
 // Slot, file, volume
-int L_PlaySE(lua_State* passedState){
+int scriptPlaySE(void** _passedArguments, int _numArguments){
 	if (isSkipping==0 && seVolume>0){
-		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"SE/",seVolume);
+		GenericPlaySound(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TONUMBER(_passedArguments,2),"SE/",seVolume);
 	}
 	return 0;
 }
 // PlayVoice(channel, filename, volume)
-int L_PlayVoice(lua_State* passedState){
+int scriptPlayVoice(void** _passedArguments, int _numArguments){
 	if (isSkipping==0 && (hasOwnVoiceSetting==1 ? voiceVolume : seVolume)>0){
-		GenericPlaySound(lua_tonumber(passedState,1),lua_tostring(passedState,2),lua_tonumber(passedState,3),"voice/", hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
+		GenericPlaySound(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TONUMBER(_passedArguments,2),"voice/", hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
 	}
 	return 0;
 }
 // Loads a script file
-int L_CallScript(lua_State* passedState){
-	const char* filename = lua_tostring(passedState,1);
+int scriptCallScript(void** _passedArguments, int _numArguments){
+	const char* filename = SCRIPT_TOSTRING(_passedArguments,0);
 
 	char* tempstringconcat = CombineStringsPLEASEFREE(scriptFolder, "",filename,".txt");
 	char tempstring2[strlen(tempstringconcat)+1];
@@ -2702,36 +2695,36 @@ int L_CallScript(lua_State* passedState){
 	return 0;
 }
 // "bg_166", 7, 200, 0
-int L_ChangeScene(lua_State* passedState){
-	DrawScene(lua_tostring(passedState,1),0);
+int scriptChangeScene(void** _passedArguments, int _numArguments){
+	DrawScene(SCRIPT_TOSTRING(_passedArguments,0),0);
 	return 0;
 }
 // DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
 // x is relative to -320
 	// y is relative to -240???
 	// DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
-int L_DrawSprite(lua_State* passedState){
+int scriptDrawSprite(void** _passedArguments, int _numArguments){
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(lua_tonumber(passedState,1),lua_tostring(passedState,2),320+lua_tonumber(passedState,4),240+lua_tonumber(passedState,5),lua_tonumber(passedState,14), lua_tonumber(passedState,15),lua_toboolean(passedState,16),0);
-	//DrawBustshot(lua_tonumber(passedState,1)-1, lua_tostring(passedState,2), lua_tonumber(passedState,3), lua_tonumber(passedState,4), lua_tonumber(passedState,14), lua_tonumber(passedState,15), lua_toboolean(passedState,16), lua_tonumber(passedState,13));
+	DrawBustshot(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TOSTRING(_passedArguments,1),320+SCRIPT_TONUMBER(_passedArguments,3),240+SCRIPT_TONUMBER(_passedArguments,4),SCRIPT_TONUMBER(_passedArguments,13), SCRIPT_TONUMBER(_passedArguments,14),SCRIPT_TOBOOL(_passedArguments,15),0);
+	//DrawBustshot(SCRIPT_TONUMBER(_passedArguments,1)-1, SCRIPT_TOSTRING(_passedArguments,2), SCRIPT_TONUMBER(_passedArguments,3), SCRIPT_TONUMBER(_passedArguments,4), SCRIPT_TONUMBER(_passedArguments,14), SCRIPT_TONUMBER(_passedArguments,15), SCRIPT_TOBOOL(_passedArguments,16), SCRIPT_TONUMBER(_passedArguments,13));
 	return 0;
 }
 //MoveSprite(slot, destinationx, destinationy, ?, ?, ?, ?, ?, timeittakes, waitforcompletion)
 	// MoveSprite(5,-320,-4500,0,0,0,0,0,101400, TRUE)
-int L_MoveSprite(lua_State* passedState){
-	int _totalTime = lua_tonumber(passedState,9);
-	int _passedSlot = lua_tonumber(passedState,1);
+int scriptMoveSprite(void** _passedArguments, int _numArguments){
+	int _totalTime = SCRIPT_TONUMBER(_passedArguments,8);
+	int _passedSlot = SCRIPT_TONUMBER(_passedArguments,0);
 	// Number of x pixles the sprite has to move by the end
 
-	printf("arg2:%d\n",(int)lua_tonumber(passedState,2));
+	printf("arg2:%d\n",(int)SCRIPT_TONUMBER(_passedArguments,1));
 	printf("x:%d\n",Busts[_passedSlot].xOffset);
 
-	int _xTengoQue = lua_tonumber(passedState,2)-(Busts[_passedSlot].xOffset-320);
-	int _yTengoQue = lua_tonumber(passedState,3)-(Busts[_passedSlot].yOffset-240);
-	char _waitforcompletion = lua_toboolean(passedState,10);
+	int _xTengoQue = SCRIPT_TONUMBER(_passedArguments,1)-(Busts[_passedSlot].xOffset-320);
+	int _yTengoQue = SCRIPT_TONUMBER(_passedArguments,2)-(Busts[_passedSlot].yOffset-240);
+	char _waitforcompletion = SCRIPT_TOBOOL(_passedArguments,9);
 
-	Busts[_passedSlot].statusVariable3 = lua_tonumber(passedState,2)+320;
-	Busts[_passedSlot].statusVariable4 = lua_tonumber(passedState,3)+240;
+	Busts[_passedSlot].statusVariable3 = SCRIPT_TONUMBER(_passedArguments,1)+320;
+	Busts[_passedSlot].statusVariable4 = SCRIPT_TONUMBER(_passedArguments,2)+240;
 
 	if (_totalTime!=0){
 		unsigned int _totalFrames = floor(60*(_totalTime/(double)1000));
@@ -2754,8 +2747,8 @@ int L_MoveSprite(lua_State* passedState){
 		Busts[_passedSlot].bustStatus = BUST_STATUS_SPRITE_MOVE;
 
 	}else{
-		Busts[_passedSlot].xOffset=lua_tonumber(passedState,2)+320;
-		Busts[_passedSlot].yOffset=lua_tonumber(passedState,3)+240;
+		Busts[_passedSlot].xOffset=SCRIPT_TONUMBER(_passedArguments,1)+320;
+		Busts[_passedSlot].yOffset=SCRIPT_TONUMBER(_passedArguments,2)+240;
 	}
 
 	if (_waitforcompletion==1){
@@ -2763,8 +2756,8 @@ int L_MoveSprite(lua_State* passedState){
 			fpsCapStart();
 			controlsStart();
 			if (wasJustPressed(SCE_CTRL_CROSS)){
-				Busts[_passedSlot].xOffset=lua_tonumber(passedState,2)+320;
-				Busts[_passedSlot].yOffset=lua_tonumber(passedState,3)+240;
+				Busts[_passedSlot].xOffset=SCRIPT_TONUMBER(_passedArguments,1)+320;
+				Busts[_passedSlot].yOffset=SCRIPT_TONUMBER(_passedArguments,2)+240;
 			}
 			controlsEnd();
 			Update();
@@ -2778,8 +2771,8 @@ int L_MoveSprite(lua_State* passedState){
 }
 //FadeSprite(slot, time, waitfrocompletion)
 		// FadeSprite(5,700,FALSE)
-int L_FadeSprite(lua_State* passedState){
-	FadeBustshot(lua_tonumber(passedState,1),lua_tonumber(passedState,2),lua_toboolean(passedState,3));	
+int scriptFadeSprite(void** _passedArguments, int _numArguments){
+	FadeBustshot(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,1),SCRIPT_TOBOOL(_passedArguments,2));	
 	return 0;
 }
 // Select(numoptions, arrayofstring)
@@ -2788,15 +2781,15 @@ int L_FadeSprite(lua_State* passedState){
 //		Result can be found in LoadValueFromLocalWork("SelectResult")
 //			Choice result is zero based
 //				First choice is zero, second is one
-int L_Select(lua_State* passedState){
+int scriptSelect(void** _passedArguments, int _numArguments){
 	ChangeEasyTouchMode(TOUCHMODE_MENU);
-	int _totalOptions = lua_tonumber(passedState,1);
+	int _totalOptions = SCRIPT_TONUMBER(_passedArguments,0);
 	char* noobOptions[_totalOptions];
 	int i;
 	for (i=0;i<_totalOptions;i++){
-		lua_rawgeti(passedState,2,i+1);
-		noobOptions[i] = (char*)calloc(1,strlen(lua_tostring(passedState,-1))+1);
-		strcpy(noobOptions[i],lua_tostring(passedState,-1));
+		//lua_rawgeti(passedState,2,i+1); TODO - VERY IMPORTANT
+		noobOptions[i] = (char*)calloc(1,strlen(SCRIPT_TOSTRING(_passedArguments,-1))+1);
+		strcpy(noobOptions[i],SCRIPT_TOSTRING(_passedArguments,-1));
 	}
 
 	// This is the actual loop for choosing the choice
@@ -2834,20 +2827,20 @@ int L_Select(lua_State* passedState){
 	return 0;
 }
 // Loads a special variable
-int L_LoadValueFromLocalWork(lua_State* passedState){
-	const char* _wordWant = lua_tostring(passedState,1);
+int scriptLoadValueFromLocalWork(void** _passedArguments, int _numArguments){
+	const char* _wordWant = SCRIPT_TOSTRING(_passedArguments,0);
 	//printf("%s\n",_wordWant);
 	if ( strcmp(_wordWant,"SelectResult")==0){
-		lua_pushnumber(passedState,lastSelectionAnswer);
+		// lua_pushnumber(passedState,lastSelectionAnswer); TODO - Very important
 	}else{
 		LazyMessage("Unknown LoadValueFromLocalWork!",_wordWant,"Please report to MyLegGuy!","thx");
 	}
 	return 1;
 }
 // Calls a function that was made in a script
-int L_CallSection(lua_State* passedState){
+int scriptCallSection(void** _passedArguments, int _numArguments){
 	char buf[256];
-	strcpy(buf, lua_tostring(passedState,1));
+	strcpy(buf, SCRIPT_TOSTRING(_passedArguments,0));
 	strcat(buf,"()");
 	printf("%s\n",buf);
 	luaL_dostring(L,buf);
@@ -2857,20 +2850,20 @@ int L_CallSection(lua_State* passedState){
 // DrawFilm( 2,  0, 255, 0, 255, 0, 1000, TRUE );
 // DrawFilm (slot?, r, g, b, filer's alpha, ?, fadein time, wait for fadein) <-- Guess
 // DrawFilm ( type, r, g, b, a, style?, fadein time, wait for fadein )
-int L_DrawFilm(lua_State* passedState){
+int scriptDrawFilm(void** _passedArguments, int _numArguments){
 	// 0 is none, defaults to 1.
 	// 1 is "EffectColorMix"
 	// 2 is DrainColor
 	// 3 is Negative
 	// 10 is HorizontalBlur2
 	// 12 is GaussianBlur
-	char _filterType = lua_tonumber(passedState,1);
+	char _filterType = SCRIPT_TONUMBER(_passedArguments,0);
 	filterActive=1;
 	if (_filterType<=1){
-		filterR = lua_tonumber(passedState,2);
-		filterG = lua_tonumber(passedState,3);
-		filterB = lua_tonumber(passedState,4);
-		filterA = lua_tonumber(passedState,5);
+		filterR = SCRIPT_TONUMBER(_passedArguments,1);
+		filterG = SCRIPT_TONUMBER(_passedArguments,2);
+		filterB = SCRIPT_TONUMBER(_passedArguments,3);
+		filterA = SCRIPT_TONUMBER(_passedArguments,4);
 	}else{ // For these, we'll just draw a white filter.
 		filterR = 255;
 		filterG = 255;
@@ -2880,58 +2873,58 @@ int L_DrawFilm(lua_State* passedState){
 	return 0;
 }
 // I think this just has a time argument and a blocking argument. I've implemented neither.
-int L_FadeFilm(lua_State* passedState){
+int scriptFadeFilm(void** _passedArguments, int _numArguments){
 	filterActive=0;
 	return 0;
 }
 // This command is used so unoften that I didn't bother to make it look good.
 // FadeBG( 3000, TRUE );
-int L_FadeBG(lua_State* passedState){
+int scriptFadeBG(void** _passedArguments, int _numArguments){
 	if (currentBackground!=NULL){
 		freeTexture(currentBackground);
 		currentBackground=NULL;
 	}
 	return 0;
 }
-int L_MoveBust(lua_State* passedState){
-	MoveBustSlot(lua_tonumber(passedState,1),lua_tonumber(passedState,2));
+int scriptMoveBust(void** _passedArguments, int _numArguments){
+	MoveBustSlot(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,1));
 	return 0;
 }
-int L_GetScriptLine(lua_State* passedState){
-	lua_pushnumber(passedState,currentScriptLine);
+int scriptGetScriptLine(void** _passedArguments, int _numArguments){
+	// lua_pushnumber(passedState,currentScriptLine); TODO - Very important
 	return 1;
 }
-int L_DebugFile(lua_State* passedState){
-	WriteToDebugFile(lua_tostring(passedState,1));
+int scriptDebugFile(void** _passedArguments, int _numArguments){
+	WriteToDebugFile(SCRIPT_TOSTRING(_passedArguments,0));
 	return 0;
 }
-int L_OptionsEnableVoiceSetting(lua_State* passedState){
-	if (lua_gettop(passedState)==0){
+int scriptOptionsEnableVoiceSetting(void** _passedArguments, int _numArguments){
+	if (_numArguments==0){
 		hasOwnVoiceSetting=1;
 	}else{
-		hasOwnVoiceSetting = lua_toboolean(passedState,1);
+		hasOwnVoiceSetting = SCRIPT_TOBOOL(_passedArguments,0);
 	}
 	return 0;
 }
-int L_OptionsSetTextMode(lua_State* passedState){
-	gameTextDisplayMode = lua_tonumber(passedState,1);
+int scriptOptionsSetTextMode(void** _passedArguments, int _numArguments){
+	gameTextDisplayMode = SCRIPT_TONUMBER(_passedArguments,0);
 	setTextOnlyOverBackground(textOnlyOverBackground);
 	return 0;
 }
-int L_LoadADVBox(lua_State* passedState){
+int scriptLoadADVBox(void** _passedArguments, int _numArguments){
 	loadADVBox();
 	return 0;
 }
-int L_OptionsSetTips(lua_State* passedState){
-	gameHasTips=lua_toboolean(passedState,1);
+int scriptOptionsSetTips(void** _passedArguments, int _numArguments){
+	gameHasTips=SCRIPT_TOBOOL(_passedArguments,0);
 	return 0;
 }
-int L_OptionsCanChangeBoxAlpha(lua_State* passedState){
-	canChangeBoxAlpha = lua_toboolean(passedState,1);
+int scriptOptionsCanChangeBoxAlpha(void** _passedArguments, int _numArguments){
+	canChangeBoxAlpha = SCRIPT_TOBOOL(_passedArguments,0);
 	return 0;
 }
 // normal image 1, hover image 1, select image 1, normal image 2, hover image 2, select image 2
-int L_ImageChoice(lua_State* passedState){
+int scriptImageChoice(void** _passedArguments, int _numArguments){
 	int i;
 	// When you are not interacting with that choice
 	CrossTexture** _passedNormalImages;
@@ -2939,16 +2932,16 @@ int L_ImageChoice(lua_State* passedState){
 	CrossTexture** _passedHoverImages;
 	// When you've selected that choice
 	CrossTexture** _passedSelectImages;
-	int _numberOfChoices = lua_gettop(passedState)/3;
+	int _numberOfChoices = _numArguments/3;
 	printf("Found %d choices\n",_numberOfChoices);
 	_passedNormalImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
 	_passedHoverImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
 	_passedSelectImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
 
 	for (i=0;i<_numberOfChoices;i++){
-		_passedNormalImages[i] = safeLoadGamePNG(lua_tostring(passedState,i*3+1),graphicsLocation);
-		_passedHoverImages[i] = safeLoadGamePNG(lua_tostring(passedState,i*3+2),graphicsLocation);
-		_passedSelectImages[i] = safeLoadGamePNG(lua_tostring(passedState,i*3+3),graphicsLocation);
+		_passedNormalImages[i] = safeLoadGamePNG(SCRIPT_TOSTRING(_passedArguments,i*3+1-1),graphicsLocation);
+		_passedHoverImages[i] = safeLoadGamePNG(SCRIPT_TOSTRING(_passedArguments,i*3+2-1),graphicsLocation);
+		_passedSelectImages[i] = safeLoadGamePNG(SCRIPT_TOSTRING(_passedArguments,i*3+3-1),graphicsLocation);
 	}
 
 	// Y position of the first choice graphic
@@ -2965,7 +2958,7 @@ int L_ImageChoice(lua_State* passedState){
 
 
 	_startDrawX = (screenWidth - _firstChoiceWidth)/2.0;
-	_startDrawY = (textboxYOffset/2.0)-((_numberOfChoices)*_firstChoiceHeight+(_numberOfChoices-1)*_halfFirstChoiceHeight)/2.0;
+	_startDrawY = ((textboxYOffset!=0 ? textboxYOffset : screenHeight)/2.0)-((_numberOfChoices)*_firstChoiceHeight+(_numberOfChoices-1)*_halfFirstChoiceHeight)/2.0;
 	while (1){
 		fpsCapStart();
 
@@ -3012,160 +3005,10 @@ int L_ImageChoice(lua_State* passedState){
 	free(_passedHoverImages);
 	free(_passedSelectImages);
 
-	lua_pushnumber(passedState,_userChoice);
+	//lua_pushnumber(passedState,_userChoice); TODO - Very important
 	return 1;
 }
-void MakeLuaUseful(){
-	LUAREGISTER(L_OutputLine,"OutputLine")
-	LUAREGISTER(L_ClearMessage,"ClearMessage")
-	LUAREGISTER(L_OutputLineAll,"OutputLineAll")
-	LUAREGISTER(L_Wait,"Wait")
-	LUAREGISTER(L_DrawScene,"DrawScene")
-	LUAREGISTER(L_DrawSceneWithMask,"DrawSceneWithMask")
-	LUAREGISTER(L_PlayBGM,"PlayBGM")
-	LUAREGISTER(L_FadeoutBGM,"FadeOutBGM")
-	LUAREGISTER(L_DrawBustshotWithFiltering,"DrawBustshotWithFiltering");
-	LUAREGISTER(L_SetValidityOfInput,"SetValidityOfInput")
-	LUAREGISTER(L_FadeAllBustshots,"FadeAllBustshots")
-	LUAREGISTER(L_DisableWindow,"DisableWindow")
-	LUAREGISTER(L_DrawBustshot,"DrawBustshot")
-	LUAREGISTER(L_FadeBustshotWithFiltering,"FadeBustshotWithFiltering")
-	LUAREGISTER(L_FadeBustshot,"FadeBustshot")
-	LUAREGISTER(L_DrawScene,"DrawBG")
-	LUAREGISTER(L_PlaySE,"PlaySE")
-	LUAREGISTER(L_StopBGM,"StopBGM")
-	LUAREGISTER(L_CallScript,"CallScript") // Somehow, this works. No idea how.
-	LUAREGISTER(L_Select,"Select")
-	LUAREGISTER(L_LoadValueFromLocalWork,"LoadValueFromLocalWork")
-	LUAREGISTER(L_CallSection,"CallSection")
-	LUAREGISTER(L_CallSection,"JumpSection") // TODO - Is this correct?
-	LUAREGISTER(L_ChangeScene,"ChangeScene")
-	LUAREGISTER(L_DrawSprite,"DrawSprite")
-	LUAREGISTER(L_MoveSprite,"MoveSprite")
-	LUAREGISTER(L_FadeSprite,"FadeSprite")
-	LUAREGISTER(L_DrawFilm,"DrawFilm")
-	LUAREGISTER(L_FadeFilm,"FadeFilm") // Used for fixing negative and removing films?
-	LUAREGISTER(L_FadeBG,"FadeBG")
-	LUAREGISTER(L_PlayVoice,"PlayVoice")
-	LUAREGISTER(L_DisplayWindow,"DisplayWindow")
-
-	// Options changing commands
-	LUAREGISTER(L_OptionsEnableVoiceSetting,"OptionsEnableVoiceSetting");
-	LUAREGISTER(L_LoadADVBox,"OptionsLoadADVBox");
-	LUAREGISTER(L_OptionsSetTextMode,"OptionsSetTextMode");
-	LUAREGISTER(L_OptionsSetTips,"OptionsSetTipExist");
-	LUAREGISTER(L_OptionsCanChangeBoxAlpha,"OptionsCanChangeBoxAlpha");
-
-	// Commands exclusive to my engine
-	LUAREGISTER(L_DebugFile,"Debugfile")
-	LUAREGISTER(L_MoveBust,"MoveBust")
-	LUAREGISTER(L_ImageChoice,"ImageChoice");
-
-	// Functions that intentionally do nothing
-	LUAREGISTER(L_NotYet,"SetFontId")
-	LUAREGISTER(L_NotYet,"SetCharSpacing")
-	LUAREGISTER(L_NotYet,"SetLineSpacing")
-	LUAREGISTER(L_NotYet,"SetFontSize")
-	LUAREGISTER(L_NotYet,"SetNameFormat")
-	LUAREGISTER(L_NotYet,"SetScreenAspect")
-	LUAREGISTER(L_NotYet,"SetWindowPos")
-	LUAREGISTER(L_NotYet,"SetWindowSize")
-	LUAREGISTER(L_NotYet,"SetWindowMargins")
-	LUAREGISTER(L_NotYet,"SetGUIPosition")
-	LUAREGISTER(L_NotYet,"SetValidityOfSaving")
-	LUAREGISTER(L_NotYet,"SetValidityOfLoading")
-	LUAREGISTER(L_NotYet,"EnableJumpingOfReturnIcon")
-
-	// Functions I should implement
-	LUAREGISTER(L_NotYet,"SetSpeedOfMessage")
-	LUAREGISTER(L_NotYet,"ShakeScreen")
-	LUAREGISTER(L_NotYet,"ShakeScreenSx")
-	LUAREGISTER(L_NotYet,"SetDrawingPointOfMessage")
-	LUAREGISTER(L_NotYet,"SetStyleOfMessageSwinging")
-	LUAREGISTER(L_NotYet,"SetValidityOfWindowDisablingWhenGraphicsControl")
-	LUAREGISTER(L_NotYet,"StopSE")
-	LUAREGISTER(L_NotYet,"SetValidityOfTextFade")
-	LUAREGISTER(L_NotYet,"SetValidityOfSkipping")
-	LUAREGISTER(L_NotYet,"GetAchievement")
-	LUAREGISTER(L_NotYet,"SetFontOfMessage")
-	LUAREGISTER(L_NotYet,"ActivateScreenEffectForcedly")
-	LUAREGISTER(L_NotYet,"SetValidityOfUserEffectSpeed")
-	LUAREGISTER(L_NotYet,"Negative") // Command for color inversion
-									// Negative( 1000, TRUE ); is inveted
-									// FadeFilm( 200, TRUE ); fixes it??!
-									// Name provably means to negate the colors, or replace the colors with their complementary ones on the other side of the color wheel
-									// First arg is maybe time when it fades to inverted and argument is proably if it's inverted
-	// Not investigated yet
-		LUAREGISTER(L_NotYet,"BlurOffOn")
-		LUAREGISTER(L_NotYet,"Break")
-		LUAREGISTER(L_NotYet,"ChangeBustshot")
-		LUAREGISTER(L_NotYet,"ChangeVolumeOfBGM")
-		LUAREGISTER(L_NotYet,"ChapterPreview")
-		LUAREGISTER(L_NotYet,"CheckTipsAchievements")
-		LUAREGISTER(L_NotYet,"CloseGallery")
-		LUAREGISTER(L_NotYet,"ControlMotionOfSprite")
-		LUAREGISTER(L_NotYet,"DisableBlur")
-		LUAREGISTER(L_NotYet,"DisableEffector")
-		LUAREGISTER(L_NotYet,"DisableGradation")
-		LUAREGISTER(L_NotYet,"DrawBGWithMask")
-		LUAREGISTER(L_NotYet,"DrawBustFace")
-		LUAREGISTER(L_NotYet,"DrawFace")
-		LUAREGISTER(L_NotYet,"DrawSpriteWithFiltering")
-		LUAREGISTER(L_NotYet,"DrawStandgraphic")
-		LUAREGISTER(L_NotYet,"EnableBlur")
-		LUAREGISTER(L_NotYet,"EnableHorizontalGradation")
-		LUAREGISTER(L_NotYet,"EnlargeScreen")
-		LUAREGISTER(L_NotYet,"ExecutePlannedControl")
-		LUAREGISTER(L_NotYet,"FadeAllBustshots2")
-		LUAREGISTER(L_NotYet,"FadeAllBustshots3")
-		LUAREGISTER(L_NotYet,"FadeFace")
-		LUAREGISTER(L_NotYet,"FadeOutMultiBGM")
-		LUAREGISTER(L_NotYet,"FadeOutSE")
-		LUAREGISTER(L_NotYet,"FadeScene")
-		LUAREGISTER(L_NotYet,"FadeSceneWithMask")
-		LUAREGISTER(L_NotYet,"FadeSpriteWithFiltering")
-		LUAREGISTER(L_NotYet,"GetLocalFlag")
-		LUAREGISTER(L_NotYet,"GetPositionOfSprite")
-		LUAREGISTER(L_NotYet,"HideGallery")
-		LUAREGISTER(L_NotYet,"JumpScript")
-		LUAREGISTER(L_NotYet,"LanguagePrompt")
-		LUAREGISTER(L_NotYet,"MoveBustshot")
-		LUAREGISTER(L_NotYet,"MoveSpriteEx")
-		LUAREGISTER(L_NotYet,"NullOp")
-		LUAREGISTER(L_NotYet,"OpenGallery")
-		LUAREGISTER(L_NotYet,"PlaceViewTip")
-		LUAREGISTER(L_NotYet,"PlaceViewTip2")
-		LUAREGISTER(L_NotYet,"PlusStandgraphic1")
-		LUAREGISTER(L_NotYet,"PlusStandgraphic2")
-		LUAREGISTER(L_NotYet,"PlusStandgraphic3")
-		LUAREGISTER(L_NotYet,"PreloadBitmap")
-		LUAREGISTER(L_NotYet,"Return")
-		LUAREGISTER(L_NotYet,"RevealGallery")
-		LUAREGISTER(L_NotYet,"SavePoint")
-		LUAREGISTER(L_NotYet,"SetGuiPosition")
-		LUAREGISTER(L_NotYet,"SetLocalFlag")
-		LUAREGISTER(L_NotYet,"SetSkipAll")
-		LUAREGISTER(L_NotYet,"SetTextFade")
-		LUAREGISTER(L_NotYet,"SetValidityOfFilmToFace")
-		LUAREGISTER(L_NotYet,"SetValidityOfInterface")
-		LUAREGISTER(L_NotYet,"SpringText")
-		LUAREGISTER(L_NotYet,"StartShakingOfAllObjects")
-		LUAREGISTER(L_NotYet,"StartShakingOfBustshot")
-		LUAREGISTER(L_NotYet,"StartShakingOfSprite")
-		LUAREGISTER(L_NotYet,"StartShakingOfWindow")
-		LUAREGISTER(L_NotYet,"StoreValueToLocalWork")
-		LUAREGISTER(L_NotYet,"TerminateShakingOfAllObjects")
-		LUAREGISTER(L_NotYet,"TerminateShakingOfBustshot")
-		LUAREGISTER(L_NotYet,"TerminateShakingOfSprite")
-		LUAREGISTER(L_NotYet,"TerminateShakingOfWindow")
-		LUAREGISTER(L_NotYet,"TitleScreen")
-		LUAREGISTER(L_NotYet,"ViewChapterScreen")
-		LUAREGISTER(L_NotYet,"ViewExtras")
-		LUAREGISTER(L_NotYet,"ViewTips")
-		LUAREGISTER(L_NotYet,"WaitForInput")
-		LUAREGISTER(L_NotYet,"WaitToFinishSEPlaying")
-		LUAREGISTER(L_NotYet,"WaitToFinishVoicePlaying")
-}
+#include "LuaWrapperDefinitions.h"
 //======================================================
 void Draw(char _shouldDrawMessageBox){
 	int i;
@@ -3191,10 +3034,6 @@ void Draw(char _shouldDrawMessageBox){
 	if (_shouldDrawMessageBox==1){
 		DrawMessageText();
 	}
-}
-// Returns what RunScript returns
-char LuaThread(char* _torun){
-	return RunScript(scriptFolder, _torun,1);
 }
 // Returns 0 if normal
 // Returns 1 if user quit
@@ -4470,7 +4309,7 @@ signed char init(){
 	// Initialize Lua
 	L = luaL_newstate();
 	luaL_openlibs(L);
-	MakeLuaUseful();
+	initLuaWrappers();
 
 	if (init_dohappylua()==2){
 		return 2;
@@ -4492,6 +4331,9 @@ signed char init(){
 		svcGetThreadPriority(&_foundMainThreadPriority, CUR_THREAD_HANDLE);
 		_3dsSoundUpdateThread = threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
 	#endif
+
+	LazyMessage("Dont forget to fix the stuff labeled TODO Very important","At this stage, the scripts will not work fully.",NULL,NULL);
+
 	return 0;
 }
 int main(int argc, char *argv[]){
@@ -4548,7 +4390,7 @@ int main(int argc, char *argv[]){
 				break;
 			case GAMESTATUS_MAINGAME:
 				; // This blank statement is here to allow me to declare a variable. Variables can not be declared directly after a label.
-				char _didWork = LuaThread((char*)nextScriptToLoad);
+				char _didWork = RunScript(scriptFolder, nextScriptToLoad, 1);
 				if (currentPresetFileList.length!=0){
 					if (_didWork==0){ // If the script didn't run, don't advance the game
 						currentPresetChapter--; // Go back a script
