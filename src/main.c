@@ -20,12 +20,6 @@
 		TODO - Inversion
 			I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
 	TODO - Inform user of errors in game specific Lua
-	TODO - Make another scripting language that can share functions with my existing Lua language. 
-		- Make a bunch of normal functions for script things
-			- These normal functions take two arguments. One argument is the number of arguments passed from the script call. The second argument is a void* array of malloc'd arguments
-			- I guess the array can be created and freed in a method I call from my Lua wrapper functions
-		- Lua wrapper functions
-			- A macro will make this really easy
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -1357,14 +1351,14 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 		_time=0;
 	}
 
-	//int passedSlot = SCRIPT_TONUMBER(_passedArguments,1)-1;
+	//int passedSlot = SCRIPT_TOINT(_passedArguments,1)-1;
 	//Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
 	//Busts[passedSlot].statusVariable = 
 	Busts[passedSlot].alpha=0;
 	Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
 	if (_time!=0){
 		Busts[passedSlot].alpha=255;
-		//int _time = floor(SCRIPT_TONUMBER(_passedArguments,7));
+		//int _time = floor(SCRIPT_TOINT(_passedArguments,7));
 		int _totalFrames = floor(60*(_time/(double)1000));
 		if (_totalFrames==0){
 			_totalFrames=1;
@@ -2441,58 +2435,58 @@ void setDefaultGame(char* _defaultGameFolderName){
 /*
 =================================================
 */
-int scriptDisplayWindow(void** _passedArguments, int _numArguments){
+void** scriptDisplayWindow(void** _passedArguments, int _numArguments){
 	MessageBoxEnabled=1;
-	return 0;
+	return NULL;
 }
-int scriptClearMessage(void** _passedArguments, int _numArguments){
+void** scriptClearMessage(void** _passedArguments, int _numArguments){
 	currentLine=0;
 	ClearMessageArray();
-	return 0;
+	return NULL;
 }
-int scriptOutputLine(void** _passedArguments, int _numArguments){
+void** scriptOutputLine(void** _passedArguments, int _numArguments){
 	if (!SCRIPT_ISMAYBENULL(_passedArguments,3)){
 		if (strcmp(SCRIPT_TOSTRING(_passedArguments,3),"0")==0){
-			return 0;
+			return NULL;
 		}
-		OutputLine((unsigned const char*)SCRIPT_TOSTRING(_passedArguments,3),SCRIPT_TONUMBER(_passedArguments,4),0);
+		OutputLine((unsigned const char*)SCRIPT_TOSTRING(_passedArguments,3),SCRIPT_TOINT(_passedArguments,4),0);
 		outputLineWait();
 	}
-	return 0;
+	return NULL;
 }
 // Null, text, line type
-int scriptOutputLineAll(void** _passedArguments, int _numArguments){
+void** scriptOutputLineAll(void** _passedArguments, int _numArguments){
 	if (!SCRIPT_ISMAYBENULL(_passedArguments,1)){
 		if (strcmp(SCRIPT_TOSTRING(_passedArguments,1),"0")==0){
-			return 0;
+			return NULL;
 		}
-		OutputLine((unsigned const char*)SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TONUMBER(_passedArguments,2),1);
+		OutputLine((unsigned const char*)SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TOINT(_passedArguments,2),1);
 		outputLineWait();
 	}
-	return 0;
+	return NULL;
 }
 //
-int scriptWait(void** _passedArguments, int _numArguments){
+void** scriptWait(void** _passedArguments, int _numArguments){
 	if (isSkipping!=1 && capEnabled==1){
-		wait(SCRIPT_TONUMBER(_passedArguments,0));
+		wait(SCRIPT_TOINT(_passedArguments,0));
 	}
-	return 0;
+	return NULL;
 }
 // filename, filter, unknown, unknown, time
-int scriptDrawSceneWithMask(void** _passedArguments, int _numArguments){
-	DrawScene(SCRIPT_TOSTRING(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,4));
-	return 0;
+void** scriptDrawSceneWithMask(void** _passedArguments, int _numArguments){
+	DrawScene(SCRIPT_TOSTRING(_passedArguments,0),SCRIPT_TOINT(_passedArguments,4));
+	return NULL;
 }
 // filename
 // fadein
-int scriptDrawScene(void** _passedArguments, int _numArguments){
-	DrawScene(SCRIPT_TOSTRING(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,1));
-	return 0;
+void** scriptDrawScene(void** _passedArguments, int _numArguments){
+	DrawScene(SCRIPT_TOSTRING(_passedArguments,0),SCRIPT_TOINT(_passedArguments,1));
+	return NULL;
 }
 // Placeholder for unimplemented function
-int scriptNotYet(void** _passedArguments, int _numArguments){
+void** scriptNotYet(void** _passedArguments, int _numArguments){
 	printf("An unimplemented Lua function was just executed!\n");
-	return 0;
+	return NULL;
 }
 // Fist arg seems to be a channel arg.
 	// Usually 1 for msys
@@ -2500,43 +2494,43 @@ int scriptNotYet(void** _passedArguments, int _numArguments){
 // Second arg is path in BGM folder without extention
 // Third arg is volume. 128 seems to be average. I can hardly hear 8 with computer volume on 10.
 // Fourth arg is unknown
-int scriptPlayBGM(void** _passedArguments, int _numArguments){
-	PlayBGM(SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TONUMBER(_passedArguments,2),SCRIPT_TONUMBER(_passedArguments,0));
+void** scriptPlayBGM(void** _passedArguments, int _numArguments){
+	PlayBGM(SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TOINT(_passedArguments,2),SCRIPT_TOINT(_passedArguments,0));
 
-	if (SCRIPT_TONUMBER(_passedArguments,3)!=0){
+	if (SCRIPT_TOINT(_passedArguments,3)!=0){
 		printf("*************** VERY IMPORTANT *******************\nThe last PlayBGM call didn't have 0 for the fourth argument! This is a good place to investigate!\n");
 	}
 
-	return 0;
+	return NULL;
 }
 // Some int argument
 // Maybe music slot
-int scriptStopBGM(void** _passedArguments, int _numArguments){
-	char _slot = SCRIPT_TONUMBER(_passedArguments,0);
+void** scriptStopBGM(void** _passedArguments, int _numArguments){
+	char _slot = SCRIPT_TOINT(_passedArguments,0);
 	if (currentMusic[_slot]!=NULL){
 		StopBGM(_slot);
 		FreeBGM(_slot);
 	}
-	return 0;
+	return NULL;
 }
 #if SOUNDPLAYER == SND_3DS
 	void nathanSetChannelVolume(unsigned char _a, float _b);
 	// slot, time, should wair
-	int scriptFadeoutBGM(void** _passedArguments, int _numArguments){
-		if (currentMusic[(int)SCRIPT_TONUMBER(_passedArguments,0)]==NULL){
-			return 0;
+	void** scriptFadeoutBGM(void** _passedArguments, int _numArguments){
+		if (currentMusic[(int)SCRIPT_TOINT(_passedArguments,0)]==NULL){
+			return NULL;
 		}
 		if (SCRIPT_TOBOOL(_passedArguments,2)==0){
-			stopMusic(currentMusicHandle[(int)SCRIPT_TONUMBER(_passedArguments,0)]);
-			return 0;
+			stopMusic(currentMusicHandle[(int)SCRIPT_TOINT(_passedArguments,0)]);
+			return NULL;
 		}
-		float _perTenthSecond=(float)((float)(1*bgmVolume)/((double)SCRIPT_TONUMBER(_passedArguments,1)/(double)100));
+		float _perTenthSecond=(float)((float)(1*bgmVolume)/((double)SCRIPT_TOINT(_passedArguments,1)/(double)100));
 		//float _perTenthSecond=.1;
 		if (_perTenthSecond==0){
 			_perTenthSecond=.00001;
 		}
-		float _currentFadeoutVolume=((1*((float)currentMusicUnfixedVolume[(int)SCRIPT_TONUMBER(_passedArguments,0)]/(float)256))*bgmVolume);
-		unsigned char _passedHandle = currentMusicHandle[(int)SCRIPT_TONUMBER(_passedArguments,0)];
+		float _currentFadeoutVolume=((1*((float)currentMusicUnfixedVolume[(int)SCRIPT_TOINT(_passedArguments,0)]/(float)256))*bgmVolume);
+		unsigned char _passedHandle = currentMusicHandle[(int)SCRIPT_TOINT(_passedArguments,0)];
 		while (_currentFadeoutVolume>0){
 			if (_currentFadeoutVolume<_perTenthSecond){
 				_currentFadeoutVolume=0;
@@ -2550,19 +2544,19 @@ int scriptStopBGM(void** _passedArguments, int _numArguments){
 	}
 #else
 	// slot, time, (bool) should wait for finish
-	int scriptFadeoutBGM(void** _passedArguments, int _numArguments){
-		if (currentMusic[(int)SCRIPT_TONUMBER(_passedArguments,0)]!=NULL){
+	void** scriptFadeoutBGM(void** _passedArguments, int _numArguments){
+		if (currentMusic[(int)SCRIPT_TOINT(_passedArguments,0)]!=NULL){
 			#if SOUNDPLAYER == SND_SOLOUD
-				if (currentMusicHandle[(int)SCRIPT_TONUMBER(_passedArguments,0)]==0){
-					return 0;
+				if (currentMusicHandle[(int)SCRIPT_TOINT(_passedArguments,0)]==0){
+					return NULL;
 				}
 			#endif
-			fadeoutMusic(currentMusicHandle[(int)SCRIPT_TONUMBER(_passedArguments,0)],SCRIPT_TONUMBER(_passedArguments,1));
+			fadeoutMusic(currentMusicHandle[(int)SCRIPT_TOINT(_passedArguments,0)],SCRIPT_TOINT(_passedArguments,1));
 			if (SCRIPT_TOBOOL(_passedArguments,2)==1){
-				wait(SCRIPT_TONUMBER(_passedArguments,1));
+				wait(SCRIPT_TOINT(_passedArguments,1));
 			}
 		}
-		return 0;
+		return NULL;
 	}
 #endif
 // Bustshot slot? (Normally 1-3 used, 5 for black, 6 for cinema 7 for title)
@@ -2582,15 +2576,15 @@ int scriptStopBGM(void** _passedArguments, int _numArguments){
 		// Textbox's layer is 31. >31 layer shows a not darkened sprite.
 	// Fadein time
 	// (bool) wait for fadein? (15)
-int scriptDrawBustshotWithFiltering(void** _passedArguments, int _numArguments){
+void** scriptDrawBustshotWithFiltering(void** _passedArguments, int _numArguments){
 	int i;
 	for (i=8;i!=12;i++){
-		if (SCRIPT_TONUMBER(_passedArguments,i-1)!=0){
+		if (SCRIPT_TOINT(_passedArguments,i-1)!=0){
 			printf("***********************IMPORTANT INFORMATION***************************\nAn argument I know nothing about was just used in DrawBustshotWithFiltering!\n***********************************************\n");
 		}
 	}
-	DrawBustshot(SCRIPT_TONUMBER(_passedArguments,0), SCRIPT_TOSTRING(_passedArguments,1), SCRIPT_TONUMBER(_passedArguments,4), SCRIPT_TONUMBER(_passedArguments,5), SCRIPT_TONUMBER(_passedArguments,12), SCRIPT_TONUMBER(_passedArguments,13), SCRIPT_TOBOOL(_passedArguments,14), SCRIPT_TONUMBER(_passedArguments,11));
-	return 0;
+	DrawBustshot(SCRIPT_TOINT(_passedArguments,0), SCRIPT_TOSTRING(_passedArguments,1), SCRIPT_TOINT(_passedArguments,4), SCRIPT_TOINT(_passedArguments,5), SCRIPT_TOINT(_passedArguments,12), SCRIPT_TOINT(_passedArguments,13), SCRIPT_TOBOOL(_passedArguments,14), SCRIPT_TOINT(_passedArguments,11));
+	return NULL;
 }
 // Butshot slot
 	// Filename
@@ -2612,34 +2606,34 @@ int scriptDrawBustshotWithFiltering(void** _passedArguments, int _numArguments){
 	// (bool) wait for fadein? (16)
 	//
 	// * The bustshot can only stay after a scene change if it's created the line before the scene change AND it doesn't wait for fadein completion.
-int scriptDrawBustshot(void** _passedArguments, int _numArguments){
+void** scriptDrawBustshot(void** _passedArguments, int _numArguments){
 	startDrawing();
 	Draw(MessageBoxEnabled);
 	endDrawing();
 
 	int i;
 	for (i=8;i!=12;i++){
-		if (SCRIPT_TONUMBER(_passedArguments,i-1)!=0){
+		if (SCRIPT_TOINT(_passedArguments,i-1)!=0){
 			printf("***********************IMPORTANT INFORMATION***************************\nAn argument I know nothing about was just used in DrawBustshotWithFiltering!\n***********************************************\n");
 		}
 	}
 	
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(SCRIPT_TONUMBER(_passedArguments,0), SCRIPT_TOSTRING(_passedArguments,1), SCRIPT_TONUMBER(_passedArguments,2), SCRIPT_TONUMBER(_passedArguments,3), SCRIPT_TONUMBER(_passedArguments,13), SCRIPT_TONUMBER(_passedArguments,14), SCRIPT_TOBOOL(_passedArguments,15), SCRIPT_TONUMBER(_passedArguments,12));
-	return 0;
+	DrawBustshot(SCRIPT_TOINT(_passedArguments,0), SCRIPT_TOSTRING(_passedArguments,1), SCRIPT_TOINT(_passedArguments,2), SCRIPT_TOINT(_passedArguments,3), SCRIPT_TOINT(_passedArguments,13), SCRIPT_TOINT(_passedArguments,14), SCRIPT_TOBOOL(_passedArguments,15), SCRIPT_TOINT(_passedArguments,12));
+	return NULL;
 }
-int scriptSetValidityOfInput(void** _passedArguments, int _numArguments){
+void** scriptSetValidityOfInput(void** _passedArguments, int _numArguments){
 	if (SCRIPT_TOBOOL(_passedArguments,0)==1){
 		InputValidity=1;
 	}else{
 		InputValidity=0;
 	}
-	return 0;
+	return NULL;
 }
 // Fadeout time
 // Wait for completely fadeout
-int scriptFadeAllBustshots(void** _passedArguments, int _numArguments){
-	FadeAllBustshots(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TOBOOL(_passedArguments,1));
+void** scriptFadeAllBustshots(void** _passedArguments, int _numArguments){
+	FadeAllBustshots(SCRIPT_TOINT(_passedArguments,0),SCRIPT_TOBOOL(_passedArguments,1));
 	//int i;
 	//for (i=0;i<MAXBUSTS;i++){
 	//	if (Busts[i].isActive==1){
@@ -2647,38 +2641,38 @@ int scriptFadeAllBustshots(void** _passedArguments, int _numArguments){
 	//		ResetBustStruct(&(Busts[i]));
 	//	}
 	//}
-	return 0;
+	return NULL;
 }
-int scriptDisableWindow(void** _passedArguments, int _numArguments){
+void** scriptDisableWindow(void** _passedArguments, int _numArguments){
 	MessageBoxEnabled=0;
-	return 0;
+	return NULL;
 }
-int scriptFadeBustshotWithFiltering(void** _passedArguments, int _numArguments){
-	FadeBustshot(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,6),SCRIPT_TOBOOL(_passedArguments,7));
-	return 0;
+void** scriptFadeBustshotWithFiltering(void** _passedArguments, int _numArguments){
+	FadeBustshot(SCRIPT_TOINT(_passedArguments,0),SCRIPT_TOINT(_passedArguments,6),SCRIPT_TOBOOL(_passedArguments,7));
+	return NULL;
 }
 //FadeBustshot( 2, FALSE, 0, 0, 0, 0, 0, TRUE );
 //FadeBustshot( SLOT, MOVE, X, Y, UNKNOWNA, UNKNOWNB, FADETIME, WAIT );
-int scriptFadeBustshot(void** _passedArguments, int _numArguments){
-	FadeBustshot(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,6),SCRIPT_TOBOOL(_passedArguments,7));
-	return 0;
+void** scriptFadeBustshot(void** _passedArguments, int _numArguments){
+	FadeBustshot(SCRIPT_TOINT(_passedArguments,0),SCRIPT_TOINT(_passedArguments,6),SCRIPT_TOBOOL(_passedArguments,7));
+	return NULL;
 }
 // Slot, file, volume
-int scriptPlaySE(void** _passedArguments, int _numArguments){
+void** scriptPlaySE(void** _passedArguments, int _numArguments){
 	if (isSkipping==0 && seVolume>0){
-		GenericPlaySound(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TONUMBER(_passedArguments,2),"SE/",seVolume);
+		GenericPlaySound(SCRIPT_TOINT(_passedArguments,0),SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TOINT(_passedArguments,2),"SE/",seVolume);
 	}
-	return 0;
+	return NULL;
 }
 // PlayVoice(channel, filename, volume)
-int scriptPlayVoice(void** _passedArguments, int _numArguments){
+void** scriptPlayVoice(void** _passedArguments, int _numArguments){
 	if (isSkipping==0 && (hasOwnVoiceSetting==1 ? voiceVolume : seVolume)>0){
-		GenericPlaySound(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TONUMBER(_passedArguments,2),"voice/", hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
+		GenericPlaySound(SCRIPT_TOINT(_passedArguments,0),SCRIPT_TOSTRING(_passedArguments,1),SCRIPT_TOINT(_passedArguments,2),"voice/", hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
 	}
-	return 0;
+	return NULL;
 }
 // Loads a script file
-int scriptCallScript(void** _passedArguments, int _numArguments){
+void** scriptCallScript(void** _passedArguments, int _numArguments){
 	const char* filename = SCRIPT_TOSTRING(_passedArguments,0);
 
 	char* tempstringconcat = CombineStringsPLEASEFREE(scriptFolder, "",filename,".txt");
@@ -2692,39 +2686,39 @@ int scriptCallScript(void** _passedArguments, int _numArguments){
 	}else{
 		printf("Failed to find script\n");
 	}
-	return 0;
+	return NULL;
 }
 // "bg_166", 7, 200, 0
-int scriptChangeScene(void** _passedArguments, int _numArguments){
+void** scriptChangeScene(void** _passedArguments, int _numArguments){
 	DrawScene(SCRIPT_TOSTRING(_passedArguments,0),0);
-	return 0;
+	return NULL;
 }
 // DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
 // x is relative to -320
 	// y is relative to -240???
 	// DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
-int scriptDrawSprite(void** _passedArguments, int _numArguments){
+void** scriptDrawSprite(void** _passedArguments, int _numArguments){
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TOSTRING(_passedArguments,1),320+SCRIPT_TONUMBER(_passedArguments,3),240+SCRIPT_TONUMBER(_passedArguments,4),SCRIPT_TONUMBER(_passedArguments,13), SCRIPT_TONUMBER(_passedArguments,14),SCRIPT_TOBOOL(_passedArguments,15),0);
-	//DrawBustshot(SCRIPT_TONUMBER(_passedArguments,1)-1, SCRIPT_TOSTRING(_passedArguments,2), SCRIPT_TONUMBER(_passedArguments,3), SCRIPT_TONUMBER(_passedArguments,4), SCRIPT_TONUMBER(_passedArguments,14), SCRIPT_TONUMBER(_passedArguments,15), SCRIPT_TOBOOL(_passedArguments,16), SCRIPT_TONUMBER(_passedArguments,13));
-	return 0;
+	DrawBustshot(SCRIPT_TOINT(_passedArguments,0),SCRIPT_TOSTRING(_passedArguments,1),320+SCRIPT_TOINT(_passedArguments,3),240+SCRIPT_TOINT(_passedArguments,4),SCRIPT_TOINT(_passedArguments,13), SCRIPT_TOINT(_passedArguments,14),SCRIPT_TOBOOL(_passedArguments,15),0);
+	//DrawBustshot(SCRIPT_TOINT(_passedArguments,1)-1, SCRIPT_TOSTRING(_passedArguments,2), SCRIPT_TOINT(_passedArguments,3), SCRIPT_TOINT(_passedArguments,4), SCRIPT_TOINT(_passedArguments,14), SCRIPT_TOINT(_passedArguments,15), SCRIPT_TOBOOL(_passedArguments,16), SCRIPT_TOINT(_passedArguments,13));
+	return NULL;
 }
 //MoveSprite(slot, destinationx, destinationy, ?, ?, ?, ?, ?, timeittakes, waitforcompletion)
 	// MoveSprite(5,-320,-4500,0,0,0,0,0,101400, TRUE)
-int scriptMoveSprite(void** _passedArguments, int _numArguments){
-	int _totalTime = SCRIPT_TONUMBER(_passedArguments,8);
-	int _passedSlot = SCRIPT_TONUMBER(_passedArguments,0);
+void** scriptMoveSprite(void** _passedArguments, int _numArguments){
+	int _totalTime = SCRIPT_TOINT(_passedArguments,8);
+	int _passedSlot = SCRIPT_TOINT(_passedArguments,0);
 	// Number of x pixles the sprite has to move by the end
 
-	printf("arg2:%d\n",(int)SCRIPT_TONUMBER(_passedArguments,1));
+	printf("arg2:%d\n",(int)SCRIPT_TOINT(_passedArguments,1));
 	printf("x:%d\n",Busts[_passedSlot].xOffset);
 
-	int _xTengoQue = SCRIPT_TONUMBER(_passedArguments,1)-(Busts[_passedSlot].xOffset-320);
-	int _yTengoQue = SCRIPT_TONUMBER(_passedArguments,2)-(Busts[_passedSlot].yOffset-240);
+	int _xTengoQue = SCRIPT_TOINT(_passedArguments,1)-(Busts[_passedSlot].xOffset-320);
+	int _yTengoQue = SCRIPT_TOINT(_passedArguments,2)-(Busts[_passedSlot].yOffset-240);
 	char _waitforcompletion = SCRIPT_TOBOOL(_passedArguments,9);
 
-	Busts[_passedSlot].statusVariable3 = SCRIPT_TONUMBER(_passedArguments,1)+320;
-	Busts[_passedSlot].statusVariable4 = SCRIPT_TONUMBER(_passedArguments,2)+240;
+	Busts[_passedSlot].statusVariable3 = SCRIPT_TOINT(_passedArguments,1)+320;
+	Busts[_passedSlot].statusVariable4 = SCRIPT_TOINT(_passedArguments,2)+240;
 
 	if (_totalTime!=0){
 		unsigned int _totalFrames = floor(60*(_totalTime/(double)1000));
@@ -2747,8 +2741,8 @@ int scriptMoveSprite(void** _passedArguments, int _numArguments){
 		Busts[_passedSlot].bustStatus = BUST_STATUS_SPRITE_MOVE;
 
 	}else{
-		Busts[_passedSlot].xOffset=SCRIPT_TONUMBER(_passedArguments,1)+320;
-		Busts[_passedSlot].yOffset=SCRIPT_TONUMBER(_passedArguments,2)+240;
+		Busts[_passedSlot].xOffset=SCRIPT_TOINT(_passedArguments,1)+320;
+		Busts[_passedSlot].yOffset=SCRIPT_TOINT(_passedArguments,2)+240;
 	}
 
 	if (_waitforcompletion==1){
@@ -2756,8 +2750,8 @@ int scriptMoveSprite(void** _passedArguments, int _numArguments){
 			fpsCapStart();
 			controlsStart();
 			if (wasJustPressed(SCE_CTRL_CROSS)){
-				Busts[_passedSlot].xOffset=SCRIPT_TONUMBER(_passedArguments,1)+320;
-				Busts[_passedSlot].yOffset=SCRIPT_TONUMBER(_passedArguments,2)+240;
+				Busts[_passedSlot].xOffset=SCRIPT_TOINT(_passedArguments,1)+320;
+				Busts[_passedSlot].yOffset=SCRIPT_TOINT(_passedArguments,2)+240;
 			}
 			controlsEnd();
 			Update();
@@ -2767,13 +2761,13 @@ int scriptMoveSprite(void** _passedArguments, int _numArguments){
 			fpsCapWait();
 		}
 	}
-	return 0;
+	return NULL;
 }
 //FadeSprite(slot, time, waitfrocompletion)
 		// FadeSprite(5,700,FALSE)
-int scriptFadeSprite(void** _passedArguments, int _numArguments){
-	FadeBustshot(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,1),SCRIPT_TOBOOL(_passedArguments,2));	
-	return 0;
+void** scriptFadeSprite(void** _passedArguments, int _numArguments){
+	FadeBustshot(SCRIPT_TOINT(_passedArguments,0),SCRIPT_TOINT(_passedArguments,1),SCRIPT_TOBOOL(_passedArguments,2));	
+	return NULL;
 }
 // Select(numoptions, arrayofstring)
 //		Let's the user make a choice and have this not be a sound novel anymore. :/
@@ -2781,9 +2775,9 @@ int scriptFadeSprite(void** _passedArguments, int _numArguments){
 //		Result can be found in LoadValueFromLocalWork("SelectResult")
 //			Choice result is zero based
 //				First choice is zero, second is one
-int scriptSelect(void** _passedArguments, int _numArguments){
+void** scriptSelect(void** _passedArguments, int _numArguments){
 	ChangeEasyTouchMode(TOUCHMODE_MENU);
-	int _totalOptions = SCRIPT_TONUMBER(_passedArguments,0);
+	int _totalOptions = SCRIPT_TOINT(_passedArguments,0);
 	char* noobOptions[_totalOptions];
 	int i;
 	for (i=0;i<_totalOptions;i++){
@@ -2824,107 +2818,111 @@ int scriptSelect(void** _passedArguments, int _numArguments){
 		free(noobOptions[i]);
 	}
 	ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
-	return 0;
+	return NULL;
 }
 // Loads a special variable
-int scriptLoadValueFromLocalWork(void** _passedArguments, int _numArguments){
+void** scriptLoadValueFromLocalWork(void** _passedArguments, int _numArguments){
 	const char* _wordWant = SCRIPT_TOSTRING(_passedArguments,0);
 	//printf("%s\n",_wordWant);
 	if ( strcmp(_wordWant,"SelectResult")==0){
-		// lua_pushnumber(passedState,lastSelectionAnswer); TODO - Very important
+		void** _tempArray = nathanscriptMakeNewReturnArray(1);
+		nathanscriptReturnArraySetInt(_tempArray,0,lastSelectionAnswer);
+		return _tempArray;
 	}else{
 		LazyMessage("Unknown LoadValueFromLocalWork!",_wordWant,"Please report to MyLegGuy!","thx");
 	}
-	return 1;
+	return NULL;
 }
 // Calls a function that was made in a script
-int scriptCallSection(void** _passedArguments, int _numArguments){
+void** scriptCallSection(void** _passedArguments, int _numArguments){
 	char buf[256];
 	strcpy(buf, SCRIPT_TOSTRING(_passedArguments,0));
 	strcat(buf,"()");
 	printf("%s\n",buf);
 	luaL_dostring(L,buf);
-	return 0;
+	return NULL;
 }
 // I CAN DO THIS EZ-PZ WITH DRAWING RECTANGLES OVER THE SCREEN
 // DrawFilm( 2,  0, 255, 0, 255, 0, 1000, TRUE );
 // DrawFilm (slot?, r, g, b, filer's alpha, ?, fadein time, wait for fadein) <-- Guess
 // DrawFilm ( type, r, g, b, a, style?, fadein time, wait for fadein )
-int scriptDrawFilm(void** _passedArguments, int _numArguments){
+void** scriptDrawFilm(void** _passedArguments, int _numArguments){
 	// 0 is none, defaults to 1.
 	// 1 is "EffectColorMix"
 	// 2 is DrainColor
 	// 3 is Negative
 	// 10 is HorizontalBlur2
 	// 12 is GaussianBlur
-	char _filterType = SCRIPT_TONUMBER(_passedArguments,0);
+	char _filterType = SCRIPT_TOINT(_passedArguments,0);
 	filterActive=1;
 	if (_filterType<=1){
-		filterR = SCRIPT_TONUMBER(_passedArguments,1);
-		filterG = SCRIPT_TONUMBER(_passedArguments,2);
-		filterB = SCRIPT_TONUMBER(_passedArguments,3);
-		filterA = SCRIPT_TONUMBER(_passedArguments,4);
+		filterR = SCRIPT_TOINT(_passedArguments,1);
+		filterG = SCRIPT_TOINT(_passedArguments,2);
+		filterB = SCRIPT_TOINT(_passedArguments,3);
+		filterA = SCRIPT_TOINT(_passedArguments,4);
 	}else{ // For these, we'll just draw a white filter.
 		filterR = 255;
 		filterG = 255;
 		filterB = 255;
 		filterA = 127;
 	}
-	return 0;
+	return NULL;
 }
 // I think this just has a time argument and a blocking argument. I've implemented neither.
-int scriptFadeFilm(void** _passedArguments, int _numArguments){
+void** scriptFadeFilm(void** _passedArguments, int _numArguments){
 	filterActive=0;
-	return 0;
+	return NULL;
 }
 // This command is used so unoften that I didn't bother to make it look good.
 // FadeBG( 3000, TRUE );
-int scriptFadeBG(void** _passedArguments, int _numArguments){
+void** scriptFadeBG(void** _passedArguments, int _numArguments){
 	if (currentBackground!=NULL){
 		freeTexture(currentBackground);
 		currentBackground=NULL;
 	}
-	return 0;
+	return NULL;
 }
-int scriptMoveBust(void** _passedArguments, int _numArguments){
-	MoveBustSlot(SCRIPT_TONUMBER(_passedArguments,0),SCRIPT_TONUMBER(_passedArguments,1));
-	return 0;
+void** scriptMoveBust(void** _passedArguments, int _numArguments){
+	MoveBustSlot(SCRIPT_TOINT(_passedArguments,0),SCRIPT_TOINT(_passedArguments,1));
+	return NULL;
 }
-int scriptGetScriptLine(void** _passedArguments, int _numArguments){
-	// lua_pushnumber(passedState,currentScriptLine); TODO - Very important
-	return 1;
+void** scriptGetScriptLine(void** _passedArguments, int _numArguments){
+	void** _tempReturnArray = nathanscriptMakeNewReturnArray(1);
+	nathanscriptReturnArraySetInt(_tempReturnArray,0,currentScriptLine);
+	//lua_pushnumber(passedState,currentScriptLine); TODO - Very important
+	return _tempReturnArray;
 }
-int scriptDebugFile(void** _passedArguments, int _numArguments){
+void** scriptDebugFile(void** _passedArguments, int _numArguments){
 	WriteToDebugFile(SCRIPT_TOSTRING(_passedArguments,0));
-	return 0;
+	return NULL;
 }
-int scriptOptionsEnableVoiceSetting(void** _passedArguments, int _numArguments){
+void** scriptOptionsEnableVoiceSetting(void** _passedArguments, int _numArguments){
 	if (_numArguments==0){
 		hasOwnVoiceSetting=1;
 	}else{
 		hasOwnVoiceSetting = SCRIPT_TOBOOL(_passedArguments,0);
 	}
-	return 0;
+	return NULL;
 }
-int scriptOptionsSetTextMode(void** _passedArguments, int _numArguments){
-	gameTextDisplayMode = SCRIPT_TONUMBER(_passedArguments,0);
+void** scriptOptionsSetTextMode(void** _passedArguments, int _numArguments){
+	gameTextDisplayMode = SCRIPT_TOINT(_passedArguments,0);
 	setTextOnlyOverBackground(textOnlyOverBackground);
-	return 0;
+	return NULL;
 }
-int scriptLoadADVBox(void** _passedArguments, int _numArguments){
+void** scriptLoadADVBox(void** _passedArguments, int _numArguments){
 	loadADVBox();
-	return 0;
+	return NULL;
 }
-int scriptOptionsSetTips(void** _passedArguments, int _numArguments){
+void** scriptOptionsSetTips(void** _passedArguments, int _numArguments){
 	gameHasTips=SCRIPT_TOBOOL(_passedArguments,0);
-	return 0;
+	return NULL;
 }
-int scriptOptionsCanChangeBoxAlpha(void** _passedArguments, int _numArguments){
+void** scriptOptionsCanChangeBoxAlpha(void** _passedArguments, int _numArguments){
 	canChangeBoxAlpha = SCRIPT_TOBOOL(_passedArguments,0);
-	return 0;
+	return NULL;
 }
 // normal image 1, hover image 1, select image 1, normal image 2, hover image 2, select image 2
-int scriptImageChoice(void** _passedArguments, int _numArguments){
+void** scriptImageChoice(void** _passedArguments, int _numArguments){
 	int i;
 	// When you are not interacting with that choice
 	CrossTexture** _passedNormalImages;
@@ -3005,8 +3003,9 @@ int scriptImageChoice(void** _passedArguments, int _numArguments){
 	free(_passedHoverImages);
 	free(_passedSelectImages);
 
-	//lua_pushnumber(passedState,_userChoice); TODO - Very important
-	return 1;
+	void** _tempReturnArray = nathanscriptMakeNewReturnArray(1);
+	nathanscriptReturnArraySetInt(_tempReturnArray,0,_userChoice);
+	return _tempReturnArray;
 }
 #include "LuaWrapperDefinitions.h"
 //======================================================
@@ -4145,7 +4144,7 @@ void NewGameMenu(){
 // Returns 2 for missing or outdated happy.lua
 // Returns 0 otherwise
 char init_dohappylua(){
-	// Happy.lua contains functions that both Higurashi script files use and my C code
+	// happy.lua contains functions that both Higurashi script files use and my C code
 	char _didLoadHappyLua;
 	fixPath("assets/happy.lua",globalTempConcat,TYPE_EMBEDDED);
 	_didLoadHappyLua = SafeLuaDoFile(L,globalTempConcat,0);
