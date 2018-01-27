@@ -166,7 +166,7 @@ typedef struct hauighrehrge{
 
 bust* Busts;
 
-lua_State* L;
+lua_State* L=NULL;
 /*
 	Line_ContinueAfterTyping=0; (No wait after text display, go right to next script line)
 	Line_WaitForInput=1; (Wait for the player to click. Displays an arrow.)
@@ -4141,21 +4141,27 @@ void NewGameMenu(){
 	}
 }
 // =====================================================
-// Returns 2 for missing or outdated happy.lua
-// Returns 0 otherwise
-char init_dohappylua(){
-	// happy.lua contains functions that both Higurashi script files use and my C code
-	char _didLoadHappyLua;
-	fixPath("assets/happy.lua",globalTempConcat,TYPE_EMBEDDED);
-	_didLoadHappyLua = SafeLuaDoFile(L,globalTempConcat,0);
-	lua_sethook(L, incrementScriptLineVariable, LUA_MASKLINE, 5);
-	if (_didLoadHappyLua==0){
-		#if PLATFORM == PLAT_VITA
-			LazyMessage("happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
-		#else
-			LazyMessage("happy.lua missing.",NULL,NULL,NULL);
-		#endif
-		return 2;
+
+char initializeLua(){
+	if (L==NULL){
+		// Initialize Lua
+		L = luaL_newstate();
+		luaL_openlibs(L);
+		initLuaWrappers();
+	
+		// happy.lua contains functions that both Higurashi script files use and my C code
+		char _didLoadHappyLua;
+		fixPath("assets/happy.lua",globalTempConcat,TYPE_EMBEDDED);
+		_didLoadHappyLua = SafeLuaDoFile(L,globalTempConcat,0);
+		lua_sethook(L, incrementScriptLineVariable, LUA_MASKLINE, 5);
+		if (_didLoadHappyLua==0){
+			#if PLATFORM == PLAT_VITA
+				LazyMessage("happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
+			#else
+				LazyMessage("happy.lua missing.",NULL,NULL,NULL);
+			#endif
+			return 2;
+		}
 	}
 	return 0;
 }
@@ -4305,12 +4311,7 @@ signed char init(){
 	// Fill with null char
 	ClearMessageArray();
 
-	// Initialize Lua
-	L = luaL_newstate();
-	luaL_openlibs(L);
-	initLuaWrappers();
-
-	if (init_dohappylua()==2){
+	if (initializeLua()==2){
 		return 2;
 	}
 
@@ -4330,8 +4331,6 @@ signed char init(){
 		svcGetThreadPriority(&_foundMainThreadPriority, CUR_THREAD_HANDLE);
 		_3dsSoundUpdateThread = threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
 	#endif
-
-	LazyMessage("Dont forget to fix the stuff labeled TODO Very important","At this stage, the scripts will not work fully.",NULL,NULL);
 
 	return 0;
 }
