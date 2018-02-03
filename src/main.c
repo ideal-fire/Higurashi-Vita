@@ -1269,11 +1269,16 @@ void SaveGame(){
 	fwrite(&currentPresetChapter,2,1,fp);
 	fclose(fp);
 }
-void TryLoadMenuSoundEffect(){
+void TryLoadMenuSoundEffect(char* _passedPathIdea){
 	if (menuSound!=NULL){
 		return;
 	}
-	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/","wa_038",".ogg");
+	char* tempstringconcat;
+	if (_passedPathIdea==NULL){
+		tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/","wa_038",".ogg");
+	}else{
+		tempstringconcat = _passedPathIdea;
+	}
 	if (checkFileExist(tempstringconcat)){
 		menuSoundLoaded=1;
 		menuSound = loadSound(tempstringconcat);
@@ -1281,7 +1286,9 @@ void TryLoadMenuSoundEffect(){
 	}else{
 		menuSoundLoaded=0;
 	}
-	free(tempstringconcat);
+	if (_passedPathIdea==NULL){
+		free(tempstringconcat);
+	}
 }
 // realloc, but new memory is zeroed out
 void* recalloc(void* _oldBuffer, int _newSize, int _oldSize){
@@ -2266,7 +2273,7 @@ void loadADVBox(){
 	setTextOnlyOverBackground(textOnlyOverBackground);
 }
 void LoadGameSpecificStupidity(){
-	TryLoadMenuSoundEffect();
+	TryLoadMenuSoundEffect(NULL);
 	RunGameSpecificLua();
 }
 void resetSettings(){
@@ -2431,7 +2438,7 @@ void setDefaultGame(char* _defaultGameFolderName){
 		}
 	}
 #endif
-#include "LuaWrapperHelpers.h"
+#include "NathanDoubleScripting.h"
 /*
 =================================================
 */
@@ -2547,7 +2554,7 @@ void scriptStopBGM(nathanscriptVariable* _passedArguments, int _numArguments, na
 	void scriptFadeoutBGM(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 		if (currentMusic[(int)nathanvariableToInt(&_passedArguments[0])]!=NULL){
 			#if SOUNDPLAYER == SND_SOLOUD
-				if (currentMusicHandle[(int)nathanvariableToInt(&_passedArguments[0])==0){
+				if (currentMusicHandle[(int)nathanvariableToInt(&_passedArguments[0])]==0){
 					return;
 				}
 			#endif
@@ -2776,18 +2783,13 @@ void scriptFadeSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 //			Choice result is zero based
 //				First choice is zero, second is one
 void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-
-
-	LazyMessage("Selection currently broken.",NULL,NULL,NULL);
-
 	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	int _totalOptions = nathanvariableToInt(&_passedArguments[0]);
 	char* noobOptions[_totalOptions];
 	int i;
 	for (i=0;i<_totalOptions;i++){
-		//lua_rawgeti(passedState,2,i+1); TODO - VERY IMPORTANT
-		noobOptions[i] = (char*)calloc(1,strlen(nathanvariableToString(&_passedArguments[-1]))+1);
-		strcpy(noobOptions[i],nathanvariableToString(&_passedArguments[-1]));
+		noobOptions[i] = malloc(strlen(nathanvariableGetArray(&_passedArguments[1],i))+1);
+		strcpy(noobOptions[i],nathanvariableGetArray(&_passedArguments[1],i));
 	}
 
 	// This is the actual loop for choosing the choice
@@ -4300,7 +4302,11 @@ signed char init(){
 	menuCursorSpaceWidth = textWidth(fontSize,MENUCURSOR" ");
 
 	// Load the menu sound effect if it's present
-	TryLoadMenuSoundEffect();
+	fixPath("assets/wa_038.ogg",globalTempConcat,TYPE_EMBEDDED);
+	TryLoadMenuSoundEffect(globalTempConcat);
+	if (menuSound==NULL){
+		TryLoadMenuSoundEffect(NULL);
+	}
 
 	// Needed for any advanced message display
 	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("assets/unknown.png");

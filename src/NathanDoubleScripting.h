@@ -22,6 +22,7 @@
 #define POINTER_TOBOOL(x) POINTER_TOCHAR(x)
 #define POINTER_TOSTRING(x) ((char*)(x))
 #define POINTER_TOINT(x) (*((int*)(x)))
+#define POINTER_TOSHORT(x) (*((short*)(x)))
 #define POINTER_TOFLOAT(x) (*((float*)(x)))
 #define POINTER_TOPOINTER(x) (*((void**)(x)))
 
@@ -47,7 +48,9 @@ int L_##scriptFunctionName(lua_State* passedState){ \
 #define NATHAN_TYPE_STRING LUA_TSTRING
 #define NATHAN_TYPE_FLOAT LUA_TNUMBER
 #define NATHAN_TYPE_POINTER LUA_TLIGHTUSERDATA
-#define NATHAN_TYPE_ARRAYLENGTH 80 // Just hope this isn't used by the Lua constants
+#define NATHAN_TYPE_ARRAY LUA_TTABLE // Just hope this isn't used by the Lua constants
+
+lua_State* L;
 
 //===================================================================================
 int nathanscriptTotalGamevar;
@@ -78,39 +81,33 @@ int nathanscriptFoundFiIndex; // Array index of the fi command from the line par
 int nathanscriptFoundLabelIndex;
 
 /*============================================================================*/
-char nathanvariableArrayChangeIndexIfReturnArray(nathanscriptVariable*  _variableArray, char _index){
-	if (_variableArray[0].variableType==NATHAN_TYPE_ARRAYLENGTH){
-		return _index+1;
-	}
-	return _index;
-}
+void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize);
+void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize);
+void scriptGoto(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize);
+void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize);
+/*============================================================================*/
 void nathanvariableArraySetFloat(nathanscriptVariable*  _variableArray, unsigned char _index, float _value){
-	_index = nathanvariableArrayChangeIndexIfReturnArray(_variableArray,_index);
 	_variableArray[_index].variableType = NATHAN_TYPE_FLOAT;
 	_variableArray[_index].value = malloc(sizeof(float));
 	POINTER_TOFLOAT(_variableArray[_index].value)=_value;
 }
 void nathanvariableArraySetBool(nathanscriptVariable*  _variableArray, unsigned char _index, char _value){
-	_index = nathanvariableArrayChangeIndexIfReturnArray(_variableArray,_index);
 	_variableArray[_index].variableType = NATHAN_TYPE_BOOL;
 	_variableArray[_index].value = malloc(sizeof(char));
 	POINTER_TOCHAR(_variableArray[_index].value)=_value;
 }
 void nathanvariableArraySetString(nathanscriptVariable*  _variableArray, unsigned char _index, const char* _value){
-	_index = nathanvariableArrayChangeIndexIfReturnArray(_variableArray,_index);
 	_variableArray[_index].variableType = NATHAN_TYPE_STRING;
 	_variableArray[_index].value = malloc(strlen(_value)+1);
 	strcpy(_variableArray[_index].value,_value);
 }
 void nathanvariableArraySetPointer(nathanscriptVariable*  _variableArray, unsigned char _index, void* _value){
-	_index = nathanvariableArrayChangeIndexIfReturnArray(_variableArray,_index);
 	_variableArray[_index].variableType = NATHAN_TYPE_POINTER;
 	_variableArray[_index].value = malloc(sizeof(void*));
 	POINTER_TOPOINTER(_variableArray[_index].value)=_value;
 }
 nathanscriptVariable* makeScriptArgumentsFromLua(lua_State* passedState){
 	int i;
-	//lua_type
 	int _numberOfArguments = lua_gettop(passedState);
 	nathanscriptVariable* _returnedArguments = malloc(sizeof(nathanscriptVariable)*lua_gettop(passedState));
 	for (i=0;i<_numberOfArguments;++i){
@@ -132,9 +129,23 @@ nathanscriptVariable* makeScriptArgumentsFromLua(lua_State* passedState){
 				_returnedArguments[i].variableType = NATHAN_TYPE_NULL;
 				_returnedArguments[i].value = calloc(1,1);
 				break;
-			/*
 			case LUA_TTABLE:
+					;
+					short _arrayLength = lua_rawlen(L,i+1);
+					int j;
+					char** _newStringArray = malloc(sizeof(char*)*(_arrayLength+1));
+					memcpy(&(_newStringArray[0]),&(_arrayLength),sizeof(short));
+					for (j=1;j<=_arrayLength;j++){
+						if (lua_rawgeti(passedState,i+1,j)!=LUA_TSTRING){ // TODO - Proper array support  using nathanscriptvariable
+							printf("Error, value in table isn't a string.\n");
+						}
+						_newStringArray[j] = malloc(strlen(lua_tostring(passedState,-1))+1);
+						strcpy(_newStringArray[j],lua_tostring(passedState,-1));
+						lua_pop(passedState,1);
+					}
+					_returnedArguments[i].value = _newStringArray;
 				break;
+			/*
 			case LUA_TFUNCTION:
 				break;
 			case LUA_TUSERDATA:
@@ -157,6 +168,12 @@ int freeNathanscriptVariableArray(nathanscriptVariable* _passedVariableArray, in
 	}
 	int i;
 	for (i=0;i<_passedArraySize;i++){
+		if (_passedVariableArray[i].variableType==NATHAN_TYPE_ARRAY){
+			int j;
+			for (j=1;j<=(((short*)(_passedVariableArray[i].value))[0]);j++){
+				free((((char**)(_passedVariableArray[i].value))[j]));
+			}
+		}
 		free(_passedVariableArray[i].value);
 	}
 	free(_passedVariableArray);
@@ -269,19 +286,6 @@ int searchStringArray(char** _passedArray, int _passedArraySize, char* _passedSe
 	}
 	return -1;
 }
-/*
-// Searches the list for the command you pass it
-// Returns -1 if not found
-int searchStringArray(char** _passedArray, int _passedArraySize,char* _passedCommandName){
-	int i;
-	for (i=0;i<nathanCurrentRegisteredFunctions;i++){
-		if (strcmp(_passedCommandName,nathanFunctionNameList[i])==0){
-			return i;
-		}
-	}
-	return -1;
-}
-*/
 
 int nathanscriptAddNewGameVariable(){
 	nathanscriptTotalGamevar++;
@@ -365,28 +369,6 @@ nathanscriptGameVariable* nathanscriptGetGameVariable(char* _passedSearchTerm){
 	return &(nathanscriptGamevarList[_foundIndex]);
 }
 
-/*
-// Value we will malloc later that will contain the read string with the correct malloc size
-char* _returnReadString;
-int i=0;
-while (1){
-	if (_bufferToReadFrom[*_bufferStartIndex]==32 || _bufferToReadFrom[*_bufferStartIndex]==0){ // 32 is space character
-		if (_bufferToReadFrom[*_bufferStartIndex]==0){
-			*_bufferStartIndex=-1;
-		}else{
-			*_bufferStartIndex+=1; // Advance past the space character for next time.
-		}
-		break;
-	}
-	_tempBuffer[i]=_bufferToReadFrom[*_bufferStartIndex];
-	*_bufferStartIndex+=1;
-	i+=1;
-}
-_tempBuffer[i]=0; // Null character to finish off the string
-_returnReadString = malloc(strlen(_tempBuffer)+1);
-strcpy(_returnReadString,_tempBuffer);
-return _returnReadString;
-*/
 void replaceIfIsVariable(char** _possibleVariableString){
 	int i;
 	int _cachedStrlen = strlen(*_possibleVariableString);
@@ -542,19 +524,23 @@ void nathanscriptAddFunction(nathanscriptFunction _passedFunction, char _passedF
 	nathanCurrentRegisteredFunctions++;
 }
 
-/*
-	char* makeNathanArgumentArray(int _numberOfArguments){
-	int i;
-	char* _tempReturnArray = malloc(sizeof(char)*_numberOfArguments);
-	for (i=0;i<_numberOfArguments;i++){
-		_tempReturnArray[i] = NATHAN_TYPE_STRING;
-	}
-	return _tempReturnArray;
-}*/
+void nathanscriptIncreaseMaxFunctions(int _incrementAmount){
+	nathanReallocFunctionLists(nathanCurrentMaxFunctions+_incrementAmount);
+	nathanCurrentMaxFunctions+=_incrementAmount;
+}
 
-void nathanscriptInit(int _startMaxFunctions){
-	nathanReallocFunctionLists(_startMaxFunctions);
-	nathanCurrentMaxFunctions=_startMaxFunctions;
+short nathanvariableGetArrayLength(nathanscriptVariable* _passedVariable){
+	if (_passedVariable->variableType!=NATHAN_TYPE_ARRAY){
+		return -1;
+	}
+	return (((short*)(_passedVariable->value))[0]);
+}
+
+char* nathanvariableGetArray(nathanscriptVariable* _passedVariable, int _index){
+	if (_passedVariable->variableType!=NATHAN_TYPE_ARRAY){
+		return (char*)-1;
+	}
+	return ((char**)_passedVariable->value)[_index+1];
 }
 
 char* nathanvariableToString(nathanscriptVariable* _passedVariable){
@@ -579,6 +565,20 @@ int nathanvariableToInt(nathanscriptVariable* _passedVariable){
 void makeNewReturnArray(nathanscriptVariable** _returnedReturnArray, int* _returnArraySize, int _newArraySize){
 	*_returnedReturnArray = calloc(1,sizeof(nathanscriptVariable)*_newArraySize);
 	*_returnArraySize = _newArraySize;
+}
+
+void nathanscriptInit(){
+	nathanReallocFunctionLists(6);
+	nathanCurrentMaxFunctions=6;
+
+	nathanscriptAddFunction(scriptSetVar,0,"setvar");
+	nathanscriptAddFunction(scriptIfStatement,0,"if");
+	nathanscriptAddFunction(NULL,0,"fi");
+	nathanscriptFoundFiIndex = nathanCurrentRegisteredFunctions-1;
+	nathanscriptAddFunction(NULL,0,"label");
+	nathanscriptFoundLabelIndex = nathanCurrentRegisteredFunctions-1;
+	nathanscriptAddFunction(scriptGoto,0,"goto");
+	nathanscriptAddFunction(scriptLuaDostring,1,"luastring");
 }
 
 /*
@@ -731,5 +731,4 @@ void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nat
 	luaL_dostring(L,nathanvariableToString(&_madeArgs[0]));
 	return;
 }
-
 #endif
