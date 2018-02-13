@@ -45,8 +45,10 @@
 	//===============================
 	#if _WIN32
 		#define PRESET PRE_COMPUTER
+		#define SUBPLATFORM SUB_WINDOWS
 	#elif __unix__
 		#define PRESET PRE_COMPUTER
+		#define SUBPLATFORM SUB_UNIX
 	#elif __vita__
 		#define PRESET PRE_VITA
 	#elif _3DS
@@ -61,11 +63,11 @@
 	//===============================
 	
 	// These must be changed BEFORE compiling the library.
-		// If the program will use uma0 for the data directory instead of ux0. If you choose to do so, your homebrew will have to be unsafe.
+		// If the program will use uma0 for the data directory instead of ux0.
 		#define USEUMA0 1
 		// For some reason, I can't remember what exactly this does. Something for Android.
 		#define DOFIXCOORDS 0
-	// Only affects SDL. Not really worth using this setting. Can be changed after compiling library.
+	// Only affects SDL. Not really worth using this setting.
 	#define USEVSYNC 0
 
 	#ifdef FORCESDL

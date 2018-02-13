@@ -48,7 +48,7 @@ int L_##scriptFunctionName(lua_State* passedState){ \
 #define NATHAN_TYPE_STRING LUA_TSTRING
 #define NATHAN_TYPE_FLOAT LUA_TNUMBER
 #define NATHAN_TYPE_POINTER LUA_TLIGHTUSERDATA
-#define NATHAN_TYPE_ARRAY LUA_TTABLE // Just hope this isn't used by the Lua constants
+#define NATHAN_TYPE_ARRAY LUA_TTABLE
 
 lua_State* L;
 
@@ -179,7 +179,6 @@ int freeNathanscriptVariableArray(nathanscriptVariable* _passedVariableArray, in
 	free(_passedVariableArray);
 	return _passedArraySize;
 }
-
 void pushSingleReturnArgument(lua_State* passedState, char _returnValueType, void* _returnValue){
 	switch(_returnValueType){
 		case NATHAN_TYPE_STRING:
@@ -208,8 +207,6 @@ void pushReturnArrayToLua(lua_State* passedState, nathanscriptVariable* _passedR
 		pushSingleReturnArgument(passedState,_passedReturnArray[i].variableType,_passedReturnArray[i].value);
 	}
 }
-
-
 // Returns number of arguments
 int freeReturnArray(void** _passedReturnArray){
 	int _totalReturnArguments = *((int*)(_passedReturnArray[0]));
@@ -222,25 +219,16 @@ int freeReturnArray(void** _passedReturnArray){
 	free(_passedReturnArray);
 	return _totalReturnArguments;
 }
-
-#ifndef PLATFORM
-	void removeNewline(char* _toRemove){
-		int _cachedStrlen = strlen(_toRemove);
-		int i;
-		for (i=0;i!=2;i++){
-			if (!(((_toRemove)[_cachedStrlen-(i+1)]==0x0A) || ((_toRemove)[_cachedStrlen-(i+1)]==0x0D))){
-				break;
-			}
-		}
-		(_toRemove)[_cachedStrlen-i] = '\0';
-	}
-#endif
-
 // _bufferStartIndex becomes -1 if we reached end of buffer.
 char* readSpaceTerminated(char* _bufferToReadFrom, int* _bufferStartIndex, char* _tempBuffer){
 	// Value we will malloc later that will contain the read string with the correct malloc size
 	char* _returnReadString;
 	int i=0;
+
+	while (_bufferToReadFrom[*_bufferStartIndex]==32){ // Ignore starting on space
+		*_bufferStartIndex+=1;
+	}
+
 	while (1){
 		if (_bufferToReadFrom[*_bufferStartIndex]==32 || _bufferToReadFrom[*_bufferStartIndex]==0){ // 32 is space character
 			if (_bufferToReadFrom[*_bufferStartIndex]==0){
@@ -287,13 +275,13 @@ int searchStringArray(char** _passedArray, int _passedArraySize, char* _passedSe
 	return -1;
 }
 
-int nathanscriptAddNewGameVariable(){
-	nathanscriptTotalGamevar++;
-	nathanscriptGamevarList = realloc(nathanscriptGamevarList,nathanscriptTotalGamevar*sizeof(nathanscriptGameVariable));
-	nathanscriptGamevarList[nathanscriptTotalGamevar-1].name=NULL;
-	nathanscriptGamevarList[nathanscriptTotalGamevar-1].variable.variableType=NATHAN_TYPE_NULL;
-	nathanscriptGamevarList[nathanscriptTotalGamevar-1].variable.value=NULL;
-	return nathanscriptTotalGamevar-1; // Index of new variable
+int nathanscriptAddNewVariableToList(nathanscriptGameVariable** _passedVariableList, int* _storeMaxVariables){
+	(*_storeMaxVariables)++;
+	*_passedVariableList = realloc(*_passedVariableList,*_storeMaxVariables*sizeof(nathanscriptGameVariable));
+	(*_passedVariableList)[*_storeMaxVariables-1].name=NULL;
+	(*_passedVariableList)[*_storeMaxVariables-1].variable.variableType=NATHAN_TYPE_NULL;
+	(*_passedVariableList)[*_storeMaxVariables-1].variable.value=NULL;
+	return *_storeMaxVariables-1; // Index of new variable
 }
 
 void nathanscriptConvertVariable(nathanscriptVariable* _variableToConvert, char _newType){
@@ -427,23 +415,22 @@ void replaceIfIsVariable(char** _possibleVariableString){
 	}
 }
 
-#define MAXNATHANARGUMENTS 20
-void nathanscriptParseSingleLine(FILE* fp, int* _storeCommandIndex, nathanscriptVariable** _storeArguments, int* _storeNumArguments){
-	// Contains the entire line. Will be resized by getline function
-	char* _tempReadLine = calloc(1,512);
-	// Will be changed if the buffer isn't big enough
-	size_t _readLineBufferSize = 512;
-	getline(&_tempReadLine,&_readLineBufferSize,fp);
-	char* _tempSingleElementBuffer;
-	// getline function includes the new line character in the string
-	removeNewline(_tempReadLine);
-	if (strlen(_tempReadLine)==0){
-		*_storeCommandIndex=-2;
-		//*_storeArguments=NULL; // Don't uncomment because we don't know if these are valid pointers
-		//*_storeNumArguments=0;
-		free(_tempReadLine);
-		return;
+void trimStart(char* _toTrim){
+	int i;
+	int _cachedStrlen = strlen(_toTrim);
+	for (i=0;i<_cachedStrlen;i++){
+		if (_toTrim[i]!=0x09 && _toTrim[i]!=0x20){
+			if (i!=0){
+				memmove(&(_toTrim[0]),&(_toTrim[i]),strlen(_toTrim)-i+1);
+			}
+			break;
+		}
 	}
+}
+
+#define MAXNATHANARGUMENTS 20
+void nathanscriptParseString(char* _tempReadLine, int* _storeCommandIndex, nathanscriptVariable** _storeArguments, int* _storeNumArguments){
+	char* _tempSingleElementBuffer;
 	_tempSingleElementBuffer = malloc(strlen(_tempReadLine)+1);
 
 	int i;
@@ -454,6 +441,7 @@ void nathanscriptParseSingleLine(FILE* fp, int* _storeCommandIndex, nathanscript
 	// Does not include the main command
 	nathanscriptVariable _parsedArguments[MAXNATHANARGUMENTS]; // This is so much easier than allowing unlimited arguments. Fix this on a rainy day. Or don't. It won't matter.
 	char* _parsedMainCommand = readSpaceTerminated(_tempReadLine,&_lineBufferIndex,_tempSingleElementBuffer);
+	trimStart(_parsedMainCommand);
 	*_storeCommandIndex = searchStringArray(nathanFunctionNameList,nathanCurrentRegisteredFunctions,_parsedMainCommand);
 
 	// Search for arguments only if we haven't already reached the end of the line buffer and it's a valid command
@@ -490,8 +478,26 @@ void nathanscriptParseSingleLine(FILE* fp, int* _storeCommandIndex, nathanscript
 	*_storeNumArguments = _totalArguments;
 
 	free(_parsedMainCommand);
-	free(_tempReadLine);
 	free(_tempSingleElementBuffer);
+}
+
+void nathanscriptParseSingleLine(FILE* fp, int* _storeCommandIndex, nathanscriptVariable** _storeArguments, int* _storeNumArguments){
+	// Contains the entire line. Will be resized by getline function
+	char* _tempReadLine = calloc(1,512);
+	// Will be changed if the buffer isn't big enough
+	size_t _readLineBufferSize = 512;
+	getline(&_tempReadLine,&_readLineBufferSize,fp);
+	// getline function includes the new line character in the string
+	removeNewline(_tempReadLine);
+	// If it's just an empty line,
+	if (strlen(_tempReadLine)==0){
+		*_storeCommandIndex=-2;
+		*_storeArguments=NULL;
+		free(_tempReadLine);
+		return;
+	}
+	nathanscriptParseString(_tempReadLine,_storeCommandIndex,_storeArguments,_storeNumArguments);
+	free(_tempReadLine);
 }
 
 // TODO - Reaplce with the variable converter function
@@ -586,43 +592,37 @@ void nathanscriptInit(){
 SCRIPT
 ================================================================
 */
-// setvar varname modifier value
-// modifier: =, +. -
-// setvar v_d0 = 1
-void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	char* _passedVariableName = nathanvariableToString(&_argumentList[0]);
-	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
-	char* _passedNewValue = nathanvariableToString(&_argumentList[2]);
+void genericSetVar(char* _passedVariableName, char* _passedModifier, char* _passedNewValue, nathanscriptGameVariable** _variableList, int* _variableListLength){
 	if (strlen(_passedModifier)!=1){
 		printf("modifier string too long.");
 		return;
 	}
-	int _foundVariableIndex = searchVariableArray(nathanscriptGamevarList,nathanscriptTotalGamevar,_passedVariableName);
+	int _foundVariableIndex = searchVariableArray(*_variableList,*_variableListLength,_passedVariableName);
 	// Make a new variable
 	if (_foundVariableIndex==-1){
-		_foundVariableIndex = nathanscriptAddNewGameVariable();
-		nathanscriptGamevarList[_foundVariableIndex].name = malloc(strlen(_passedVariableName)+1);
-		strcpy(nathanscriptGamevarList[_foundVariableIndex].name,_passedVariableName);
+		_foundVariableIndex = nathanscriptAddNewVariableToList(_variableList,_variableListLength);
+		(*_variableList)[_foundVariableIndex].name = malloc(strlen(_passedVariableName)+1);
+		strcpy((*_variableList)[_foundVariableIndex].name,_passedVariableName);
 	}
 	// There's no sure way to tell if the user passed a string or number
 	char _guessedVariableType = NATHAN_TYPE_FLOAT;
 	if (!stringIsNumber(_passedNewValue)){
 		_guessedVariableType = NATHAN_TYPE_STRING;
-	}else if (nathanscriptGamevarList[_foundVariableIndex].variable.variableType==NATHAN_TYPE_STRING){
+	}else if ((*_variableList)[_foundVariableIndex].variable.variableType==NATHAN_TYPE_STRING){
 		_guessedVariableType = NATHAN_TYPE_STRING;
 	}
-	nathanscriptConvertVariable(&(nathanscriptGamevarList[_foundVariableIndex].variable),_guessedVariableType);
+	nathanscriptConvertVariable(&((*_variableList)[_foundVariableIndex].variable),_guessedVariableType);
 	if (_guessedVariableType==NATHAN_TYPE_FLOAT){
-		float _convertedNewValue = nathanvariableToFloat(&_argumentList[2]);
+		float _convertedNewValue = atof(_passedNewValue);
 		switch (_passedModifier[0]){
 			case '+':
-				*((float*)nathanscriptGamevarList[_foundVariableIndex].variable.value)+=_convertedNewValue;
+				*((float*)(*_variableList)[_foundVariableIndex].variable.value)+=_convertedNewValue;
 				break;
 			case '-':
-				*((float*)nathanscriptGamevarList[_foundVariableIndex].variable.value)-=_convertedNewValue;
+				*((float*)(*_variableList)[_foundVariableIndex].variable.value)-=_convertedNewValue;
 				break;
 			case '=':
-				*((float*)nathanscriptGamevarList[_foundVariableIndex].variable.value)=_convertedNewValue;
+				*((float*)(*_variableList)[_foundVariableIndex].variable.value)=_convertedNewValue;
 				break;
 			default:
 				printf("Bad operator %c on int value.\n",_passedModifier[0]);
@@ -632,16 +632,16 @@ void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nath
 		switch (_passedModifier[0]){
 			case '+':
 				;
-				char* _newStringBuffer = malloc(strlen(nathanscriptGamevarList[_foundVariableIndex].variable.value)+strlen(_passedNewValue)+1);
-				strcpy(_newStringBuffer,nathanscriptGamevarList[_foundVariableIndex].variable.value);
+				char* _newStringBuffer = malloc(strlen((*_variableList)[_foundVariableIndex].variable.value)+strlen(_passedNewValue)+1);
+				strcpy(_newStringBuffer,(*_variableList)[_foundVariableIndex].variable.value);
 				strcat(_newStringBuffer,_passedNewValue);
-				free(nathanscriptGamevarList[_foundVariableIndex].variable.value);
-				nathanscriptGamevarList[_foundVariableIndex].variable.value = _newStringBuffer;
+				free((*_variableList)[_foundVariableIndex].variable.value);
+				(*_variableList)[_foundVariableIndex].variable.value = _newStringBuffer;
 				break;
 			case '=':
-				free(nathanscriptGamevarList[_foundVariableIndex].variable.value);
-				nathanscriptGamevarList[_foundVariableIndex].variable.value = malloc(strlen(_passedNewValue)+1);
-				strcpy(nathanscriptGamevarList[_foundVariableIndex].variable.value,_passedNewValue);
+				free((*_variableList)[_foundVariableIndex].variable.value);
+				(*_variableList)[_foundVariableIndex].variable.value = malloc(strlen(_passedNewValue)+1);
+				strcpy((*_variableList)[_foundVariableIndex].variable.value,_passedNewValue);
 				break;
 			default:
 				printf("Bad operator %c on string value.\n",_passedModifier[0]);
@@ -651,6 +651,17 @@ void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nath
 	return;
 }
 
+// setvar varname modifier value
+// modifier: =, +. -
+// setvar v_d0 = 1
+void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	char* _passedVariableName = nathanvariableToString(&_argumentList[0]);
+	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
+	char* _passedNewValue = nathanvariableToString(&_argumentList[2]);
+	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
+}
+
+// Uninitialized variables will result in true
 void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	nathanscriptGameVariable* _firstVariable = nathanscriptGetGameVariable(nathanvariableToString(&_argumentList[0]));
 	if (_firstVariable==NULL){
@@ -686,7 +697,7 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 	if (_ifStatementResult==0){
 		while (!feof(nathanscriptCurrentOpenFile)){
 			int _foundCommandIndex;
-			nathanscriptVariable* _parsedArguments;
+			nathanscriptVariable* _parsedArguments=NULL;
 			int _parsedArgumentsLength;
 			nathanscriptParseSingleLine(nathanscriptCurrentOpenFile,&_foundCommandIndex,&_parsedArguments,&_parsedArgumentsLength);
 			freeNathanscriptVariableArray(_parsedArguments,_parsedArgumentsLength);
@@ -698,7 +709,7 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 	return;
 }
 
-void scriptGoto(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+void genericGotoLabel(char* labelName){
 	long int _startSearchSpot = ftell(nathanscriptCurrentOpenFile);
 	char _didFoundLabel=0;
 	if (fseek(nathanscriptCurrentOpenFile,0,SEEK_SET)!=0){
@@ -706,11 +717,11 @@ void scriptGoto(nathanscriptVariable* _argumentList, int _totalArguments, nathan
 	}
 	while (!feof(nathanscriptCurrentOpenFile)){
 		int _foundCommandIndex;
-		nathanscriptVariable* _parsedArguments;
+		nathanscriptVariable* _parsedArguments=NULL;
 		int _parsedArgumentsLength;
 		nathanscriptParseSingleLine(nathanscriptCurrentOpenFile,&_foundCommandIndex,&_parsedArguments,&_parsedArgumentsLength);
 		if (_foundCommandIndex==nathanscriptFoundLabelIndex){
-			if (strcmp(nathanvariableToString(&_parsedArguments[0]),nathanvariableToString(&_argumentList[0]))==0){
+			if (strcmp(nathanvariableToString(&_parsedArguments[0]),labelName)==0){
 				freeNathanscriptVariableArray(_parsedArguments,_parsedArgumentsLength);
 				_didFoundLabel=1;
 				break;
@@ -724,11 +735,46 @@ void scriptGoto(nathanscriptVariable* _argumentList, int _totalArguments, nathan
 			printf("Seek error 2.\n");
 		}
 	}
-	return;
+}
+
+void scriptGoto(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	genericGotoLabel(nathanvariableToString(&_argumentList[0]));
 }
 
 void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	luaL_dostring(L,nathanvariableToString(&_madeArgs[0]));
 	return;
 }
+
+int nathanscriptCurrentLine=1;
+
+void nathanscriptDoScript(char* _filename, long int _startingOffset){
+	nathanscriptCurrentOpenFile = fopen(_filename,"r");
+	if (_startingOffset>0){
+		fseek(nathanscriptCurrentOpenFile,_startingOffset,SEEK_SET);
+	}
+	while (!feof(nathanscriptCurrentOpenFile)){
+		int _foundCommandIndex;
+		nathanscriptVariable* _parsedCommandArgument;
+		int _parsedArgumentListSize;
+		nathanscriptParseSingleLine(nathanscriptCurrentOpenFile,&_foundCommandIndex,&_parsedCommandArgument,&_parsedArgumentListSize);
+		if (_foundCommandIndex<0){
+			if (_foundCommandIndex==-1){
+				printf("invalid command.\n");
+			}
+		}else{
+			if (nathanFunctionList[_foundCommandIndex]!=NULL){ // If the command has a valid function to go with it.
+				nathanscriptVariable* _gottenReturnArray=NULL;
+				int _gottenReturnArrayLength;
+				nathanFunctionList[_foundCommandIndex](_parsedCommandArgument,_parsedArgumentListSize,&_gottenReturnArray,&_gottenReturnArrayLength);
+				if (_gottenReturnArray!=NULL){
+					freeNathanscriptVariableArray(_gottenReturnArray,_gottenReturnArrayLength);
+				}
+			}
+		}
+		nathanscriptCurrentLine++;
+	}
+	fclose(nathanscriptCurrentOpenFile);
+}
+
 #endif

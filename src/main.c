@@ -20,6 +20,22 @@
 		TODO - Inversion
 			I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
 	TODO - Inform user of errors in game specific Lua
+
+	TODO - Make the BGM folder use the SE folder as a backup
+	TODO - Implement all vnds commands
+		SETIMG,
+		SOUND,
+		MUSIC,
+		TEXT, (make it so it scrolls how it should when it runs out of space)
+		GSETVAR,
+		RANDOM,
+		SKIP,
+		ENDSCRIPT,
+		END_OF_FILE
+
+	TODO - Bgload is used to remove busts in VNDS.
+		Make it so if the new background loaded is the same filename as the old one, don't reload, just remove busts.
+			This is okay because I'll need to be storing the background filename anyway as part of the saving feature.
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -105,7 +121,7 @@
 #include "FpsCapper.h"
 
 // System string
-#if __UNIX__
+#if __UNIX__ || __linux__ || __gnu_linux__
 	#define SYSTEMSTRING "LINUX"
 #elif __WIN32__
 	#define SYSTEMSTRING "WINDOWS"
@@ -166,6 +182,8 @@ typedef struct hauighrehrge{
 
 bust* Busts;
 
+#define MAXLINES 15
+
 lua_State* L=NULL;
 /*
 	Line_ContinueAfterTyping=0; (No wait after text display, go right to next script line)
@@ -177,7 +195,7 @@ lua_State* L=NULL;
 #define Line_Normal 2
 int endType;
 signed char useVsync=0;
-unsigned char currentMessages[15][SINGLELINEARRAYSIZE];
+unsigned char currentMessages[MAXLINES][SINGLELINEARRAYSIZE];
 int currentLine=0;
 int place=0;
 
@@ -318,9 +336,31 @@ int menuCursorSpaceWidth;
 char canChangeBoxAlpha=1;
 // When this variable is 1, we can assume that the current game is the default game because the user can't chose a different game when a default is set.
 char defaultGameIsSet;
+char nathanscriptIsInit=0;
+char scriptUsesFileExtentions=0;
+char bustsStartInMiddle=1;
+
+// What scripts think the screen width and height is.
+// For Higurashi, this is 640x480
+// For vnds, this is the DS' screen resolution
+int scriptScreenWidth=640;
+int scriptScreenHeight=480;
+
+#define USENEWSCALE 1
+
+double graphicsScale=1.0;
+
 /*
 ====================================================
 */
+
+#if SUBPLATFORM == SUB_UNIX
+char* itoa(int value, char* _buffer, int _uselessBase){
+	sprintf(_buffer,"%d",value);
+	return _buffer;
+}
+#endif
+
 void XOutFunction(){
 	#if PLATFORM == PLAT_3DS
 		_3dsSoundProtectThreadIsAlive=0;
@@ -553,7 +593,7 @@ int FixVoiceVolume(int _val){
 void ClearMessageArray(){
 	currentLine=0;
 	int i,j;
-	for (i = 0; i < 15; i++){
+	for (i = 0; i < MAXLINES; i++){
 		if (currentMessages[i][0]!='\0'){
 			strcpy((char*)messageHistory[oldestMessage],(const char*)currentMessages[i]);
 			oldestMessage++;
@@ -584,7 +624,7 @@ void DrawMessageText(){
 	#if PLATFORM == PLAT_3DS
 		if (textIsBottomScreen==1){
 			startDrawingBottom();
-			for (i = 0; i < 15; i++){
+			for (i = 0; i < MAXLINES; i++){
 				goodDrawText(0,12+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 			}
 			for (i=0;i<MAXIMAGECHAR;i++){
@@ -595,7 +635,7 @@ void DrawMessageText(){
 			return;
 		}
 	#endif
-	for (i = 0; i < 15; i++){
+	for (i = 0; i < MAXLINES; i++){
 		goodDrawText(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 	}
 	for (i=0;i<MAXIMAGECHAR;i++){
@@ -618,7 +658,7 @@ void WriteIntToDebugFile(int a){
 }
 // Does not clear the debug file at ux0:data/HIGURASHI/log.txt  , I promise.
 void ClearDebugFile(){
-	char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
+	char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt")+1);
 	strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
 	strcat(_tempDebugFileLocationBuffer,"log.txt");
 	FILE *fp;
@@ -824,7 +864,7 @@ void DrawUntilX(){
 	controlsEnd();
 }
 void LastLineLazyFix(int* _line){
-	if (*_line==15){
+	if (*_line==MAXLINES){
 		DrawUntilX();
 		ClearMessageArray();
 		*_line=0;
@@ -964,50 +1004,72 @@ void outputLineWait(){
 		exitIfForceQuit();
 	}while(endType==Line_Normal || endType == Line_WaitForInput);
 }
+// This is used in background and bust drawing
+// For Higurashi, this is used to get the center of the screen for all images.
+// For vnds, this is just used to get the position of the background.
 void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
-	*_tempXOffset = floor((screenWidth-getTextureWidth(_tempImg))/2);
-	*_tempYOffset = floor((screenHeight-getTextureHeight(_tempImg))/2);
-	// If they're bigger than the screen, assume that they're supposed to scroll or something
-	if (*_tempXOffset<0){
-		*_tempXOffset=0;
-	}
-	if (*_tempYOffset<0){
-		*_tempYOffset=0;
-	}
+	#if USENEWSCALE
+		*_tempXOffset = floor((screenWidth-(graphicsScale*getTextureWidth(_tempImg)))/2);
+		*_tempYOffset = floor((screenHeight-(graphicsScale*getTextureHeight(_tempImg)))/2);
+	#else // TODO - Remove if all goes well
+		*_tempXOffset = floor((screenWidth-getTextureWidth(_tempImg))/2);
+		*_tempYOffset = floor((screenHeight-getTextureHeight(_tempImg))/2);
+		// If they're bigger than the screen, assume that they're supposed to scroll or something
+		if (*_tempXOffset<0){
+			*_tempXOffset=0;
+		}
+		if (*_tempYOffset<0){
+			*_tempYOffset=0;
+		}
+	#endif
+	
 }
 float GetXOffsetScale(CrossTexture* _tempImg){
+	#if USENEWSCALE
+		return graphicsScale;
+	#endif
+	// TODO - Remove below code if all goes well.
 	if (getTextureWidth(_tempImg)>screenWidth){
-		return (screenWidth/640);
+		return (screenWidth/scriptScreenWidth);
 	}
-	return (getTextureWidth(_tempImg)/(float)640);
+	return (getTextureWidth(_tempImg)/(float)scriptScreenWidth);
 }
 float GetYOffsetScale(CrossTexture* _tempImg){
+	#if USENEWSCALE
+		return graphicsScale;
+	#endif
+	// TODO - Remove below code if all goes well
 	if (getTextureHeight(_tempImg)>screenHeight){
-		return (screenHeight/480);
+		return (screenHeight/scriptScreenHeight);
 	}
-	return ( getTextureHeight(_tempImg)/(float)480);
+	return ( getTextureHeight(_tempImg)/(float)scriptScreenHeight);
+}
+
+void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlpha){
+	if (passedBackground!=NULL){
+		signed int _tempXOffset;
+		signed int _tempYOffset;
+		GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
+		drawTextureScaleAlpha(passedBackground,_tempXOffset,_tempYOffset, graphicsScale, graphicsScale, passedAlpha);
+	}
 }
 void DrawBackground(CrossTexture* passedBackground){
-	signed int _tempXOffset;
-	signed int _tempYOffset;
-	GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
-	drawTexture(passedBackground,_tempXOffset,_tempYOffset);
-}
-void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlpha){
-	signed int _tempXOffset;
-	signed int _tempYOffset;
-	GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
-	drawTextureAlpha(passedBackground,_tempXOffset,_tempYOffset,passedAlpha);
+	DrawBackgroundAlpha(passedBackground,255);
 }
 void DrawBust(bust* passedBust){
-	signed int _tempXOffset;
-	signed int _tempYOffset;
-	
-	GetXAndYOffset(passedBust->image,&_tempXOffset,&_tempYOffset);
-	if (passedBust->alpha==255){
-		drawTexture(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale);
+	signed int _tempXOffset=0;
+	signed int _tempYOffset=0;
+	if (bustsStartInMiddle){
+		GetXAndYOffset(passedBust->image,&_tempXOffset,&_tempYOffset);
 	}else{
-		drawTextureAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, passedBust->alpha);
+		if (currentBackground!=NULL){
+			GetXAndYOffset(currentBackground,&_tempXOffset,&_tempYOffset);
+		}
+	}
+	if (passedBust->alpha==255){
+		drawTextureScale(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale,graphicsScale,graphicsScale);
+	}else{
+		drawTextureScaleAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, passedBust->alpha);
 	}	
 }
 void RecalculateBustOrder(){
@@ -1068,15 +1130,15 @@ unsigned char* ReadNumberStringList(CROSSFILE *fp, unsigned char* arraysize){
 	int numScripts;
 	char currentReadNumber[4];
 	// Add null for atoi
-	currentReadNumber[4]='\0';
-
+	currentReadNumber[4];
+	memset(&currentReadNumber[0], 0, 4);
 	crossfread(&currentReadNumber,3,1,fp);
 	numScripts = atoi(currentReadNumber);
 	MoveFilePointerPastNewline(fp);
 
 	unsigned char* _thelist;
 	
-	_thelist = (unsigned char*)calloc(numScripts,sizeof(char));
+	_thelist = calloc(numScripts,sizeof(char));
 
 	int i=0;
 	for (i=0;i<numScripts;i++){
@@ -1140,12 +1202,11 @@ void LoadPreset(char* filename){
 	fp = crossfopen(filename, "r");
 	//fprintf(fp,"There are %d music deocoders available\n", Mix_GetNumMusicDecoders());
 	//int i;
-	
+
 	currentPresetFileList.theArray = ReadFileStringList(fp,&currentPresetFileList.length);
 	//for (i=0;i<currentPresetFileList.length;i++){
 	//	printf("%s\n",currentPresetFileList.theArray[i]);
 	//}
-
 
 	if (gameHasTips==1){
 		currentPresetTipList.theArray = ReadFileStringList(fp,&currentPresetTipList.length);
@@ -1282,6 +1343,7 @@ void TryLoadMenuSoundEffect(char* _passedPathIdea){
 	if (checkFileExist(tempstringconcat)){
 		menuSoundLoaded=1;
 		menuSound = loadSound(tempstringconcat);
+		showErrorIfNull(menuSound);
 		setSFXVolumeBefore(menuSound,FixSEVolume(256));
 	}else{
 		menuSoundLoaded=0;
@@ -1313,6 +1375,15 @@ void updateTextPositions(CrossTexture* _passedBackground){
 		}
 	#endif
 }
+void updateGraphicsScale(CrossTexture* _passedBackground){
+	#if USENEWSCALE
+		if (((double)screenWidth)/getTextureWidth(_passedBackground) < ((double)screenHeight)/getTextureHeight(_passedBackground)){
+			graphicsScale = ((double)screenWidth)/getTextureWidth(_passedBackground);
+		}else{
+			graphicsScale = ((double)screenHeight)/getTextureHeight(_passedBackground);
+		}
+	#endif
+}
 void setTextOnlyOverBackground(char _newValue){
 	textOnlyOverBackground=_newValue;
 	if (gameTextDisplayMode == TEXTMODE_AVD){
@@ -1327,27 +1398,63 @@ void setTextOnlyOverBackground(char _newValue){
 		updateTextPositions(currentBackground);
 	}
 }
-char* LocationStringFallback(const char* filename, char _folderPreference){
-	char* _returnFoundString;
+
+// Returns the folder for CG or CGAlt depending on the user's settings
+char* getUserPreferredImageDirectory(char _folderPreference){
 	if (_folderPreference==LOCATION_CGALT){
-		_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, locationStrings[LOCATION_CGALT],filename,".png");
+		return locationStrings[LOCATION_CGALT];
 	}else{
-		_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, locationStrings[LOCATION_CG],filename,".png");
+		return locationStrings[LOCATION_CG];
 	}
-	if (checkFileExist(_returnFoundString)==0){
-		free(_returnFoundString);
-		if (_folderPreference == LOCATION_CGALT){
-			_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, locationStrings[LOCATION_CG],filename,".png");
-		}else if (_folderPreference == LOCATION_CG){
-			_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, locationStrings[LOCATION_CGALT],filename,".png");
-		}
+}
+// Returns the image folder the user didn't choose.
+char* getUserPreferredImageDirectoryFallback(char _folderPreference){
+	if (_folderPreference==LOCATION_CGALT){
+		return locationStrings[LOCATION_CG];
+	}else{
+		return locationStrings[LOCATION_CGALT];
+	}
+}
+
+// Location string fallback with a specific image format
+char* _locationStringFallbackFormat(const char* filename, char _folderPreference, char* _fileFormat){
+	char* _returnFoundString;
+	// Try the user's first choice
+	_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, getUserPreferredImageDirectory(_folderPreference),filename,_fileFormat);
+	
+	if (checkFileExist(_returnFoundString)){
+		return _returnFoundString;
+	}
+
+	// If not exist, try the other folder.
+	free(_returnFoundString);
+	_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, getUserPreferredImageDirectoryFallback(_folderPreference),filename,_fileFormat);
+	
+	if (checkFileExist(_returnFoundString)){
+		return _returnFoundString;
+	}
+
+	// If the file still doesn't exist, return NULL
+	free(_returnFoundString);
+	return NULL;
+}
+
+char* LocationStringFallback(const char* filename, char _folderPreference, char _extentionIncluded){
+	char* _returnFoundString;
+	_returnFoundString = _locationStringFallbackFormat(filename,_folderPreference,_extentionIncluded==0 ? ".png" : "");
+	if (_returnFoundString==NULL && _extentionIncluded==0){
+		_returnFoundString = _locationStringFallbackFormat(filename,_folderPreference,".jpg");
 	}
 	return _returnFoundString;
 }
 // Will load a PNG from CG or CGAlt
-CrossTexture* safeLoadGamePNG(const char* filename, char _folderPreference){
+CrossTexture* safeLoadGamePNG(const char* filename, char _folderPreference, char _extentionIncluded){
 	char* _tempFoundFilename;
-	_tempFoundFilename = LocationStringFallback(filename,_folderPreference);
+	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extentionIncluded);
+	if (_tempFoundFilename==NULL){
+		LazyMessage("Image not found.",filename,"What will happen now?!",NULL);
+		return NULL;
+	}
 	CrossTexture* _returnLoadedPNG = SafeLoadPNG(_tempFoundFilename);
 	free(_tempFoundFilename);
 	return _returnLoadedPNG;
@@ -1455,8 +1562,9 @@ void DrawScene(const char* _filename, int time){
 		}
 	}
 
-	CrossTexture* newBackground = safeLoadGamePNG(_filename,graphicsLocation);
+	CrossTexture* newBackground = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtentions);
 	updateTextPositions(newBackground);
+	updateGraphicsScale(newBackground);
 	while (_backgroundAlpha<255){
 		fpsCapStart();
 
@@ -1465,7 +1573,6 @@ void DrawScene(const char* _filename, int time){
 		if (_backgroundAlpha>255){
 			_backgroundAlpha=255;
 		}
-		//int i;
 		startDrawing();
 		
 		if (currentBackground!=NULL){
@@ -1550,7 +1657,7 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	int i;
 	unsigned char skippedInitialWait=0;
 	ResetBustStruct(&(Busts[passedSlot]),1); 
-	Busts[passedSlot].image = safeLoadGamePNG(_filename,graphicsLocation);
+	Busts[passedSlot].image = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtentions);
 	if (Busts[passedSlot].image==NULL){
 		ResetBustStruct(&(Busts[passedSlot]),1);
 		return;
@@ -1995,6 +2102,35 @@ void StopBGM(int _slot){
 		stopMusic(currentMusicHandle[_slot]);
 	}
 }
+// Will use fallbacks
+// Return NULL if file not exist
+char* getBGMFilename(const char* _filename){
+	// TODO - I don't need to create a new string every time, just modify the string
+	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "BGM/", _filename, ".wav");
+	if (checkFileExist(tempstringconcat)==1){
+		return tempstringconcat;
+	}
+	free(tempstringconcat);
+
+	tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "BGM/", _filename, ".ogg");
+	if (checkFileExist(tempstringconcat)==1){
+		return tempstringconcat;
+	}
+	free(tempstringconcat);
+
+	tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/", _filename, ".ogg");
+	if (checkFileExist(tempstringconcat)==1){
+		return tempstringconcat;
+	}
+	free(tempstringconcat);
+
+	tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/", _filename, ".ogg");
+	if (checkFileExist(tempstringconcat)==1){
+		return tempstringconcat;
+	}
+	free(tempstringconcat);
+	return NULL;
+}
 // Unfixed bgm
 void PlayBGM(const char* filename, int _volume, int _slot){
 	#if PLATFORM == PLAT_3DS
@@ -2011,12 +2147,10 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 		LazyMessage("Music slot too high.","No action will be taken.",NULL,NULL);
 		return;
 	}
-	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "BGM/", filename, ".wav");
-	if (checkFileExist(tempstringconcat)==0){
-		free(tempstringconcat);
-		tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "BGM/", filename, ".ogg");
-	}
-	if (checkFileExist(tempstringconcat)==1){
+	char* tempstringconcat = getBGMFilename(filename);
+	if (tempstringconcat!=NULL){
+		FreeBGM(_slot);
+	}else{
 		char* _tempHoldFilepathConcat = malloc(strlen(filename)+1);
 		strcpy(_tempHoldFilepathConcat,filename);
 		CROSSMUSIC* _tempHoldSlot = loadMusic(tempstringconcat);
@@ -2028,10 +2162,9 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 		currentMusicHandle[_slot] = playMusic(currentMusic[_slot],_slot);
 		setMusicVolume(currentMusicHandle[_slot],FixBGMVolume(_volume));
 		lastBGMVolume=_volume;
-	}else{
-		FreeBGM(_slot);
+		
+		free(tempstringconcat);
 	}
-	free(tempstringconcat);
 	#if PLATFORM == PLAT_3DS
 		_bgmIsLock = 0;
 	#endif
@@ -2321,6 +2454,9 @@ void startLoadingGameFolder(char* _chosenGameFolder){
 	strcat(_fileWithPresetFilenamePath,_chosenGameFolder);
 	strcat(_fileWithPresetFilenamePath,"/includedPreset.txt");
 
+	if (!checkFileExist(_fileWithPresetFilenamePath)){
+		LazyMessage("Invalid game folder.","I know this because the includedPreset.txt","is not exist.",NULL);
+	}
 	startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
 
 	free(presetFolder);
@@ -2338,7 +2474,6 @@ void startLoadingGameFolder(char* _chosenGameFolder){
 	strcpy(scriptFolder,streamingAssets);
 	strcat(scriptFolder,"Scripts/");
 	
-	startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
 }
 void setDefaultGame(char* _defaultGameFolderName){
 	char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("/_defaultGame")+1];
@@ -2452,7 +2587,7 @@ void scriptClearMessage(nathanscriptVariable* _passedArguments, int _numArgument
 	return;
 }
 void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	if (!(_passedArguments[3].variableType==NATHAN_TYPE_NULL)){
+	if (_passedArguments[3].variableType!=NATHAN_TYPE_NULL){
 		if (strcmp(nathanvariableToString(&_passedArguments[3]),"0")==0){
 			return;
 		}
@@ -2461,9 +2596,10 @@ void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments,
 	}
 	return;
 }
+// OutputLineAll(NULL, "\n", Line_ContinueAfterTyping);
 // Null, text, line type
 void scriptOutputLineAll(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	if (!(_passedArguments[3].variableType==NATHAN_TYPE_NULL)){
+	if (_passedArguments[1].variableType!=NATHAN_TYPE_NULL){
 		if (strcmp(nathanvariableToString(&_passedArguments[1]),"0")==0){
 			return;
 		}
@@ -2943,9 +3079,9 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 	_passedSelectImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
 
 	for (i=0;i<_numberOfChoices;i++){
-		_passedNormalImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+1-1]),graphicsLocation);
-		_passedHoverImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+2-1]),graphicsLocation);
-		_passedSelectImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+3-1]),graphicsLocation);
+		_passedNormalImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+1-1]),graphicsLocation,scriptUsesFileExtentions);
+		_passedHoverImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+2-1]),graphicsLocation,scriptUsesFileExtentions);
+		_passedSelectImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+3-1]),graphicsLocation,scriptUsesFileExtentions);
 	}
 
 	// Y position of the first choice graphic
@@ -4147,7 +4283,6 @@ void NewGameMenu(){
 	}
 }
 // =====================================================
-
 char initializeLua(){
 	if (L==NULL){
 		// Initialize Lua
@@ -4170,6 +4305,23 @@ char initializeLua(){
 		}
 	}
 	return 0;
+}
+// These functions do some stuff with the data and usually eventually call the same functions that the Lua functions do.
+#include "VNDSScriptWrappers.h"
+void initializeNathanScript(){
+	if (!nathanscriptIsInit){
+		nathanscriptIsInit=1;
+		nathanscriptInit();
+		// TODO - Pre-realloc to number of functions we need.
+
+		nathanscriptAddFunction(vndswrapper_text,1,"text");
+		nathanscriptAddFunction(vndswrapper_choice,1,"choice");
+		nathanscriptAddFunction(vndswrapper_jump,0,"jump");
+		nathanscriptAddFunction(vndswrapper_delay,0,"delay");
+		nathanscriptAddFunction(vndswrapper_cleartext,0,"cleartext");
+		nathanscriptAddFunction(vndswrapper_bgload,0,"bgload");
+		nathanscriptAddFunction(vndswrapper_setimg,0,"setimg");
+	}
 }
 // Please exit if this function returns 2
 // Go ahead as normal if it returns 0
@@ -4254,7 +4406,6 @@ signed char init(){
 			}
 		}
 	}
-
 	// Check if this is the new game folder mode or the old preset file mode.
 	fixPath("Games/",globalTempConcat,TYPE_DATA);
 	if (directoryExists(globalTempConcat)==1){
@@ -4320,7 +4471,6 @@ signed char init(){
 
 	// Fill with null char
 	ClearMessageArray();
-
 	if (initializeLua()==2){
 		return 2;
 	}
@@ -4382,7 +4532,6 @@ int main(int argc, char *argv[]){
 				}else{
 					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 				}
-				
 				break;
 			case GAMESTATUS_PRESETSELECTION:
 				if (FileSelector(presetFolder,&currentPresetFilename,(char*)"Select a preset")==2){
@@ -4430,20 +4579,53 @@ int main(int argc, char *argv[]){
 				;
 				char* _chosenGameFolder;
 				if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a preset")==2){
-					LazyMessage("No folders found.","After running the script converter,","you should've put the converted files in",gamesFolder);
+					LazyMessage("No folders found.","After running the script converter","you should've put the converted files in",gamesFolder);
+					currentGameStatus = GAMESTATUS_TITLE;
 					break;
 				}
 				if (_chosenGameFolder==NULL){
-					currentGameStatus=GAMESTATUS_TITLE;
-				}else{
-					if (strcmp(_chosenGameFolder,"PLACEHOLDER.txt")==0){ // TODO - Either automatically delete this, or delete it when it's selected.
-						LazyMessage("Feel free to delete this file,","PLACEHOLDER.txt","in",gamesFolder);
-						free(_chosenGameFolder);
-						break;
+					currentGameStatus = GAMESTATUS_TITLE;
+					break;
+				}
+				char _possibleVNDSStatusFile[strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/Scripts/main.scr")+1];
+				strcpy(_possibleVNDSStatusFile,gamesFolder);
+				strcat(_possibleVNDSStatusFile,_chosenGameFolder);
+				strcat(_possibleVNDSStatusFile,"/isvnds");
+				if (checkFileExist(_possibleVNDSStatusFile)){
+					initializeNathanScript();
+					_possibleVNDSStatusFile[strlen(gamesFolder)+strlen(_chosenGameFolder)]=0; // Trim last part of the string
+					strcat(_possibleVNDSStatusFile,"/save0");
+					if (checkFileExist(_possibleVNDSStatusFile)	){
+						// TODO - Load save file
+						printf("Load save file.\n");
+					}else{
+						// Special settings for vnds
+						scriptUsesFileExtentions=1;
+						bustsStartInMiddle=0;
+						scriptScreenWidth=256;
+						scriptScreenHeight=192;
+
+						// Setup StreamingAssets path
+						_possibleVNDSStatusFile[strlen(gamesFolder)+strlen(_chosenGameFolder)]=0;
+						GenerateStreamingAssetsPaths(_possibleVNDSStatusFile);
+						// Do the main.scr script
+						_possibleVNDSStatusFile[strlen(gamesFolder)+strlen(_chosenGameFolder)]=0;
+						strcat(_possibleVNDSStatusFile,"/Scripts/main.scr");
+						nathanscriptDoScript(_possibleVNDSStatusFile,0);
 					}
-					startLoadingGameFolder(_chosenGameFolder);
-					currentGameFolderName = _chosenGameFolder; // Do not free _chosenGameFolder
-					currentGameStatus=GAMESTATUS_LOADPRESET;
+				}else{
+					if (_chosenGameFolder==NULL){
+						currentGameStatus=GAMESTATUS_TITLE;
+					}else{
+						if (strcmp(_chosenGameFolder,"PLACEHOLDER.txt")==0){ // TODO - Either automatically delete this, or delete it when it's selected.
+							LazyMessage("Feel free to delete this file,","PLACEHOLDER.txt","in",gamesFolder);
+							free(_chosenGameFolder);
+							break;
+						}
+						startLoadingGameFolder(_chosenGameFolder);
+						currentGameFolderName = _chosenGameFolder; // Do not free _chosenGameFolder
+						currentGameStatus=GAMESTATUS_LOADPRESET;
+					}
 				}
 				break;
 		}
