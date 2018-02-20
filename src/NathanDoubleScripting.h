@@ -50,10 +50,9 @@ int L_##scriptFunctionName(lua_State* passedState){ \
 #define NATHAN_TYPE_POINTER LUA_TLIGHTUSERDATA
 #define NATHAN_TYPE_ARRAY LUA_TTABLE
 
-lua_State* L;
-
 //===================================================================================
-int nathanscriptTotalGamevar;
+int nathanscriptCurrentLine=1;
+
 typedef struct fgurhrh{
 	char variableType;
 	void* value; // string or float made with malloc
@@ -64,7 +63,11 @@ typedef struct fjiwejfe{
 	char* name; // string made with malloc
 }nathanscriptGameVariable;
 
+int nathanscriptTotalGamevar;
 nathanscriptGameVariable* nathanscriptGamevarList;
+
+int nathanscriptTotalGlobalvar;
+nathanscriptGameVariable* nathanscriptGlobalvarList;
 
 typedef void(*nathanscriptFunction)(nathanscriptVariable* _madeArgs, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize);
 
@@ -80,12 +83,32 @@ FILE* nathanscriptCurrentOpenFile;
 int nathanscriptFoundFiIndex; // Array index of the fi command from the line parser
 int nathanscriptFoundLabelIndex;
 
-/*============================================================================*/
-void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize);
-void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize);
-void scriptGoto(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize);
-void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize);
-/*============================================================================*/
+////////////////////////////////////////////////
+void saveVariableList(FILE* fp, nathanscriptGameVariable* _listToSave, int _totalListLength);
+////////////////////////////////////////////////
+
+char nathanGetBit(char _value, char _bitNumber){
+	return (_value & (1<<_bitNumber))>>_bitNumber;
+}
+char nathanSetBit(char _value, char _bitNumber, char _bitValue){
+	if (_bitValue==1){
+		return (_value | (1<<_bitNumber));
+	}else{
+		return (_value & (~(1<<_bitNumber)));
+	}
+}
+
+char nathanscriptMakeConfigByte(char _isOneArgument, char _ifShouldNotParse){
+	char _returnConfig = 0;
+	if (_isOneArgument){
+		_returnConfig = nathanSetBit(_returnConfig,0,1);
+	}
+	if (_ifShouldNotParse){
+		_returnConfig = nathanSetBit(_returnConfig,1,1);
+	}
+	return _returnConfig;
+}
+
 void nathanvariableArraySetFloat(nathanscriptVariable*  _variableArray, unsigned char _index, float _value){
 	_variableArray[_index].variableType = NATHAN_TYPE_FLOAT;
 	_variableArray[_index].value = malloc(sizeof(float));
@@ -106,6 +129,7 @@ void nathanvariableArraySetPointer(nathanscriptVariable*  _variableArray, unsign
 	_variableArray[_index].value = malloc(sizeof(void*));
 	POINTER_TOPOINTER(_variableArray[_index].value)=_value;
 }
+
 nathanscriptVariable* makeScriptArgumentsFromLua(lua_State* passedState){
 	int i;
 	int _numberOfArguments = lua_gettop(passedState);
@@ -162,23 +186,42 @@ nathanscriptVariable* makeScriptArgumentsFromLua(lua_State* passedState){
 	}
 	return _returnedArguments;
 }
+
+void freeSingleNathanVariable(nathanscriptVariable _variableToFree){
+	if (_variableToFree.variableType==NATHAN_TYPE_ARRAY){
+		int j;
+		for (j=1;j<=(((short*)(_variableToFree.value))[0]);j++){
+			free((((char**)(_variableToFree.value))[j]));
+		}
+	}
+	free(_variableToFree.value);
+}
+
+int freeNathanGamevariableArray(nathanscriptGameVariable* _passedVariableArray, int _passedArrayLength){
+	if (_passedVariableArray==NULL){
+		return -1;
+	}
+	int i;
+	for (i=0;i<_passedArrayLength;i++){
+		freeSingleNathanVariable(_passedVariableArray[i].variable);
+		free(_passedVariableArray[i].name);
+	}
+	free(_passedVariableArray);
+	return _passedArrayLength;
+}
+
 int freeNathanscriptVariableArray(nathanscriptVariable* _passedVariableArray, int _passedArraySize){
 	if (_passedVariableArray==NULL){
 		return -1;
 	}
 	int i;
 	for (i=0;i<_passedArraySize;i++){
-		if (_passedVariableArray[i].variableType==NATHAN_TYPE_ARRAY){
-			int j;
-			for (j=1;j<=(((short*)(_passedVariableArray[i].value))[0]);j++){
-				free((((char**)(_passedVariableArray[i].value))[j]));
-			}
-		}
-		free(_passedVariableArray[i].value);
+		freeSingleNathanVariable(_passedVariableArray[i]);
 	}
 	free(_passedVariableArray);
 	return _passedArraySize;
 }
+
 void pushSingleReturnArgument(lua_State* passedState, char _returnValueType, void* _returnValue){
 	switch(_returnValueType){
 		case NATHAN_TYPE_STRING:
@@ -201,6 +244,7 @@ void pushSingleReturnArgument(lua_State* passedState, char _returnValueType, voi
 			break;
 	}
 }
+
 void pushReturnArrayToLua(lua_State* passedState, nathanscriptVariable* _passedReturnArray, int _passedArraySize){
 	int i;
 	for (i=0;i<_passedArraySize;i++){
@@ -219,6 +263,7 @@ int freeReturnArray(void** _passedReturnArray){
 	free(_passedReturnArray);
 	return _totalReturnArguments;
 }
+
 // _bufferStartIndex becomes -1 if we reached end of buffer.
 char* readSpaceTerminated(char* _bufferToReadFrom, int* _bufferStartIndex, char* _tempBuffer){
 	// Value we will malloc later that will contain the read string with the correct malloc size
@@ -247,6 +292,7 @@ char* readSpaceTerminated(char* _bufferToReadFrom, int* _bufferStartIndex, char*
 	strcpy(_returnReadString,_tempBuffer);
 	return _returnReadString;
 }
+
 char stringIsNumber(char* _stringToCheck){
 	int i;
 	char _usedDecimalPoint=0;
@@ -288,7 +334,7 @@ void nathanscriptConvertVariable(nathanscriptVariable* _variableToConvert, char 
 	if (_variableToConvert->variableType==_newType || _variableToConvert->variableType==NATHAN_TYPE_POINTER){
 		return;
 	}
-	if (_variableToConvert->value==NATHAN_TYPE_NULL){
+	if (_variableToConvert->variableType==NATHAN_TYPE_NULL){
 		if (_newType==NATHAN_TYPE_FLOAT){
 			_variableToConvert->value = calloc(1,sizeof(float));
 		}else if (_newType == NATHAN_TYPE_STRING){
@@ -349,6 +395,19 @@ int searchVariableArray(nathanscriptGameVariable* _listToSearch, int _passedArra
 	return -1;
 }
 
+nathanscriptGameVariable* nathanscriptGetGameOrGlboalVariable(char* _passedSearchTerm){
+	int _foundIndex = searchVariableArray(nathanscriptGamevarList,nathanscriptTotalGamevar,_passedSearchTerm);
+	if (_foundIndex==-1){
+		_foundIndex = searchVariableArray(nathanscriptGlobalvarList,nathanscriptTotalGlobalvar,_passedSearchTerm);
+		if (_foundIndex!=-1){
+			return &(nathanscriptGlobalvarList[_foundIndex]);
+		}
+	}else{
+		return &(nathanscriptGamevarList[_foundIndex]);
+	}
+	return NULL;
+}
+
 nathanscriptGameVariable* nathanscriptGetGameVariable(char* _passedSearchTerm){
 	int _foundIndex = searchVariableArray(nathanscriptGamevarList,nathanscriptTotalGamevar,_passedSearchTerm);
 	if (_foundIndex==-1){
@@ -367,18 +426,23 @@ void replaceIfIsVariable(char** _possibleVariableString){
 				if ((*_possibleVariableString)[i+j]==' ' || (*_possibleVariableString)[i+j]==0){ // Find end of the string
 					char _endCharacterCache = (*_possibleVariableString)[i+j];
 					(*_possibleVariableString)[i+j]=0; // trim string for searching
+					nathanscriptGameVariable* _targetVariableArray = nathanscriptGamevarList;
 					int _foundVariableIndex = searchVariableArray(nathanscriptGamevarList,nathanscriptTotalGamevar,&((*_possibleVariableString)[i+1]));
+					if (_foundVariableIndex==-1){
+						_targetVariableArray = nathanscriptGlobalvarList;
+						_foundVariableIndex = searchVariableArray(nathanscriptGlobalvarList,nathanscriptTotalGlobalvar,&((*_possibleVariableString)[i+1]));
+					}
 					if (_foundVariableIndex!=-1){
 						char* _newStringBuffer;
 
 						char* _varaibleStringToReplace =  NULL;
-						if (nathanscriptGamevarList[_foundVariableIndex].variable.variableType==NATHAN_TYPE_STRING){
-							_varaibleStringToReplace = nathanscriptGamevarList[_foundVariableIndex].variable.value;
-						}else if (nathanscriptGamevarList[_foundVariableIndex].variable.variableType==NATHAN_TYPE_FLOAT){
+						if (_targetVariableArray[_foundVariableIndex].variable.variableType==NATHAN_TYPE_STRING){
+							_varaibleStringToReplace = _targetVariableArray[_foundVariableIndex].variable.value;
+						}else if (_targetVariableArray[_foundVariableIndex].variable.variableType==NATHAN_TYPE_FLOAT){
 							_varaibleStringToReplace = malloc(256);
-							sprintf(_varaibleStringToReplace, "%.0f", *((float*)nathanscriptGamevarList[_foundVariableIndex].variable.value));
+							sprintf(_varaibleStringToReplace, "%.0f", *((float*)_targetVariableArray[_foundVariableIndex].variable.value));
 						}else{
-							printf("Invalid variable type when doing replace stupidity!\n");
+							printf("Invalid variable type %d when doing replace stupidity. %s\n",_targetVariableArray[_foundVariableIndex].variable.variableType,&((*_possibleVariableString)[i+1]));
 						}
 
 						int _singlePhraseStrlen = strlen(&((*_possibleVariableString)[i]));
@@ -401,7 +465,7 @@ void replaceIfIsVariable(char** _possibleVariableString){
 						(*_possibleVariableString)=_newStringBuffer;
 						_cachedStrlen = strlen(*_possibleVariableString);
 
-						if (nathanscriptGamevarList[_foundVariableIndex].variable.variableType==NATHAN_TYPE_FLOAT){
+						if (_targetVariableArray[_foundVariableIndex].variable.variableType==NATHAN_TYPE_FLOAT){
 							free(_varaibleStringToReplace);
 						}
 					}else{
@@ -447,16 +511,20 @@ void nathanscriptParseString(char* _tempReadLine, int* _storeCommandIndex, natha
 	// Search for arguments only if we haven't already reached the end of the line buffer and it's a valid command
 	if (_lineBufferIndex!=-1 && *_storeCommandIndex!=-1 && _storeArguments!=NULL){
 		// the text command doesn't have quotation marks around the text, so we treat everything as one argument.
-		if (nathanFunctionPropertyList[*_storeCommandIndex]==1){
+		if (nathanGetBit(nathanFunctionPropertyList[*_storeCommandIndex],0)==1){
 			_totalArguments=1;
 			_parsedArguments[0].value = malloc(strlen(_tempReadLine)-strlen(_parsedMainCommand)); // No need to remove the space character because we need that extra byte for the null character
 			strcpy(_parsedArguments[0].value,&(_tempReadLine[_lineBufferIndex]));
-			replaceIfIsVariable((char**)&(_parsedArguments[0].value));
+			if (nathanGetBit(nathanFunctionPropertyList[*_storeCommandIndex],1)!=1){
+				replaceIfIsVariable((char**)&(_parsedArguments[0].value));
+			}
 		}else{
 			// Read up to MAXNATHANARGUMENTS arguments
 			for (i=0;i<MAXNATHANARGUMENTS;i++){
 				_parsedArguments[i].value = readSpaceTerminated(_tempReadLine,&_lineBufferIndex,_tempSingleElementBuffer);
-				replaceIfIsVariable((char**)&(_parsedArguments[i].value));
+				if (nathanGetBit(nathanFunctionPropertyList[*_storeCommandIndex],1)!=1){
+					replaceIfIsVariable((char**)&(_parsedArguments[i].value));
+				}
 				_totalArguments++;
 				if (_lineBufferIndex==-1){
 					break;
@@ -498,18 +566,6 @@ void nathanscriptParseSingleLine(FILE* fp, int* _storeCommandIndex, nathanscript
 	}
 	nathanscriptParseString(_tempReadLine,_storeCommandIndex,_storeArguments,_storeNumArguments);
 	free(_tempReadLine);
-}
-
-// TODO - Reaplce with the variable converter function
-char nathanscriptConvertArgumentToFloat(void** _argumentArray, int _argumentIndex){
-	if (stringIsNumber(_argumentArray[_argumentIndex])){
-		float* _newConverterValue = malloc(sizeof(float));
-		*(_newConverterValue) = atof(_argumentArray[_argumentIndex]);
-		free(_argumentArray[_argumentIndex]);
-		_argumentArray[_argumentIndex]=_newConverterValue;
-		return 1;
-	}
-	return 0;
 }
 
 void nathanReallocFunctionLists(int _newSize){
@@ -573,47 +629,103 @@ void makeNewReturnArray(nathanscriptVariable** _returnedReturnArray, int* _retur
 	*_returnArraySize = _newArraySize;
 }
 
-void nathanscriptInit(){
-	nathanReallocFunctionLists(6);
-	nathanCurrentMaxFunctions=6;
-
-	nathanscriptAddFunction(scriptSetVar,0,"setvar");
-	nathanscriptAddFunction(scriptIfStatement,0,"if");
-	nathanscriptAddFunction(NULL,0,"fi");
-	nathanscriptFoundFiIndex = nathanCurrentRegisteredFunctions-1;
-	nathanscriptAddFunction(NULL,0,"label");
-	nathanscriptFoundLabelIndex = nathanCurrentRegisteredFunctions-1;
-	nathanscriptAddFunction(scriptGoto,0,"goto");
-	nathanscriptAddFunction(scriptLuaDostring,1,"luastring");
+void genericGotoLabel(char* labelName){
+	long int _startSearchSpot = ftell(nathanscriptCurrentOpenFile);
+	char _didFoundLabel=0;
+	if (fseek(nathanscriptCurrentOpenFile,0,SEEK_SET)!=0){
+		printf("Seek error 1.\n");
+	}
+	while (!feof(nathanscriptCurrentOpenFile)){
+		int _foundCommandIndex;
+		nathanscriptVariable* _parsedArguments=NULL;
+		int _parsedArgumentsLength;
+		nathanscriptParseSingleLine(nathanscriptCurrentOpenFile,&_foundCommandIndex,&_parsedArguments,&_parsedArgumentsLength);
+		if (_foundCommandIndex==nathanscriptFoundLabelIndex){
+			if (strcmp(nathanvariableToString(&_parsedArguments[0]),labelName)==0){
+				freeNathanscriptVariableArray(_parsedArguments,_parsedArgumentsLength);
+				_didFoundLabel=1;
+				break;
+			}
+		}
+		freeNathanscriptVariableArray(_parsedArguments,_parsedArgumentsLength);
+	}
+	if (_didFoundLabel==0){
+		printf("Label not found.\n");
+		if (fseek(nathanscriptCurrentOpenFile,_startSearchSpot,SEEK_SET)!=0){
+			printf("Seek error 2.\n");
+		}
+	}
 }
 
-/*
-================================================================
-SCRIPT
-================================================================
-*/
 void genericSetVar(char* _passedVariableName, char* _passedModifier, char* _passedNewValue, nathanscriptGameVariable** _variableList, int* _variableListLength){
 	if (strlen(_passedModifier)!=1){
 		printf("modifier string too long.");
 		return;
 	}
 	int _foundVariableIndex = searchVariableArray(*_variableList,*_variableListLength,_passedVariableName);
-	// Make a new variable
+	// Make a new variable if the one we're using doesn't exist
 	if (_foundVariableIndex==-1){
 		_foundVariableIndex = nathanscriptAddNewVariableToList(_variableList,_variableListLength);
 		(*_variableList)[_foundVariableIndex].name = malloc(strlen(_passedVariableName)+1);
 		strcpy((*_variableList)[_foundVariableIndex].name,_passedVariableName);
 	}
+
 	// There's no sure way to tell if the user passed a string or number
-	char _guessedVariableType = NATHAN_TYPE_FLOAT;
-	if (!stringIsNumber(_passedNewValue)){
+	char _guessedVariableType;
+
+	char* _modifiedNewValue=NULL;
+	if (_passedNewValue[0]=='\"' && _passedNewValue[strlen(_passedNewValue)-1]=='\"'){ // If we're setting the variable to a string in quotatioin marks
 		_guessedVariableType = NATHAN_TYPE_STRING;
-	}else if ((*_variableList)[_foundVariableIndex].variable.variableType==NATHAN_TYPE_STRING){
+		if (strlen(_passedNewValue)<2){ // not even a second quotation mark is exist
+			_modifiedNewValue = calloc(1,1);
+		}else{
+			_modifiedNewValue = malloc(strlen(_passedNewValue)-1); // only minus 1 because we still need the null character
+			memcpy(_modifiedNewValue,&(_passedNewValue[1]),strlen(_passedNewValue)-2); // Can't use strcpy because would result in buffer overflow. This way, we don't copy second quotation mark
+			_modifiedNewValue[strlen(_passedNewValue)-2]='\0';
+		}
 		_guessedVariableType = NATHAN_TYPE_STRING;
+	}else if (stringIsNumber(_passedNewValue)){ // Just do everything normally if it's a number
+		_guessedVariableType = NATHAN_TYPE_FLOAT;
+		_modifiedNewValue = malloc(strlen(_passedNewValue)+1);
+		strcpy(_modifiedNewValue,_passedNewValue);
+	}else{ // check if it's a variable. If it's not, make it 0 as a float.
+		int _foundSecondVariableIndex = searchVariableArray(nathanscriptGamevarList, nathanscriptTotalGamevar, _passedNewValue);
+		char _foundSecondVariableList = 0; // 
+		// If it's not in the local variable list, search the global variable list.
+		if (_foundSecondVariableIndex==-1){
+			_foundSecondVariableIndex = searchVariableArray(nathanscriptGlobalvarList, nathanscriptTotalGlobalvar, _passedNewValue);
+			_foundSecondVariableList=1;
+		}
+		// This is not a variable. It's not a string. It's not a number. We're setting the variable to 0 now.
+		if (_foundSecondVariableIndex==-1){
+			printf("Variable not found, %s\n",_passedNewValue);
+			_modifiedNewValue = calloc(2,1);
+			_modifiedNewValue[0] = '0';
+			_guessedVariableType = NATHAN_TYPE_FLOAT;
+		}else{
+			char* _targetString;
+			if (_foundSecondVariableList==0){ // normal list
+				_targetString = nathanvariableToString(&(nathanscriptGamevarList[_foundSecondVariableIndex].variable));
+				_guessedVariableType = nathanscriptGamevarList[_foundSecondVariableIndex].variable.variableType;
+			}else if (_foundSecondVariableList==1){ // global list
+				_targetString = nathanvariableToString(&(nathanscriptGlobalvarList[_foundSecondVariableIndex].variable));
+				_guessedVariableType = nathanscriptGlobalvarList[_foundSecondVariableIndex].variable.variableType;
+			}
+			_modifiedNewValue = malloc(strlen(_targetString)+1);
+			strcpy(_modifiedNewValue,_targetString);
+		}
 	}
+
+	if (_guessedVariableType == NATHAN_TYPE_FLOAT){
+		if ((*_variableList)[_foundVariableIndex].variable.variableType == NATHAN_TYPE_STRING){
+			_guessedVariableType = NATHAN_TYPE_STRING;
+		}
+	}
+
+	// Convert the variable we're setting to the type we need it to be.
 	nathanscriptConvertVariable(&((*_variableList)[_foundVariableIndex].variable),_guessedVariableType);
 	if (_guessedVariableType==NATHAN_TYPE_FLOAT){
-		float _convertedNewValue = atof(_passedNewValue);
+		float _convertedNewValue = atof(_modifiedNewValue);
 		switch (_passedModifier[0]){
 			case '+':
 				*((float*)(*_variableList)[_foundVariableIndex].variable.value)+=_convertedNewValue;
@@ -632,23 +744,41 @@ void genericSetVar(char* _passedVariableName, char* _passedModifier, char* _pass
 		switch (_passedModifier[0]){
 			case '+':
 				;
-				char* _newStringBuffer = malloc(strlen((*_variableList)[_foundVariableIndex].variable.value)+strlen(_passedNewValue)+1);
+				char* _newStringBuffer = malloc(strlen((*_variableList)[_foundVariableIndex].variable.value)+strlen(_modifiedNewValue)+1);
 				strcpy(_newStringBuffer,(*_variableList)[_foundVariableIndex].variable.value);
-				strcat(_newStringBuffer,_passedNewValue);
+				strcat(_newStringBuffer,_modifiedNewValue);
 				free((*_variableList)[_foundVariableIndex].variable.value);
 				(*_variableList)[_foundVariableIndex].variable.value = _newStringBuffer;
 				break;
 			case '=':
 				free((*_variableList)[_foundVariableIndex].variable.value);
-				(*_variableList)[_foundVariableIndex].variable.value = malloc(strlen(_passedNewValue)+1);
-				strcpy((*_variableList)[_foundVariableIndex].variable.value,_passedNewValue);
+				(*_variableList)[_foundVariableIndex].variable.value = malloc(strlen(_modifiedNewValue)+1);
+				strcpy((*_variableList)[_foundVariableIndex].variable.value,_modifiedNewValue);
 				break;
 			default:
 				printf("Bad operator %c on string value.\n",_passedModifier[0]);
 				break;
 		}
 	}
+	free(_modifiedNewValue);
 	return;
+}
+
+/*
+================================================================
+SCRIPT
+================================================================
+*/
+
+// random var low high
+// inclusive
+void scriptRandom(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	int _minRandom = nathanvariableToFloat(&_passedArguments[1]);
+	int _maxRandom = nathanvariableToFloat(&_passedArguments[2])+1; // Add 1 so the value is actually included
+	int _variableResult = (rand()%(_maxRandom-_minRandom))+_minRandom;
+	char _numberToStringBuffer[256];
+	sprintf(_numberToStringBuffer,"%d",_variableResult);
+	genericSetVar(nathanvariableToString(&_passedArguments[0]),"=",_numberToStringBuffer,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
 }
 
 // setvar varname modifier value
@@ -661,9 +791,17 @@ void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nath
 	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
 }
 
+// Same as setvar
+void scriptGSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	char* _passedVariableName = nathanvariableToString(&_argumentList[0]);
+	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
+	char* _passedNewValue = nathanvariableToString(&_argumentList[2]);
+	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
+	//saveVariableList
+}
 // Uninitialized variables will result in true
 void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	nathanscriptGameVariable* _firstVariable = nathanscriptGetGameVariable(nathanvariableToString(&_argumentList[0]));
+	nathanscriptGameVariable* _firstVariable = nathanscriptGetGameOrGlboalVariable(nathanvariableToString(&_argumentList[0]));
 	if (_firstVariable==NULL){
 		printf("Invalid variable.\n");
 		return;
@@ -709,34 +847,6 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 	return;
 }
 
-void genericGotoLabel(char* labelName){
-	long int _startSearchSpot = ftell(nathanscriptCurrentOpenFile);
-	char _didFoundLabel=0;
-	if (fseek(nathanscriptCurrentOpenFile,0,SEEK_SET)!=0){
-		printf("Seek error 1.\n");
-	}
-	while (!feof(nathanscriptCurrentOpenFile)){
-		int _foundCommandIndex;
-		nathanscriptVariable* _parsedArguments=NULL;
-		int _parsedArgumentsLength;
-		nathanscriptParseSingleLine(nathanscriptCurrentOpenFile,&_foundCommandIndex,&_parsedArguments,&_parsedArgumentsLength);
-		if (_foundCommandIndex==nathanscriptFoundLabelIndex){
-			if (strcmp(nathanvariableToString(&_parsedArguments[0]),labelName)==0){
-				freeNathanscriptVariableArray(_parsedArguments,_parsedArgumentsLength);
-				_didFoundLabel=1;
-				break;
-			}
-		}
-		freeNathanscriptVariableArray(_parsedArguments,_parsedArgumentsLength);
-	}
-	if (_didFoundLabel==0){
-		printf("Label not found.\n");
-		if (fseek(nathanscriptCurrentOpenFile,_startSearchSpot,SEEK_SET)!=0){
-			printf("Seek error 2.\n");
-		}
-	}
-}
-
 void scriptGoto(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	genericGotoLabel(nathanvariableToString(&_argumentList[0]));
 }
@@ -746,10 +856,8 @@ void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nat
 	return;
 }
 
-int nathanscriptCurrentLine=1;
-
 void nathanscriptDoScript(char* _filename, long int _startingOffset){
-	nathanscriptCurrentOpenFile = fopen(_filename,"r");
+	nathanscriptCurrentOpenFile = fopen(_filename,"rb");
 	if (_startingOffset>0){
 		fseek(nathanscriptCurrentOpenFile,_startingOffset,SEEK_SET);
 	}
@@ -775,6 +883,23 @@ void nathanscriptDoScript(char* _filename, long int _startingOffset){
 		nathanscriptCurrentLine++;
 	}
 	fclose(nathanscriptCurrentOpenFile);
+}
+
+// This will also add functions that don't depend on graphics.
+void nathanscriptInit(){
+	nathanReallocFunctionLists(8);
+	nathanCurrentMaxFunctions=8;
+
+	nathanscriptAddFunction(scriptSetVar,nathanscriptMakeConfigByte(0,1),"setvar");
+	nathanscriptAddFunction(scriptGSetVar,nathanscriptMakeConfigByte(0,1),"gsetvar");
+	nathanscriptAddFunction(scriptIfStatement,0,"if");
+	nathanscriptAddFunction(NULL,0,"fi");
+		nathanscriptFoundFiIndex = nathanCurrentRegisteredFunctions-1;
+	nathanscriptAddFunction(NULL,0,"label");
+		nathanscriptFoundLabelIndex = nathanCurrentRegisteredFunctions-1;
+	nathanscriptAddFunction(scriptGoto,0,"goto");
+	nathanscriptAddFunction(scriptLuaDostring,1,"luastring");
+	nathanscriptAddFunction(scriptRandom,0,"random");
 }
 
 #endif

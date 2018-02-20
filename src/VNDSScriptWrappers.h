@@ -3,26 +3,33 @@
 
 #define _VNDSWAITDISABLE 1
 
-char nextVndsBustshotSlot=0;
+//char nextVndsBustshotSlot=0;
 
+// Will always start on an avalible line
 void vndswrapper_text(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	if (nathanvariableToString(&_passedArguments[0])[0]=='@'){
+	if (currentLine==MAXLINES){
+		if (vndsClearAtBottom){
+			ClearMessageArray();
+			currentLine=0;
+		}else{
+			LastLineLazyFix(&currentLine);
+		}
+	}
+	if (nathanvariableToString(&_passedArguments[0])[0]=='@'){ // Line that doesn't wait for input
 		OutputLine(&(nathanvariableToString(&_passedArguments[0])[1]),Line_ContinueAfterTyping,isSkipping);
 		outputLineWait();
 	}else if (nathanvariableToString(&_passedArguments[0])[0]=='!'){ // Blank line that requires button push
 		OutputLine("\n",Line_WaitForInput,isSkipping);
 		outputLineWait();
 		currentLine--; // Later in this function we add 1 to this variable, so it evens out.
-	}else if (!(nathanvariableToString(&_passedArguments[0])[0]=='~')){ // If we're not making a blank line that doesn't require button push
+	}else if (nathanvariableToString(&_passedArguments[0])[0]=='~'){
+		currentMessages[currentLine][0]=0;
+	}else{ // Normal line
 		OutputLine(nathanvariableToString(&_passedArguments[0]),Line_WaitForInput,isSkipping);
 		outputLineWait();
 	}
 	currentLine++;
-	if (currentLine==MAXLINES){
-		// TODO - Just shift everything else up
-		ClearMessageArray();
-		currentLine=0;
-	}
+	
 }
 void vndswrapper_choice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* _choiceSet = nathanvariableToString(&_passedArguments[0]);
@@ -70,10 +77,37 @@ void vndswrapper_choice(nathanscriptVariable* _passedArguments, int _numArgument
 	sprintf(_numberToStringBuffer,"%d",lastSelectionAnswer+1);
 	genericSetVar("selected","=",_numberToStringBuffer,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
 }
+void vndswrapper_delay(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	#if !_VNDSWAITDISABLE
+	long _totalMillisecondWaitTime = ((nathanvariableToFloat(&_passedArguments[0])/(float)60)*1000);
+	wait(_totalMillisecondWaitTime);
+	#else
+	printf("delay command is disable.\n");
+	#endif
+}
+void vndswrapper_cleartext(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	ClearMessageArray();
+	if (_numArguments==1 && (nathanvariableToString(&_passedArguments[0])[0]=='!')){
+		clearHistory();
+	}
+}
+// bgload filename.extention [dsFadeinFrames]
+void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	DrawScene(nathanvariableToString(&_passedArguments[0]),_numArguments==2 ? floor((nathanvariableToFloat(&_passedArguments[1])/60)*1000) : 0);
+	nextVndsBustshotSlot=0;
+}
+// setimg file x y
+// setimg MGE_000099.png 75 0
+void vndswrapper_setimg(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	DrawBustshot(nextVndsBustshotSlot++, nathanvariableToString(&_passedArguments[0]), nathanvariableToInt(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[2]), 0, 0, 0, 0);
+}
+
 // jump file.scr [label]
 void vndswrapper_jump(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	
 	char _tempstringconcat[strlen(scriptFolder)+strlen(nathanvariableToString(&_passedArguments[0]))+1];
+
+	changeMallocString(&currentScriptFilename,nathanvariableToString(&_passedArguments[0]));
+
 	strcpy(_tempstringconcat,scriptFolder);
 	strcat(_tempstringconcat,nathanvariableToString(&_passedArguments[0]));
 	if (checkFileExist(_tempstringconcat)==0){
@@ -86,32 +120,6 @@ void vndswrapper_jump(nathanscriptVariable* _passedArguments, int _numArguments,
 	if (_numArguments==2){ // Optional label argument
 		genericGotoLabel(nathanvariableToString(&_passedArguments[1]));
 	}
-}
-void vndswrapper_delay(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	#if !_VNDSWAITDISABLE
-	long _totalMillisecondWaitTime = ((nathanvariableToFloat(&_passedArguments[0])/(float)60)*1000);
-	wait(_totalMillisecondWaitTime);
-	#else
-	printf("delay command is disable.\n");
-	#endif
-}
-void vndswrapper_cleartext(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	ClearMessageArray();
-}
-// bgload filename.extention [dsFadeinFrames]
-void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	DrawScene(nathanvariableToString(&_passedArguments[0]),_numArguments==2 ? floor((nathanvariableToFloat(&_passedArguments[1])/60)*1000) : 0);
-	nextVndsBustshotSlot=0;
-}
-// setimg file x y
-// setimg MGE_000099.png 75 0
-void vndswrapper_setimg(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(nextVndsBustshotSlot++, nathanvariableToString(&_passedArguments[0]), nathanvariableToInt(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[2]), 0, 0, 0, 0);
-}
-
-void vndswrapper_random(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	
 }
 
 #endif
