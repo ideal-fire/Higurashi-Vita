@@ -122,4 +122,19 @@ void vndswrapper_jump(nathanscriptVariable* _passedArguments, int _numArguments,
 	}
 }
 
+// Same as setvar
+void vndswrapper_gsetvar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	char* _passedVariableName = nathanvariableToString(&_argumentList[0]);
+	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
+	char* _passedNewValue = nathanvariableToString(&_argumentList[2]);
+	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
+	// Resave the global variable file
+	char _globalsSaveFilePath[strlen(saveFolder)+strlen("vndsGlobals")+1];
+	strcpy(_globalsSaveFilePath,saveFolder);
+	strcat(_globalsSaveFilePath,"vndsGlobals");
+	FILE* fp = fopen(_globalsSaveFilePath,"w");
+	saveVariableList(fp,nathanscriptGlobalvarList,nathanscriptTotalGlobalvar);
+	fclose(fp);
+}
+
 #endif

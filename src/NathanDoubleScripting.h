@@ -790,15 +790,6 @@ void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nath
 	char* _passedNewValue = nathanvariableToString(&_argumentList[2]);
 	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
 }
-
-// Same as setvar
-void scriptGSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	char* _passedVariableName = nathanvariableToString(&_argumentList[0]);
-	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
-	char* _passedNewValue = nathanvariableToString(&_argumentList[2]);
-	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
-	//saveVariableList
-}
 // Uninitialized variables will result in true
 void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	nathanscriptGameVariable* _firstVariable = nathanscriptGetGameOrGlboalVariable(nathanvariableToString(&_argumentList[0]));
@@ -891,7 +882,6 @@ void nathanscriptInit(){
 	nathanCurrentMaxFunctions=8;
 
 	nathanscriptAddFunction(scriptSetVar,nathanscriptMakeConfigByte(0,1),"setvar");
-	nathanscriptAddFunction(scriptGSetVar,nathanscriptMakeConfigByte(0,1),"gsetvar");
 	nathanscriptAddFunction(scriptIfStatement,0,"if");
 	nathanscriptAddFunction(NULL,0,"fi");
 		nathanscriptFoundFiIndex = nathanCurrentRegisteredFunctions-1;

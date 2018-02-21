@@ -31,8 +31,6 @@
 
 	TODO - Script converter needs to take all images and put them in all caps.
 	TODO - Remove scriptFolder variable
-	TODO - Save global variable list to file
-	TODO - After text is shifted up, I think only the last line is drawn even if it's shfited up two lines. I'm not sure.
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -350,10 +348,9 @@ int scriptScreenHeight=480;
 #define USENEWSCALE 1
 double graphicsScale=1.0;
 char* lastBackgroundFilename=NULL;
-
-char currentlyVNDSGame=0;
 char* currentScriptFilename=NULL;
 
+char currentlyVNDSGame=0;
 char nextVndsBustshotSlot=0;
 // If all the text should be cleared when the text reached the bottom of the screen when playing a VNDS game
 signed char vndsClearAtBottom=0;
@@ -627,14 +624,12 @@ void addToMessageHistory(const char* _newWords){
 		oldestMessage=0;
 	}
 }
-
 void clearHistory(){
 	int i;
 	for (i=0;i<MAXMESSAGEHISTORY;i++){
 		messageHistory[i][0]='\0';
 	}
 }
-
 void ClearMessageArray(){
 	currentLine=0;
 	int i,j;
@@ -923,6 +918,13 @@ void LastLineLazyFix(int* _line){
 		//DrawUntilX();
 		//ClearMessageArray();
 		//*_line=0;
+	}
+}
+void changeIfLazyLastLineFix(int* _line, int* _toChange){
+	int _cacheLine = *_line;
+	LastLineLazyFix(_line);
+	if (*_line!=_cacheLine){
+		(*_toChange)-=1;
 	}
 }
 void Update(){
@@ -1864,7 +1866,6 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 	}
 	free(tempstringconcat);
 }
-// TODO - If there's no space left on the screen, shift other lines up.
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
 	if (strlen(_tempMsg)==0){
 		return;
@@ -1923,7 +1924,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 					lastNewlinePosition=i;
 					currentLine++;
 				}
-				LastLineLazyFix(&currentLine);
+				changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
 			}else{
 				message[i]=32;
 			}
@@ -1981,7 +1982,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			}
 		}
 
-		LastLineLazyFix(&currentLine);
+		changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
 	}
 	// This code will make a new line if there needs to be one because of the last word
 	if (textWidth(fontSize,&(message[lastNewlinePosition+1]))>=outputLineScreenWidth-textboxXOffset-MESSAGEEDGEOFFSET-messageInBoxXOffset){
@@ -1993,7 +1994,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				// Copy stuff before the split, this would copy the W characters
 				strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
 				currentLine++;
-				LastLineLazyFix(&currentLine);
+				changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
 				lastNewlinePosition=j;
 				_didWork=1;
 				// Copy stuff after the split, this would copy the MION
@@ -2015,7 +2016,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 					strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
 					message[i-1]=_tempCharCache2;
 					currentLine++;
-					LastLineLazyFix(&currentLine);
+					changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
 					lastNewlinePosition=i-2;
 				}else{
 					//printf("%d;%s\n",textWidth(fontSize,&(message[lastNewlinePosition+1])));
@@ -2031,7 +2032,10 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		// example, NOOB will be copied. This is seperate from the code above. NOOB by itself does not need a new line.
 		strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
 	}
-	LastLineLazyFix(&currentLine);
+	changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
+	if (_currentDrawLine<0){
+		_currentDrawLine=0;
+	}
 	#if PLATFORM == PLAT_3DS
 		int _oldMessageXOffset=textboxXOffset;
 		int _oldMessageInBoxXOffset=messageInBoxXOffset;
@@ -2715,7 +2719,7 @@ char* readLengthStringFromFile(FILE* fp){
 	}
 	return _returnString;
 }
-void readVariableList(FILE* fp, nathanscriptGameVariable** _listToLoad, int* _totalListLength){
+void loadVariableList(FILE* fp, nathanscriptGameVariable** _listToLoad, int* _totalListLength){
 	int i;
 	int _readTotalVariables;
 	fread(&_readTotalVariables,sizeof(int),1,fp);
@@ -2730,7 +2734,6 @@ void readVariableList(FILE* fp, nathanscriptGameVariable** _listToLoad, int* _to
 		nathanscriptConvertVariable(&((*_listToLoad)[_newVariableIndex].variable),_readCorrectVariableType);
 	}
 }
-
 #define VNDSSAVEFORMAT 1
 // unsigned char - format version
 // script filename relative to script folder
@@ -2814,7 +2817,7 @@ void vndsNormalLoad(char* _filename){
 		free(_tempReadFilename);
 	}
 
-	readVariableList(fp,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
+	loadVariableList(fp,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
 	fclose(fp);
 
 	// ============================================
@@ -3746,7 +3749,6 @@ void SettingsMenu(){
 		if (wasJustPressed(SCE_CTRL_CIRCLE)){
 			break;
 		}
-		// TODO - Make the switch to switch statements here
 		if (wasJustPressed(SCE_CTRL_LEFT)){
 			if (_choice==2){
 				if (isDown(SCE_CTRL_LTRIGGER)){
@@ -4669,6 +4671,14 @@ void initializeNathanScript(){
 		nathanscriptAddFunction(vndswrapper_bgload,0,"bgload");
 		nathanscriptAddFunction(vndswrapper_setimg,0,"setimg");
 		nathanscriptAddFunction(vndswrapper_jump,0,"jump");
+		nathanscriptAddFunction(vndswrapper_gsetvar,nathanscriptMakeConfigByte(0,1),"gsetvar");
+		// Load global variables
+		char _globalsSaveFilePath[strlen(saveFolder)+strlen("vndsGlobals")+1];
+		strcpy(_globalsSaveFilePath,saveFolder);
+		strcat(_globalsSaveFilePath,"vndsGlobals");
+		FILE* fp = fopen(_globalsSaveFilePath,"r");
+		loadVariableList(fp,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
+		fclose(fp);
 	}
 }
 // Please exit if this function returns 2
