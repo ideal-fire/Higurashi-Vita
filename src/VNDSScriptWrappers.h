@@ -125,6 +125,10 @@ void vndswrapper_jump(nathanscriptVariable* _passedArguments, int _numArguments,
 // Same as setvar
 void vndswrapper_gsetvar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* _passedVariableName = nathanvariableToString(&_argumentList[0]);
+	if (_passedVariableName[0]=='~'){
+		printf("Wait, I'm pretty sure that isn't/shouldn't be allowed.\nClearing global variables, I mean. TODO");
+		return;
+	}
 	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
 	char* _passedNewValue = nathanvariableToString(&_argumentList[2]);
 	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);

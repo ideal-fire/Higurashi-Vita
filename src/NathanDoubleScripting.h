@@ -786,6 +786,11 @@ void scriptRandom(nathanscriptVariable* _passedArguments, int _numArguments, nat
 // setvar v_d0 = 1
 void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* _passedVariableName = nathanvariableToString(&_argumentList[0]);
+	if (_passedVariableName[0]=='~'){
+		freeNathanGamevariableArray(nathanscriptGamevarList,nathanscriptTotalGamevar);
+		nathanscriptTotalGamevar=0;
+		return;
+	}
 	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
 	char* _passedNewValue = nathanvariableToString(&_argumentList[2]);
 	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,&nathanscriptGamevarList,&nathanscriptTotalGamevar);

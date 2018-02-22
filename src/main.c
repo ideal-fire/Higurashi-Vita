@@ -31,6 +31,8 @@
 
 	TODO - Script converter needs to take all images and put them in all caps.
 	TODO - Remove scriptFolder variable
+	TODO - Load JPG if a JPG is passed.
+	TODO - Make a little effect on the choice selection screen. The choice your cursor is on is shifted a little bit to the right along with your cursor
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -256,9 +258,9 @@ signed char chapterNamesLoaded=0;
 unsigned char lastSelectionAnswer=0;
 
 // The x position on screen of this image character
-unsigned short imageCharX[MAXIMAGECHAR] = {0};
+signed short imageCharX[MAXIMAGECHAR] = {0};
 // The y position on screen of this image character
-unsigned short imageCharY[MAXIMAGECHAR] = {0};
+signed short imageCharY[MAXIMAGECHAR] = {0};
 // The character that the image character is. The values in here are one of the IMAGECHAR constants
 signed char imageCharType[MAXIMAGECHAR] = {0};
 // The line number the image chars are at. This is used when displaying the message in OutputLine
@@ -915,6 +917,19 @@ void LastLineLazyFix(int* _line){
 		}
 		currentMessages[MAXLINES-1][0]=0;
 		(*_line)--;
+
+		for (i=0;i<MAXIMAGECHAR;i++){
+			if (imageCharType[i]!=-1){
+				imageCharY[i]-=currentTextHeight;
+				// Delete image char if it goes offscreen
+				if (imageCharY[i]<0){
+					if (imageCharY[i]<(screenHeight*.20)*-1){
+						imageCharType[i]=-1;
+					}
+				}
+			}
+		}
+
 		//DrawUntilX();
 		//ClearMessageArray();
 		//*_line=0;
@@ -1631,6 +1646,11 @@ void DrawScene(const char* _filename, int time){
 
 	changeMallocString(&lastBackgroundFilename,_filename);
 	CrossTexture* newBackground = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtentions);
+	if (newBackground==NULL){
+		freeTexture(currentBackground);
+		currentBackground=NULL;
+		return;
+	}
 	updateGraphicsScale(newBackground);
 	updateTextPositions(newBackground);
 	while (_backgroundAlpha<255){
@@ -2724,6 +2744,8 @@ void loadVariableList(FILE* fp, nathanscriptGameVariable** _listToLoad, int* _to
 	int _readTotalVariables;
 	fread(&_readTotalVariables,sizeof(int),1,fp);
 	freeNathanGamevariableArray(*_listToLoad,*_totalListLength);
+	*_listToLoad=NULL;
+	*_totalListLength=0;
 	for (i=0;i<_readTotalVariables;i++){
 		int _newVariableIndex = nathanscriptAddNewVariableToList(_listToLoad,_totalListLength);
 		char _readCorrectVariableType;
@@ -3198,7 +3220,8 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		}
 		controlsEnd();
 		startDrawing();
-		Draw(MessageBoxEnabled);
+		Draw(0);
+		DrawMessageBox();
 		for (i=0;i<_totalOptions;i++){
 			goodDrawText(MENUOPTIONOFFSET,i*currentTextHeight,noobOptions[i],fontSize);
 		}
