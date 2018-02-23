@@ -29,10 +29,7 @@
 			ENDSCRIPT,
 			END_OF_FILE
 
-	TODO - Script converter needs to take all images and put them in all caps.
 	TODO - Remove scriptFolder variable
-	TODO - Load JPG if a JPG is passed.
-	TODO - Make a little effect on the choice selection screen. The choice your cursor is on is shifted a little bit to the right along with your cursor
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -68,6 +65,7 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <pthread.h>
+#include <ctype.h> // toupper
 //
 #include <Lua/lua.h>
 #include <Lua/lualib.h>
@@ -102,6 +100,7 @@
 #endif
 #define HISTORYONONESCREEN ((int)((screenHeight-currentTextHeight*2-5)/currentTextHeight))
 #define MENUCURSOR ">"
+#define MENUCURSOROFFSET 5
 #define MENUOPTIONOFFSET menuCursorSpaceWidth+5
 ////////////////////////////////////
 #define MAXMUSICARRAY 10
@@ -337,7 +336,7 @@ char canChangeBoxAlpha=1;
 // When this variable is 1, we can assume that the current game is the default game because the user can't chose a different game when a default is set.
 char defaultGameIsSet;
 char nathanscriptIsInit=0;
-char scriptUsesFileExtentions=0;
+char scriptUsesFileExtensions=0;
 char bustsStartInMiddle=1;
 
 // What scripts think the screen width and height is.
@@ -382,14 +381,12 @@ void changeMallocString(char** _stringToChange, const char* _newValue){
 	*_stringToChange = malloc(strlen(_newValue)+1);
 	strcpy(*_stringToChange,_newValue);
 }
-
 #if SUBPLATFORM == SUB_UNIX
 char* itoa(int value, char* _buffer, int _uselessBase){
 	sprintf(_buffer,"%d",value);
 	return _buffer;
 }
 #endif
-
 void XOutFunction(){
 	#if PLATFORM == PLAT_3DS
 		_3dsSoundProtectThreadIsAlive=0;
@@ -865,11 +862,17 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	return 1;
 }
 char* CombineStringsPLEASEFREE(const char* first, const char* firstpointfive, const char* second, const char* third){
-	char* tempstringconcat = (char*)calloc(1,strlen(first)+strlen(firstpointfive)+strlen(second)+strlen(third)+1);
+	char* tempstringconcat = (char*)calloc(1,strlen(first)+(firstpointfive!=NULL ? strlen(firstpointfive) : 0)+(second!=NULL ? strlen(second) : 0)+(third!=NULL ? strlen(third) : 0)+1);
 	strcpy(tempstringconcat, first);
-	strcat(tempstringconcat, firstpointfive);
-	strcat(tempstringconcat, second);
-	strcat(tempstringconcat, third);
+	if (firstpointfive!=NULL){
+		strcat(tempstringconcat, firstpointfive);
+	}
+	if (second!=NULL){
+		strcat(tempstringconcat, second);
+	}
+	if (third!=NULL){
+		strcat(tempstringconcat, third);
+	}
 	return tempstringconcat;
 }
 signed char WaitCanSkip(int amount){
@@ -1094,7 +1097,6 @@ void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int
 			*_tempYOffset=0;
 		}
 	#endif
-	
 }
 float GetXOffsetScale(CrossTexture* _tempImg){
 	#if USENEWSCALE
@@ -1510,18 +1512,59 @@ char* _locationStringFallbackFormat(const char* filename, char _folderPreference
 	return NULL;
 }
 
-char* LocationStringFallback(const char* filename, char _folderPreference, char _extentionIncluded){
-	char* _returnFoundString;
-	_returnFoundString = _locationStringFallbackFormat(filename,_folderPreference,_extentionIncluded==0 ? ".png" : "");
-	if (_returnFoundString==NULL && _extentionIncluded==0){
-		_returnFoundString = _locationStringFallbackFormat(filename,_folderPreference,".jpg");
+char* LocationStringFallback(const char* filename, char _folderPreference, char _extensionIncluded, char _isAllCaps){
+	char* _foundFileExtension=NULL;
+	char* _workableFilename = malloc(strlen(filename)+1);
+	strcpy(_workableFilename,filename);
+	
+	if (_isAllCaps){
+		signed short i=0;
+		for (i=0;i<_workableFilename[i]!='\0';i++){
+			_workableFilename[i] = toupper(_workableFilename[i]);
+		}
 	}
+
+	if (_extensionIncluded){
+		signed short i;
+		short _cachedStrlen = strlen(_workableFilename);
+		for (i=_cachedStrlen-1;i>=0;i--){
+			if (_workableFilename[i]=='.' && i!=_cachedStrlen-1){
+				_foundFileExtension = malloc(strlen(&(_workableFilename[i]))+1);
+				strcpy(_foundFileExtension,&(_workableFilename[i]));
+				_workableFilename[i]=0;
+				break;
+			}
+		}
+	}
+	char* _returnFoundString;
+	if (_extensionIncluded){
+		// Try the included file extension
+		_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference,_foundFileExtension);
+		if (_returnFoundString==NULL){
+			// If not, try png
+			_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference, _isAllCaps==1 ? ".PNG" : ".png");
+			if (_returnFoundString==NULL){
+				// If not, try jpg
+				_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference, _isAllCaps==1 ? ".JPG" : ".jpg");
+			}
+		}
+	}else{
+		_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference, _isAllCaps==1 ? ".PNG" : ".png");
+		if (_returnFoundString==NULL && _extensionIncluded==0){
+			_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference, _isAllCaps==1 ? ".JPG" : ".jpg");
+		}
+	}
+
+	if (_foundFileExtension!=NULL){
+		free(_foundFileExtension);
+	}
+	free(_workableFilename);
 	return _returnFoundString;
 }
 // Will load a PNG from CG or CGAlt
-CrossTexture* safeLoadGamePNG(const char* filename, char _folderPreference, char _extentionIncluded){
+CrossTexture* safeLoadGamePNG(const char* filename, char _folderPreference, char _extensionIncluded){
 	char* _tempFoundFilename;
-	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extentionIncluded);
+	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extensionIncluded,currentlyVNDSGame);
 	if (_tempFoundFilename==NULL){
 		LazyMessage("Image not found.",filename,"What will happen now?!",NULL);
 		return NULL;
@@ -1645,7 +1688,7 @@ void DrawScene(const char* _filename, int time){
 	}
 
 	changeMallocString(&lastBackgroundFilename,_filename);
-	CrossTexture* newBackground = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtentions);
+	CrossTexture* newBackground = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtensions);
 	if (newBackground==NULL){
 		freeTexture(currentBackground);
 		currentBackground=NULL;
@@ -1745,7 +1788,7 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 	int i;
 	unsigned char skippedInitialWait=0;
 	ResetBustStruct(&(Busts[passedSlot]),1); 
-	Busts[passedSlot].image = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtentions);
+	Busts[passedSlot].image = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtensions);
 	Busts[passedSlot].relativeFilename = mallocForString(_filename);
 	if (Busts[passedSlot].image==NULL){
 		ResetBustStruct(&(Busts[passedSlot]),1);
@@ -2202,19 +2245,23 @@ void StopBGM(int _slot){
 // Return NULL if file not exist
 char* getBGMFilename(const char* _filename){
 	// TODO - I don't need to create a new string every time, just modify the string
-	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "BGM/", _filename, ".wav");
+	printf("a\n");
+	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "BGM/", _filename, scriptUsesFileExtensions==1 ? NULL : ".ogg");
+	printf("%s\n",tempstringconcat);
 	if (checkFileExist(tempstringconcat)==1){
 		return tempstringconcat;
 	}
 	free(tempstringconcat);
 
-	tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "BGM/", _filename, ".ogg");
+	printf("b\n");
+	tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/", _filename, scriptUsesFileExtensions==1 ? NULL : ".ogg");
+	printf("%s\n",tempstringconcat);
 	if (checkFileExist(tempstringconcat)==1){
 		return tempstringconcat;
 	}
 	free(tempstringconcat);
 
-	tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/", _filename, ".ogg");
+	tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "BGM/", _filename, ".wav");
 	if (checkFileExist(tempstringconcat)==1){
 		return tempstringconcat;
 	}
@@ -2244,12 +2291,14 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 		return;
 	}
 	char* tempstringconcat = getBGMFilename(filename);
-	if (tempstringconcat!=NULL){
+	printf("%s\n",tempstringconcat);
+	if (tempstringconcat==NULL){
 		FreeBGM(_slot);
 	}else{
 		char* _tempHoldFilepathConcat = malloc(strlen(filename)+1);
 		strcpy(_tempHoldFilepathConcat,filename);
 		CROSSMUSIC* _tempHoldSlot = loadMusic(tempstringconcat);
+		showErrorIfNull(_tempHoldSlot);
 		// FreeBGM is right here so the player can listen to the old BGM as the new one loads.
 		FreeBGM(_slot);
 		currentMusic[_slot] = _tempHoldSlot;
@@ -2578,7 +2627,6 @@ void startLoadingGameFolder(char* _chosenGameFolder){
 	scriptFolder = malloc(strlen(streamingAssets)+strlen("Scripts/")+1);
 	strcpy(scriptFolder,streamingAssets);
 	strcat(scriptFolder,"Scripts/");
-	
 }
 void setDefaultGame(char* _defaultGameFolderName){
 	char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("/_defaultGame")+1];
@@ -2605,14 +2653,14 @@ void makeTextSpeedString(char* _textSpeedStringBuffer, signed char _newTextSpeed
 }
 void activateVNDSSettings(){
 	currentlyVNDSGame=1;
-	scriptUsesFileExtentions=1;
+	scriptUsesFileExtensions=1;
 	bustsStartInMiddle=0;
 	scriptScreenWidth=256;
 	scriptScreenHeight=192;
 }
 void activateHigurashiSettings(){
 	currentlyVNDSGame=0;
-	scriptUsesFileExtentions=0;
+	scriptUsesFileExtensions=0;
 	bustsStartInMiddle=1;
 	scriptScreenWidth=640;
 	scriptScreenHeight=480;
@@ -2912,7 +2960,7 @@ void scriptNotYet(nathanscriptVariable* _passedArguments, int _numArguments, nat
 // Fist arg seems to be a channel arg.
 	// Usually 1 for msys
 	// Usually 2 for lsys
-// Second arg is path in BGM folder without extention
+// Second arg is path in BGM folder without extension
 // Third arg is volume. 128 seems to be average. I can hardly hear 8 with computer volume on 10.
 // Fourth arg is unknown
 void scriptPlayBGM(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -3028,9 +3076,11 @@ void scriptDrawBustshotWithFiltering(nathanscriptVariable* _passedArguments, int
 	//
 	// * The bustshot can only stay after a scene change if it's created the line before the scene change AND it doesn't wait for fadein completion.
 void scriptDrawBustshot(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	startDrawing();
-	Draw(MessageBoxEnabled);
-	endDrawing();
+	if (!currentlyVNDSGame){
+		startDrawing();
+		Draw(MessageBoxEnabled);
+		endDrawing();
+	}
 
 	int i;
 	for (i=8;i!=12;i++){
@@ -3190,6 +3240,7 @@ void scriptFadeSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 	FadeBustshot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]),nathanvariableToBool(&_passedArguments[2]));	
 	return;
 }
+#define MENUSELECTIONHIGHLIGHTOFFSET 10
 // Select(numoptions, arrayofstring)
 //		Let's the user make a choice and have this not be a sound novel anymore. :/
 //		First arg is the number of options and the second arg is a string of the names of the options
@@ -3223,9 +3274,12 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		Draw(0);
 		DrawMessageBox();
 		for (i=0;i<_totalOptions;i++){
-			goodDrawText(MENUOPTIONOFFSET,i*currentTextHeight,noobOptions[i],fontSize);
+			if (_choice!=i){
+				goodDrawText(MENUOPTIONOFFSET,i*currentTextHeight,noobOptions[i],fontSize);
+			}
 		}
-		goodDrawText(0,_choice*currentTextHeight,MENUCURSOR,fontSize);
+		goodDrawText(MENUOPTIONOFFSET+MENUCURSOROFFSET,_choice*currentTextHeight,noobOptions[_choice],fontSize);
+		goodDrawText(MENUCURSOROFFSET*2,_choice*currentTextHeight,MENUCURSOR,fontSize);
 
 		endDrawing();
 		fpsCapWait();
@@ -3355,9 +3409,9 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 	_passedSelectImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
 
 	for (i=0;i<_numberOfChoices;i++){
-		_passedNormalImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+1-1]),graphicsLocation,scriptUsesFileExtentions);
-		_passedHoverImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+2-1]),graphicsLocation,scriptUsesFileExtentions);
-		_passedSelectImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+3-1]),graphicsLocation,scriptUsesFileExtentions);
+		_passedNormalImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+1-1]),graphicsLocation,scriptUsesFileExtensions);
+		_passedHoverImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+2-1]),graphicsLocation,scriptUsesFileExtensions);
+		_passedSelectImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+3-1]),graphicsLocation,scriptUsesFileExtensions);
 	}
 
 	// Y position of the first choice graphic
@@ -3976,6 +4030,9 @@ void SettingsMenu(){
 		}
 		if (cpuOverclocked){
 			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*4,_settingsOptionsMainText[4],fontSize,0,255,0);
+		}
+		if (MessageBoxAlpha>=230){
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*9,_settingsOptionsMainText[9],fontSize,255,0,0);
 		}
 		// Display sample Rena if changing bust location
 		#if PLATFORM == PLAT_3DS
@@ -4694,14 +4751,17 @@ void initializeNathanScript(){
 		nathanscriptAddFunction(vndswrapper_bgload,0,"bgload");
 		nathanscriptAddFunction(vndswrapper_setimg,0,"setimg");
 		nathanscriptAddFunction(vndswrapper_jump,0,"jump");
+		nathanscriptAddFunction(vndswrapper_music,0,"music");
 		nathanscriptAddFunction(vndswrapper_gsetvar,nathanscriptMakeConfigByte(0,1),"gsetvar");
 		// Load global variables
 		char _globalsSaveFilePath[strlen(saveFolder)+strlen("vndsGlobals")+1];
 		strcpy(_globalsSaveFilePath,saveFolder);
 		strcat(_globalsSaveFilePath,"vndsGlobals");
-		FILE* fp = fopen(_globalsSaveFilePath,"r");
-		loadVariableList(fp,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
-		fclose(fp);
+		if (checkFileExist(_globalsSaveFilePath)){
+			FILE* fp = fopen(_globalsSaveFilePath,"r");
+			loadVariableList(fp,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
+			fclose(fp);
+		}
 	}
 }
 // Please exit if this function returns 2
@@ -4983,11 +5043,9 @@ int main(int argc, char *argv[]){
 					initializeNathanScript();
 					// Special settings for vnds
 					activateVNDSSettings();
-
 					// Setup StreamingAssets path
 					_possibleVNDSStatusFile[strlen(gamesFolder)+strlen(_chosenGameFolder)]=0;
 					GenerateStreamingAssetsPaths(_possibleVNDSStatusFile,0);
-
 					currentGameStatus = GAMESTATUS_NAVIGATIONMENU;
 					VNDSNavigationMenu();
 				}else{

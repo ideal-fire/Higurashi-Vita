@@ -140,5 +140,15 @@ void vndswrapper_gsetvar(nathanscriptVariable* _argumentList, int _totalArgument
 	saveVariableList(fp,nathanscriptGlobalvarList,nathanscriptTotalGlobalvar);
 	fclose(fp);
 }
+// music file
+// music ~
+void vndswrapper_music(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	char* _passedFilename = nathanvariableToString(&_argumentList[0]);
+	if (_passedFilename[0]=='~'){
+		StopBGM(0);
+		return;
+	}
+	PlayBGM(_passedFilename,128,0);
+}
 
 #endif
