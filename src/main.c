@@ -2245,17 +2245,13 @@ void StopBGM(int _slot){
 // Return NULL if file not exist
 char* getBGMFilename(const char* _filename){
 	// TODO - I don't need to create a new string every time, just modify the string
-	printf("a\n");
 	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "BGM/", _filename, scriptUsesFileExtensions==1 ? NULL : ".ogg");
-	printf("%s\n",tempstringconcat);
 	if (checkFileExist(tempstringconcat)==1){
 		return tempstringconcat;
 	}
 	free(tempstringconcat);
 
-	printf("b\n");
 	tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/", _filename, scriptUsesFileExtensions==1 ? NULL : ".ogg");
-	printf("%s\n",tempstringconcat);
 	if (checkFileExist(tempstringconcat)==1){
 		return tempstringconcat;
 	}
@@ -2291,7 +2287,6 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 		return;
 	}
 	char* tempstringconcat = getBGMFilename(filename);
-	printf("%s\n",tempstringconcat);
 	if (tempstringconcat==NULL){
 		FreeBGM(_slot);
 	}else{
@@ -2384,7 +2379,7 @@ void LoadSettings(){
 		if (_tempOptionsFormat>=3){
 			unsigned char _voiceTemp;
 			fread(&_voiceTemp,1,1,fp);
-			_voiceTemp = (float)_voiceTemp/4;
+			voiceVolume = (float)_voiceTemp/4;
 		}
 		if (_tempOptionsFormat>=4){
 			fread(&MessageBoxAlpha,1,1,fp);
@@ -2836,6 +2831,7 @@ void vndsNormalSave(char* _filename){
 		if (Busts[i].relativeFilename==NULL){
 			writeLengthStringToFile(fp,""); //
 		}else{
+			printf("Write real filename for %d\n",i);
 			writeLengthStringToFile(fp,Busts[i].relativeFilename); //
 		}
 	}
@@ -2882,7 +2878,8 @@ void vndsNormalLoad(char* _filename){
 		fread(&_tempReadY,sizeof(signed int),1,fp); //
 		_tempReadFilename = readLengthStringFromFile(fp); //
 		if (_tempReadFilename[0]!='\0'){
-			DrawBustshot(nextVndsBustshotSlot++,_tempReadFilename,_tempReadX,_tempReadY,0,0,0,0);
+			nextVndsBustshotSlot = i+1;
+			DrawBustshot(i,_tempReadFilename,_tempReadX,_tempReadY,0,0,0,0);
 		}
 		free(_tempReadFilename);
 	}
@@ -2897,6 +2894,9 @@ void vndsNormalLoad(char* _filename){
 	char _tempLoadedFilename[strlen(scriptFolder)+strlen(_foundScriptFilename)+1];
 	strcpy(_tempLoadedFilename,scriptFolder);
 	strcat(_tempLoadedFilename,_foundScriptFilename);
+
+	endType=Line_Normal;	
+	outputLineWait();
 
 	nathanscriptDoScript(_tempLoadedFilename,_readFilePosition);
 }
@@ -3772,6 +3772,9 @@ void SettingsMenu(){
 	// Set pointers to menu option value text
 	for (i=0;i<MAXOPTIONSSETTINGS;i++){
 		_settingsOptionsValueText[i]=NULL;
+	}
+	if (hasOwnVoiceSetting){
+		_settingsOptionsValueText[1] = &(_tempItoaHoldVoice[0]);
 	}
 	_settingsOptionsValueText[2]=&(_tempAutoModeString[0]);
 	if (graphicsLocation == LOCATION_CG){
@@ -4679,7 +4682,11 @@ void VNDSNavigationMenu(){
 				char _vndsSaveFileConcat[strlen(streamingAssets)+strlen("sav0")+1];
 				strcpy(_vndsSaveFileConcat,streamingAssets);
 				strcat(_vndsSaveFileConcat,"sav0");
-				vndsNormalLoad(_vndsSaveFileConcat);
+				if (checkFileExist(_vndsSaveFileConcat)){
+					vndsNormalLoad(_vndsSaveFileConcat);
+				}else{
+					LazyMessage("Save file",_vndsSaveFileConcat,"not exist.",NULL);
+				}
 			}else if (_choice==1){
 				char _vndsMainScriptConcat[strlen(streamingAssets)+strlen("/Scripts/main.scr")+1];
 				strcpy(_vndsMainScriptConcat,streamingAssets);
@@ -5047,6 +5054,8 @@ int main(int argc, char *argv[]){
 					_possibleVNDSStatusFile[strlen(gamesFolder)+strlen(_chosenGameFolder)]=0;
 					GenerateStreamingAssetsPaths(_possibleVNDSStatusFile,0);
 					currentGameStatus = GAMESTATUS_NAVIGATIONMENU;
+					// VNDS games also support game specific lua
+					LoadGameSpecificStupidity();
 					VNDSNavigationMenu();
 				}else{
 					if (_chosenGameFolder==NULL){
