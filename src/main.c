@@ -1895,11 +1895,66 @@ int strlenNO1(char* src){
 		printf("lagometer: %d\n",getTicks()-_LagTestStart);
 	}
 #endif
+char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName){
+	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, _folderName, _filename, ".ogg");
+	if (checkFileExist(tempstringconcat)==1){
+		return tempstringconcat;
+	}
+	tempstringconcat[strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)]='\0';
+	strcat(tempstringconcat,".wav");
+	if (checkFileExist(tempstringconcat)==1){
+		return tempstringconcat;
+	}
+	if (scriptUsesFileExtensions){
+		tempstringconcat[strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)]='\0';
+		if (checkFileExist(tempstringconcat)==1){
+			return tempstringconcat;
+		}
+	}
+	free(tempstringconcat);
+	return NULL;
+}
+#define PREFER_DIR_BGM 0
+#define PREFER_DIR_SE 1
+#define PREFER_DIR_VOICE 2
+// Will use fallbacks
+// Return NULL if file not exist
+char* getSoundFilename(const char* _filename, char _preferedDirectory){
+	char* tempstringconcat;
+	if (_preferedDirectory==PREFER_DIR_BGM){
+		tempstringconcat = getSpecificPossibleSoundFilename(_filename,"BGM/");
+		if (tempstringconcat==NULL){
+			tempstringconcat = getSpecificPossibleSoundFilename(_filename,"SE/");
+			if (tempstringconcat==NULL){
+				tempstringconcat = getSpecificPossibleSoundFilename(_filename,"voice/");
+			}
+		}
+	}else if (_preferedDirectory==PREFER_DIR_SE){
+		tempstringconcat = getSpecificPossibleSoundFilename(_filename,"SE/");
+		if (tempstringconcat==NULL){
+			tempstringconcat = getSpecificPossibleSoundFilename(_filename,"BGM/");
+			if (tempstringconcat==NULL){
+				tempstringconcat = getSpecificPossibleSoundFilename(_filename,"voice/");
+			}
+		}
+	}else if (_preferedDirectory==PREFER_DIR_VOICE){
+		tempstringconcat = getSpecificPossibleSoundFilename(_filename,"voice/");
+		if (tempstringconcat==NULL){
+			tempstringconcat = getSpecificPossibleSoundFilename(_filename,"SE/");
+			if (tempstringconcat==NULL){
+				tempstringconcat = getSpecificPossibleSoundFilename(_filename,"BGM/");
+			}
+		}
+	}else{
+		printf("Invalid preference %d\n",_preferedDirectory);
+	}
+	return tempstringconcat;
+}
 // _dirRelativeToStreamingAssetsNoEndSlash should start AND END with a slash
 // Example
 // /SE/
 // DO NOT FIX THE SE VOLUME BEFORE PASSING ARGUMENT
-void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, const char* _dirRelativeToStreamingAssetsNoEndSlash, float _passedVolumeFixScale){
+void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, char _preferedDirectory, float _passedVolumeFixScale){
 	if (passedSlot>=MAXSOUNDEFFECTARRAY){
 		LazyMessage("Sound effect slot too high.","No action will be taken.",NULL,NULL);
 		return;
@@ -1913,19 +1968,15 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 		soundEffects[passedSlot]=NULL;
 	}
 	// Play WAV version if found.
-	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, _dirRelativeToStreamingAssetsNoEndSlash,filename,".wav");
-	if (checkFileExist(tempstringconcat)==0){
-		free(tempstringconcat);
-		tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, _dirRelativeToStreamingAssetsNoEndSlash,filename,".ogg");
-	}
-	if (checkFileExist(tempstringconcat)==1){
+	char* tempstringconcat = getSoundFilename(filename,_preferedDirectory);
+	if (tempstringconcat==NULL){
+		WriteToDebugFile("SE file not found");
+		WriteToDebugFile(tempstringconcat);
+	}else{
 		soundEffects[passedSlot] = loadSound(tempstringconcat);
 		//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
 		CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1,passedSlot+10);
 		setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
-	}else{
-		WriteToDebugFile("SE file not found");
-		WriteToDebugFile(tempstringconcat);
 	}
 	free(tempstringconcat);
 }
@@ -2241,35 +2292,6 @@ void StopBGM(int _slot){
 		stopMusic(currentMusicHandle[_slot]);
 	}
 }
-// Will use fallbacks
-// Return NULL if file not exist
-char* getBGMFilename(const char* _filename){
-	// TODO - I don't need to create a new string every time, just modify the string
-	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "BGM/", _filename, scriptUsesFileExtensions==1 ? NULL : ".ogg");
-	if (checkFileExist(tempstringconcat)==1){
-		return tempstringconcat;
-	}
-	free(tempstringconcat);
-
-	tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/", _filename, scriptUsesFileExtensions==1 ? NULL : ".ogg");
-	if (checkFileExist(tempstringconcat)==1){
-		return tempstringconcat;
-	}
-	free(tempstringconcat);
-
-	tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "BGM/", _filename, ".wav");
-	if (checkFileExist(tempstringconcat)==1){
-		return tempstringconcat;
-	}
-	free(tempstringconcat);
-
-	tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/", _filename, ".ogg");
-	if (checkFileExist(tempstringconcat)==1){
-		return tempstringconcat;
-	}
-	free(tempstringconcat);
-	return NULL;
-}
 // Unfixed bgm
 void PlayBGM(const char* filename, int _volume, int _slot){
 	#if PLATFORM == PLAT_3DS
@@ -2280,14 +2302,16 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 		_bgmIsLock = 1;
 	#endif
 	if (bgmVolume==0){
+		printf("BGM volume is 0, ignore music change.");
 		return;
 	}
 	if (_slot>=MAXMUSICARRAY){
 		LazyMessage("Music slot too high.","No action will be taken.",NULL,NULL);
 		return;
 	}
-	char* tempstringconcat = getBGMFilename(filename);
+	char* tempstringconcat = getSoundFilename(filename,PREFER_DIR_BGM);
 	if (tempstringconcat==NULL){
+		printf("BGM file not found.\n");
 		FreeBGM(_slot);
 	}else{
 		char* _tempHoldFilepathConcat = malloc(strlen(filename)+1);
@@ -2831,7 +2855,6 @@ void vndsNormalSave(char* _filename){
 		if (Busts[i].relativeFilename==NULL){
 			writeLengthStringToFile(fp,""); //
 		}else{
-			printf("Write real filename for %d\n",i);
 			writeLengthStringToFile(fp,Busts[i].relativeFilename); //
 		}
 	}
@@ -3131,14 +3154,14 @@ void scriptFadeBustshot(nathanscriptVariable* _passedArguments, int _numArgument
 // Slot, file, volume
 void scriptPlaySE(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (isSkipping==0 && seVolume>0){
-		GenericPlaySound(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),"SE/",seVolume);
+		GenericPlaySound(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),PREFER_DIR_SE,seVolume);
 	}
 	return;
 }
 // PlayVoice(channel, filename, volume)
 void scriptPlayVoice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (isSkipping==0 && (hasOwnVoiceSetting==1 ? voiceVolume : seVolume)>0){
-		GenericPlaySound(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),"voice/", hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
+		GenericPlaySound(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),PREFER_DIR_VOICE, hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
 	}
 	return;
 }
@@ -3752,7 +3775,11 @@ void SettingsMenu(){
 	_settingsOptionsMainText[6] = "SE Volume:";
 	_settingsOptionsMainText[7] = "Font Size";
 	_settingsOptionsMainText[8] = "Defaults";
-	_settingsOptionsMainText[9] = "Message Box Alpha:";
+	if (canChangeBoxAlpha){
+		_settingsOptionsMainText[9] = "Message Box Alpha:";
+	}else{
+		_settingsOptionsMainText[9] = "===";
+	}
 	_settingsOptionsMainText[10] = "Textbox:";
 	_settingsOptionsMainText[11] = "Text Speed:";
 	_maxOptionSlotUsed=11;
@@ -3784,7 +3811,9 @@ void SettingsMenu(){
 	}
 	_settingsOptionsValueText[5] = &(_tempItoaHoldBGM[0]);
 	_settingsOptionsValueText[6] = &(_tempItoaHoldSE[0]);
-	_settingsOptionsValueText[9] = &(_tempItoaHoldBoxAlpha[0]);
+	if (canChangeBoxAlpha){
+		_settingsOptionsValueText[9] = &(_tempItoaHoldBoxAlpha[0]);
+	}
 	if (textOnlyOverBackground){
 		_settingsOptionsValueText[10] = "Small";
 	}else{
@@ -3863,7 +3892,7 @@ void SettingsMenu(){
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
-			}else if (_choice==9){
+			}else if (_choice==9 && canChangeBoxAlpha){
 				// char will wrap, we don't want that
 				int _tempHoldChar = MessageBoxAlpha;
 				if (isDown(SCE_CTRL_LTRIGGER)){
@@ -3972,7 +4001,7 @@ void SettingsMenu(){
 					itoa(voiceVolume*4, _tempItoaHoldVoice,10);
 					itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
 				}
-			}else if (_choice==9){
+			}else if (_choice==9 && canChangeBoxAlpha){
 				int _tempHoldChar = MessageBoxAlpha;
 				if (isDown(SCE_CTRL_LTRIGGER)){
 					_tempHoldChar+=15;
@@ -4034,7 +4063,7 @@ void SettingsMenu(){
 		if (cpuOverclocked){
 			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*4,_settingsOptionsMainText[4],fontSize,0,255,0);
 		}
-		if (MessageBoxAlpha>=230){
+		if (MessageBoxAlpha>=230 && canChangeBoxAlpha){
 			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*9,_settingsOptionsMainText[9],fontSize,255,0,0);
 		}
 		// Display sample Rena if changing bust location
@@ -4691,10 +4720,14 @@ void VNDSNavigationMenu(){
 				char _vndsMainScriptConcat[strlen(streamingAssets)+strlen("/Scripts/main.scr")+1];
 				strcpy(_vndsMainScriptConcat,streamingAssets);
 				strcat(_vndsMainScriptConcat,"/Scripts/main.scr");
-				currentGameStatus = GAMESTATUS_MAINGAME;
-				changeMallocString(&currentScriptFilename,"main.scr");
-				nathanscriptDoScript(_vndsMainScriptConcat,0);
-				currentGameStatus = GAMESTATUS_NAVIGATIONMENU;
+				if (checkFileExist(_vndsMainScriptConcat)){
+					currentGameStatus = GAMESTATUS_MAINGAME;
+					changeMallocString(&currentScriptFilename,"main.scr");
+					nathanscriptDoScript(_vndsMainScriptConcat,0);
+					currentGameStatus = GAMESTATUS_NAVIGATIONMENU;
+				}else{
+					LazyMessage("Main script file",_vndsMainScriptConcat,"not exist.",NULL);
+				}
 			}else if (_choice==2){
 				currentGameStatus = GAMESTATUS_QUIT;
 			}
