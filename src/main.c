@@ -3500,6 +3500,11 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 
 	makeNewReturnArray(_returnedReturnArray,_returnArraySize,1);
 	nathanvariableArraySetFloat(*_returnedReturnArray,0,_userChoice);
+	if (currentlyVNDSGame && nathanscriptIsInit){
+		char _numberToStringBuffer[5];
+		sprintf(_numberToStringBuffer,"%d",_userChoice+1);
+		genericSetVar("selected","=",_numberToStringBuffer,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
+	}
 	return;
 }
 #include "LuaWrapperDefinitions.h"
@@ -4793,6 +4798,8 @@ void initializeNathanScript(){
 		nathanscriptAddFunction(vndswrapper_jump,0,"jump");
 		nathanscriptAddFunction(vndswrapper_music,0,"music");
 		nathanscriptAddFunction(vndswrapper_gsetvar,nathanscriptMakeConfigByte(0,1),"gsetvar");
+		nathanscriptAddFunction(scriptImageChoice,0,"imagechoice");
+
 		// Load global variables
 		char _globalsSaveFilePath[strlen(saveFolder)+strlen("vndsGlobals")+1];
 		strcpy(_globalsSaveFilePath,saveFolder);
