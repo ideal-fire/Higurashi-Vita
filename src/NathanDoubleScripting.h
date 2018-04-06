@@ -343,7 +343,7 @@ void nathanscriptConvertVariable(nathanscriptVariable* _variableToConvert, char 
 		_variableToConvert->variableType = _newType;
 		return; // Do not remove. 
 	}else if (_newType==NATHAN_TYPE_BOOL){
-		char _boolValue;
+		char _boolValue=0; // To suppress warning
 		if (_variableToConvert->variableType==NATHAN_TYPE_FLOAT){
 			_boolValue = (int)POINTER_TOFLOAT(_variableToConvert->value);
 		}else if (_variableToConvert->variableType==NATHAN_TYPE_STRING){

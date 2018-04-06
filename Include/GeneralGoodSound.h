@@ -41,6 +41,37 @@
 	#define CROSSPLAYHANDLE int
 	void nathanUpdateMusicIfNeeded(NathanMusic* _passedMusic);
 #endif
+#if SOUNDPLAYER == SND_VITA
+	#include <psp2/audioout.h>
+	
+	#include <ogg/ogg.h>
+	#include <vorbis/codec.h>
+	#include <vorbis/vorbisfile.h>
+	#include <psp2/kernel/threadmgr.h> 
+	
+	#include <samplerate.h>
+	typedef struct fruhfreuir{
+		void* mainAudioStruct;
+		void** audioBuffers;
+		float* tempFloatConverted;
+		SRC_DATA usualConverterData;
+		SRC_STATE* personalConverter;
+		unsigned int unscaledSamples;
+		unsigned int scaledSamples;
+		signed char numBuffers;
+		signed char fileFormat;
+		signed char shouldLoop;
+		SceUID playerThreadId;
+		signed int audioPort;
+		signed char quitStatus;
+		signed char isFadingOut;
+		unsigned int fadeoutPerSwap;
+		signed int volume;
+	}NathanAudio;
+	#define CROSSMUSIC NathanAudio
+	#define CROSSSFX CROSSMUSIC
+	#define CROSSPLAYHANDLE CROSSMUSIC*
+#endif
 
 void quitAudio();
 void fadeoutMusic(CROSSPLAYHANDLE _passedHandle,int time);

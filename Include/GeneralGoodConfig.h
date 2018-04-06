@@ -22,6 +22,7 @@
 	#define SND_SDL 1
 	#define SND_SOLOUD 2
 	#define SND_3DS 3 // Only OGG supported
+	#define SND_VITA 4
 
 	#define REND_UNDEFINED 0
 	#define REND_SDL 1
@@ -85,7 +86,7 @@
 		#endif
 	#elif PRESET == PRE_VITA
 		#define PLATFORM PLAT_VITA
-		#define SOUNDPLAYER SND_SOLOUD
+		#define SOUNDPLAYER SND_VITA
 		#ifndef RENDERER
 			#define RENDERER REND_VITA2D
 			#define TEXTRENDERER TEXT_VITA2D

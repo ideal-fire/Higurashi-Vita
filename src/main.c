@@ -127,6 +127,7 @@
 #elif _3DS
 	#define SYSTEMSTRING "3DS"
 #else
+	#warning please make platform string
 	#define SYSTEMSTRING "UNKNOWN"
 #endif
 
@@ -217,6 +218,10 @@ unsigned char MessageBoxAlpha = 100;
 signed char MessageBoxEnabled=1;
 
 unsigned int currentScriptLine=0;
+
+// Set by the graphics init function
+int screenWidth=0;
+int screenHeight=0;
 
 // Order of busts drawn as organized by layer
 // element in array is their bust slot
@@ -647,7 +652,9 @@ void ClearMessageArray(){
 void SetAllMusicVolume(int _passedFixedVolume){
 	int i;
 	for (i = 0; i < MAXMUSICARRAY; i++){
-		setMusicVolume(currentMusicHandle[i],_passedFixedVolume);
+		if (currentMusicHandle[i]!=0){
+			setMusicVolume(currentMusicHandle[i],_passedFixedVolume);
+		}
 	}
 }
 int GetNextCharOnLine(int _linenum){
@@ -1203,7 +1210,6 @@ unsigned char* ReadNumberStringList(CROSSFILE *fp, unsigned char* arraysize){
 	int numScripts;
 	char currentReadNumber[4];
 	// Add null for atoi
-	currentReadNumber[4];
 	memset(&currentReadNumber[0], 0, 4);
 	crossfread(&currentReadNumber,3,1,fp);
 	numScripts = atoi(currentReadNumber);
@@ -1231,7 +1237,7 @@ char** ReadFileStringList(CROSSFILE *fp, unsigned char* arraysize){
 	int linePosition=0;
 	int numScripts;
 
-	currentReadNumber[4]='\0';
+	currentReadNumber[3]='\0';
 	crossfread(&currentReadNumber,3,1,fp);
 	numScripts = atoi(currentReadNumber);
 	MoveFilePointerPastNewline(fp);
@@ -1519,7 +1525,7 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 	
 	if (_isAllCaps){
 		signed short i=0;
-		for (i=0;i<_workableFilename[i]!='\0';i++){
+		for (i=0;_workableFilename[i]!='\0';i++){
 			_workableFilename[i] = toupper(_workableFilename[i]);
 		}
 	}
@@ -1947,9 +1953,11 @@ char* getSoundFilename(const char* _filename, char _preferedDirectory){
 		}
 	}else{
 		printf("Invalid preference %d\n",_preferedDirectory);
+		return getSoundFilename(_filename,PREFER_DIR_VOICE);
 	}
 	return tempstringconcat;
 }
+
 // _dirRelativeToStreamingAssetsNoEndSlash should start AND END with a slash
 // Example
 // /SE/
@@ -1974,6 +1982,8 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 		WriteToDebugFile(tempstringconcat);
 	}else{
 		soundEffects[passedSlot] = loadSound(tempstringconcat);
+		//soundEffects[passedSlot] = _mlgsnd_loadAudio(tempstringconcat,0,0);
+
 		//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
 		CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1,passedSlot+10);
 		setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
@@ -2258,13 +2268,18 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	// End of function
 	endType = _endtypetemp;
 }
-void FreeBGM(int _slot){
-	#if PLATFORM == PLAT_3DS
-		// Wait for BGM to be unlocked.
+#if PLATFORM == PLAT_3DS
+	// Wait for BGM to be unlocked and then lock it
+	void lockBGM(){
 		while (_bgmIsLock){
-			wait(1);
+			wait(10);
 		}
 		_bgmIsLock = 1;
+	}
+#endif
+void FreeBGM(int _slot){
+	#if PLATFORM == PLAT_3DS
+		lockBGM();
 	#endif
 	if (currentMusic[_slot]!=NULL){
 		stopMusic(currentMusicHandle[_slot]);
@@ -2283,23 +2298,19 @@ void FreeBGM(int _slot){
 }
 void StopBGM(int _slot){
 	#if PLATFORM == PLAT_3DS
-		// Wait for BGM to be unlocked.
-		while (_bgmIsLock){
-			wait(1);
-		}
+		lockBGM();
 	#endif
 	if (currentMusic[_slot]!=NULL){
 		stopMusic(currentMusicHandle[_slot]);
 	}
+	#if PLATFORM == PLAT_3DS
+		_bgmIsLock = 0;
+	#endif
 }
 // Unfixed bgm
 void PlayBGM(const char* filename, int _volume, int _slot){
 	#if PLATFORM == PLAT_3DS
-		// Wait for BGM to be unlocked.
-		while (_bgmIsLock){
-			wait(1);
-		}
-		_bgmIsLock = 1;
+		lockBGM();
 	#endif
 	if (bgmVolume==0){
 		printf("BGM volume is 0, ignore music change.");
@@ -2495,25 +2506,20 @@ void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName, char _isRela
 	free(streamingAssets);
 	free(scriptFolder);
 
+	streamingAssets = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+2);
+	scriptFolder = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+strlen("/Scripts/")+1);
+	streamingAssets[0]='\0';
+	scriptFolder[0]='\0';
 	if (_isRelativeToData){
-		streamingAssets = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+2);
-		strcpy(streamingAssets,DATAFOLDER);
-		strcat(streamingAssets,_streamingAssetsFolderName);
-		strcat(streamingAssets,"/");
-	
-		scriptFolder = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+strlen("/Scripts/")+1);
-		strcpy(scriptFolder,DATAFOLDER);
-		strcat(scriptFolder,_streamingAssetsFolderName);
-		strcat(scriptFolder,"/Scripts/");
-	}else{
-		streamingAssets = malloc(strlen(_streamingAssetsFolderName)+2);
-		strcpy(streamingAssets,_streamingAssetsFolderName);
-		strcat(streamingAssets,"/");
-		
-		scriptFolder = malloc(strlen(_streamingAssetsFolderName)+strlen("/Scripts/")+1);
-		strcpy(scriptFolder,_streamingAssetsFolderName);
-		strcat(scriptFolder,"/Scripts/");
+		strcat(streamingAssets,DATAFOLDER); 
+		strcat(scriptFolder,DATAFOLDER); 
 	}
+	//
+	strcat(streamingAssets,_streamingAssetsFolderName);
+	strcat(streamingAssets,"/");
+	//
+	strcat(scriptFolder,_streamingAssetsFolderName);
+	strcat(scriptFolder,"/Scripts/");
 
 	presetFolder = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+strlen("/Presets/")+1);
 	strcpy(presetFolder,DATAFOLDER);
@@ -2757,7 +2763,7 @@ void activateHigurashiSettings(){
 	void soundUpdateThread(void *arg){
 		int i;
 		while (_3dsSoundProtectThreadIsAlive){
-			_bgmIsLock=1;
+			lockBGM();
 			for (i=0;i<10;i++){
 				if (currentMusic[i]!=NULL){
 					nathanUpdateMusicIfNeeded(currentMusic[i]);
@@ -3112,7 +3118,6 @@ void scriptDrawBustshot(nathanscriptVariable* _passedArguments, int _numArgument
 		}
 	}
 	
-	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
 	DrawBustshot(nathanvariableToInt(&_passedArguments[0]), nathanvariableToString(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[2]), nathanvariableToInt(&_passedArguments[3]), nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]), nathanvariableToBool(&_passedArguments[15]), nathanvariableToInt(&_passedArguments[12]));
 	return;
 }
@@ -3441,7 +3446,7 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 	int _startDrawY;
 	// X position of every choice graphic
 	int _startDrawX;
-	int _spaceBetweenChoices;
+	//int _spaceBetweenChoices;
 
 	int _firstChoiceWidth = getTextureWidth(_passedNormalImages[0]);
 	int _firstChoiceHeight = getTextureHeight(_passedNormalImages[0]);
@@ -3477,12 +3482,12 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 		startDrawing();
 		Draw(1);
 		for (i=0;i<_numberOfChoices;i++){
-			drawTexture(_passedNormalImages[i],0,_startDrawY+_firstChoiceHeight*i+_halfFirstChoiceHeight*i);
+			drawTexture(_passedNormalImages[i],_startDrawX,_startDrawY+_firstChoiceHeight*i+_halfFirstChoiceHeight*i);
 		}
 		if (_isHoldSelect==0){
-			drawTexture(_passedHoverImages[_userChoice],0,_startDrawY+_firstChoiceHeight*_userChoice+_halfFirstChoiceHeight*_userChoice);
+			drawTexture(_passedHoverImages[_userChoice],_startDrawX,_startDrawY+_firstChoiceHeight*_userChoice+_halfFirstChoiceHeight*_userChoice);
 		}else{
-			drawTexture(_passedSelectImages[_userChoice],0,_startDrawY+_firstChoiceHeight*_userChoice+_halfFirstChoiceHeight*_userChoice);
+			drawTexture(_passedSelectImages[_userChoice],_startDrawX,_startDrawY+_firstChoiceHeight*_userChoice+_halfFirstChoiceHeight*_userChoice);
 		}
 		endDrawing();
 
@@ -4046,6 +4051,9 @@ void SettingsMenu(){
 				vndsClearAtBottom = !vndsClearAtBottom;
 				_settingsOptionsValueText[_vndsHitBottomActionSlot] = charToBoolString(vndsClearAtBottom);
 			}else if (_choice==_maxOptionSlotUsed){ // Quit
+				#if PLATFORM == PLAT_3DS
+					lockBGM();
+				#endif
 				endType = Line_ContinueAfterTyping;
 				if (_choice==99){
 					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
@@ -4116,7 +4124,20 @@ void TitleScreen(){
 
 	int _versionStringWidth = textWidth(fontSize,VERSIONSTRING VERSIONSTRINGSUFFIX);
 
-	//SetClearColor(255,255,255,255);
+	char _bottomConfigurationString[13+strlen(SYSTEMSTRING)];
+	strcpy(_bottomConfigurationString,SYSTEMSTRING);
+	if (isGameFolderMode){
+		strcat(_bottomConfigurationString,";Games");
+	}else{
+		strcat(_bottomConfigurationString,";Presets");
+	}
+	if (isActuallyUsingUma0){
+		strcat(_bottomConfigurationString,";uma0");
+	}else{
+		strcat(_bottomConfigurationString,";ux0");
+	}
+	
+
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		fpsCapStart();
 		controlsStart();
@@ -4243,15 +4264,19 @@ void TitleScreen(){
 
 		goodDrawText(MENUOPTIONOFFSET,5,"Main Menu",fontSize);
 
+		// Menu options
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load game",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Manual mode",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"Settings",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit",fontSize);
 
+		// Extra bottom data
 		goodDrawTextColored((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING VERSIONSTRINGSUFFIX,fontSize,VERSIONCOLOR);
-		goodDrawText(5,screenHeight-5-currentTextHeight,SYSTEMSTRING,fontSize);
+		goodDrawText(5,screenHeight-5-currentTextHeight,_bottomConfigurationString,fontSize);
 
+		// Cursor
 		goodDrawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR,fontSize);
+
 		#if PLATFORM == PLAT_3DS
 			startDrawingBottom();
 		#endif
