@@ -1982,8 +1982,6 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 		WriteToDebugFile(tempstringconcat);
 	}else{
 		soundEffects[passedSlot] = loadSound(tempstringconcat);
-		//soundEffects[passedSlot] = _mlgsnd_loadAudio(tempstringconcat,0,0);
-
 		//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
 		CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1,passedSlot+10);
 		setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
