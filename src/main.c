@@ -350,9 +350,16 @@ char bustsStartInMiddle=1;
 int scriptScreenWidth=640;
 int scriptScreenHeight=480;
 
-// X and Y scale applied to graphics and their coordinates
+// X and Y scale applied to graphics size
 #define USENEWSCALE 1
 double graphicsScale=1.0;
+
+// This assumes the background is the biggest image. These values decide how much to scale all other elements, such as characters.
+int actualBackgroundWidth;
+int actualBackgroundHeight;
+// If these values should not change because we're sure they're right. We can be sure these are right if they're specified in vnds ini file.
+char actualBackgroundSizesConfirmedForSmashFive=0;
+
 char* lastBackgroundFilename=NULL;
 char* currentScriptFilename=NULL;
 
@@ -1121,7 +1128,7 @@ void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int
 }
 float GetXOffsetScale(CrossTexture* _tempImg){
 	#if USENEWSCALE
-		return graphicsScale;
+		return (actualBackgroundWidth*graphicsScale)/(double)scriptScreenWidth;
 	#endif
 	// TODO - Remove below code if all goes well.
 	if (getTextureWidth(_tempImg)>screenWidth){
@@ -1131,7 +1138,7 @@ float GetXOffsetScale(CrossTexture* _tempImg){
 }
 float GetYOffsetScale(CrossTexture* _tempImg){
 	#if USENEWSCALE
-		return graphicsScale;
+		return (actualBackgroundHeight*graphicsScale)/(double)scriptScreenHeight;
 	#endif
 	// TODO - Remove below code if all goes well
 	if (getTextureHeight(_tempImg)>screenHeight){
@@ -1454,12 +1461,11 @@ void* recalloc(void* _oldBuffer, int _newSize, int _oldSize){
 	}
 	return _newBuffer;
 }
-void updateTextPositions(CrossTexture* _passedBackground){
+// If we're doing textOnlyOverBackground, make the textbox start at the right place according to global variables for background sizes
+void updateTextPositions(){
 	if (textOnlyOverBackground){
-		if (_passedBackground!=NULL){
-			textboxXOffset = floor((float)(screenWidth- applyGraphicsScale(getTextureWidth(_passedBackground)))/2);
-			outputLineScreenWidth = screenWidth - textboxXOffset;
-		}
+		textboxXOffset = floor((float)(screenWidth-applyGraphicsScale(actualBackgroundWidth))/2);
+		outputLineScreenWidth = screenWidth - textboxXOffset;
 	}
 	#if PLATFORM == PLAT_3DS
 		if (textIsBottomScreen==1){
@@ -1468,12 +1474,13 @@ void updateTextPositions(CrossTexture* _passedBackground){
 		}
 	#endif
 }
-void updateGraphicsScale(CrossTexture* _passedBackground){
+// Using the global variables for background sizes, update the global graphics scale factor
+void updateGraphicsScale(){
 	#if USENEWSCALE
-		if (((double)screenWidth)/getTextureWidth(_passedBackground) < ((double)screenHeight)/getTextureHeight(_passedBackground)){
-			graphicsScale = ((double)screenWidth)/getTextureWidth(_passedBackground);
+		if (((double)screenWidth)/actualBackgroundWidth < ((double)screenHeight)/actualBackgroundHeight){
+			graphicsScale = ((double)screenWidth)/actualBackgroundWidth;
 		}else{
-			graphicsScale = ((double)screenHeight)/getTextureHeight(_passedBackground);
+			graphicsScale = ((double)screenHeight)/actualBackgroundHeight;
 		}
 	#endif
 }
@@ -1488,7 +1495,7 @@ void setTextOnlyOverBackground(char _newValue){
 		textboxXOffset=0;
 		outputLineScreenWidth = screenWidth;
 	}else{
-		updateTextPositions(currentBackground);
+		updateTextPositions();
 	}
 }
 
@@ -1713,8 +1720,12 @@ void DrawScene(const char* _filename, int time){
 		currentBackground=NULL;
 		return;
 	}
-	updateGraphicsScale(newBackground);
-	updateTextPositions(newBackground);
+	if (actualBackgroundSizesConfirmedForSmashFive==0){
+		actualBackgroundWidth = getTextureWidth(newBackground);
+		actualBackgroundHeight = getTextureHeight(newBackground);
+		updateGraphicsScale();
+		updateTextPositions();
+	}
 	while (_backgroundAlpha<255){
 		fpsCapStart();
 
@@ -2878,7 +2889,7 @@ void vndsNormalSave(char* _filename){
 	fclose(fp);
 }
 void vndsNormalLoad(char* _filename){
-	FILE* fp = fopen(_filename,"r");
+	FILE* fp = fopen(_filename,"rb");
 	unsigned char _readFileFormat;
 	fread(&_readFileFormat,sizeof(unsigned char),1,fp); //
 	if (_readFileFormat!=1){
@@ -2909,6 +2920,7 @@ void vndsNormalLoad(char* _filename){
 	nextVndsBustshotSlot=0;
 	fread(&_maxReadBusts,sizeof(int),1,fp); //
 	for (i=0;i<_maxReadBusts;i++){
+		printf("Read %d/%d\n",i,_maxReadBusts);
 		signed int _tempReadX;
 		signed int _tempReadY;
 		char* _tempReadFilename;
@@ -4873,6 +4885,11 @@ signed char init(){
 
 	outputLineScreenWidth = screenWidth;
 	outputLineScreenHeight = screenHeight;
+
+	// Guess the graphic sizes
+	actualBackgroundWidth = screenWidth;
+	actualBackgroundHeight = screenHeight;
+	actualBackgroundSizesConfirmedForSmashFive=0;
 
 	// Make buffers for busts
 	Busts = calloc(1,sizeof(bust)*MAXBUSTS);
