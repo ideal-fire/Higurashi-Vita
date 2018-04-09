@@ -1,7 +1,12 @@
 #ifndef VNDSSCRIPTWRAPPERS
 #define VNDSSCRIPTWRAPPERS
 
-#define _VNDSWAITDISABLE 1
+#define _VNDSWAITDISABLE 0
+// Fadein time in milliseconds used if one not given by vnds script
+#define VNDS_IMPLIED_BACKGROUND_FADE 300
+#define VNDS_HIDE_BOX_ON_BG_CHANGE 1
+
+// TODO - Fadein and hidebox on setimg
 
 //char nextVndsBustshotSlot=0;
 
@@ -91,10 +96,17 @@ void vndswrapper_cleartext(nathanscriptVariable* _passedArguments, int _numArgum
 		clearHistory();
 	}
 }
+
 // bgload filename.extention [dsFadeinFrames]
 void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	DrawScene(nathanvariableToString(&_passedArguments[0]),_numArguments==2 ? floor((nathanvariableToFloat(&_passedArguments[1])/60)*1000) : 0);
+	#if VNDS_HIDE_BOX_ON_BG_CHANGE
+		hideTextbox();
+	#endif
+	DrawScene(nathanvariableToString(&_passedArguments[0]),_numArguments==2 ? floor((nathanvariableToFloat(&_passedArguments[1])/60)*1000) : VNDS_IMPLIED_BACKGROUND_FADE);
 	nextVndsBustshotSlot=0;
+	#if VNDS_HIDE_BOX_ON_BG_CHANGE
+		showTextbox();
+	#endif
 }
 // setimg file x y
 // setimg MGE_000099.png 75 0
@@ -149,6 +161,15 @@ void vndswrapper_music(nathanscriptVariable* _argumentList, int _totalArguments,
 		return;
 	}
 	PlayBGM(_passedFilename,128,0);
+}
+
+
+void vndswrapper_sound(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	char* _passedFilename = nathanvariableToString(&_passedArguments[0]);
+	if (_passedFilename[0]!='~'){
+		removeFileExtension(_passedFilename);
+		GenericPlaySound(0,_passedFilename,256,PREFER_DIR_SE,seVolume);
+	}
 }
 
 #endif

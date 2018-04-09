@@ -417,13 +417,14 @@ nathanscriptGameVariable* nathanscriptGetGameVariable(char* _passedSearchTerm){
 }
 
 void replaceIfIsVariable(char** _possibleVariableString){
+	//printf("possible string is %s\n",*_possibleVariableString);
 	int i;
 	int _cachedStrlen = strlen(*_possibleVariableString);
 	for (i=0;i<_cachedStrlen;i++){
-		if ((*_possibleVariableString)[i]=='$' && (i==0 || (*_possibleVariableString)[i-1]==' ')){
+		if ( ( (*_possibleVariableString)[i]=='$' && (*_possibleVariableString)[i+1]!='$' ) && (i==0 || (*_possibleVariableString)[i-1]==' ' || (*_possibleVariableString)[i-1]=='{')){ // $happy bla{$happy} are both good. $$ is escape
 			int j;
 			for (j=1;j<=_cachedStrlen-i;j++){ // Less than or equal to because we need to check for the null character
-				if ((*_possibleVariableString)[i+j]==' ' || (*_possibleVariableString)[i+j]==0){ // Find end of the string
+				if ((*_possibleVariableString)[i+j]==' ' || (*_possibleVariableString)[i+j]=='\0' || ((*_possibleVariableString)[i+j]=='}' && (*_possibleVariableString)[i-1]=='{') ){ // Find end of the string
 					char _endCharacterCache = (*_possibleVariableString)[i+j];
 					(*_possibleVariableString)[i+j]=0; // trim string for searching
 					nathanscriptGameVariable* _targetVariableArray = nathanscriptGamevarList;
@@ -432,9 +433,11 @@ void replaceIfIsVariable(char** _possibleVariableString){
 						_targetVariableArray = nathanscriptGlobalvarList;
 						_foundVariableIndex = searchVariableArray(nathanscriptGlobalvarList,nathanscriptTotalGlobalvar,&((*_possibleVariableString)[i+1]));
 					}
+					(*_possibleVariableString)[i+j]=_endCharacterCache; // Restore after trim
 					if (_foundVariableIndex!=-1){
 						char* _newStringBuffer;
 
+						// The variable's value as a string
 						char* _varaibleStringToReplace =  NULL;
 						if (_targetVariableArray[_foundVariableIndex].variable.variableType==NATHAN_TYPE_STRING){
 							_varaibleStringToReplace = _targetVariableArray[_foundVariableIndex].variable.value;
@@ -445,9 +448,38 @@ void replaceIfIsVariable(char** _possibleVariableString){
 							printf("Invalid variable type %d when doing replace stupidity. %s\n",_targetVariableArray[_foundVariableIndex].variable.variableType,&((*_possibleVariableString)[i+1]));
 						}
 
-						int _singlePhraseStrlen = strlen(&((*_possibleVariableString)[i]));
-						_newStringBuffer = malloc(_cachedStrlen-_singlePhraseStrlen+strlen(_varaibleStringToReplace)+1);
-						if (i==0){
+						// If there should be spaces on these sides of the varaible. Changes depending on stuff.
+						signed char _shouldLeftSpace=1;
+						signed char _shouldRightSpace=1;
+						if (i==0 || (*_possibleVariableString)[i-1]=='{'){
+							_shouldLeftSpace=0;
+						}
+						//printf("%c;%c\n",(*_possibleVariableString)[i+j],(*_possibleVariableString)[i-1]);
+						if (((*_possibleVariableString)[i+j]=='}' && (*_possibleVariableString)[i-1]=='{')){
+							_shouldRightSpace=0;
+						}
+
+						int _singlePhraseStrlen = strlen(&((*_possibleVariableString)[i])); // Length of spot we're replacing
+						_newStringBuffer = malloc(_cachedStrlen-_singlePhraseStrlen+strlen(_varaibleStringToReplace)+1+_shouldLeftSpace+_shouldRightSpace);
+
+						_newStringBuffer[0]='\0'; // So strcat will work
+						if (i!=0){ // If we have stuff before our variable
+							//printf("copy %s\n",*_possibleVariableString);
+							(*_possibleVariableString)[i-1]=0;
+							strcat(_newStringBuffer,*_possibleVariableString);
+						}
+						if (_shouldLeftSpace){
+							strcat(_newStringBuffer," ");
+						}
+						strcat(_newStringBuffer,_varaibleStringToReplace); // Our actual variable as string
+						if (_shouldRightSpace){
+							//printf("A good idea, this is.");
+							strcat(_newStringBuffer," ");
+						}
+						if (_endCharacterCache!=0){ // If we have stuff after our variable. We know by checking if the char after our replacement is the null character. If the character after our replacement is } then we'll try to start to copy from the null character, so nothing will be copied.
+							strcat(_newStringBuffer,&((*_possibleVariableString)[i+j+1]));
+						}
+						/*if (i==0){
 							if ((_singlePhraseStrlen)==_cachedStrlen){
 								strcpy(_newStringBuffer,_varaibleStringToReplace);
 							}else{
@@ -460,17 +492,15 @@ void replaceIfIsVariable(char** _possibleVariableString){
 							}else{
 								sprintf(_newStringBuffer, "%s %s",(*_possibleVariableString),_varaibleStringToReplace);
 							}
-						}
+						}*/
 						free((*_possibleVariableString));
 						(*_possibleVariableString)=_newStringBuffer;
 						_cachedStrlen = strlen(*_possibleVariableString);
-
 						if (_targetVariableArray[_foundVariableIndex].variable.variableType==NATHAN_TYPE_FLOAT){
 							free(_varaibleStringToReplace);
 						}
 					}else{
 						printf("Variable not found, %s\n",&((*_possibleVariableString)[i+1]));
-						(*_possibleVariableString)[i+j]=_endCharacterCache;
 					}
 					break;
 				}
@@ -564,6 +594,7 @@ void nathanscriptParseSingleLine(FILE* fp, int* _storeCommandIndex, nathanscript
 		free(_tempReadLine);
 		return;
 	}
+	//printf("%s\n",_tempReadLine);
 	nathanscriptParseString(_tempReadLine,_storeCommandIndex,_storeArguments,_storeNumArguments);
 	free(_tempReadLine);
 }

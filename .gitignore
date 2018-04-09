@@ -53,6 +53,7 @@ Temporary Items
 copyrite/
 build/
 lib-custom/
+_goodNameIdea.txt
 
 # Build
 *.o

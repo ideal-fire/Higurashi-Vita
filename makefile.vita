@@ -28,7 +28,8 @@ LIBS = -lGeneralGoodVita \
 	-lm \
 	-lc \
 	-lluaVita \
-	-lm
+	-lm \
+	-lmpg123
 
 PREFIX  = arm-vita-eabi
 CC      = $(PREFIX)-gcc

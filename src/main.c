@@ -30,6 +30,7 @@
 			END_OF_FILE
 
 	TODO - Remove scriptFolder variable
+	TODO - 3ds build doesn't work at all.
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -75,7 +76,6 @@
 #define LOCATION_UNDEFINED 0
 #define LOCATION_CG 1
 #define LOCATION_CGALT 2
-
 /////////////////////////////////////
 #define MAXIMAGECHAR 20
 #define MAXFILES 50
@@ -364,6 +364,17 @@ signed char vndsClearAtBottom=0;
 /*
 ====================================================
 */
+
+// Directly remove file extension from string, string should not be const.
+void removeFileExtension(char* _passedFilename){
+	signed short i;
+	for (i=strlen(_passedFilename)-1;i>=0;--i){
+		if (_passedFilename[i]=='.'){
+			_passedFilename[i]='\0';
+			break;
+		}
+	}
+}
 char* charToBoolString(char _boolValue){
 	if (_boolValue){
 		return "True";
@@ -529,6 +540,9 @@ char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 	return 1;
 }
 void WriteToDebugFile(const char* stuff){
+	#if PLATFORM == PLAT_COMPUTER
+		printf("%s\n",stuff);
+	#endif
 	char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
 	strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
 	strcat(_tempDebugFileLocationBuffer,"log.txt");
@@ -1671,8 +1685,7 @@ void DrawScene(const char* _filename, int time){
 	signed short _backgroundAlpha=0;
 
 	if (time!=0){
-		int _time = time;
-		int _totalFrames = floor(60*(_time/(double)1000));
+		int _totalFrames = floor(60*(time/(double)1000));
 		if (_totalFrames==0){
 			_totalFrames=1;
 		}
@@ -1979,7 +1992,7 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 	char* tempstringconcat = getSoundFilename(filename,_preferedDirectory);
 	if (tempstringconcat==NULL){
 		WriteToDebugFile("SE file not found");
-		WriteToDebugFile(tempstringconcat);
+		WriteToDebugFile(filename);
 	}else{
 		soundEffects[passedSlot] = loadSound(tempstringconcat);
 		//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
@@ -2312,31 +2325,29 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 	#endif
 	if (bgmVolume==0){
 		printf("BGM volume is 0, ignore music change.");
-		return;
-	}
-	if (_slot>=MAXMUSICARRAY){
+	}if (_slot>=MAXMUSICARRAY){
 		LazyMessage("Music slot too high.","No action will be taken.",NULL,NULL);
-		return;
-	}
-	char* tempstringconcat = getSoundFilename(filename,PREFER_DIR_BGM);
-	if (tempstringconcat==NULL){
-		printf("BGM file not found.\n");
-		FreeBGM(_slot);
 	}else{
-		char* _tempHoldFilepathConcat = malloc(strlen(filename)+1);
-		strcpy(_tempHoldFilepathConcat,filename);
-		CROSSMUSIC* _tempHoldSlot = loadMusic(tempstringconcat);
-		showErrorIfNull(_tempHoldSlot);
-		// FreeBGM is right here so the player can listen to the old BGM as the new one loads.
-		FreeBGM(_slot);
-		currentMusic[_slot] = _tempHoldSlot;
-		currentMusicFilepath[_slot] = _tempHoldFilepathConcat;
-		currentMusicUnfixedVolume[_slot] = _volume;
-		currentMusicHandle[_slot] = playMusic(currentMusic[_slot],_slot);
-		setMusicVolume(currentMusicHandle[_slot],FixBGMVolume(_volume));
-		lastBGMVolume=_volume;
-		
-		free(tempstringconcat);
+		char* tempstringconcat = getSoundFilename(filename,PREFER_DIR_BGM);
+		if (tempstringconcat==NULL){
+			printf("BGM file not found.\n");
+			FreeBGM(_slot);
+		}else{
+			char* _tempHoldFilepathConcat = malloc(strlen(filename)+1);
+			strcpy(_tempHoldFilepathConcat,filename);
+			CROSSMUSIC* _tempHoldSlot = loadMusic(tempstringconcat);
+			showErrorIfNull(_tempHoldSlot);
+			// FreeBGM is right here so the player can listen to the old BGM as the new one loads.
+			FreeBGM(_slot);
+			currentMusic[_slot] = _tempHoldSlot;
+			currentMusicFilepath[_slot] = _tempHoldFilepathConcat;
+			currentMusicUnfixedVolume[_slot] = _volume;
+			currentMusicHandle[_slot] = playMusic(currentMusic[_slot],_slot);
+			setMusicVolume(currentMusicHandle[_slot],FixBGMVolume(_volume));
+			lastBGMVolume=_volume;
+			
+			free(tempstringconcat);
+		}
 	}
 	#if PLATFORM == PLAT_3DS
 		_bgmIsLock = 0;
@@ -2927,11 +2938,20 @@ void vndsNormalLoad(char* _filename){
 
 	nathanscriptDoScript(_tempLoadedFilename,_readFilePosition);
 }
+
+// TODO - Small fadein and fadeout transitions
+void hideTextbox(){
+	MessageBoxEnabled=0;
+}
+void showTextbox(){
+	MessageBoxEnabled=1;
+}
+
 /*
 =================================================
 */
 void scriptDisplayWindow(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	MessageBoxEnabled=1;
+	showTextbox();
 	return;
 }
 void scriptClearMessage(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -3141,7 +3161,7 @@ void scriptFadeAllBustshots(nathanscriptVariable* _passedArguments, int _numArgu
 	return;
 }
 void scriptDisableWindow(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	MessageBoxEnabled=0;
+	hideTextbox();
 	return;
 }
 void scriptFadeBustshotWithFiltering(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -3755,6 +3775,10 @@ void SettingsMenu(){
 
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
+	// Init value slots
+	for (i=0;i<MAXOPTIONSSETTINGS;i++){
+		_settingsOptionsValueText[i]=NULL;
+	}
 	if (currentGameStatus == GAMESTATUS_TITLE){
 		_settingsOptionsMainText[0] = "Back";
 	}else{
@@ -3804,10 +3828,10 @@ void SettingsMenu(){
 		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Quit";
 	}
 
+	//////////////////
+	// Set values here
+	//////////////////
 	// Set pointers to menu option value text
-	for (i=0;i<MAXOPTIONSSETTINGS;i++){
-		_settingsOptionsValueText[i]=NULL;
-	}
 	if (hasOwnVoiceSetting){
 		_settingsOptionsValueText[1] = &(_tempItoaHoldVoice[0]);
 	}
@@ -4813,6 +4837,7 @@ void initializeNathanScript(){
 		nathanscriptInit();
 		// TODO - Pre-realloc to number of functions we need.
 		nathanscriptAddFunction(vndswrapper_text,nathanscriptMakeConfigByte(1,0),"text");
+		nathanscriptAddFunction(vndswrapper_sound,nathanscriptMakeConfigByte(0,1),"sound");
 		nathanscriptAddFunction(vndswrapper_choice,nathanscriptMakeConfigByte(1,0),"choice");
 		nathanscriptAddFunction(vndswrapper_delay,0,"delay");
 		nathanscriptAddFunction(vndswrapper_cleartext,0,"cleartext");
