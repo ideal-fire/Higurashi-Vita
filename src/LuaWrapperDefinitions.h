@@ -43,6 +43,7 @@ GENERATELUAWRAPPER(scriptLoadADVBox);
 GENERATELUAWRAPPER(scriptOptionsSetTips);
 GENERATELUAWRAPPER(scriptOptionsCanChangeBoxAlpha);
 GENERATELUAWRAPPER(scriptImageChoice);
+GENERATELUAWRAPPER(scriptSetPositionsSize);
 
 //===============================================================
 //===============================================================
@@ -88,6 +89,7 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptOptionsSetTextMode,"OptionsSetTextMode");
 	PUSHLUAWRAPPER(scriptOptionsSetTips,"OptionsSetTipExist");
 	PUSHLUAWRAPPER(scriptOptionsCanChangeBoxAlpha,"OptionsCanChangeBoxAlpha");
+	PUSHLUAWRAPPER(scriptSetPositionsSize,"OptionsSetPositionSize")
 
 	// Commands exclusive to my engine
 	PUSHLUAWRAPPER(scriptDebugFile,"Debugfile")

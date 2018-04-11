@@ -886,7 +886,9 @@ void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nat
 void nathanscriptDoScript(char* _filename, long int _startingOffset){
 	nathanscriptCurrentOpenFile = fopen(_filename,"rb");
 	if (_startingOffset>0){
+
 		fseek(nathanscriptCurrentOpenFile,_startingOffset,SEEK_SET);
+		printf("Wanted to be at: %d\nActually at %d\n",_startingOffset,ftell(nathanscriptCurrentOpenFile));
 	}
 	while (!feof(nathanscriptCurrentOpenFile)){
 		int _foundCommandIndex;

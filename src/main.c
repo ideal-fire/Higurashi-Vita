@@ -30,7 +30,8 @@
 			END_OF_FILE
 
 	TODO - Remove scriptFolder variable
-	TODO - 3ds build doesn't work at all.
+	TODO - Go to Higurashi, go through ch 4 all cast review sesssion, then select chapter 1 on the menu. Leads to crash.
+	TODO - Fix restart BGM option
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -50,11 +51,11 @@
 	void initializeNathanScript();
 	void activateVNDSSettings();
 	void activateHigurashiSettings();
-	typedef struct grhuighruei{
+	typedef struct{
 		char** theArray;
 		unsigned char length;
 	}goodStringMallocArray;
-	typedef struct grejgrkew{
+	typedef struct{
 		unsigned char* theArray;
 		unsigned char length;
 	}goodu8MallocArray;
@@ -344,7 +345,7 @@ char nathanscriptIsInit=0;
 char scriptUsesFileExtensions=0;
 char bustsStartInMiddle=1;
 
-// What scripts think the screen width and height is.
+// What scripts think the screen width and height is for sprite positions
 // For Higurashi, this is 640x480
 // For vnds, this is the DS' screen resolution
 int scriptScreenWidth=640;
@@ -2299,10 +2300,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		_bgmIsLock = 1;
 	}
 #endif
-void FreeBGM(int _slot){
-	#if PLATFORM == PLAT_3DS
-		lockBGM();
-	#endif
+void __freeBGMNoLock(int _slot){
 	if (currentMusic[_slot]!=NULL){
 		stopMusic(currentMusicHandle[_slot]);
 		freeMusic(currentMusic[_slot]);
@@ -2314,6 +2312,12 @@ void FreeBGM(int _slot){
 			currentMusicUnfixedVolume[_slot] = 0;
 		}
 	}
+}
+void FreeBGM(int _slot){
+	#if PLATFORM == PLAT_3DS
+		lockBGM();
+	#endif
+	__freeBGMNoLock(_slot);
 	#if PLATFORM == PLAT_3DS
 		_bgmIsLock = 0;
 	#endif
@@ -2336,20 +2340,20 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 	#endif
 	if (bgmVolume==0){
 		printf("BGM volume is 0, ignore music change.");
-	}if (_slot>=MAXMUSICARRAY){
+	}else if (_slot>=MAXMUSICARRAY){
 		LazyMessage("Music slot too high.","No action will be taken.",NULL,NULL);
 	}else{
 		char* tempstringconcat = getSoundFilename(filename,PREFER_DIR_BGM);
 		if (tempstringconcat==NULL){
 			printf("BGM file not found.\n");
-			FreeBGM(_slot);
+			__freeBGMNoLock(_slot);
 		}else{
 			char* _tempHoldFilepathConcat = malloc(strlen(filename)+1);
 			strcpy(_tempHoldFilepathConcat,filename);
 			CROSSMUSIC* _tempHoldSlot = loadMusic(tempstringconcat);
 			showErrorIfNull(_tempHoldSlot);
 			// FreeBGM is right here so the player can listen to the old BGM as the new one loads.
-			FreeBGM(_slot);
+			__freeBGMNoLock(_slot);
 			currentMusic[_slot] = _tempHoldSlot;
 			currentMusicFilepath[_slot] = _tempHoldFilepathConcat;
 			currentMusicUnfixedVolume[_slot] = _volume;
@@ -2860,21 +2864,36 @@ void loadVariableList(FILE* fp, nathanscriptGameVariable** _listToLoad, int* _to
 // bust x, bust y, bust filename
 // game variables
 void vndsNormalSave(char* _filename){
-	FILE* fp = fopen(_filename,"w");
+	FILE* fp = fopen(_filename,"wb");
+	
+	// Save options file format
 	unsigned char _tempOptionsFormat = VNDSSAVEFORMAT;
 	fwrite(&_tempOptionsFormat,sizeof(unsigned char),1,fp); //
+
+	// Save the current script
 	writeLengthStringToFile(fp,currentScriptFilename);
+
+	// Save the position in the current script
 	long int _currentFilePosition = ftell(nathanscriptCurrentOpenFile);
 	fwrite(&_currentFilePosition,sizeof(long int),1,fp); //
+
+	// Save the number of lines we have on screen
 	int i;
 	i=MAXLINES;
 	fwrite(&i,sizeof(int),1,fp); //
+
+	// Save the current messages
 	for (i=0;i<MAXLINES;i++){
 		writeLengthStringToFile(fp, currentMessages[i]); //
 	}
+
+	// Save the background filename
 	writeLengthStringToFile(fp,lastBackgroundFilename); //
 
+	// Write the number of busts we're saving
 	fwrite(&MAXBUSTS,sizeof(int),1,fp); //
+
+	// Write the bust data
 	for (i=0;i<MAXBUSTS;i++){
 		fwrite(&(Busts[i].xOffset),sizeof(signed int),1,fp); //
 		fwrite(&(Busts[i].yOffset),sizeof(signed int),1,fp); //
@@ -2885,6 +2904,7 @@ void vndsNormalSave(char* _filename){
 		}
 	}
 
+	// Write game specific var list
 	saveVariableList(fp,nathanscriptGamevarList,nathanscriptTotalGamevar); //
 	fclose(fp);
 }
@@ -3542,6 +3562,14 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 	}
 	return;
 }
+// Sets the size of the screen that positions are relative to. For example, this would be the DS' screen resolution for vnds games. It's 640x480 for Higurashi
+// Sets scriptScreenWidth and scriptScreenHeight
+void scriptSetPositionsSize(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	scriptScreenWidth = nathanvariableToInt(&_passedArguments[0]);
+	scriptScreenHeight = nathanvariableToInt(&_passedArguments[1]);
+	return;
+}
+
 #include "LuaWrapperDefinitions.h"
 //======================================================
 void Draw(char _shouldDrawMessageBox){
@@ -3765,7 +3793,7 @@ void FontSizeSetup(){
 	SaveFontSizeFile();
 }
 #define ISTEXTSPEEDBAR 0
-#define MAXOPTIONSSETTINGS 15
+#define MAXOPTIONSSETTINGS 16
 void SettingsMenu(){
 	PlayMenuSound();
 	signed char _choice=0;
@@ -3784,6 +3812,7 @@ void SettingsMenu(){
 	// Dynamic slots
 	signed char _vndsSaveOptionsSlot=-2;
 	signed char _vndsHitBottomActionSlot=-2;
+	signed char _restartBgmActionSlot=-2;
 
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
@@ -3827,7 +3856,11 @@ void SettingsMenu(){
 	_settingsOptionsMainText[10] = "Textbox:";
 	_settingsOptionsMainText[11] = "Text Speed:";
 	_maxOptionSlotUsed=11;
-	// Add new settings here
+	// Add new, optional settings here
+	if (isActuallyUsingUma0==0){
+		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Restart BGM";
+		_restartBgmActionSlot = _maxOptionSlotUsed;
+	}
 	if (currentlyVNDSGame){
 		_settingsOptionsMainText[++_maxOptionSlotUsed] = "=Save Game=";
 		_vndsSaveOptionsSlot = _maxOptionSlotUsed;
@@ -4074,6 +4107,8 @@ void SettingsMenu(){
 					textSpeed=1;
 				}
 				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
+			}else if (_choice==_restartBgmActionSlot){
+				
 			}else if (_choice==_vndsSaveOptionsSlot){ // VNDS Save
 				PlayMenuSound();
 				char _tempSavefilePath[strlen(streamingAssets)+strlen("sav0")+1];
@@ -4107,10 +4142,13 @@ void SettingsMenu(){
 				goodDrawText(MENUOPTIONOFFSET+textWidth(fontSize,_settingsOptionsMainText[i])+_singleSpaceWidth,5+currentTextHeight*i,_settingsOptionsValueText[i],fontSize);
 			}
 		}
-		if (cpuOverclocked){
+		
+		// Color CPU overclock text if enabled
+		if (cpuOverclocked && PLATFORM != PLAT_3DS){
 			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*4,_settingsOptionsMainText[4],fontSize,0,255,0);
 		}
-		if (MessageBoxAlpha>=230 && canChangeBoxAlpha){
+		// If message box alpha is very high or text is on the bottom screen then make the message box alpha text red
+		if ( (MessageBoxAlpha>=230 && canChangeBoxAlpha) || (PLATFORM == PLAT_3DS && cpuOverclocked)){
 			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*9,_settingsOptionsMainText[9],fontSize,255,0,0);
 		}
 		// Display sample Rena if changing bust location
@@ -4165,11 +4203,13 @@ void TitleScreen(){
 	}else{
 		strcat(_bottomConfigurationString,";Presets");
 	}
-	if (isActuallyUsingUma0){
-		strcat(_bottomConfigurationString,";uma0");
-	}else{
-		strcat(_bottomConfigurationString,";ux0");
-	}
+	#if PLATFORM != PLAT_3DS
+		if (isActuallyUsingUma0){
+			strcat(_bottomConfigurationString,";uma0");
+		}else{
+			strcat(_bottomConfigurationString,";ux0");
+		}
+	#endif
 	
 
 	while (currentGameStatus!=GAMESTATUS_QUIT){
@@ -4865,7 +4905,7 @@ void initializeNathanScript(){
 		strcpy(_globalsSaveFilePath,saveFolder);
 		strcat(_globalsSaveFilePath,"vndsGlobals");
 		if (checkFileExist(_globalsSaveFilePath)){
-			FILE* fp = fopen(_globalsSaveFilePath,"r");
+			FILE* fp = fopen(_globalsSaveFilePath,"rb");
 			loadVariableList(fp,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
 			fclose(fp);
 		}
