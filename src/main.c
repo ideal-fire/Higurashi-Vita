@@ -22,16 +22,16 @@
 	TODO - Inform user of errors in game specific Lua
 
 	TODO - Implement all vnds commands
-		SOUND,
-		MUSIC,
 		(useless commands?)
 			SKIP,
 			ENDSCRIPT,
 			END_OF_FILE
 
 	TODO - Remove scriptFolder variable
-	TODO - Go to Higurashi, go through ch 4 all cast review sesssion, then select chapter 1 on the menu. Leads to crash.
-	TODO - Fix restart BGM option
+	TODO - Because we can have multiple BGM tracks at once, the restart BGM option may just activate and replay the second track only, which would often just be some higurashi.
+	TODO - Fix LazyMessage system. Let it take a variable number of arguments to put together. Maybe even make it printf style.
+	TODO - Allow VNDS save slot selection
+	TODO - Custom SonoHana port (MSE Converter) doesn't work at all, at least on GNU/Linux. Is it because all filenames are still lowercase?
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -47,7 +47,7 @@
 	void XOutFunction();
 	void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]);
 	void SaveGameEditor();
-	void SettingsMenu();
+	void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM);
 	void initializeNathanScript();
 	void activateVNDSSettings();
 	void activateHigurashiSettings();
@@ -138,7 +138,8 @@
 // 4 adds MessageBoxAlpha and textOnlyOverBackground
 // 5 adds textSpeed
 // 6 adds vndsClearAtBottom
-#define OPTIONSFILEFORMAT 6
+// 7 adds showVNDSWarnings
+#define OPTIONSFILEFORMAT 7
 
 //#define LUAREGISTER(x,y) DebugLuaReg(y);
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
@@ -363,16 +364,23 @@ char actualBackgroundSizesConfirmedForSmashFive=0;
 
 char* lastBackgroundFilename=NULL;
 char* currentScriptFilename=NULL;
+char* lastBGMFilename=NULL;
 
 char currentlyVNDSGame=0;
 char nextVndsBustshotSlot=0;
 // If all the text should be cleared when the text reached the bottom of the screen when playing a VNDS game
 signed char vndsClearAtBottom=0;
+signed char showVNDSWarnings=1;
 
 /*
 ====================================================
 */
-
+char shouldShowWarnings(){
+	if (currentlyVNDSGame && !showVNDSWarnings){
+		return 0;
+	}
+	return 1;
+}
 // Directly remove file extension from string, string should not be const.
 void removeFileExtension(char* _passedFilename){
 	signed short i;
@@ -402,8 +410,12 @@ void changeMallocString(char** _stringToChange, const char* _newValue){
 	if (*_stringToChange!=NULL){
 		free(*_stringToChange);
 	}
-	*_stringToChange = malloc(strlen(_newValue)+1);
-	strcpy(*_stringToChange,_newValue);
+	if (_newValue!=NULL){
+		*_stringToChange = malloc(strlen(_newValue)+1);
+		strcpy(*_stringToChange,_newValue);
+	}else{
+		*_stringToChange=NULL;
+	}
 }
 #if SUBPLATFORM == SUB_UNIX
 char* itoa(int value, char* _buffer, int _uselessBase){
@@ -551,7 +563,7 @@ void WriteToDebugFile(const char* stuff){
 	#if PLATFORM == PLAT_COMPUTER
 		printf("%s\n",stuff);
 	#endif
-	char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt"));
+	char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt")+1);
 	strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
 	strcat(_tempDebugFileLocationBuffer,"log.txt");
 	FILE *fp;
@@ -1039,7 +1051,7 @@ void updateControlsGeneral(){
 		endType=Line_ContinueAfterTyping;
 	}
 	if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-		SettingsMenu();
+		SettingsMenu(currentlyVNDSGame,currentlyVNDSGame,isActuallyUsingUma0==0 || PLATFORM != PLAT_VITA);
 	}
 	if (wasJustPressed(SCE_CTRL_SELECT)){
 		PlayMenuSound();
@@ -1444,8 +1456,10 @@ void TryLoadMenuSoundEffect(char* _passedPathIdea){
 	if (checkFileExist(tempstringconcat)){
 		menuSoundLoaded=1;
 		menuSound = loadSound(tempstringconcat);
-		showErrorIfNull(menuSound);
-		setSFXVolumeBefore(menuSound,FixSEVolume(256));
+		if (menuSound!=NULL){
+			showErrorIfNull(menuSound);
+			setSFXVolumeBefore(menuSound,FixSEVolume(256));
+		}
 	}else{
 		menuSoundLoaded=0;
 	}
@@ -1594,7 +1608,9 @@ CrossTexture* safeLoadGamePNG(const char* filename, char _folderPreference, char
 	char* _tempFoundFilename;
 	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extensionIncluded,currentlyVNDSGame);
 	if (_tempFoundFilename==NULL){
-		LazyMessage("Image not found.",filename,"What will happen now?!",NULL);
+		if (shouldShowWarnings()){
+			LazyMessage("Image not found.",filename,"What will happen now?!",NULL);
+		}
 		return NULL;
 	}
 	CrossTexture* _returnLoadedPNG = SafeLoadPNG(_tempFoundFilename);
@@ -2326,6 +2342,7 @@ void StopBGM(int _slot){
 	#if PLATFORM == PLAT_3DS
 		lockBGM();
 	#endif
+	changeMallocString(&lastBGMFilename,NULL);
 	if (currentMusic[_slot]!=NULL){
 		stopMusic(currentMusicHandle[_slot]);
 	}
@@ -2338,14 +2355,17 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 	#if PLATFORM == PLAT_3DS
 		lockBGM();
 	#endif
+	if (filename!=lastBGMFilename){ // HACK
+		changeMallocString(&lastBGMFilename,filename);
+	}
 	if (bgmVolume==0){
-		printf("BGM volume is 0, ignore music change.");
+		printf("BGM volume is 0, ignore music change.\n");
 	}else if (_slot>=MAXMUSICARRAY){
 		LazyMessage("Music slot too high.","No action will be taken.",NULL,NULL);
 	}else{
 		char* tempstringconcat = getSoundFilename(filename,PREFER_DIR_BGM);
 		if (tempstringconcat==NULL){
-			printf("BGM file not found.\n");
+			printf("BGM file not found, %s\n",filename);
 			__freeBGMNoLock(_slot);
 		}else{
 			char* _tempHoldFilepathConcat = malloc(strlen(filename)+1);
@@ -2403,6 +2423,7 @@ void SaveSettings(){
 	fwrite(&textOnlyOverBackground,1,1,fp);
 	fwrite(&textSpeed,1,1,fp);
 	fwrite(&vndsClearAtBottom,sizeof(signed char),1,fp);
+	fwrite(&showVNDSWarnings,sizeof(signed char),1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -2449,6 +2470,9 @@ void LoadSettings(){
 		}
 		if (_tempOptionsFormat>=6){
 			fread(&vndsClearAtBottom,sizeof(signed char),1,fp);
+		}
+		if (_tempOptionsFormat>=7){
+			fread(&showVNDSWarnings,sizeof(signed char),1,fp);
 		}
 		fclose(fp);
 
@@ -3793,8 +3817,8 @@ void FontSizeSetup(){
 	SaveFontSizeFile();
 }
 #define ISTEXTSPEEDBAR 0
-#define MAXOPTIONSSETTINGS 16
-void SettingsMenu(){
+#define MAXOPTIONSSETTINGS 17
+void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM){
 	PlayMenuSound();
 	signed char _choice=0;
 	int i;
@@ -3813,6 +3837,7 @@ void SettingsMenu(){
 	signed char _vndsSaveOptionsSlot=-2;
 	signed char _vndsHitBottomActionSlot=-2;
 	signed char _restartBgmActionSlot=-2;
+	signed char _vndsErrorShowToggleSlot=-2;
 
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
@@ -3857,16 +3882,20 @@ void SettingsMenu(){
 	_settingsOptionsMainText[11] = "Text Speed:";
 	_maxOptionSlotUsed=11;
 	// Add new, optional settings here
-	if (isActuallyUsingUma0==0){
+	if (_shouldShowRestartBGM==1){
 		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Restart BGM";
 		_restartBgmActionSlot = _maxOptionSlotUsed;
 	}
-	if (currentlyVNDSGame){
+	if (_shouldShowVNDSSave){
 		_settingsOptionsMainText[++_maxOptionSlotUsed] = "=Save Game=";
 		_vndsSaveOptionsSlot = _maxOptionSlotUsed;
-
+	}
+	if (_shouldShowVNDSSettings){
 		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Clear at bottom:";
 		_vndsHitBottomActionSlot = _maxOptionSlotUsed;
+	
+		_settingsOptionsMainText[++_maxOptionSlotUsed] = "VNDS Warnings: ";
+		_vndsErrorShowToggleSlot=_maxOptionSlotUsed;
 	}
 	// Quit button is always last
 	if (currentGameStatus!=GAMESTATUS_TITLE){
@@ -3897,8 +3926,13 @@ void SettingsMenu(){
 		_settingsOptionsValueText[10] = "Full";
 	}
 	_settingsOptionsValueText[11] = &(_tempItoaHoldTextSpeed[0]);
-	if (currentlyVNDSGame){
+	if (_shouldShowVNDSSettings){
 		_settingsOptionsValueText[_vndsHitBottomActionSlot] = charToBoolString(vndsClearAtBottom);
+		if (showVNDSWarnings){
+			_settingsOptionsValueText[_vndsErrorShowToggleSlot] = "Show";
+		}else{
+			_settingsOptionsValueText[_vndsErrorShowToggleSlot] = "Hide";
+		}
 	}
 
 	// Make strings
@@ -4108,7 +4142,7 @@ void SettingsMenu(){
 				}
 				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
 			}else if (_choice==_restartBgmActionSlot){
-				
+				PlayBGM(lastBGMFilename,lastBGMVolume,1);
 			}else if (_choice==_vndsSaveOptionsSlot){ // VNDS Save
 				PlayMenuSound();
 				char _tempSavefilePath[strlen(streamingAssets)+strlen("sav0")+1];
@@ -4119,6 +4153,13 @@ void SettingsMenu(){
 			}else if (_choice==_vndsHitBottomActionSlot){
 				vndsClearAtBottom = !vndsClearAtBottom;
 				_settingsOptionsValueText[_vndsHitBottomActionSlot] = charToBoolString(vndsClearAtBottom);
+			}else if (_choice==_vndsErrorShowToggleSlot){
+				showVNDSWarnings = !showVNDSWarnings;
+				if (showVNDSWarnings){
+					_settingsOptionsValueText[_vndsErrorShowToggleSlot] = "Show";
+				}else{
+					_settingsOptionsValueText[_vndsErrorShowToggleSlot] = "Hide";
+				}
 			}else if (_choice==_maxOptionSlotUsed){ // Quit
 				#if PLATFORM == PLAT_3DS
 					lockBGM();
@@ -4325,7 +4366,7 @@ void TitleScreen(){
 				break;
 			}else if (_choice==2){ // Go to setting menu
 				controlsEnd();
-				SettingsMenu();
+				SettingsMenu(1,0,0);
 				controlsEnd();
 				break;
 			}else{
