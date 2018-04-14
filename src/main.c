@@ -19,6 +19,8 @@
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 		TODO - Inversion
 			I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
+		TODO - Because we can have multiple BGM tracks at once, the restart BGM option may just activate and replay the second track only, which would often just be some higurashi.
+		TODO - Remove scriptFolder variable
 	TODO - Inform user of errors in game specific Lua
 
 	TODO - Implement all vnds commands
@@ -26,11 +28,7 @@
 			SKIP,
 			ENDSCRIPT,
 			END_OF_FILE
-
-	TODO - Remove scriptFolder variable
-	TODO - Because we can have multiple BGM tracks at once, the restart BGM option may just activate and replay the second track only, which would often just be some higurashi.
 	TODO - Fix LazyMessage system. Let it take a variable number of arguments to put together. Maybe even make it printf style.
-	TODO - Allow VNDS save slot selection
 	TODO - Custom SonoHana port (MSE Converter) doesn't work at all, at least on GNU/Linux. Is it because all filenames are still lowercase?
 */
 #define SINGLELINEARRAYSIZE 121
@@ -313,6 +311,7 @@ float seVolume = 1.0;
 float voiceVolume = 1.0;
 
 int currentTextHeight;
+int singleSpaceWidth;
 #if PLATFORM == PLAT_VITA
 	pthread_t soundProtectThreadId;
 #endif
@@ -531,6 +530,7 @@ void ReloadFont(){
 	#endif
 	loadFont(globalTempConcat);
 	currentTextHeight = textHeight(fontSize);
+	singleSpaceWidth = textWidth(fontSize," ");
 }
 char MenuControls(char _choice,int _menuMin, int _menuMax){
 	if (wasJustPressed(SCE_CTRL_UP)){
@@ -3819,18 +3819,21 @@ void FontSizeSetup(){
 #define ISTEXTSPEEDBAR 0
 #define MAXOPTIONSSETTINGS 17
 void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM){
+	controlsStart();
+	controlsEnd();
 	PlayMenuSound();
 	signed char _choice=0;
+	static unsigned char _chosenSaveSlot=0;
 	int i;
 	char _artBefore=graphicsLocation; // This variable is used to check if the player changed the bust location after exiting
 	CrossTexture* _renaImage=NULL;
-	int _singleSpaceWidth = textWidth(fontSize," ");
 	char _tempItoaHoldBGM[5] = {'\0'};
 	char _tempItoaHoldSE[5] = {'\0'};
 	char _tempItoaHoldVoice[5] = {'\0'};
 	char _tempItoaHoldBoxAlpha[5] = {'\0'};
 	char _tempItoaHoldTextSpeed[8] = {'\0'}; // Needs to be big enough to hold "instant"
 	char _tempAutoModeString[10] = {'\0'};
+	char _tempHoldSaveSlotSelection[5] = {'\0'};
 	char _maxOptionSlotUsed=0;
 
 	// Dynamic slots
@@ -3887,7 +3890,7 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 		_restartBgmActionSlot = _maxOptionSlotUsed;
 	}
 	if (_shouldShowVNDSSave){
-		_settingsOptionsMainText[++_maxOptionSlotUsed] = "=Save Game=";
+		_settingsOptionsMainText[++_maxOptionSlotUsed] = "=Save Game ";
 		_vndsSaveOptionsSlot = _maxOptionSlotUsed;
 	}
 	if (_shouldShowVNDSSettings){
@@ -3926,6 +3929,9 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 		_settingsOptionsValueText[10] = "Full";
 	}
 	_settingsOptionsValueText[11] = &(_tempItoaHoldTextSpeed[0]);
+	if (_shouldShowVNDSSave){
+		_settingsOptionsValueText[_vndsSaveOptionsSlot]=&(_tempHoldSaveSlotSelection[0]);
+	}
 	if (_shouldShowVNDSSettings){
 		_settingsOptionsValueText[_vndsHitBottomActionSlot] = charToBoolString(vndsClearAtBottom);
 		if (showVNDSWarnings){
@@ -3947,6 +3953,7 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 	}else{
 		_settingsOptionsValueText[10] = "Full";
 	}
+	strcpy(_tempHoldSaveSlotSelection,"0=");
 
 	// This checks if we have Rena busts in CG AND CGAlt also loads Rena, if possible
 	char* _tempRenaPath = CombineStringsPLEASEFREE(streamingAssets,"CG/","re_se_de_a1.png","");
@@ -3968,6 +3975,13 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 		
 		if (wasJustPressed(SCE_CTRL_CIRCLE)){
 			break;
+		}
+		if (wasJustPressed(SCE_CTRL_TRIANGLE)){
+			if (_choice==_vndsSaveOptionsSlot){
+				_chosenSaveSlot=0;
+			}else{
+				break;
+			}
 		}
 		if (wasJustPressed(SCE_CTRL_LEFT)){
 			if (_choice==2){
@@ -4026,6 +4040,9 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 					textSpeed=-1;
 				}
 				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
+			}else if (_choice==_vndsSaveOptionsSlot){
+				_chosenSaveSlot--;
+				sprintf(_tempHoldSaveSlotSelection,"%d=",_chosenSaveSlot);
 			}
 		}
 		if (wasJustPressed(SCE_CTRL_CROSS) || wasJustPressed(SCE_CTRL_RIGHT)){
@@ -4144,12 +4161,16 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 			}else if (_choice==_restartBgmActionSlot){
 				PlayBGM(lastBGMFilename,lastBGMVolume,1);
 			}else if (_choice==_vndsSaveOptionsSlot){ // VNDS Save
-				PlayMenuSound();
-				char _tempSavefilePath[strlen(streamingAssets)+strlen("sav0")+1];
-				strcpy(_tempSavefilePath,streamingAssets);
-				strcat(_tempSavefilePath,"sav0");
-				vndsNormalSave(_tempSavefilePath);
-				LazyMessage("Saved to",_tempSavefilePath,NULL,NULL);
+				if (!wasJustPressed(SCE_CTRL_RIGHT)){
+					PlayMenuSound();
+					char _tempSavefilePath[strlen(streamingAssets)+strlen("sav")+3+1];
+					sprintf(_tempSavefilePath,"%ssav%d",streamingAssets,_chosenSaveSlot);
+					vndsNormalSave(_tempSavefilePath);
+					LazyMessage("Saved to",_tempSavefilePath,NULL,NULL);
+				}else{
+					_chosenSaveSlot++;
+					sprintf(_tempHoldSaveSlotSelection,"%d=",_chosenSaveSlot);
+				}
 			}else if (_choice==_vndsHitBottomActionSlot){
 				vndsClearAtBottom = !vndsClearAtBottom;
 				_settingsOptionsValueText[_vndsHitBottomActionSlot] = charToBoolString(vndsClearAtBottom);
@@ -4180,7 +4201,7 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 		for (i=0;i<=_maxOptionSlotUsed;i++){
 			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*i,_settingsOptionsMainText[i],fontSize);
 			if (_settingsOptionsValueText[i]!=NULL){
-				goodDrawText(MENUOPTIONOFFSET+textWidth(fontSize,_settingsOptionsMainText[i])+_singleSpaceWidth,5+currentTextHeight*i,_settingsOptionsValueText[i],fontSize);
+				goodDrawText(MENUOPTIONOFFSET+textWidth(fontSize,_settingsOptionsMainText[i])+singleSpaceWidth,5+currentTextHeight*i,_settingsOptionsValueText[i],fontSize);
 			}
 		}
 		
@@ -4817,10 +4838,11 @@ void NewGameMenu(){
 void VNDSNavigationMenu(){
 	controlsEnd();
 	signed char _choice=0;
-
+	unsigned char _chosenSaveSlot=0;
 	char* _loadedNovelName=NULL;
 
 	CrossTexture* _loadedThumbnail=NULL;
+	char _chosenSlotAsString[4] = "0";
 
 	char _possibleThunbnailPath[strlen(streamingAssets)+strlen("/thumbnail.png")+1];
 	strcpy(_possibleThunbnailPath,streamingAssets);
@@ -4853,9 +4875,8 @@ void VNDSNavigationMenu(){
 		_choice = MenuControls(_choice,0,2);
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
-				char _vndsSaveFileConcat[strlen(streamingAssets)+strlen("sav0")+1];
-				strcpy(_vndsSaveFileConcat,streamingAssets);
-				strcat(_vndsSaveFileConcat,"sav0");
+				char _vndsSaveFileConcat[strlen(streamingAssets)+strlen("sav255")+1];
+				sprintf(_vndsSaveFileConcat,"%s%s%d",streamingAssets,"sav",_chosenSaveSlot);
 				if (checkFileExist(_vndsSaveFileConcat)){
 					vndsNormalLoad(_vndsSaveFileConcat);
 				}else{
@@ -4877,6 +4898,13 @@ void VNDSNavigationMenu(){
 				currentGameStatus = GAMESTATUS_QUIT;
 			}
 		}
+		if (wasJustPressed(SCE_CTRL_RIGHT)){
+			_chosenSaveSlot++;
+			itoa(_chosenSaveSlot,_chosenSlotAsString,10);
+		}else if (wasJustPressed(SCE_CTRL_LEFT)){
+			_chosenSaveSlot--;
+			itoa(_chosenSaveSlot,_chosenSlotAsString,10);
+		}
 		controlsEnd();
 		startDrawing();
 
@@ -4887,6 +4915,7 @@ void VNDSNavigationMenu(){
 		goodDrawText(MENUOPTIONOFFSET,0,_loadedNovelName,fontSize);
 
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load Save",fontSize);
+			goodDrawText(MENUOPTIONOFFSET+textWidth(fontSize,"Load Save")+singleSpaceWidth,5+currentTextHeight*(0+2),_chosenSlotAsString,fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"New Game",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"Exit",fontSize);
 
