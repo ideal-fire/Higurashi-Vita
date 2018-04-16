@@ -81,6 +81,8 @@ void vndswrapper_choice(nathanscriptVariable* _passedArguments, int _numArgument
 	char _numberToStringBuffer[20];
 	sprintf(_numberToStringBuffer,"%d",lastSelectionAnswer+1);
 	genericSetVar("selected","=",_numberToStringBuffer,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
+
+	freeNathanscriptVariableArray(_fakeArgumentArray,2);
 }
 void vndswrapper_delay(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	#if !_VNDSWAITDISABLE

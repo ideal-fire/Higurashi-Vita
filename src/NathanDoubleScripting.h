@@ -53,12 +53,12 @@ int L_##scriptFunctionName(lua_State* passedState){ \
 //===================================================================================
 int nathanscriptCurrentLine=1;
 
-typedef struct fgurhrh{
+typedef struct{
 	char variableType;
 	void* value; // string or float made with malloc
 }nathanscriptVariable;
 // These are controlled with setvar
-typedef struct fjiwejfe{
+typedef struct{
 	nathanscriptVariable variable;
 	char* name; // string made with malloc
 }nathanscriptGameVariable;
@@ -891,7 +891,8 @@ void nathanscriptDoScript(char* _filename, long int _startingOffset){
 				nathanscriptVariable* _gottenReturnArray=NULL;
 				int _gottenReturnArrayLength;
 				nathanFunctionList[_foundCommandIndex](_parsedCommandArgument,_parsedArgumentListSize,&_gottenReturnArray,&_gottenReturnArrayLength);
-				if (_gottenReturnArray!=NULL){
+				freeNathanscriptVariableArray(_parsedCommandArgument,_parsedArgumentListSize); // Free the arguments we passed to that function
+				if (_gottenReturnArray!=NULL){ // Return variables not supported
 					freeNathanscriptVariableArray(_gottenReturnArray,_gottenReturnArrayLength);
 				}
 			}

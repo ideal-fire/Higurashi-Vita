@@ -30,6 +30,7 @@
 			END_OF_FILE
 	TODO - Fix LazyMessage system. Let it take a variable number of arguments to put together. Maybe even make it printf style.
 	TODO - Custom SonoHana port (MSE Converter) doesn't work at all, at least on GNU/Linux. Is it because all filenames are still lowercase?
+		TODO - Make everything in it uppercase. 
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -76,6 +77,7 @@
 #define LOCATION_CG 1
 #define LOCATION_CGALT 2
 /////////////////////////////////////
+#define MAXBUSTCACHE 6
 #define MAXIMAGECHAR 20
 #define MAXFILES 50
 #define MAXFILELENGTH 51
@@ -161,7 +163,7 @@ char* gamesFolder;
 #define BUST_STATUS_FADEOUT_MOVE 3 // var 1 is alpha per frame. var 2 is x per frame. var 3 is y per frame
 #define BUST_STATUS_SPRITE_MOVE 4 // var 1 is x per frame, var 2 is y per frame
 
-typedef struct hauighrehrge{
+typedef struct{
 	CrossTexture* image;
 	signed int xOffset;
 	signed int yOffset;
@@ -177,8 +179,24 @@ typedef struct hauighrehrge{
 	unsigned int lineCreatedOn;
 	float cacheXOffsetScale;
 	float cacheYOffsetScale;
-	char* relativeFilename;
+	char* relativeFilename; // Filename passed by the script
 }bust;
+typedef struct{
+	CrossTexture* image;
+	char* filename;
+}cachedImage;
+
+/*
+Can cache up to MAXBUSTCACHE busts
+
+bustA - Loaded into bust struct
+bustB - Loaded into bust struct
+bgload - All bust structs have their data put into bustCache then bust structs are reset
+bustC - Loaded into bust struct
+bustA - Loaded from bust cache and element removed, but not freed, from bust cache
+bgload - First remove bustB from bust cache and then do the same as before.
+*/
+cachedImage bustCache[MAXBUSTCACHE];
 
 bust* Busts;
 
@@ -343,7 +361,9 @@ char canChangeBoxAlpha=1;
 char defaultGameIsSet;
 char nathanscriptIsInit=0;
 char scriptUsesFileExtensions=0;
+char scriptForceResourceUppercase=0;
 char bustsStartInMiddle=1;
+//char shouldUseBustCache=0;
 
 // What scripts think the screen width and height is for sprite positions
 // For Higurashi, this is 640x480
@@ -410,8 +430,7 @@ void changeMallocString(char** _stringToChange, const char* _newValue){
 		free(*_stringToChange);
 	}
 	if (_newValue!=NULL){
-		*_stringToChange = malloc(strlen(_newValue)+1);
-		strcpy(*_stringToChange,_newValue);
+		*_stringToChange = mallocForString(_newValue);
 	}else{
 		*_stringToChange=NULL;
 	}
@@ -563,17 +582,18 @@ void WriteToDebugFile(const char* stuff){
 	#if PLATFORM == PLAT_COMPUTER
 		printf("%s\n",stuff);
 	#endif
-	char *_tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt")+1);
+	char* _tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt")+1);
 	strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
 	strcat(_tempDebugFileLocationBuffer,"log.txt");
 	FILE *fp;
 	fp = fopen(_tempDebugFileLocationBuffer, "a");
 	if (!fp){
 		LazyMessage("Failed to open debug file.",_tempDebugFileLocationBuffer,NULL,NULL);
-		return;
+	}else{
+		fprintf(fp,"%s\n",stuff);
+		fclose(fp);
 	}
-	fprintf(fp,"%s\n",stuff);
-	fclose(fp);
+	free(_tempDebugFileLocationBuffer);
 }
 void WriteSDLError(){
 	#if RENDERER == REND_SDL || SOUNDPLAYER == SND_SDL
@@ -1565,7 +1585,7 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 			_workableFilename[i] = toupper(_workableFilename[i]);
 		}
 	}
-
+	// Remove file extension and put it in _foundFileExtension if file extension is included
 	if (_extensionIncluded){
 		signed short i;
 		short _cachedStrlen = strlen(_workableFilename);
@@ -1573,7 +1593,7 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 			if (_workableFilename[i]=='.' && i!=_cachedStrlen-1){
 				_foundFileExtension = malloc(strlen(&(_workableFilename[i]))+1);
 				strcpy(_foundFileExtension,&(_workableFilename[i]));
-				_workableFilename[i]=0;
+				_workableFilename[i]='\0';
 				break;
 			}
 		}
@@ -1606,7 +1626,7 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 // Will load a PNG from CG or CGAlt
 CrossTexture* safeLoadGamePNG(const char* filename, char _folderPreference, char _extensionIncluded){
 	char* _tempFoundFilename;
-	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extensionIncluded,currentlyVNDSGame);
+	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extensionIncluded,scriptForceResourceUppercase);
 	if (_tempFoundFilename==NULL){
 		if (shouldShowWarnings()){
 			LazyMessage("Image not found.",filename,"What will happen now?!",NULL);
@@ -1616,6 +1636,57 @@ CrossTexture* safeLoadGamePNG(const char* filename, char _folderPreference, char
 	CrossTexture* _returnLoadedPNG = SafeLoadPNG(_tempFoundFilename);
 	free(_tempFoundFilename);
 	return _returnLoadedPNG;
+}
+int decrementWithMax(int _passedCurrentValue, int _passedMax){
+	if (_passedCurrentValue==0){
+		return _passedMax;
+	}
+	return --_passedCurrentValue;
+}
+int incrementWithMax(int _passedCurrentValue, int _passedMax){
+	if (_passedCurrentValue==_passedMax){
+		return 0;
+	}
+	return ++_passedCurrentValue;
+}
+void _freeCachedImage(cachedImage* _passedImage){
+	changeMallocString(&(_passedImage->filename),NULL);
+	if (_passedImage->image!=NULL){
+		freeTexture(_passedImage->image);
+		_passedImage->image=NULL;
+	}
+}
+// For all active slots in the bust cache, free them.
+// Checks if something is NULL before freeing it multiple times because I just shove checks everywhere hoping nothing breaks.
+void freeBustCache(){
+	unsigned char i;
+	for (i=0;i<MAXBUSTCACHE;++i){
+		if (bustCache[i].filename!=NULL){
+			_freeCachedImage(&(bustCache[i]));
+		}
+	}
+}
+cachedImage* getFreeBustCacheSlot(){
+	unsigned char i;
+	for (i=0;i<MAXBUSTCACHE;++i){
+		if (bustCache[i].filename==NULL){
+			return &(bustCache[i]);
+		}
+	}
+	// If this one is full then overwrite the first slot
+	_freeCachedImage(&(bustCache[0]));
+	return &(bustCache[0]);
+}
+cachedImage* searchBustCache(const char* _passedFilename){
+	unsigned char i;
+	for (i=0;i<MAXBUSTCACHE;++i){
+		if (bustCache[i].filename!=NULL){
+			if (strcmp(_passedFilename,bustCache[i].filename)==0){
+				return &(bustCache[i]);
+			}
+		}
+	}
+	return NULL;
 }
 //===================
 void FadeBustshot(int passedSlot,int _time,char _wait){
@@ -1719,11 +1790,22 @@ void DrawScene(const char* _filename, int time){
 		}
 	}
 
+	freeBustCache();
+	// Update the bust cache will all our new busts that we're about to free
+	for (i=0;i<MAXBUSTS;++i){
+		if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
+			cachedImage* _slotToUse = getFreeBustCacheSlot();
+			_slotToUse->filename = Busts[i].relativeFilename; // Already malloc'd, I think.
+			_slotToUse->image = Busts[i].image;
+		}
+	}
+
+	// This appears to be a way to quickly reset all the busts in VNDS games
 	if (lastBackgroundFilename!=NULL){
 		if (strcmp(lastBackgroundFilename,_filename)==0){
 			for (i=0;i<MAXBUSTS;i++){
 				if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
-					ResetBustStruct(&Busts[i], 1);
+					ResetBustStruct(&Busts[i], 0); // Don't free the images, they're in the cache
 				}
 			}
 			return;
@@ -1799,7 +1881,7 @@ void DrawScene(const char* _filename, int time){
 
 	for (i=0;i<MAXBUSTS;i++){
 		if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
-			ResetBustStruct(&Busts[i], 1);
+			ResetBustStruct(&Busts[i], 0);
 		}
 	}
 
@@ -1829,17 +1911,31 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 		_fadeintime=0;
 		_waitforfadein=0;
 	}
+	// I wonder why these three lines are here. Probably something to do with the lack of redraw between frames.
 	startDrawing();
 	Draw(MessageBoxEnabled);
 	endDrawing();
+
 	int i;
 	unsigned char skippedInitialWait=0;
-	ResetBustStruct(&(Busts[passedSlot]),1); 
-	Busts[passedSlot].image = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtensions);
-	Busts[passedSlot].relativeFilename = mallocForString(_filename);
-	if (Busts[passedSlot].image==NULL){
-		ResetBustStruct(&(Busts[passedSlot]),1);
-		return;
+	ResetBustStruct(&(Busts[passedSlot]),1); // Old bust does not go into cache
+
+	cachedImage* _possibleCachedImage = searchBustCache(_filename);
+	if (_possibleCachedImage!=NULL){
+		Busts[passedSlot].image = _possibleCachedImage->image;
+		Busts[passedSlot].relativeFilename = _possibleCachedImage->filename;
+		// Remove from cache so we don't free it early
+		_possibleCachedImage->image = NULL;
+		_possibleCachedImage->filename = NULL;
+	}else{
+		Busts[passedSlot].image = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtensions);
+		Busts[passedSlot].relativeFilename = mallocForString(_filename);
+		if (Busts[passedSlot].image==NULL){
+			free(Busts[passedSlot].relativeFilename);
+			Busts[passedSlot].relativeFilename=NULL;
+			ResetBustStruct(&(Busts[passedSlot]),0);
+			return;
+		}
 	}
 	Busts[passedSlot].xOffset = _xoffset;
 	Busts[passedSlot].yOffset = _yoffset;
@@ -2553,6 +2649,7 @@ void ChangeEasyTouchMode(int _newControlValue){
 void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName, char _isRelativeToData){
 	free(streamingAssets);
 	free(scriptFolder);
+	free(presetFolder);
 
 	streamingAssets = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+2);
 	scriptFolder = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+strlen("/Scripts/")+1);
@@ -2730,6 +2827,8 @@ void activateVNDSSettings(){
 	bustsStartInMiddle=0;
 	scriptScreenWidth=256;
 	scriptScreenHeight=192;
+	scriptForceResourceUppercase=1;
+	//shouldUseBustCache=1;
 }
 void activateHigurashiSettings(){
 	currentlyVNDSGame=0;
@@ -2737,6 +2836,8 @@ void activateHigurashiSettings(){
 	bustsStartInMiddle=1;
 	scriptScreenWidth=640;
 	scriptScreenHeight=480;
+	scriptForceResourceUppercase=0;
+	//shouldUseBustCache=0;
 }
 #if PLATFORM == PLAT_VITA
 	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
@@ -3591,6 +3692,14 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 void scriptSetPositionsSize(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	scriptScreenWidth = nathanvariableToInt(&_passedArguments[0]);
 	scriptScreenHeight = nathanvariableToInt(&_passedArguments[1]);
+	return;
+}
+void scriptSetIncludedFileExtensions(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	scriptUsesFileExtensions = nathanvariableToBool(&_passedArguments[0]);
+	return;
+}
+void scriptSetForceCapFilenames(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	scriptForceResourceUppercase = nathanvariableToBool(&_passedArguments[0]);
 	return;
 }
 
@@ -5005,6 +5114,14 @@ signed char init(){
 	Busts = calloc(1,sizeof(bust)*MAXBUSTS);
 	bustOrder = calloc(1,sizeof(char)*MAXBUSTS);
 	bustOrderOverBox = calloc(1,sizeof(char)*MAXBUSTS);
+
+	// Reset bust cache
+	// I could memset everything to 0, but apparently NULL is not guaranteed to be represented by all 0.
+	// https://stackoverflow.com/questions/9894013/is-null-always-zero-in-c
+	for (i=0;i<MAXBUSTCACHE;++i){
+		bustCache[i].filename=NULL;
+		bustCache[i].image=NULL;
+	}
 
 	// Setup DATAFOLDER variable. Defaults to uma0 if it exists and it's unsafe build
 	ResetDataDirectory();

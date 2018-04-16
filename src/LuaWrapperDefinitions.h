@@ -45,6 +45,9 @@ GENERATELUAWRAPPER(scriptOptionsCanChangeBoxAlpha);
 GENERATELUAWRAPPER(scriptImageChoice);
 GENERATELUAWRAPPER(scriptSetPositionsSize);
 
+GENERATELUAWRAPPER(scriptSetIncludedFileExtensions);
+GENERATELUAWRAPPER(scriptSetForceCapFilenames);
+
 //===============================================================
 //===============================================================
 //===============================================================
@@ -90,6 +93,8 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptOptionsSetTips,"OptionsSetTipExist");
 	PUSHLUAWRAPPER(scriptOptionsCanChangeBoxAlpha,"OptionsCanChangeBoxAlpha");
 	PUSHLUAWRAPPER(scriptSetPositionsSize,"OptionsSetPositionSize")
+	PUSHLUAWRAPPER(scriptSetIncludedFileExtensions,"OptionsSetIncludedFileExtensions")
+	PUSHLUAWRAPPER(scriptSetForceCapFilenames,"OptionsSetResourceUppercase")
 
 	// Commands exclusive to my engine
 	PUSHLUAWRAPPER(scriptDebugFile,"Debugfile")
