@@ -21,16 +21,11 @@
 			I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
 		TODO - Because we can have multiple BGM tracks at once, the restart BGM option may just activate and replay the second track only, which would often just be some higurashi.
 		TODO - Remove scriptFolder variable
-	TODO - Inform user of errors in game specific Lua
-
-	TODO - Implement all vnds commands
-		(useless commands?)
-			SKIP,
-			ENDSCRIPT,
-			END_OF_FILE
-	TODO - Fix LazyMessage system. Let it take a variable number of arguments to put together. Maybe even make it printf style.
-	TODO - Custom SonoHana port (MSE Converter) doesn't work at all, at least on GNU/Linux. Is it because all filenames are still lowercase?
-		TODO - Make everything in it uppercase. 
+		TODO - Inform user of errors in game specific Lua
+		TODO - Fix LazyMessage system. Let it take a variable number of arguments to put together. Maybe even make it printf style.
+	
+	TODO - Test texture inversion code more
+	TODO - Load vnds game font file if it exists
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -99,6 +94,13 @@
 	#define cpuOverclocked textIsBottomScreen
 	#define VERSIONSTRINGSUFFIX ""
 #endif
+#if PLATFORM == PLAT_VITA
+	#define CANINVERT 1
+#elif PLATFORM == PLAT_3DS
+	#define CANINVERT 0
+#elif PLATFORM == PLAT_COMPUTER
+	#define CANINVERT 1
+#endif
 #define HISTORYONONESCREEN ((int)((screenHeight-currentTextHeight*2-5)/currentTextHeight))
 #define MENUCURSOR ">"
 #define MENUCURSOROFFSET 5
@@ -163,6 +165,7 @@ char* gamesFolder;
 #define BUST_STATUS_FADEOUT_MOVE 3 // var 1 is alpha per frame. var 2 is x per frame. var 3 is y per frame
 #define BUST_STATUS_SPRITE_MOVE 4 // var 1 is x per frame, var 2 is y per frame
 
+void invertImage(CrossTexture* _passedImage, signed char _doInvertAlpha);
 typedef struct{
 	CrossTexture* image;
 	signed int xOffset;
@@ -295,11 +298,19 @@ unsigned short imageCharCharPositions[MAXIMAGECHAR] = {0};
 #define IMAGECHARUNKNOWN 0
 CrossTexture* imageCharImages[3]; // PLEASE DON'T FORGET TO CHANGE THIS IF ANOTHER IMAGE CHAR IS ADDED
 
+#define FILTERTYPE_INACTIVE 0 // This one is different from Higurashi, in Higurashi it defaults to FILTERTYPE_EFFECTCOLORMIX
+#define FILTERTYPE_EFFECTCOLORMIX 1
+#define FILETRTYPE_DRAINCOLOR 2
+#define FILTERTYPE_NEGATIVE 3
+#define FILTERTYPE_HORIZONTALBLUR2 10
+#define FILETRTYPE_GAUSSIANBLUR 12
+
 unsigned char filterR;
 unsigned char filterG;
 unsigned char filterB;
 unsigned char filterA;
 unsigned char filterActive=0;
+signed char currentFilterType=FILTERTYPE_INACTIVE;
 
 signed char autoModeOn=0;
 int32_t autoModeWait=500;
@@ -1803,11 +1814,20 @@ void DrawScene(const char* _filename, int time){
 	// This appears to be a way to quickly reset all the busts in VNDS games
 	if (lastBackgroundFilename!=NULL){
 		if (strcmp(lastBackgroundFilename,_filename)==0){
+			// Fix bust cache before restting bust structs
+			if (filterActive && currentFilterType==FILTERTYPE_NEGATIVE){
+				for (i=0;i<MAXBUSTS;++i){
+					if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
+						invertImage(Busts[i].image,0);
+					}
+				}
+			}
 			for (i=0;i<MAXBUSTS;i++){
 				if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
 					ResetBustStruct(&Busts[i], 0); // Don't free the images, they're in the cache
 				}
 			}
+
 			return;
 		}
 	}
@@ -1818,6 +1838,9 @@ void DrawScene(const char* _filename, int time){
 		freeTexture(currentBackground);
 		currentBackground=NULL;
 		return;
+	}
+	if (filterActive && currentFilterType==FILTERTYPE_NEGATIVE){
+		invertImage(newBackground,0);
 	}
 	if (actualBackgroundSizesConfirmedForSmashFive==0){
 		actualBackgroundWidth = getTextureWidth(newBackground);
@@ -1879,6 +1902,16 @@ void DrawScene(const char* _filename, int time){
 		fpsCapWait();
 	}
 
+	// Fix the bust cache if cached images are inverted.
+	// THE CODE IS COPIED AND PASTED ABOVE! 
+	if (filterActive && currentFilterType==FILTERTYPE_NEGATIVE){
+		for (i=0;i<MAXBUSTS;++i){
+			if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
+				invertImage(Busts[i].image,0);
+			}
+		}
+	}
+
 	for (i=0;i<MAXBUSTS;i++){
 		if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
 			ResetBustStruct(&Busts[i], 0);
@@ -1937,6 +1970,11 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 			return;
 		}
 	}
+
+	if (filterActive==1 && currentFilterType==FILTERTYPE_NEGATIVE){
+		invertImage(Busts[passedSlot].image,0);
+	}
+
 	Busts[passedSlot].xOffset = _xoffset;
 	Busts[passedSlot].yOffset = _yoffset;
 	Busts[passedSlot].cacheXOffsetScale = GetXOffsetScale(Busts[passedSlot].image);
@@ -2762,7 +2800,7 @@ void startLoadPresetSpecifiedInFile(char* _presetFilenameFile){
 	FILE* fp;
 	char _tempReadPresetFilename[50];
 	fp = fopen (_presetFilenameFile, "r");
- 	fgets (_tempReadPresetFilename, 50, fp);
+	fgets (_tempReadPresetFilename, 50, fp);
 	fclose (fp);
 
 	removeNewline(_tempReadPresetFilename);
@@ -3095,7 +3133,6 @@ void vndsNormalLoad(char* _filename){
 
 	nathanscriptDoScript(_tempLoadedFilename,_readFilePosition);
 }
-
 // TODO - Small fadein and fadeout transitions
 void hideTextbox(){
 	MessageBoxEnabled=0;
@@ -3103,7 +3140,71 @@ void hideTextbox(){
 void showTextbox(){
 	MessageBoxEnabled=1;
 }
-
+#if PLATFORM == PLAT_VITA
+	void invertImage(vita2d_texture* _passedImage, signed char _doInvertAlpha){
+		// Don't recalculate these every time
+		uint32_t _cachedImageWidth = vita2d_texture_get_width(_passedImage);
+		uint32_t _cachedImageHeight = vita2d_texture_get_height(_passedImage);
+		uint8_t _cachedValuesToInvert = 3+_doInvertAlpha; // Last 8 bits are alpha value for some reason
+		// Pixels stored in uint32_t
+		void* _currentImageData = vita2d_texture_get_datap(_passedImage);
+		uint32_t y;
+		for (y=0;y<_cachedImageHeight;++y) {
+			uint32_t x;
+			for (x=0;x< _cachedImageWidth;++x) {
+				uint8_t i;
+				for (i=0;i<_cachedValuesToInvert;++i){
+					((uint8_t*)_currentImageData)[(x + _cachedImageWidth * y)*4+i]=255-((uint8_t*)_currentImageData)[(x + _cachedImageWidth * y)*4+i];
+				}
+			}
+		}
+	}
+#elif CANINVERT
+	void invertImage(CrossTexture* _passedImage, signed char _doInvertAlpha){
+		printf("Invert image at %p. Alpha change: %d\n",_passedImage,_doInvertAlpha);
+	}
+#endif
+void applyNegative(int _actionTime, signed char _waitforcompletion){
+	filterActive=1;
+	#if CANINVERT
+		// Invert all images
+		currentFilterType = FILTERTYPE_NEGATIVE;
+		unsigned char i;
+		for (i=0;i<MAXBUSTS;++i){
+			if (Busts[i].isActive==1){
+				invertImage(Busts[i].image,0);
+			}
+		}
+		if (currentBackground!=NULL){
+			invertImage(currentBackground,0);
+		}
+	#else
+		currentFilterType = FILTERTYPE_EFFECTCOLORMIX;
+		filterR = 255;
+		filterG = 255;
+		filterB = 255;
+		filterA = 127;
+	#endif
+}
+void removeNegative(int _actionTime, signed char _waitforcompletion){
+	filterActive=0;
+	currentFilterType=FILTERTYPE_INACTIVE;
+	#if CANINVERT
+		// Fix all the images we inverted
+		unsigned char i;
+		for (i=0;i<MAXBUSTS;++i){
+			if (Busts[i].isActive==1){
+				invertImage(Busts[i].image,0);
+			}
+		}
+		if (currentBackground!=NULL){
+			invertImage(currentBackground,0);
+		}
+	#else
+		filterActive=0;
+		currentFilterType=FILTERTYPE_INACTIVE;
+	#endif
+}
 /*
 =================================================
 */
@@ -3523,19 +3624,28 @@ void scriptCallSection(nathanscriptVariable* _passedArguments, int _numArguments
 // DrawFilm (slot?, r, g, b, filer's alpha, ?, fadein time, wait for fadein) <-- Guess
 // DrawFilm ( type, r, g, b, a, style?, fadein time, wait for fadein )
 void scriptDrawFilm(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	// Make sure we don't have some horrible situation where the player is stuck in Hell
+	if (currentFilterType == FILTERTYPE_NEGATIVE){
+		removeNegative(0,0);
+	}
 	// 0 is none, defaults to 1.
 	// 1 is "EffectColorMix"
 	// 2 is DrainColor
 	// 3 is Negative
 	// 10 is HorizontalBlur2
 	// 12 is GaussianBlur
-	char _filterType = nathanvariableToInt(&_passedArguments[0]);
+	currentFilterType = nathanvariableToInt(&_passedArguments[0]);
+	if (currentFilterType==0){ // Default
+		currentFilterType = FILTERTYPE_EFFECTCOLORMIX;
+	}
 	filterActive=1;
-	if (_filterType<=1){
+	if (currentFilterType<=1){
 		filterR = nathanvariableToInt(&_passedArguments[1]);
 		filterG = nathanvariableToInt(&_passedArguments[2]);
 		filterB = nathanvariableToInt(&_passedArguments[3]);
 		filterA = nathanvariableToInt(&_passedArguments[4]);
+	}else if (currentFilterType==3 && CANINVERT){
+		applyNegative(nathanvariableToInt(&_passedArguments[6]),nathanvariableToBool(&_passedArguments[7]));
 	}else{ // For these, we'll just draw a white filter.
 		filterR = 255;
 		filterG = 255;
@@ -3544,10 +3654,19 @@ void scriptDrawFilm(nathanscriptVariable* _passedArguments, int _numArguments, n
 	}
 	return;
 }
+// Seems to be very similar to using DrawFilm with type of 3
+// Negative(fadein time, wait for fadein)
+// Translates to DrawFilm(3, 1, 1, 1, 255, 0, arg 0, arg 1);
+void scriptNegative(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	applyNegative(nathanvariableToInt(&_passedArguments[0]),nathanvariableToBool(&_passedArguments[1]));
+}
 // I think this just has a time argument and a blocking argument. I've implemented neither.
 void scriptFadeFilm(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	if (currentFilterType==FILTERTYPE_NEGATIVE){
+		removeNegative(nathanvariableToInt(&_passedArguments[0]),nathanvariableToBool(&_passedArguments[1]));
+	}
 	filterActive=0;
-	return;
+	currentFilterType = FILTERTYPE_INACTIVE;
 }
 // This command is used so unoften that I didn't bother to make it look good.
 // FadeBG( 3000, TRUE );
@@ -5078,6 +5197,8 @@ void initializeNathanScript(){
 		nathanscriptAddFunction(vndswrapper_music,0,"music");
 		nathanscriptAddFunction(vndswrapper_gsetvar,nathanscriptMakeConfigByte(0,1),"gsetvar");
 		nathanscriptAddFunction(scriptImageChoice,0,"imagechoice");
+		nathanscriptAddFunction(vndswrapper_ENDOF,0,"ENDSCRIPT");
+		nathanscriptAddFunction(vndswrapper_ENDOF,0,"END_OF_FILE");
 
 		// Load global variables
 		char _globalsSaveFilePath[strlen(saveFolder)+strlen("vndsGlobals")+1];

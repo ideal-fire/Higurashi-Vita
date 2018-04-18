@@ -44,9 +44,9 @@ GENERATELUAWRAPPER(scriptOptionsSetTips);
 GENERATELUAWRAPPER(scriptOptionsCanChangeBoxAlpha);
 GENERATELUAWRAPPER(scriptImageChoice);
 GENERATELUAWRAPPER(scriptSetPositionsSize);
-
 GENERATELUAWRAPPER(scriptSetIncludedFileExtensions);
 GENERATELUAWRAPPER(scriptSetForceCapFilenames);
+GENERATELUAWRAPPER(scriptNegative);
 
 //===============================================================
 //===============================================================
@@ -85,13 +85,18 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptFadeBG,"FadeBG")
 	PUSHLUAWRAPPER(scriptPlayVoice,"PlayVoice")
 	PUSHLUAWRAPPER(scriptDisplayWindow,"DisplayWindow")
+	PUSHLUAWRAPPER(scriptNegative,"Negative") // Command for color inversion
+									// Negative( 1000, TRUE ); is inveted
+									// FadeFilm( 200, TRUE ); fixes it??!
+									// Name provably means to negate the colors, or replace the colors with their complementary ones on the other side of the color wheel
+									// First arg is maybe time when it fades to inverted and argument is proably if it's inverted
 
 	// Options changing commands
-	PUSHLUAWRAPPER(scriptOptionsEnableVoiceSetting,"OptionsEnableVoiceSetting");
-	PUSHLUAWRAPPER(scriptLoadADVBox,"OptionsLoadADVBox");
-	PUSHLUAWRAPPER(scriptOptionsSetTextMode,"OptionsSetTextMode");
-	PUSHLUAWRAPPER(scriptOptionsSetTips,"OptionsSetTipExist");
-	PUSHLUAWRAPPER(scriptOptionsCanChangeBoxAlpha,"OptionsCanChangeBoxAlpha");
+	PUSHLUAWRAPPER(scriptOptionsEnableVoiceSetting,"OptionsEnableVoiceSetting")
+	PUSHLUAWRAPPER(scriptLoadADVBox,"OptionsLoadADVBox")
+	PUSHLUAWRAPPER(scriptOptionsSetTextMode,"OptionsSetTextMode")
+	PUSHLUAWRAPPER(scriptOptionsSetTips,"OptionsSetTipExist")
+	PUSHLUAWRAPPER(scriptOptionsCanChangeBoxAlpha,"OptionsCanChangeBoxAlpha")
 	PUSHLUAWRAPPER(scriptSetPositionsSize,"OptionsSetPositionSize")
 	PUSHLUAWRAPPER(scriptSetIncludedFileExtensions,"OptionsSetIncludedFileExtensions")
 	PUSHLUAWRAPPER(scriptSetForceCapFilenames,"OptionsSetResourceUppercase")
@@ -99,14 +104,14 @@ void initLuaWrappers(){
 	// Commands exclusive to my engine
 	PUSHLUAWRAPPER(scriptDebugFile,"Debugfile")
 	PUSHLUAWRAPPER(scriptMoveBust,"MoveBust")
-	PUSHLUAWRAPPER(scriptImageChoice,"ImageChoice");
+	PUSHLUAWRAPPER(scriptImageChoice,"ImageChoice")
 
 	// Functions that intentionally do nothing
 	PUSHLUAWRAPPER(scriptNotYet,"SetFontId")
 	PUSHLUAWRAPPER(scriptNotYet,"SetCharSpacing")
 	PUSHLUAWRAPPER(scriptNotYet,"SetLineSpacing")
 	PUSHLUAWRAPPER(scriptNotYet,"SetFontSize")
-	PUSHLUAWRAPPER(scriptNotYet,"SetNameFormat")
+	PUSHLUAWRAPPER(scriptNotYet,"SetNameFormat") // Used for ADV mode in 07th Modding patch
 	PUSHLUAWRAPPER(scriptNotYet,"SetScreenAspect")
 	PUSHLUAWRAPPER(scriptNotYet,"SetWindowPos")
 	PUSHLUAWRAPPER(scriptNotYet,"SetWindowSize")
@@ -130,11 +135,7 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptNotYet,"SetFontOfMessage")
 	PUSHLUAWRAPPER(scriptNotYet,"ActivateScreenEffectForcedly")
 	PUSHLUAWRAPPER(scriptNotYet,"SetValidityOfUserEffectSpeed")
-	PUSHLUAWRAPPER(scriptNotYet,"Negative") // Command for color inversion
-									// Negative( 1000, TRUE ); is inveted
-									// FadeFilm( 200, TRUE ); fixes it??!
-									// Name provably means to negate the colors, or replace the colors with their complementary ones on the other side of the color wheel
-									// First arg is maybe time when it fades to inverted and argument is proably if it's inverted
+	
 	// Not investigated yet
 		PUSHLUAWRAPPER(scriptNotYet,"BlurOffOn")
 		PUSHLUAWRAPPER(scriptNotYet,"Break")

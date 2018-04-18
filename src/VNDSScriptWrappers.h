@@ -10,6 +10,23 @@
 
 //char nextVndsBustshotSlot=0;
 
+// Helper for two functions
+void _vndsChangeScriptFiles(const char* _newFilename){
+	char _tempstringconcat[strlen(scriptFolder)+strlen(_newFilename)+1];
+
+	changeMallocString(&currentScriptFilename,_newFilename);
+
+	strcpy(_tempstringconcat,scriptFolder);
+	strcat(_tempstringconcat,_newFilename);
+	if (checkFileExist(_tempstringconcat)==0){
+		LazyMessage("Script file not found,",_tempstringconcat,NULL,NULL);
+		return;
+	}
+	fclose(nathanscriptCurrentOpenFile);
+	nathanscriptCurrentOpenFile = fopen(_tempstringconcat,"r");
+	nathanscriptCurrentLine=1;
+}
+
 // Will always start on an avalible line
 void vndswrapper_text(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (currentLine==MAXLINES){
@@ -33,8 +50,7 @@ void vndswrapper_text(nathanscriptVariable* _passedArguments, int _numArguments,
 		OutputLine(nathanvariableToString(&_passedArguments[0]),Line_WaitForInput,isSkipping);
 		outputLineWait();
 	}
-	currentLine++;
-	
+	currentLine++;	
 }
 void vndswrapper_choice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* _choiceSet = nathanvariableToString(&_passedArguments[0]);
@@ -118,22 +134,15 @@ void vndswrapper_setimg(nathanscriptVariable* _passedArguments, int _numArgument
 
 // jump file.scr [label]
 void vndswrapper_jump(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	char _tempstringconcat[strlen(scriptFolder)+strlen(nathanvariableToString(&_passedArguments[0]))+1];
-
-	changeMallocString(&currentScriptFilename,nathanvariableToString(&_passedArguments[0]));
-
-	strcpy(_tempstringconcat,scriptFolder);
-	strcat(_tempstringconcat,nathanvariableToString(&_passedArguments[0]));
-	if (checkFileExist(_tempstringconcat)==0){
-		LazyMessage("File not found,",_tempstringconcat,NULL,NULL);
-		return;
-	}
-	fclose(nathanscriptCurrentOpenFile);
-	nathanscriptCurrentOpenFile = fopen(_tempstringconcat,"r");
-	nathanscriptCurrentLine=1;
+	_vndsChangeScriptFiles(nathanvariableToString(&_passedArguments[0]));
 	if (_numArguments==2){ // Optional label argument
 		genericGotoLabel(nathanvariableToString(&_passedArguments[1]));
 	}
+}
+
+// ENDSCRIPT and END_OF_FILE do the same thing
+void vndswrapper_ENDOF(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	_vndsChangeScriptFiles("main.scr");
 }
 
 // Same as setvar
@@ -164,7 +173,6 @@ void vndswrapper_music(nathanscriptVariable* _argumentList, int _totalArguments,
 	}
 	PlayBGM(_passedFilename,128,0);
 }
-
 
 void vndswrapper_sound(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* _passedFilename = nathanvariableToString(&_passedArguments[0]);
