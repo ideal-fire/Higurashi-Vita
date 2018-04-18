@@ -25,6 +25,7 @@
 		TODO - Fix LazyMessage system. Let it take a variable number of arguments to put together. Maybe even make it printf style.
 	
 	TODO - Test texture inversion code more
+		Including removing the filter, I haven't tried that yet.
 	TODO - Load vnds game font file if it exists
 */
 #define SINGLELINEARRAYSIZE 121
@@ -99,7 +100,7 @@
 #elif PLATFORM == PLAT_3DS
 	#define CANINVERT 0
 #elif PLATFORM == PLAT_COMPUTER
-	#define CANINVERT 1
+	#define CANINVERT 0
 #endif
 #define HISTORYONONESCREEN ((int)((screenHeight-currentTextHeight*2-5)/currentTextHeight))
 #define MENUCURSOR ">"
@@ -1800,9 +1801,86 @@ void DrawScene(const char* _filename, int time){
 			_alphaPerFrame=1;
 		}
 	}
+	// If we're NOT doing the VNDS easy bust reset trick
+	if (!(lastBackgroundFilename!=NULL && strcmp(lastBackgroundFilename,_filename)==0)){
+		changeMallocString(&lastBackgroundFilename,_filename);
+		CrossTexture* newBackground = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtensions);
+		if (newBackground==NULL){
+			freeTexture(currentBackground);
+			currentBackground=NULL;
+			return;
+		}
+		if (filterActive && currentFilterType==FILTERTYPE_NEGATIVE){
+			invertImage(newBackground,0);
+		}
+		if (actualBackgroundSizesConfirmedForSmashFive==0){
+			actualBackgroundWidth = getTextureWidth(newBackground);
+			actualBackgroundHeight = getTextureHeight(newBackground);
+			updateGraphicsScale();
+			updateTextPositions();
+		}
+		while (_backgroundAlpha<255){
+			fpsCapStart();
+	
+			Update();
+			_backgroundAlpha+=_alphaPerFrame;
+			if (_backgroundAlpha>255){
+				_backgroundAlpha=255;
+			}
+			startDrawing();
+			
+			if (currentBackground!=NULL){
+				DrawBackground(currentBackground);
+			}
+			
+			for (i = MAXBUSTS-1; i != -1; i--){
+				if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn != currentScriptLine-1){
+					DrawBust(&(Busts[bustOrder[i]]));
+				}
+			}
+			if (MessageBoxEnabled==1){
+				DrawMessageBox();
+			}
+			for (i = MAXBUSTS-1; i != -1; i--){
+				if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1 && Busts[bustOrderOverBox[i]].lineCreatedOn != currentScriptLine-1){
+					DrawBust(&(Busts[bustOrderOverBox[i]]));
+				}
+			}
+	
+			
+			DrawBackgroundAlpha(newBackground,_backgroundAlpha);
+			
+			for (i = MAXBUSTS-1; i != -1; i--){
+				if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
+					DrawBust(&(Busts[bustOrder[i]]));
+				}
+			}
+	
+			if (filterActive==1){
+				DrawCurrentFilter();
+			}
+			if (MessageBoxEnabled==1){
+				DrawMessageText();
+			}
+			endDrawing();
+	
+			controlsStart();
+			if (wasJustPressed(SCE_CTRL_CROSS)){
+				_backgroundAlpha=254;
+			}
+			controlsEnd();
+	
+			fpsCapWait();
+		}
 
+		if (currentBackground!=NULL){
+			freeTexture(currentBackground);
+		}
+		currentBackground=newBackground;
+	}
+	// Delete old bust cache before putting new ones in it
 	freeBustCache();
-	// Update the bust cache will all our new busts that we're about to free
+	// Update the bust cache will all our current busts that we're about to free
 	for (i=0;i<MAXBUSTS;++i){
 		if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
 			cachedImage* _slotToUse = getFreeBustCacheSlot();
@@ -1810,100 +1888,7 @@ void DrawScene(const char* _filename, int time){
 			_slotToUse->image = Busts[i].image;
 		}
 	}
-
-	// This appears to be a way to quickly reset all the busts in VNDS games
-	if (lastBackgroundFilename!=NULL){
-		if (strcmp(lastBackgroundFilename,_filename)==0){
-			// Fix bust cache before restting bust structs
-			if (filterActive && currentFilterType==FILTERTYPE_NEGATIVE){
-				for (i=0;i<MAXBUSTS;++i){
-					if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
-						invertImage(Busts[i].image,0);
-					}
-				}
-			}
-			for (i=0;i<MAXBUSTS;i++){
-				if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
-					ResetBustStruct(&Busts[i], 0); // Don't free the images, they're in the cache
-				}
-			}
-
-			return;
-		}
-	}
-
-	changeMallocString(&lastBackgroundFilename,_filename);
-	CrossTexture* newBackground = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtensions);
-	if (newBackground==NULL){
-		freeTexture(currentBackground);
-		currentBackground=NULL;
-		return;
-	}
-	if (filterActive && currentFilterType==FILTERTYPE_NEGATIVE){
-		invertImage(newBackground,0);
-	}
-	if (actualBackgroundSizesConfirmedForSmashFive==0){
-		actualBackgroundWidth = getTextureWidth(newBackground);
-		actualBackgroundHeight = getTextureHeight(newBackground);
-		updateGraphicsScale();
-		updateTextPositions();
-	}
-	while (_backgroundAlpha<255){
-		fpsCapStart();
-
-		Update();
-		_backgroundAlpha+=_alphaPerFrame;
-		if (_backgroundAlpha>255){
-			_backgroundAlpha=255;
-		}
-		startDrawing();
-		
-		if (currentBackground!=NULL){
-			DrawBackground(currentBackground);
-		}
-		
-		for (i = MAXBUSTS-1; i != -1; i--){
-			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn != currentScriptLine-1){
-				DrawBust(&(Busts[bustOrder[i]]));
-			}
-		}
-		if (MessageBoxEnabled==1){
-			DrawMessageBox();
-		}
-		for (i = MAXBUSTS-1; i != -1; i--){
-			if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1 && Busts[bustOrderOverBox[i]].lineCreatedOn != currentScriptLine-1){
-				DrawBust(&(Busts[bustOrderOverBox[i]]));
-			}
-		}
-
-		
-		DrawBackgroundAlpha(newBackground,_backgroundAlpha);
-		
-		for (i = MAXBUSTS-1; i != -1; i--){
-			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
-				DrawBust(&(Busts[bustOrder[i]]));
-			}
-		}
-
-		if (filterActive==1){
-			DrawCurrentFilter();
-		}
-		if (MessageBoxEnabled==1){
-			DrawMessageText();
-		}
-		endDrawing();
-
-		controlsStart();
-		if (wasJustPressed(SCE_CTRL_CROSS)){
-			_backgroundAlpha=254;
-		}
-		controlsEnd();
-
-		fpsCapWait();
-	}
-
 	// Fix the bust cache if cached images are inverted.
-	// THE CODE IS COPIED AND PASTED ABOVE! 
 	if (filterActive && currentFilterType==FILTERTYPE_NEGATIVE){
 		for (i=0;i<MAXBUSTS;++i){
 			if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
@@ -1911,18 +1896,11 @@ void DrawScene(const char* _filename, int time){
 			}
 		}
 	}
-
 	for (i=0;i<MAXBUSTS;i++){
 		if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
 			ResetBustStruct(&Busts[i], 0);
 		}
 	}
-
-	if (currentBackground!=NULL){
-		freeTexture(currentBackground);
-		currentBackground=NULL;
-	}
-	currentBackground=newBackground;
 }
 void MoveBustSlot(unsigned char _sourceSlot, unsigned char _destSlot){
 	ResetBustStruct(&(Busts[_destSlot]),1);
@@ -3159,7 +3137,7 @@ void showTextbox(){
 			}
 		}
 	}
-#elif CANINVERT
+#else
 	void invertImage(CrossTexture* _passedImage, signed char _doInvertAlpha){
 		printf("Invert image at %p. Alpha change: %d\n",_passedImage,_doInvertAlpha);
 	}
