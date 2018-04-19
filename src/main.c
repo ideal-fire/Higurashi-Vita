@@ -27,6 +27,7 @@
 	TODO - Test texture inversion code more
 		Including removing the filter, I haven't tried that yet.
 	TODO - Load vnds game font file if it exists
+	TODO - Scrolling in game select list.
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -551,6 +552,11 @@ void SetDefaultFontSize(){
 		fontSize=32;
 	#endif
 }
+void _loadSpecificFont(char* _filename){
+	loadFont(_filename);
+	currentTextHeight = textHeight(fontSize);
+	singleSpaceWidth = textWidth(fontSize," ");
+}
 void ReloadFont(){
 	#if PLATFORM != PLAT_3DS
 		fixPath("assets/LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
@@ -559,9 +565,7 @@ void ReloadFont(){
 	#else
 		#error whoops
 	#endif
-	loadFont(globalTempConcat);
-	currentTextHeight = textHeight(fontSize);
-	singleSpaceWidth = textWidth(fontSize," ");
+	_loadSpecificFont(globalTempConcat);
 }
 char MenuControls(char _choice,int _menuMin, int _menuMax){
 	if (wasJustPressed(SCE_CTRL_UP)){
@@ -579,6 +583,15 @@ char MenuControls(char _choice,int _menuMin, int _menuMax){
 		}
 	}
 	return _choice;
+}
+// Return 1 if value was changed
+char altMenuControls(char* _choice, int _menuMin, int _menuMax){
+	char _newValue = MenuControls(*_choice,_menuMin,_menuMax);
+	if (*_choice!=_newValue){
+		*_choice = _newValue;
+		return 1;
+	}
+	return 0;
 }
 char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 	if (checkFileExist(passedPath)==0){
@@ -4029,6 +4042,9 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 	controlsEnd();
 	PlayMenuSound();
 	signed char _choice=0;
+	signed char _scrollOffset=0;
+	signed char _optionsOnScreen;
+	signed char _needToScroll=0;
 	static unsigned char _chosenSaveSlot=0;
 	int i;
 	char _artBefore=graphicsLocation; // This variable is used to check if the player changed the bust location after exiting
@@ -4174,11 +4190,22 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 		free(_tempRenaPath);
 	}
 	
+	_optionsOnScreen = (screenHeight/(double)currentTextHeight)-1;
+	if (_optionsOnScreen>_maxOptionSlotUsed){
+		_optionsOnScreen = _maxOptionSlotUsed+1;
+	}else{
+		_needToScroll=1;
+	}
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		fpsCapStart();
 		controlsStart();
-		_choice = MenuControls(_choice,0,_maxOptionSlotUsed);
-		
+		if (altMenuControls(&_choice,0,_maxOptionSlotUsed)){
+			if (_choice>=_optionsOnScreen){
+				_scrollOffset = _choice-(_optionsOnScreen-1);
+			}else if (_choice<_optionsOnScreen){
+				_scrollOffset=0;
+			}
+		}
 		if (wasJustPressed(SCE_CTRL_CIRCLE)){
 			break;
 		}
@@ -4403,21 +4430,27 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 		}
 		controlsEnd();
 		startDrawing();
-		goodDrawText(5,5+_choice*currentTextHeight,MENUCURSOR,fontSize);
-		for (i=0;i<=_maxOptionSlotUsed;i++){
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*i,_settingsOptionsMainText[i],fontSize);
-			if (_settingsOptionsValueText[i]!=NULL){
-				goodDrawText(MENUOPTIONOFFSET+textWidth(fontSize,_settingsOptionsMainText[i])+singleSpaceWidth,5+currentTextHeight*i,_settingsOptionsValueText[i],fontSize);
+		goodDrawText(5,5+(_choice-_scrollOffset)*currentTextHeight,MENUCURSOR,fontSize);
+		for (i=0;i<_optionsOnScreen;i++){
+			if (i>_maxOptionSlotUsed){
+				break;
 			}
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*i,_settingsOptionsMainText[i+_scrollOffset],fontSize);
+			if (_settingsOptionsValueText[i+_scrollOffset]!=NULL){
+				goodDrawText(MENUOPTIONOFFSET+textWidth(fontSize,_settingsOptionsMainText[i+_scrollOffset])+singleSpaceWidth,5+currentTextHeight*i,_settingsOptionsValueText[i+_scrollOffset],fontSize);
+			}
+		}
+		if (_needToScroll && _choice!=_maxOptionSlotUsed){
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*_optionsOnScreen,"\\/\\/\\/\\/",fontSize); // First option is at 0, so don't subtract one from _optionsOnScreen
 		}
 		
 		// Color CPU overclock text if enabled
 		if (cpuOverclocked && PLATFORM != PLAT_3DS){
-			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*4,_settingsOptionsMainText[4],fontSize,0,255,0);
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(4-_scrollOffset),_settingsOptionsMainText[4-_scrollOffset],fontSize,0,255,0);
 		}
 		// If message box alpha is very high or text is on the bottom screen then make the message box alpha text red
 		if ( (MessageBoxAlpha>=230 && canChangeBoxAlpha) || (PLATFORM == PLAT_3DS && cpuOverclocked)){
-			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*9,_settingsOptionsMainText[9],fontSize,255,0,0);
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(9-_scrollOffset),_settingsOptionsMainText[9-_scrollOffset],fontSize,255,0,0);
 		}
 		// Display sample Rena if changing bust location
 		#if PLATFORM == PLAT_3DS
@@ -5042,7 +5075,6 @@ void NewGameMenu(){
 	}
 }
 void VNDSNavigationMenu(){
-	controlsEnd();
 	signed char _choice=0;
 	unsigned char _chosenSaveSlot=0;
 	char* _loadedNovelName=NULL;
@@ -5069,6 +5101,19 @@ void VNDSNavigationMenu(){
 			strcpy(_loadedNovelName,_foundTitleString);
 		}
 	}
+
+
+
+	controlsStart();
+	if (!isDown(SCE_CTRL_RTRIGGER)){
+		_possibleThunbnailPath[strlen(streamingAssets)]=0;
+		strcat(_possibleThunbnailPath,"/default.ttf");
+		if (checkFileExist(_possibleThunbnailPath)){
+			_loadSpecificFont(_possibleThunbnailPath);
+		}
+	}
+	controlsEnd();
+
 	if (_loadedNovelName==NULL){
 		_loadedNovelName = malloc(strlen("VNDS")+1);
 		strcpy(_loadedNovelName,"VNDS");
