@@ -39,18 +39,20 @@ void vndswrapper_text(nathanscriptVariable* _passedArguments, int _numArguments,
 	}
 	if (nathanvariableToString(&_passedArguments[0])[0]=='@'){ // Line that doesn't wait for input
 		OutputLine(&(nathanvariableToString(&_passedArguments[0])[1]),Line_ContinueAfterTyping,isSkipping);
+		currentLine++;
 		outputLineWait();
 	}else if (nathanvariableToString(&_passedArguments[0])[0]=='!'){ // Blank line that requires button push
 		OutputLine("\n",Line_WaitForInput,isSkipping);
 		outputLineWait();
-		currentLine--; // Later in this function we add 1 to this variable, so it evens out.
-	}else if (nathanvariableToString(&_passedArguments[0])[0]=='~'){
+	}else if (nathanvariableToString(&_passedArguments[0])[0]=='~'){ // I guess insert a blank line, don't wait for input.
 		currentMessages[currentLine][0]=0;
+		currentLine++;
 	}else{ // Normal line
 		OutputLine(nathanvariableToString(&_passedArguments[0]),Line_WaitForInput,isSkipping);
+		currentLine++;
 		outputLineWait();
 	}
-	currentLine++;	
+	
 }
 void vndswrapper_choice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* _choiceSet = nathanvariableToString(&_passedArguments[0]);
@@ -101,12 +103,14 @@ void vndswrapper_choice(nathanscriptVariable* _passedArguments, int _numArgument
 	freeNathanscriptVariableArray(_fakeArgumentArray,2);
 }
 void vndswrapper_delay(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	#if !_VNDSWAITDISABLE
-	long _totalMillisecondWaitTime = ((nathanvariableToFloat(&_passedArguments[0])/(float)60)*1000);
-	wait(_totalMillisecondWaitTime);
-	#else
-	printf("delay command is disable.\n");
-	#endif
+	if (isSkipping!=1 && capEnabled==1){
+		#if !_VNDSWAITDISABLE
+			long _totalMillisecondWaitTime = ((nathanvariableToFloat(&_passedArguments[0])/(float)60)*1000);
+			wait(_totalMillisecondWaitTime);
+		#else
+			printf("delay command is disable.\n");
+		#endif
+	}
 }
 void vndswrapper_cleartext(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	ClearMessageArray();
@@ -149,7 +153,7 @@ void vndswrapper_ENDOF(nathanscriptVariable* _passedArguments, int _numArguments
 void vndswrapper_gsetvar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* _passedVariableName = nathanvariableToString(&_argumentList[0]);
 	if (_passedVariableName[0]=='~'){
-		printf("Wait, I'm pretty sure that isn't/shouldn't be allowed.\nClearing global variables, I mean. TODO");
+		printf("Wait, I'm pretty sure that isn't/shouldn't be allowed.\nClearing global variables, I mean.");
 		return;
 	}
 	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
@@ -175,10 +179,12 @@ void vndswrapper_music(nathanscriptVariable* _argumentList, int _totalArguments,
 }
 
 void vndswrapper_sound(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	char* _passedFilename = nathanvariableToString(&_passedArguments[0]);
-	if (_passedFilename[0]!='~'){
-		removeFileExtension(_passedFilename);
-		GenericPlaySound(0,_passedFilename,256,PREFER_DIR_SE,seVolume);
+	if (isSkipping==0 && seVolume>0){
+		char* _passedFilename = nathanvariableToString(&_passedArguments[0]);
+		if (_passedFilename[0]!='~'){
+			removeFileExtension(_passedFilename);
+			GenericPlaySound(0,_passedFilename,256,PREFER_DIR_SE,seVolume);
+		}
 	}
 }
 

@@ -17,8 +17,6 @@
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
-		TODO - Inversion
-			I could actually modify the loaded texture data. That would be for the best. I would need to store the filepaths of all busts and backgrounds loaded, though. Or, I could store backups in another texture.
 		TODO - Because we can have multiple BGM tracks at once, the restart BGM option may just activate and replay the second track only, which would often just be some higurashi.
 		TODO - Remove scriptFolder variable
 		TODO - Inform user of errors in game specific Lua
@@ -26,8 +24,6 @@
 	
 	TODO - Test texture inversion code more
 		Including removing the filter, I haven't tried that yet.
-	TODO - Load vnds game font file if it exists
-	TODO - Scrolling in game select list.
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -43,7 +39,8 @@
 	void XOutFunction();
 	void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]);
 	void SaveGameEditor();
-	void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM);
+	void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot);
+	char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage);
 	void initializeNathanScript();
 	void activateVNDSSettings();
 	void activateHigurashiSettings();
@@ -81,7 +78,7 @@
 #define MAXMESSAGEHISTORY 40
 #define VERSIONSTRING "v2.4" // This
 #define VERSIONNUMBER 4 // This
-#define VERSIONCOLOR 0,208,138
+#define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1
 // Specific constants
 #if PLATFORM != PLAT_3DS
@@ -363,7 +360,7 @@ int messageInBoxYOffset=0;
 // 1 by default to retain compatibility with games converted before game specific Lua 
 char gameHasTips=1;
 char textOnlyOverBackground=0;
-// A constant values between 0 and 127 that means that the text should be instantly displayed
+// This is a constant value between 0 and 127 that means that the text should be instantly displayed
 #define TEXTSPEED_INSTANT 100
 signed char textSpeed=1;
 char isGameFolderMode;
@@ -1095,8 +1092,11 @@ void updateControlsGeneral(){
 		isSkipping=1;
 		endType=Line_ContinueAfterTyping;
 	}
+	if (isSkipping==1 && !isDown(SCE_CTRL_SQUARE)){
+		isSkipping=0;
+	}
 	if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-		SettingsMenu(currentlyVNDSGame,currentlyVNDSGame,isActuallyUsingUma0==0 || PLATFORM != PLAT_VITA);
+		SettingsMenu(currentlyVNDSGame,currentlyVNDSGame,isActuallyUsingUma0==0 || PLATFORM != PLAT_VITA,!currentlyVNDSGame);
 	}
 	if (wasJustPressed(SCE_CTRL_SELECT)){
 		PlayMenuSound();
@@ -1111,17 +1111,7 @@ void outputLineWait(){
 	//if (currentGameStatus==GAMESTATUS_MAINGAME){
 	if (isSkipping==1){
 		controlsStart();
-		#if PLATFORM != PLAT_COMPUTER
-			if (!isDown(SCE_CTRL_SQUARE)){
-				isSkipping=0;
-			}
-		#endif
-		#if PLATFORM == PLAT_COMPUTER
-			if ( /*(  !(isDown(SCE_TOUCH) && (touchX<screenWidth*.25 && touchY<screenHeight*.20)) ) && */!(isDown(SCE_CTRL_SQUARE))  ){
-				isSkipping=0;
-				PlayMenuSound();
-			}
-		#endif
+		updateControlsGeneral();
 		controlsEnd();
 		if (isSkipping==1){
 			endType=Line_ContinueAfterTyping;
@@ -1610,6 +1600,7 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 			_workableFilename[i] = toupper(_workableFilename[i]);
 		}
 	}
+
 	// Remove file extension and put it in _foundFileExtension if file extension is included
 	if (_extensionIncluded){
 		signed short i;
@@ -2144,8 +2135,14 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 	// Play WAV version if found.
 	char* tempstringconcat = getSoundFilename(filename,_preferedDirectory);
 	if (tempstringconcat==NULL){
-		WriteToDebugFile("SE file not found");
-		WriteToDebugFile(filename);
+		//// Don't try if it's .aac file
+		//if (currentlyVNDSGame && strlen(filename)>=4){
+		//	if (strcmp(&(filename[strlen(filename)-4]),".aac")==0){ // No aac support
+		//		return;
+		//	}
+		//}
+		//WriteToDebugFile("SE file not found");
+		//WriteToDebugFile(filename);
 	}else{
 		soundEffects[passedSlot] = loadSound(tempstringconcat);
 		//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
@@ -2808,7 +2805,7 @@ void startLoadingGameFolder(char* _chosenGameFolder){
 	strcat(_fileWithPresetFilenamePath,"/includedPreset.txt");
 
 	if (!checkFileExist(_fileWithPresetFilenamePath)){
-		LazyMessage("Invalid game folder.","I know this because the includedPreset.txt","is not exist.",NULL);
+		LazyMessage("Invalid game folder.","I know this because the includedPreset.txt","does not exist.","Did you remember to convert this folder before moving it?");
 	}
 	startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
 
@@ -2856,7 +2853,7 @@ void activateVNDSSettings(){
 	bustsStartInMiddle=0;
 	scriptScreenWidth=256;
 	scriptScreenHeight=192;
-	scriptForceResourceUppercase=1;
+	scriptForceResourceUppercase=0;
 	//shouldUseBustCache=1;
 }
 void activateHigurashiSettings(){
@@ -3012,6 +3009,7 @@ void loadVariableList(FILE* fp, nathanscriptGameVariable** _listToLoad, int* _to
 // script filename relative to script folder
 // long int - position in the file
 // int - number of messgae strings
+// int - currentLine
 // message strings
 // current background filename
 // int - MAXBUSTS
@@ -3031,10 +3029,12 @@ void vndsNormalSave(char* _filename){
 	long int _currentFilePosition = ftell(nathanscriptCurrentOpenFile);
 	fwrite(&_currentFilePosition,sizeof(long int),1,fp); //
 
-	// Save the number of lines we have on screen
+	// Save the max number of lines we can have on screen, this makes the saves safe even if I change this number
 	int i;
 	i=MAXLINES;
 	fwrite(&i,sizeof(int),1,fp); //
+	// Save our current line
+	fwrite(&currentLine,sizeof(int),1,fp); //
 
 	// Save the current messages
 	for (i=0;i<MAXLINES;i++){
@@ -3076,7 +3076,7 @@ void vndsNormalLoad(char* _filename){
 	fread(&_readFilePosition,sizeof(long int),1,fp); //
 	int _readMaxLines;
 	fread(&_readMaxLines,sizeof(int),1,fp); //
-	currentLine = _readMaxLines;
+	fread(&currentLine,sizeof(int),1,fp); //
 	int i;
 	for (i=0;i<_readMaxLines;i++){
 		char* _tempReadLine = readLengthStringFromFile(fp); //
@@ -3178,23 +3178,47 @@ void applyNegative(int _actionTime, signed char _waitforcompletion){
 	#endif
 }
 void removeNegative(int _actionTime, signed char _waitforcompletion){
+	#if CANINVERT
+		applyNegative(_actionTime,_waitforcompletion);
+	#endif
 	filterActive=0;
 	currentFilterType=FILTERTYPE_INACTIVE;
-	#if CANINVERT
-		// Fix all the images we inverted
-		unsigned char i;
-		for (i=0;i<MAXBUSTS;++i){
-			if (Busts[i].isActive==1){
-				invertImage(Busts[i].image,0);
-			}
+}
+void addGamePresetToLegacyFolder(char* _streamingAssetsRoot, char* _presetFilenameRelative){
+	if (!directoryExists(_streamingAssetsRoot)){
+		LazyMessage(_streamingAssetsRoot,"does not exist. This means","you probably don't have to worry about",_presetFilenameRelative);
+		return;
+	}
+
+	char _presetFilenameAbsolute[strlen(presetFolder)+strlen(_presetFilenameRelative)+1];
+	strcpy(_presetFilenameAbsolute,presetFolder);
+	strcat(_presetFilenameAbsolute,_presetFilenameRelative);
+
+	char _includedPresetTxtLocation[strlen(_streamingAssetsRoot)+strlen("includedPreset.txt")+1];
+	strcpy(_includedPresetTxtLocation,_streamingAssetsRoot);
+	strcat(_includedPresetTxtLocation,"includedPreset.txt");
+
+	char _newStreamingAssetsPresetFilenameAbsolute[strlen(_streamingAssetsRoot)+strlen(_presetFilenameRelative)+1];
+	strcpy(_newStreamingAssetsPresetFilenameAbsolute,_streamingAssetsRoot);
+	strcat(_newStreamingAssetsPresetFilenameAbsolute,_presetFilenameRelative);
+
+	// Make includedPreset.txt
+	FILE* fp = fopen(_includedPresetTxtLocation,"wb");
+	fwrite(_presetFilenameRelative,strlen(_presetFilenameRelative),1,fp);
+	fclose(fp);
+
+	// Copy preset
+	FILE* fpr = fopen(_presetFilenameAbsolute,"rb");
+	FILE* fpw = fopen(_newStreamingAssetsPresetFilenameAbsolute,"wb");
+	while (1){
+		char _lastReadByte;
+		if (fread(&_lastReadByte,1,1,fpr)!=1){
+			break;
 		}
-		if (currentBackground!=NULL){
-			invertImage(currentBackground,0);
-		}
-	#else
-		filterActive=0;
-		currentFilterType=FILTERTYPE_INACTIVE;
-	#endif
+		fwrite(&_lastReadByte,1,1,fpw);
+	}
+	fclose(fpr);
+	fclose(fpw);
 }
 /*
 =================================================
@@ -3557,9 +3581,8 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 	while (1){
 		fpsCapStart();
 		controlsStart();
-
 		_choice = MenuControls(_choice,0,_totalOptions-1);
-
+		updateControlsGeneral();
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			lastSelectionAnswer = _choice;
 			break;
@@ -3812,7 +3835,6 @@ void scriptSetForceCapFilenames(nathanscriptVariable* _passedArguments, int _num
 	scriptForceResourceUppercase = nathanvariableToBool(&_passedArguments[0]);
 	return;
 }
-
 #include "LuaWrapperDefinitions.h"
 //======================================================
 void Draw(char _shouldDrawMessageBox){
@@ -3839,6 +3861,53 @@ void Draw(char _shouldDrawMessageBox){
 	if (_shouldDrawMessageBox==1){
 		DrawMessageText();
 	}
+}
+char upgradeToGameFolder(){
+	controlsEnd();
+	char* _tempChosenFile;
+	char _didUpgradeOne=0;
+	while (1){
+		if (FileSelector(presetFolder,&_tempChosenFile,(char*)"Select the preset to use or press circle to be done.")==2){
+			LazyMessage("What? No preset files?",presetFolder,"is empty.",NULL);
+			return 0;
+		}else{
+			if (_tempChosenFile==NULL){
+				break;
+			}
+			UpdatePresetStreamingAssetsDir(_tempChosenFile);
+			if (LazyChoice("Add the preset file",_tempChosenFile,"to",streamingAssets)){
+				addGamePresetToLegacyFolder(streamingAssets,_tempChosenFile);\
+				_didUpgradeOne=1;
+				if (!LazyChoice("Done.","Upgrade another folder?",NULL,NULL)){
+					free(_tempChosenFile);
+					break;
+				}
+			}
+			free(_tempChosenFile);
+		}
+	}
+	if (_didUpgradeOne){
+		ClearMessageArray();
+		controlsStart();
+		controlsEnd();
+
+		char _bigMessageBuffer[strlen("Now that you've upgraded one or more of your StreamingAssets folders to include the preset file, you need to move all your StreamingAssets folder(s) using VitaShell or MolecularShell to\n\nYou will need to create that games folder first. After you create that game folder, you won't be able to use preset mode anymore, so make sure you've upgraded all of your StreamingAssets folders before.")+strlen(gamesFolder)+1];
+		sprintf(_bigMessageBuffer,"Now that you've upgraded one or more of your StreamingAssets folders to include the preset file, you need to move all your StreamingAssets folder(s) using VitaShell or MolecularShell to\n%s\nYou will need to create that games folder first. After you create that game folder, you won't be able to use preset mode anymore, so make sure you've upgraded all of your StreamingAssets folders before.",gamesFolder);
+
+		OutputLine(_bigMessageBuffer,Line_WaitForInput,0);
+		while (!wasJustPressed(SCE_CTRL_CROSS)){
+			fpsCapStart();
+			controlsEnd();
+			startDrawing();
+			DrawMessageText();
+			endDrawing();
+			controlsStart();
+			fpsCapWait();
+		}
+	}else{
+		LazyMessage("You did not upgrade any folders.",NULL,NULL,NULL);
+	}
+	return _didUpgradeOne;
 }
 // Returns 0 if normal
 // Returns 1 if user quit
@@ -4037,7 +4106,10 @@ void FontSizeSetup(){
 }
 #define ISTEXTSPEEDBAR 0
 #define MAXOPTIONSSETTINGS 17
-void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM){
+#define SETTINGSMENU_EASYADDOPTION(a,b) \
+	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
+	b = _maxOptionSlotUsed;
+void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot){
 	controlsStart();
 	controlsEnd();
 	PlayMenuSound();
@@ -4063,6 +4135,9 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 	signed char _vndsHitBottomActionSlot=-2;
 	signed char _restartBgmActionSlot=-2;
 	signed char _vndsErrorShowToggleSlot=-2;
+	signed char _voiceVolumeSlot=-2;
+	signed char _bustLocationSlot=-2;
+	signed char _messageBoxAlphaSlot=-2;
 
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
@@ -4075,52 +4150,45 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 	}else{
 		_settingsOptionsMainText[0] = "Resume";
 	}
-	if (hasOwnVoiceSetting){
-		_settingsOptionsMainText[1] = "Voice Volume:";
-	}else{
-		_settingsOptionsMainText[1] = "===";
-	}
-	_settingsOptionsMainText[2] = "Auto Mode Speed:";
-	_settingsOptionsMainText[3] = "Bust Location:";
+	_settingsOptionsMainText[1] = "Auto Mode Speed:";
 	#if PLATFORM == PLAT_VITA
-		_settingsOptionsMainText[4] = "Overclock CPU";
+		_settingsOptionsMainText[2] = "Overclock CPU";
 	#elif PLATFORM == PLAT_3DS
-		_settingsOptionsMainText[4] = "Text:";
+		_settingsOptionsMainText[2] = "Text:";
 		if (cpuOverclocked==1){
-			_settingsOptionsValueText[4] = "Bottom Screen";
+			_settingsOptionsValueText[2] = "Bottom Screen";
 		}else{
-			_settingsOptionsValueText[4] = "Top Screen";
+			_settingsOptionsValueText[2] = "Top Screen";
 		}
 	#else
-		_settingsOptionsMainText[4] = "Nothing";
+		_settingsOptionsMainText[2] = "Nothing";
 	#endif
-	_settingsOptionsMainText[5] = "BGM Volume:";
-	_settingsOptionsMainText[6] = "SE Volume:";
-	_settingsOptionsMainText[7] = "Font Size";
-	_settingsOptionsMainText[8] = "Defaults";
-	if (canChangeBoxAlpha){
-		_settingsOptionsMainText[9] = "Message Box Alpha:";
-	}else{
-		_settingsOptionsMainText[9] = "===";
-	}
-	_settingsOptionsMainText[10] = "Textbox:";
-	_settingsOptionsMainText[11] = "Text Speed:";
-	_maxOptionSlotUsed=11;
+	_settingsOptionsMainText[3] = "BGM Volume:";
+	_settingsOptionsMainText[4] = "SE Volume:";
+	_settingsOptionsMainText[5] = "Font Size";
+	_settingsOptionsMainText[6] = "Defaults";
+	_settingsOptionsMainText[7] = "Textbox:";
+	_settingsOptionsMainText[8] = "Text Speed:";
+	_maxOptionSlotUsed=8;
 	// Add new, optional settings here
+	if (canChangeBoxAlpha){
+		SETTINGSMENU_EASYADDOPTION("Message Box Alpha:",_messageBoxAlphaSlot);
+	}
+	if (_showArtLocationSlot){
+		SETTINGSMENU_EASYADDOPTION("Bust Location:",_bustLocationSlot);
+	}
+	if (hasOwnVoiceSetting){
+		SETTINGSMENU_EASYADDOPTION("Voice Volume:",_voiceVolumeSlot);
+	}
 	if (_shouldShowRestartBGM==1){
-		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Restart BGM";
-		_restartBgmActionSlot = _maxOptionSlotUsed;
+		SETTINGSMENU_EASYADDOPTION("Restart BGM",_restartBgmActionSlot);
 	}
 	if (_shouldShowVNDSSave){
-		_settingsOptionsMainText[++_maxOptionSlotUsed] = "=Save Game ";
-		_vndsSaveOptionsSlot = _maxOptionSlotUsed;
+		SETTINGSMENU_EASYADDOPTION("=Save Game ",_vndsSaveOptionsSlot);
 	}
 	if (_shouldShowVNDSSettings){
-		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Clear at bottom:";
-		_vndsHitBottomActionSlot = _maxOptionSlotUsed;
-	
-		_settingsOptionsMainText[++_maxOptionSlotUsed] = "VNDS Warnings: ";
-		_vndsErrorShowToggleSlot=_maxOptionSlotUsed;
+		SETTINGSMENU_EASYADDOPTION("Clear at bottom:",_vndsHitBottomActionSlot);
+		SETTINGSMENU_EASYADDOPTION("VNDS Warnings:",_vndsErrorShowToggleSlot);
 	}
 	// Quit button is always last
 	if (currentGameStatus!=GAMESTATUS_TITLE){
@@ -4132,25 +4200,27 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 	//////////////////
 	// Set pointers to menu option value text
 	if (hasOwnVoiceSetting){
-		_settingsOptionsValueText[1] = &(_tempItoaHoldVoice[0]);
+		_settingsOptionsValueText[_voiceVolumeSlot] = &(_tempItoaHoldVoice[0]);
 	}
-	_settingsOptionsValueText[2]=&(_tempAutoModeString[0]);
-	if (graphicsLocation == LOCATION_CG){
-		_settingsOptionsValueText[3]="CG";
-	}else if (graphicsLocation == LOCATION_CGALT){
-		_settingsOptionsValueText[3]="CGAlt";
+	_settingsOptionsValueText[1]=&(_tempAutoModeString[0]);
+	if (_showArtLocationSlot){
+		if (graphicsLocation == LOCATION_CG){
+			_settingsOptionsValueText[_bustLocationSlot]="CG";
+		}else if (graphicsLocation == LOCATION_CGALT){
+			_settingsOptionsValueText[_bustLocationSlot]="CGAlt";
+		}
 	}
-	_settingsOptionsValueText[5] = &(_tempItoaHoldBGM[0]);
-	_settingsOptionsValueText[6] = &(_tempItoaHoldSE[0]);
+	_settingsOptionsValueText[3] = &(_tempItoaHoldBGM[0]);
+	_settingsOptionsValueText[4] = &(_tempItoaHoldSE[0]);
 	if (canChangeBoxAlpha){
-		_settingsOptionsValueText[9] = &(_tempItoaHoldBoxAlpha[0]);
+		_settingsOptionsValueText[_messageBoxAlphaSlot] = &(_tempItoaHoldBoxAlpha[0]);
 	}
 	if (textOnlyOverBackground){
-		_settingsOptionsValueText[10] = "Small";
+		_settingsOptionsValueText[7] = "Small";
 	}else{
-		_settingsOptionsValueText[10] = "Full";
+		_settingsOptionsValueText[7] = "Full";
 	}
-	_settingsOptionsValueText[11] = &(_tempItoaHoldTextSpeed[0]);
+	_settingsOptionsValueText[8] = &(_tempItoaHoldTextSpeed[0]);
 	if (_shouldShowVNDSSave){
 		_settingsOptionsValueText[_vndsSaveOptionsSlot]=&(_tempHoldSaveSlotSelection[0]);
 	}
@@ -4170,11 +4240,6 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
 	itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
 	makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
-	if (textOnlyOverBackground){
-		_settingsOptionsValueText[10] = "Small";
-	}else{
-		_settingsOptionsValueText[10] = "Full";
-	}
 	strcpy(_tempHoldSaveSlotSelection,"0=");
 
 	// This checks if we have Rena busts in CG AND CGAlt also loads Rena, if possible
@@ -4217,7 +4282,7 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 			}
 		}
 		if (wasJustPressed(SCE_CTRL_LEFT)){
-			if (_choice==2){
+			if (_choice==1){
 				if (isDown(SCE_CTRL_LTRIGGER)){
 					autoModeWait-=200;
 				}else{
@@ -4227,20 +4292,14 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 					autoModeWait=500;
 				}
 				itoa(autoModeWait,_tempAutoModeString,10);
-			}else if (_choice==1 && hasOwnVoiceSetting){
-				if (voiceVolume==0){
-					voiceVolume=1.25;
-				}
-				voiceVolume-=.25;
-				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
-			}else if (_choice==5){
+			}else if (_choice==3){
 				if (bgmVolume==0){
 					bgmVolume=1.25;
 				}
 				bgmVolume-=.25;
 				itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 				SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
-			}else if (_choice==6){
+			}else if (_choice==4){
 				if (seVolume==0){
 					seVolume=1.25;
 				}
@@ -4250,7 +4309,17 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
-			}else if (_choice==9 && canChangeBoxAlpha){
+			}else if (_choice==8){
+				textSpeed--;
+				if (textSpeed==-11){
+					textSpeed=-10;
+				}else if (textSpeed==TEXTSPEED_INSTANT-1){
+					textSpeed=10;
+				}else if (textSpeed==0){
+					textSpeed=-1;
+				}
+				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
+			}else if (_choice==_messageBoxAlphaSlot){ /////////////////////////////////////////////
 				// char will wrap, we don't want that
 				int _tempHoldChar = MessageBoxAlpha;
 				if (isDown(SCE_CTRL_LTRIGGER)){
@@ -4263,16 +4332,12 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 				}
 				MessageBoxAlpha = _tempHoldChar;
 				itoa(MessageBoxAlpha,_tempItoaHoldBoxAlpha,10);
-			}else if (_choice==11){
-				textSpeed--;
-				if (textSpeed==-11){
-					textSpeed=-10;
-				}else if (textSpeed==TEXTSPEED_INSTANT-1){
-					textSpeed=10;
-				}else if (textSpeed==0){
-					textSpeed=-1;
+			}else if (_choice==_voiceVolumeSlot){
+				if (voiceVolume==0){
+					voiceVolume=1.25;
 				}
-				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
+				voiceVolume-=.25;
+				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
 			}else if (_choice==_vndsSaveOptionsSlot){
 				_chosenSaveSlot--;
 				sprintf(_tempHoldSaveSlotSelection,"%d=",_chosenSaveSlot);
@@ -4282,36 +4347,14 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 			if (_choice==0){ // Resume
 				PlayMenuSound();
 				break;
-			}else if (_choice==1 && hasOwnVoiceSetting){
-				if (voiceVolume==1){
-					voiceVolume=0;
-				}else{
-					voiceVolume+=.25;
-				}
-				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
-			}else if (_choice==2){
+			}else if (_choice==1){
 				if (isDown(SCE_CTRL_LTRIGGER)){
 					autoModeWait+=200;
 				}else{
 					autoModeWait+=500;
 				}
 				itoa(autoModeWait,_tempAutoModeString,10);
-			}else if (_choice==3){
-				PlayMenuSound();
-				if (graphicsLocation == LOCATION_CG){
-					graphicsLocation = LOCATION_CGALT;
-					_settingsOptionsValueText[3]="CGAlt";
-				}else if (graphicsLocation == LOCATION_CGALT){
-					graphicsLocation = LOCATION_CG;
-					_settingsOptionsValueText[3]="CG";
-				}
-				if (_renaImage!=NULL){
-					freeTexture(_renaImage);
-					_tempRenaPath = CombineStringsPLEASEFREE(streamingAssets,locationStrings[graphicsLocation],"re_se_de_a1.png","");
-					_renaImage = SafeLoadPNG(_tempRenaPath);
-					free(_tempRenaPath);
-				}
-			}else if (_choice==4){ // CPU speed
+			}else if (_choice==2){ // CPU speed
 				PlayMenuSound();
 				if (cpuOverclocked==0){
 					cpuOverclocked=1;
@@ -4328,7 +4371,7 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 						_settingsOptionsValueText[4] = "Top Screen";
 					#endif
 				}
-			}else if (_choice==5){
+			}else if (_choice==3){
 				if (bgmVolume==1){
 					bgmVolume=0;
 				}else{
@@ -4336,7 +4379,7 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 				}
 				itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 				SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
-			}else if (_choice==6){
+			}else if (_choice==4){
 				if (seVolume==1){
 					seVolume=0;
 				}else{
@@ -4348,10 +4391,10 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
-			}else if (_choice==7){
+			}else if (_choice==5){
 				FontSizeSetup();
 				currentTextHeight = textHeight(fontSize);
-			}else if (_choice==8){
+			}else if (_choice==6){
 				PlayMenuSound();
 				if (LazyChoice("This will reset your settings.","Is this okay?",NULL,NULL)==1){
 					resetSettings();
@@ -4362,7 +4405,24 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 					itoa(voiceVolume*4, _tempItoaHoldVoice,10);
 					itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
 				}
-			}else if (_choice==9 && canChangeBoxAlpha){
+			}else if (_choice==7){
+				setTextOnlyOverBackground(!textOnlyOverBackground);
+				if (textOnlyOverBackground){
+					_settingsOptionsValueText[7] = "Small";
+				}else{
+					_settingsOptionsValueText[7] = "Full";
+				}
+			}else if (_choice==8){
+				textSpeed++;
+				if (textSpeed==11){
+					textSpeed=TEXTSPEED_INSTANT;
+				}else if (textSpeed==TEXTSPEED_INSTANT+1){
+					textSpeed=TEXTSPEED_INSTANT;
+				}else if (textSpeed==0){
+					textSpeed=1;
+				}
+				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
+			}else if (_choice==_messageBoxAlphaSlot){ /////////////////////////////////////////////
 				int _tempHoldChar = MessageBoxAlpha;
 				if (isDown(SCE_CTRL_LTRIGGER)){
 					_tempHoldChar+=15;
@@ -4374,23 +4434,28 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 				}
 				MessageBoxAlpha = _tempHoldChar;
 				itoa(_tempHoldChar,_tempItoaHoldBoxAlpha,10);
-			}else if (_choice==10){
-				setTextOnlyOverBackground(!textOnlyOverBackground);
-				if (textOnlyOverBackground){
-					_settingsOptionsValueText[10] = "Small";
+			}else if (_choice==_bustLocationSlot){
+				PlayMenuSound();
+				if (graphicsLocation == LOCATION_CG){
+					graphicsLocation = LOCATION_CGALT;
+					_settingsOptionsValueText[_bustLocationSlot]="CGAlt";
+				}else if (graphicsLocation == LOCATION_CGALT){
+					graphicsLocation = LOCATION_CG;
+					_settingsOptionsValueText[_bustLocationSlot]="CG";
+				}
+				if (_renaImage!=NULL){
+					freeTexture(_renaImage);
+					_tempRenaPath = CombineStringsPLEASEFREE(streamingAssets,locationStrings[graphicsLocation],"re_se_de_a1.png","");
+					_renaImage = SafeLoadPNG(_tempRenaPath);
+					free(_tempRenaPath);
+				}
+			}else if (_choice==_voiceVolumeSlot){
+				if (voiceVolume==1){
+					voiceVolume=0;
 				}else{
-					_settingsOptionsValueText[10] = "Full";
+					voiceVolume+=.25;
 				}
-			}else if (_choice==11){
-				textSpeed++;
-				if (textSpeed==11){
-					textSpeed=TEXTSPEED_INSTANT;
-				}else if (textSpeed==TEXTSPEED_INSTANT+1){
-					textSpeed=TEXTSPEED_INSTANT;
-				}else if (textSpeed==0){
-					textSpeed=1;
-				}
-				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
+				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
 			}else if (_choice==_restartBgmActionSlot){
 				PlayBGM(lastBGMFilename,lastBGMVolume,1);
 			}else if (_choice==_vndsSaveOptionsSlot){ // VNDS Save
@@ -4446,11 +4511,11 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 		
 		// Color CPU overclock text if enabled
 		if (cpuOverclocked && PLATFORM != PLAT_3DS){
-			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(4-_scrollOffset),_settingsOptionsMainText[4-_scrollOffset],fontSize,0,255,0);
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(2-_scrollOffset),_settingsOptionsMainText[2],fontSize,0,255,0);
 		}
 		// If message box alpha is very high or text is on the bottom screen then make the message box alpha text red
 		if ( (MessageBoxAlpha>=230 && canChangeBoxAlpha) || (PLATFORM == PLAT_3DS && cpuOverclocked)){
-			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(9-_scrollOffset),_settingsOptionsMainText[9-_scrollOffset],fontSize,255,0,0);
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(_messageBoxAlphaSlot-_scrollOffset),_settingsOptionsMainText[_messageBoxAlphaSlot],fontSize,255,0,0);
 		}
 		// Display sample Rena if changing bust location
 		#if PLATFORM == PLAT_3DS
@@ -4471,13 +4536,21 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 		fpsCapWait();
 		exitIfForceQuit();
 	}
+	controlsEnd();
 	SaveSettings();
 	if (_renaImage!=NULL){
 		freeTexture(_renaImage);
 	}
 	if (currentGameStatus!=GAMESTATUS_TITLE){
+		// If we changed art location, reload busts
 		if (_artBefore != graphicsLocation){
-			LazyMessage("You changed the character art location.","The next time a character is loaded,","it will load from",locationStrings[graphicsLocation]);
+			for (i=0;i<MAXBUSTS;++i){
+				if (Busts[i].isActive){
+					char* _cacheFilename = mallocForString(Busts[i].relativeFilename);
+					DrawBustshot(i,_cacheFilename,Busts[i].xOffset,Busts[i].yOffset,Busts[i].layer,0,0,Busts[i].isInvisible);
+					free(_cacheFilename);
+				}
+			}
 		}
 	}
 	#if PLATFORM == PLAT_3DS
@@ -4492,7 +4565,7 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 }
 void TitleScreen(){
 	signed char _choice=0;
-	
+	printf("%s\n",presetFolder);
 	signed char _titlePassword=0;
 
 	int _versionStringWidth = textWidth(fontSize,VERSIONSTRING VERSIONSTRINGSUFFIX);
@@ -4511,8 +4584,6 @@ void TitleScreen(){
 			strcat(_bottomConfigurationString,";ux0");
 		}
 	#endif
-	
-
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		fpsCapStart();
 		controlsStart();
@@ -4529,25 +4600,14 @@ void TitleScreen(){
 			}else if (wasJustPressed(SCE_CTRL_SQUARE)){
 				_titlePassword = Password(_titlePassword,4);
 				if (_titlePassword==5){
-					if (LazyChoice("Would you like to activate top secret","speedy mode for MyLegGuy's testing?",NULL,NULL)==1){
+					if (LazyChoice("Would you like to activate top secret","speedy mode for testing?",NULL,NULL)==1){
 						capEnabled=0;
 						autoModeWait=50;
 					}
 				}
 			}
 
-		if (wasJustPressed(SCE_CTRL_DOWN)){
-			_choice++;
-			if (_choice>3){
-				_choice=0;
-			}
-		}
-		if (wasJustPressed(SCE_CTRL_UP)){
-			_choice--;
-			if (_choice<0){
-				_choice=3;
-			}
-		}
+		_choice = MenuControls(_choice, 0, isGameFolderMode ? 3 : 4);
 
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
@@ -4621,14 +4681,39 @@ void TitleScreen(){
 				if (presetsAreInStreamingAssets==0){ // If the presets are not specific to a StreamingAssets folder, that means that the user could be using a different StreamingAssets folder. Reset paths just in case.
 					GenerateStreamingAssetsPaths("StreamingAssets",1);
 				}
+			}else if (_choice==2){ // Go to setting menu
+				controlsEnd();
+				SettingsMenu(1,0,0,1);
+				controlsEnd();
+				break;
 			}else if (_choice==3){ // Quit button
 				currentGameStatus=GAMESTATUS_QUIT;
 				break;
-			}else if (_choice==2){ // Go to setting menu
-				controlsEnd();
-				SettingsMenu(1,0,0);
-				controlsEnd();
-				break;
+			}else if (_choice==4){
+				if (isGameFolderMode){
+					LazyMessage("You really shouldn't be here.","You haven't escaped, you know?","You're not even going the right way.",NULL);
+				}else{
+					ClearMessageArray();
+					controlsStart();
+					controlsEnd();
+					OutputLine("Higurashi-Vita v2.3 introduced a new method of storing games. Instead of selecting a preset file, you simply select a game folder which already has a preset file in it. It's really nifty. Right now, you're living in the past. Fear not, you too can become a pro who uses the \"Games folder\" method.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
+
+					while (!wasJustPressed(SCE_CTRL_CROSS)){
+						fpsCapStart();
+						controlsEnd();
+						startDrawing();
+						DrawMessageText();
+						endDrawing();
+						controlsStart();
+						fpsCapWait();
+					}
+					if (LazyChoice("Upgrade to game folder mode?",NULL,NULL,NULL)){
+						if (upgradeToGameFolder()){
+							currentGameStatus=GAMESTATUS_QUIT;
+							break;
+						}
+					}
+				}
 			}else{
 				_choice=0;
 			}
@@ -4644,6 +4729,9 @@ void TitleScreen(){
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Manual mode",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"Settings",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit",fontSize);
+		if (!isGameFolderMode){
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(4+2),"Upgrade to game folder mode",fontSize,0,255,0);
+		}
 
 		// Extra bottom data
 		goodDrawTextColored((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING VERSIONSTRINGSUFFIX,fontSize,VERSIONCOLOR);
@@ -5349,9 +5437,9 @@ signed char init(){
 			isGameFolderMode=0;
 		}else{
 			#if PLATFORM == PLAT_3DS
-				isGameFolderMode=1;
+				isGameFolderMode=1; // If it's not found on 3ds, we're still in game folder mode.
 			#else
-				isGameFolderMode=0;
+				isGameFolderMode=0; // Vita defaults to preset folder mode
 			#endif
 		}
 	}
