@@ -4,9 +4,21 @@
 #define _VNDSWAITDISABLE 0
 // Fadein time in milliseconds used if one not given by vnds script
 #define VNDS_IMPLIED_BACKGROUND_FADE 300
+#define VNDS_IMPLIED_SETIMG_FADE 200
 #define VNDS_HIDE_BOX_ON_BG_CHANGE 1
 
-// TODO - Fadein and hidebox on setimg
+signed int* pastSetImgX;
+signed int* pastSetImgY;
+signed int* currentSetImgX;
+signed int* currentSetImgY;
+void increaseVNDSBustInfoArraysSize(int _oldMaxBusts, int _newMaxBusts){
+	pastSetImgX = recalloc(pastSetImgX, _newMaxBusts * sizeof(signed int), _oldMaxBusts * sizeof(signed int));
+	pastSetImgY = recalloc(pastSetImgY, _newMaxBusts * sizeof(signed int), _oldMaxBusts * sizeof(signed int));
+
+	currentSetImgX = recalloc(currentSetImgX, _newMaxBusts * sizeof(signed int), _oldMaxBusts * sizeof(signed int));
+	currentSetImgY= recalloc(currentSetImgY, _newMaxBusts * sizeof(signed int), _oldMaxBusts * sizeof(signed int));
+}
+
 
 //char nextVndsBustshotSlot=0;
 
@@ -126,6 +138,12 @@ void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArgument
 	#endif
 	DrawScene(nathanvariableToString(&_passedArguments[0]),_numArguments==2 ? floor((nathanvariableToFloat(&_passedArguments[1])/60)*1000) : VNDS_IMPLIED_BACKGROUND_FADE);
 	nextVndsBustshotSlot=0;
+	// Move last image position buffers
+	memcpy(pastSetImgX,currentSetImgX,sizeof(signed int)*maxBusts);
+	memcpy(pastSetImgY,currentSetImgY,sizeof(signed int)*maxBusts);
+	memset(currentSetImgX,0,sizeof(signed int)*maxBusts);
+	memset(currentSetImgY,0,sizeof(signed int)*maxBusts);
+	//
 	#if VNDS_HIDE_BOX_ON_BG_CHANGE
 		showTextbox();
 	#endif
@@ -133,7 +151,23 @@ void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArgument
 // setimg file x y
 // setimg MGE_000099.png 75 0
 void vndswrapper_setimg(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	DrawBustshot(nextVndsBustshotSlot++, nathanvariableToString(&_passedArguments[0]), nathanvariableToInt(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[2]), 0, 0, 0, 0);
+	signed int _cachedX = nathanvariableToInt(&_passedArguments[1]);
+	signed int _cachedY = nathanvariableToInt(&_passedArguments[2]);
+	signed int _imageFadein = VNDS_IMPLIED_SETIMG_FADE;
+	if (nextVndsBustshotSlot>=maxBusts){
+		increaseVNDSBustInfoArraysSize(maxBusts,nextVndsBustshotSlot+1); // No need to change maxBusts variable here, it will be changed in DrawBustshot call
+	}else{
+		//printf("do the check.\n");
+		//printf("%d: %d;%d;%d;%d\n",nextVndsBustshotSlot,_cachedX,_cachedY,pastSetImgX[nextVndsBustshotSlot],pastSetImgY[nextVndsBustshotSlot]);
+		if (_cachedX==pastSetImgX[nextVndsBustshotSlot] && _cachedY==pastSetImgY[nextVndsBustshotSlot]){
+			//printf("is confirme dfor smash 5.\n");
+			_imageFadein=0;
+		}
+	}
+	currentSetImgX[nextVndsBustshotSlot]=_cachedX;
+	currentSetImgY[nextVndsBustshotSlot]=_cachedY;
+	DrawBustshot(nextVndsBustshotSlot, nathanvariableToString(&_passedArguments[0]), _cachedX, _cachedY, 0, _imageFadein, (_imageFadein!=0), 0);
+	nextVndsBustshotSlot++; // Prepare for next bust
 }
 
 // jump file.scr [label]

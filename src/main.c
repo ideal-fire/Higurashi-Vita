@@ -22,8 +22,9 @@
 		TODO - Inform user of errors in game specific Lua
 		TODO - Fix LazyMessage system. Let it take a variable number of arguments to put together. Maybe even make it printf style.
 	
-	TODO - Test texture inversion code more
-		Including removing the filter, I haven't tried that yet.
+	TODO - Allow VNDS sound command to play sound multiple times
+	TODO - Allow setting VNDS game as default
+	TODO - Fix saving while on a choice for VNDS
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -76,8 +77,8 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.4" // This
-#define VERSIONNUMBER 4 // This
+#define VERSIONSTRING "v2.5" // This
+#define VERSIONNUMBER 5 // This
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1
 // Specific constants
@@ -349,7 +350,7 @@ int singleSpaceWidth;
 	char _bgmIsLock=0;
 #endif
 char isActuallyUsingUma0=0;
-int MAXBUSTS = 9;
+int maxBusts = 9;
 short textboxYOffset=0;
 short textboxXOffset=0;
 CrossTexture* currentCustomTextbox=NULL;
@@ -363,7 +364,7 @@ char textOnlyOverBackground=0;
 // This is a constant value between 0 and 127 that means that the text should be instantly displayed
 #define TEXTSPEED_INSTANT 100
 signed char textSpeed=1;
-char isGameFolderMode;
+char isGameFolderMode=1;
 char isEmbedMode;
 int menuCursorSpaceWidth;
 char canChangeBoxAlpha=1;
@@ -1030,7 +1031,7 @@ void changeIfLazyLastLineFix(int* _line, int* _toChange){
 }
 void Update(){
 	int i=0;
-	for (i = 0; i < MAXBUSTS; i++){
+	for (i = 0; i < maxBusts; i++){
 		if (Busts[i].bustStatus == BUST_STATUS_FADEIN){
 			if (Busts[i].statusVariable2>0){
 				Busts[i].statusVariable2-=17;
@@ -1223,23 +1224,23 @@ void DrawBust(bust* passedBust){
 }
 void RecalculateBustOrder(){
 	int i, j, k;
-	for (i=0;i<MAXBUSTS;i++){
+	for (i=0;i<maxBusts;i++){
 		bustOrder[i]=255;
 		bustOrderOverBox[i]=255;
 	}
 	// This generates the orderOfAction list
 	// i is the the current orderOfAction slot.
-	for (i=0;i<MAXBUSTS;i++){
+	for (i=0;i<maxBusts;i++){
 		// j is the current fighter we're testig
-		for (j=0;j<MAXBUSTS;j++){
+		for (j=0;j<maxBusts;j++){
 			// If current entity speed greater than
 			if ((bustOrder[i]==255 || Busts[j].layer>Busts[bustOrder[i]].layer) && (Busts[j].layer<=31)){
 				// Loops through all of orderOfAction to make sure you're not already in orderOfAction
-				for (k=0;k<MAXBUSTS;k++){
+				for (k=0;k<maxBusts;k++){
 					if (bustOrder[k]==j){
 						break;
 					}else{
-						if (k==MAXBUSTS-1){
+						if (k==maxBusts-1){
 							bustOrder[i]=j;
 						}
 					}
@@ -1248,17 +1249,17 @@ void RecalculateBustOrder(){
 		}
 	}
 	// Do another calculation for busts that have a layer greater than 31 and therefor are over the message box
-	for (i=0;i<MAXBUSTS;i++){
+	for (i=0;i<maxBusts;i++){
 		// j is the current fighter we're testig
-		for (j=0;j<MAXBUSTS;j++){
+		for (j=0;j<maxBusts;j++){
 			// If current entity speed greater than
 			if ((bustOrderOverBox[i]==255 || Busts[j].layer>Busts[bustOrderOverBox[i]].layer) && (Busts[j].layer>31)){
 				// Loops through all of orderOfAction to make sure you're not already in orderOfAction
-				for (k=0;k<MAXBUSTS;k++){
+				for (k=0;k<maxBusts;k++){
 					if (bustOrderOverBox[k]==j){
 						break;
 					}else{
-						if (k==MAXBUSTS-1){
+						if (k==maxBusts-1){
 							bustOrderOverBox[i]=j;
 						}
 					}
@@ -1704,6 +1705,13 @@ cachedImage* searchBustCache(const char* _passedFilename){
 	}
 	return NULL;
 }
+void increaseBustArraysSize(int _oldMaxBusts, int _newMaxBusts){
+	printf("Increase max bust array to %d\n",_newMaxBusts);
+	Busts = recalloc(Busts, _newMaxBusts * sizeof(bust), _oldMaxBusts * sizeof(bust));
+	bustOrder = recalloc(bustOrder, _newMaxBusts * sizeof(char), _oldMaxBusts * sizeof(char));
+	bustOrderOverBox = recalloc(bustOrderOverBox, _newMaxBusts * sizeof(char), _oldMaxBusts * sizeof(char));
+	RecalculateBustOrder();
+}
 //===================
 void FadeBustshot(int passedSlot,int _time,char _wait){
 	if (isSkipping==1){
@@ -1752,7 +1760,7 @@ void FadeAllBustshots(int _time, char _wait){
 	}
 
 	int i=0;
-	for (i=0;i<MAXBUSTS;i++){
+	for (i=0;i<maxBusts;i++){
 		if (Busts[i].isActive==1){
 			FadeBustshot(i,_time,0);
 		}
@@ -1761,7 +1769,7 @@ void FadeAllBustshots(int _time, char _wait){
 		char _isDone=0;
 		while (_isDone==0){
 			_isDone=1;
-			for (i=0;i<MAXBUSTS;i++){
+			for (i=0;i<maxBusts;i++){
 				if (Busts[i].isActive==1){
 					if (Busts[i].alpha>0){
 						_isDone=0;
@@ -1776,7 +1784,7 @@ void FadeAllBustshots(int _time, char _wait){
 			Draw(MessageBoxEnabled);
 			endDrawing();
 			if (wasJustPressed(SCE_CTRL_CROSS)){
-				for (i=0;i<MAXBUSTS;i++){
+				for (i=0;i<maxBusts;i++){
 					if (Busts[i].isActive==1){
 						Busts[i].alpha=1;
 					}
@@ -1837,7 +1845,7 @@ void DrawScene(const char* _filename, int time){
 				DrawBackground(currentBackground);
 			}
 			
-			for (i = MAXBUSTS-1; i != -1; i--){
+			for (i = maxBusts-1; i != -1; i--){
 				if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn != currentScriptLine-1){
 					DrawBust(&(Busts[bustOrder[i]]));
 				}
@@ -1845,7 +1853,7 @@ void DrawScene(const char* _filename, int time){
 			if (MessageBoxEnabled==1){
 				DrawMessageBox();
 			}
-			for (i = MAXBUSTS-1; i != -1; i--){
+			for (i = maxBusts-1; i != -1; i--){
 				if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1 && Busts[bustOrderOverBox[i]].lineCreatedOn != currentScriptLine-1){
 					DrawBust(&(Busts[bustOrderOverBox[i]]));
 				}
@@ -1854,7 +1862,7 @@ void DrawScene(const char* _filename, int time){
 			
 			DrawBackgroundAlpha(newBackground,_backgroundAlpha);
 			
-			for (i = MAXBUSTS-1; i != -1; i--){
+			for (i = maxBusts-1; i != -1; i--){
 				if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
 					DrawBust(&(Busts[bustOrder[i]]));
 				}
@@ -1885,7 +1893,7 @@ void DrawScene(const char* _filename, int time){
 	// Delete old bust cache before putting new ones in it
 	freeBustCache();
 	// Update the bust cache will all our current busts that we're about to free
-	for (i=0;i<MAXBUSTS;++i){
+	for (i=0;i<maxBusts;++i){
 		if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
 			cachedImage* _slotToUse = getFreeBustCacheSlot();
 			_slotToUse->filename = Busts[i].relativeFilename; // Already malloc'd, I think.
@@ -1894,13 +1902,13 @@ void DrawScene(const char* _filename, int time){
 	}
 	// Fix the bust cache if cached images are inverted.
 	if (filterActive && currentFilterType==FILTERTYPE_NEGATIVE){
-		for (i=0;i<MAXBUSTS;++i){
+		for (i=0;i<maxBusts;++i){
 			if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
 				invertImage(Busts[i].image,0);
 			}
 		}
 	}
-	for (i=0;i<MAXBUSTS;i++){
+	for (i=0;i<maxBusts;i++){
 		if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
 			ResetBustStruct(&Busts[i], 0);
 		}
@@ -1912,24 +1920,27 @@ void MoveBustSlot(unsigned char _sourceSlot, unsigned char _destSlot){
 	ResetBustStruct(&(Busts[_sourceSlot]),0);
 	RecalculateBustOrder();
 }
-void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	if (passedSlot>=MAXBUSTS){
-		printf("Increase max bust array to %d\n",passedSlot+1);
-		int _oldMaxBusts = MAXBUSTS;
-		MAXBUSTS = passedSlot+1;
-		Busts = recalloc(Busts, MAXBUSTS * sizeof(bust), _oldMaxBusts * sizeof(bust));
-		bustOrder = recalloc(bustOrder, MAXBUSTS * sizeof(char), _oldMaxBusts * sizeof(char));
-		bustOrderOverBox = recalloc(bustOrderOverBox, MAXBUSTS * sizeof(char), _oldMaxBusts * sizeof(char));
-		RecalculateBustOrder();
+// Returns number of old bust slots if bust slots were added
+int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
+	if (passedSlot>=maxBusts){
+		int _oldMaxBusts = maxBusts;
+		maxBusts = passedSlot+1;
+		increaseBustArraysSize(_oldMaxBusts,maxBusts);
+		if (DrawBustshot(passedSlot,_filename,_xoffset,_yoffset,_layer,_fadeintime,_waitforfadein,_isinvisible)!=0){
+			printf("Strange error.\n");
+		}
+		return _oldMaxBusts;
 	}
 	if (isSkipping==1 || _fadeintime==0){
 		_fadeintime=0;
 		_waitforfadein=0;
 	}
-	// I wonder why these three lines are here. Probably something to do with the lack of redraw between frames.
-	startDrawing();
-	Draw(MessageBoxEnabled);
-	endDrawing();
+	if (!currentlyVNDSGame){ // HACK, just don't do this for VNDS because we don't have bust fadeout
+		// I wonder why these three lines are here. Probably something to do with the lack of redraw between frames.
+		startDrawing();
+		Draw(MessageBoxEnabled);
+		endDrawing();
+	}
 
 	int i;
 	unsigned char skippedInitialWait=0;
@@ -1949,7 +1960,7 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 			free(Busts[passedSlot].relativeFilename);
 			Busts[passedSlot].relativeFilename=NULL;
 			ResetBustStruct(&(Busts[passedSlot]),0);
-			return;
+			return 0;
 		}
 	}
 
@@ -2021,6 +2032,7 @@ void DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset,
 			fpsCapWait();
 		}
 	}
+	return 0;
 }
 // strcpy, but it won't copy from src to dest if the value is 1.
 // You can use this to exclude certian spots
@@ -2357,7 +2369,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			DrawBackground(currentBackground);
 		}
 		
-		for (i = MAXBUSTS-1; i != -1; i--){
+		for (i = maxBusts-1; i != -1; i--){
 			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1){
 				DrawBust(&(Busts[bustOrder[i]]));
 			}
@@ -2369,7 +2381,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			DrawMessageBox();
 		}
 		
-		for (i = MAXBUSTS-1; i != -1; i--){
+		for (i = maxBusts-1; i != -1; i--){
 			if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
 				DrawBust(&(Busts[bustOrderOverBox[i]]));
 			}
@@ -3012,8 +3024,10 @@ void loadVariableList(FILE* fp, nathanscriptGameVariable** _listToLoad, int* _to
 // int - currentLine
 // message strings
 // current background filename
-// int - MAXBUSTS
+// int - maxBusts
 // bust x, bust y, bust filename
+// string - lastBGMFilename
+// int - lastBGMVolume
 // game variables
 void vndsNormalSave(char* _filename){
 	FILE* fp = fopen(_filename,"wb");
@@ -3045,10 +3059,10 @@ void vndsNormalSave(char* _filename){
 	writeLengthStringToFile(fp,lastBackgroundFilename); //
 
 	// Write the number of busts we're saving
-	fwrite(&MAXBUSTS,sizeof(int),1,fp); //
+	fwrite(&maxBusts,sizeof(int),1,fp); //
 
 	// Write the bust data
-	for (i=0;i<MAXBUSTS;i++){
+	for (i=0;i<maxBusts;i++){
 		fwrite(&(Busts[i].xOffset),sizeof(signed int),1,fp); //
 		fwrite(&(Busts[i].yOffset),sizeof(signed int),1,fp); //
 		if (Busts[i].relativeFilename==NULL){
@@ -3057,6 +3071,9 @@ void vndsNormalSave(char* _filename){
 			writeLengthStringToFile(fp,Busts[i].relativeFilename); //
 		}
 	}
+
+	writeLengthStringToFile(fp,lastBGMFilename);
+	fwrite(&lastBGMVolume,sizeof(int),1,fp);
 
 	// Write game specific var list
 	saveVariableList(fp,nathanscriptGamevarList,nathanscriptTotalGamevar); //
@@ -3107,6 +3124,10 @@ void vndsNormalLoad(char* _filename){
 		}
 		free(_tempReadFilename);
 	}
+
+	char* _foundBGMFilename = readLengthStringFromFile(fp);
+	fread(&lastBGMVolume,sizeof(int),1,fp);
+	PlayBGM(_foundBGMFilename,lastBGMVolume,0);
 
 	loadVariableList(fp,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
 	fclose(fp);
@@ -3161,7 +3182,7 @@ void applyNegative(int _actionTime, signed char _waitforcompletion){
 		// Invert all images
 		currentFilterType = FILTERTYPE_NEGATIVE;
 		unsigned char i;
-		for (i=0;i<MAXBUSTS;++i){
+		for (i=0;i<maxBusts;++i){
 			if (Busts[i].isActive==1){
 				invertImage(Busts[i].image,0);
 			}
@@ -3179,6 +3200,7 @@ void applyNegative(int _actionTime, signed char _waitforcompletion){
 }
 void removeNegative(int _actionTime, signed char _waitforcompletion){
 	#if CANINVERT
+		// Inverting everything again fixes it
 		applyNegative(_actionTime,_waitforcompletion);
 	#endif
 	filterActive=0;
@@ -3425,7 +3447,7 @@ void scriptSetValidityOfInput(nathanscriptVariable* _passedArguments, int _numAr
 void scriptFadeAllBustshots(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	FadeAllBustshots(nathanvariableToInt(&_passedArguments[0]),nathanvariableToBool(&_passedArguments[1]));
 	//int i;
-	//for (i=0;i<MAXBUSTS;i++){
+	//for (i=0;i<maxBusts;i++){
 	//	if (Busts[i].isActive==1){
 	//		freeTexture(Busts[i].image);
 	//		ResetBustStruct(&(Busts[i]));
@@ -3842,7 +3864,7 @@ void Draw(char _shouldDrawMessageBox){
 	if (currentBackground!=NULL){
 		DrawBackground(currentBackground);
 	}
-	for (i = MAXBUSTS-1; i != -1; i--){
+	for (i = maxBusts-1; i != -1; i--){
 		if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1){
 			DrawBust(&(Busts[bustOrder[i]]));
 		}
@@ -3853,7 +3875,7 @@ void Draw(char _shouldDrawMessageBox){
 	if (_shouldDrawMessageBox==1){
 		DrawMessageBox();
 	}
-	for (i = MAXBUSTS-1; i != -1; i--){
+	for (i = maxBusts-1; i != -1; i--){
 		if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
 			DrawBust(&(Busts[bustOrderOverBox[i]]));
 		}
@@ -4544,7 +4566,7 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 	if (currentGameStatus!=GAMESTATUS_TITLE){
 		// If we changed art location, reload busts
 		if (_artBefore != graphicsLocation){
-			for (i=0;i<MAXBUSTS;++i){
+			for (i=0;i<maxBusts;++i){
 				if (Busts[i].isActive){
 					char* _cacheFilename = mallocForString(Busts[i].relativeFilename);
 					DrawBustshot(i,_cacheFilename,Busts[i].xOffset,Busts[i].yOffset,Busts[i].layer,0,0,Busts[i].isInvisible);
@@ -4696,7 +4718,7 @@ void TitleScreen(){
 					ClearMessageArray();
 					controlsStart();
 					controlsEnd();
-					OutputLine("Higurashi-Vita v2.3 introduced a new method of storing games. Instead of selecting a preset file, you simply select a game folder which already has a preset file in it. It's really nifty. Right now, you're living in the past. Fear not, you too can become a pro who uses the \"Games folder\" method.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
+					OutputLine("This process will convert your legacy preset & StreamingAssets setup to the new game folder setup. It's makes everything easier, so you should do it.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
 
 					while (!wasJustPressed(SCE_CTRL_CROSS)){
 						fpsCapStart();
@@ -5320,6 +5342,8 @@ void initializeNathanScript(){
 			loadVariableList(fp,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
 			fclose(fp);
 		}
+
+		increaseVNDSBustInfoArraysSize(0,maxBusts);
 	}
 }
 // Please exit if this function returns 2
@@ -5343,9 +5367,7 @@ signed char init(){
 	actualBackgroundSizesConfirmedForSmashFive=0;
 
 	// Make buffers for busts
-	Busts = calloc(1,sizeof(bust)*MAXBUSTS);
-	bustOrder = calloc(1,sizeof(char)*MAXBUSTS);
-	bustOrderOverBox = calloc(1,sizeof(char)*MAXBUSTS);
+	increaseBustArraysSize(0,maxBusts);
 
 	// Reset bust cache
 	// I could memset everything to 0, but apparently NULL is not guaranteed to be represented by all 0.
@@ -5436,11 +5458,7 @@ signed char init(){
 			// Maybe, one day, I'll make it so it's 1 by default, so I'll have to have this here.
 			isGameFolderMode=0;
 		}else{
-			#if PLATFORM == PLAT_3DS
-				isGameFolderMode=1; // If it's not found on 3ds, we're still in game folder mode.
-			#else
-				isGameFolderMode=0; // Vita defaults to preset folder mode
-			#endif
+			isGameFolderMode=1;
 		}
 	}
 
@@ -5494,7 +5512,7 @@ signed char init(){
 		return 2;
 	}
 
-	for (i=0;i<MAXBUSTS;i++){
+	for (i=0;i<maxBusts;i++){
 		ResetBustStruct(&(Busts[i]),0);
 	}
 
