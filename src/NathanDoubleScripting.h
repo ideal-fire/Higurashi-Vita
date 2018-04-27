@@ -902,6 +902,37 @@ void nathanscriptDoScript(char* _filename, long int _startingOffset){
 	fclose(nathanscriptCurrentOpenFile);
 }
 
+int fpeekchar(FILE *stream){
+	int c;
+
+	c = fgetc(stream);
+	ungetc(c, stream);
+
+	return c;
+}
+
+void nathanscriptBackLine(){
+	// We're now on the previous line's newline character
+	fseek(nathanscriptCurrentOpenFile,-1,SEEK_CUR);
+	while (1){
+		if (fseek(nathanscriptCurrentOpenFile,-1,SEEK_CUR)!=0){
+			printf("error.\n");
+			return;
+		}
+		if (fpeekchar(nathanscriptCurrentOpenFile)=='\n'){
+			fseek(nathanscriptCurrentOpenFile,1,SEEK_CUR);
+			return;
+		}
+	}
+}
+
+void nathanscriptAdvanceLine(){
+	int _lastReadChar;
+	do{
+		_lastReadChar = fgetc(nathanscriptCurrentOpenFile);
+	}while(_lastReadChar!=EOF && _lastReadChar!='\n');
+}
+
 // This will also add functions that don't depend on graphics.
 void nathanscriptInit(){
 	nathanReallocFunctionLists(8);

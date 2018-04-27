@@ -23,8 +23,7 @@
 		TODO - Fix LazyMessage system. Let it take a variable number of arguments to put together. Maybe even make it printf style.
 	
 	TODO - Allow VNDS sound command to play sound multiple times
-	TODO - Allow setting VNDS game as default
-	TODO - Fix saving while on a choice for VNDS
+	TODO - Test if audio on ux0 still works
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -142,6 +141,10 @@
 // 6 adds vndsClearAtBottom
 // 7 adds showVNDSWarnings
 #define OPTIONSFILEFORMAT 7
+
+#define VNDSSAVEFORMAT 1
+
+#define VNDSGLOBALSSAVEFORMAT 1
 
 //#define LUAREGISTER(x,y) DebugLuaReg(y);
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
@@ -272,6 +275,7 @@ char* currentGameFolderName=NULL;
 #define GAMESTATUS_NAVIGATIONMENU 4
 #define GAMESTATUS_TIPMENU 5
 #define GAMESTATUS_GAMEFOLDERSELECTION 6
+#define GAMESTATUS_LOADGAMEFOLDER 7
 #define GAMESTATUS_QUIT 99
 signed char currentGameStatus=GAMESTATUS_TITLE;
 
@@ -2810,7 +2814,8 @@ void startLoadPresetSpecifiedInFile(char* _presetFilenameFile){
 	currentGameStatus = GAMESTATUS_LOADPRESET;
 }
 // Also starts loading the preset file
-void startLoadingGameFolder(char* _chosenGameFolder){
+// returns 1 if okay to keep going
+char startLoadingGameFolder(char* _chosenGameFolder){
 	char _fileWithPresetFilenamePath[strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/includedPreset.txt")+1];
 	strcpy(_fileWithPresetFilenamePath,gamesFolder);
 	strcat(_fileWithPresetFilenamePath,_chosenGameFolder);
@@ -2818,6 +2823,7 @@ void startLoadingGameFolder(char* _chosenGameFolder){
 
 	if (!checkFileExist(_fileWithPresetFilenamePath)){
 		LazyMessage("Invalid game folder.","I know this because the includedPreset.txt","does not exist.","Did you remember to convert this folder before moving it?");
+		return 0;
 	}
 	startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
 
@@ -2835,6 +2841,7 @@ void startLoadingGameFolder(char* _chosenGameFolder){
 	scriptFolder = malloc(strlen(streamingAssets)+strlen("Scripts/")+1);
 	strcpy(scriptFolder,streamingAssets);
 	strcat(scriptFolder,"Scripts/");
+	return 1;
 }
 void setDefaultGame(char* _defaultGameFolderName){
 	char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("/_defaultGame")+1];
@@ -3016,7 +3023,6 @@ void loadVariableList(FILE* fp, nathanscriptGameVariable** _listToLoad, int* _to
 		nathanscriptConvertVariable(&((*_listToLoad)[_newVariableIndex].variable),_readCorrectVariableType);
 	}
 }
-#define VNDSSAVEFORMAT 1
 // unsigned char - format version
 // script filename relative to script folder
 // long int - position in the file
@@ -3128,6 +3134,7 @@ void vndsNormalLoad(char* _filename){
 	char* _foundBGMFilename = readLengthStringFromFile(fp);
 	fread(&lastBGMVolume,sizeof(int),1,fp);
 	PlayBGM(_foundBGMFilename,lastBGMVolume,0);
+	free(_foundBGMFilename);
 
 	loadVariableList(fp,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
 	fclose(fp);
@@ -3139,6 +3146,12 @@ void vndsNormalLoad(char* _filename){
 	char _tempLoadedFilename[strlen(scriptFolder)+strlen(_foundScriptFilename)+1];
 	strcpy(_tempLoadedFilename,scriptFolder);
 	strcat(_tempLoadedFilename,_foundScriptFilename);
+
+	// Have to free here because this variable is used above
+	free(_foundScriptFilename);
+
+	controlsStart();
+	controlsEnd();
 
 	endType=Line_Normal;	
 	outputLineWait();
@@ -3296,7 +3309,7 @@ void scriptDrawScene(nathanscriptVariable* _passedArguments, int _numArguments, 
 }
 // Placeholder for unimplemented function
 void scriptNotYet(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	printf("An unimplemented Lua function was just executed!\n");
+	printf("An unimplemented Lua function was just executed.\n");
 	return;
 }
 // Fist arg seems to be a channel arg.
@@ -3598,6 +3611,10 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		strcpy(noobOptions[i],nathanvariableGetArray(&_passedArguments[1],i));
 	}
 
+	if (currentlyVNDSGame){
+		nathanscriptBackLine(); // Fix file position for saving so when we load it reloads the choice command
+	}
+
 	// This is the actual loop for choosing the choice
 	signed char _choice=0;
 	while (1){
@@ -3623,6 +3640,10 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 
 		endDrawing();
 		fpsCapWait();
+	}
+
+	if (currentlyVNDSGame){
+		nathanscriptAdvanceLine(); // Fix what we did at the start of the function
 	}
 
 	// Free strings that were made with calloc earlier
@@ -5013,6 +5034,14 @@ void SaveGameEditor(){
 		fpsCapWait();
 	}
 }
+void controls_setDefaultGame(){
+	if (wasJustPressed(SCE_CTRL_TRIANGLE)){
+		if (isGameFolderMode && !isEmbedMode && LazyChoice(defaultGameIsSet ? "Unset this game as the default?" : "Set this game as the default game?",NULL,NULL,NULL)){
+			defaultGameIsSet = !defaultGameIsSet;
+			setDefaultGame(defaultGameIsSet ? currentGameFolderName : "NONE");
+		}
+	}
+}
 void NavigationMenu(){
 	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	signed char _choice=0;
@@ -5119,12 +5148,7 @@ void NavigationMenu(){
 				printf("INVALID SELECTION\n");
 			}
 		}
-		if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-			if (isGameFolderMode && !isEmbedMode && LazyChoice(defaultGameIsSet ? "Unset this game as the default?" : "Set this game as the default game?",NULL,NULL,NULL)){
-				defaultGameIsSet = !defaultGameIsSet;
-				setDefaultGame(defaultGameIsSet ? currentGameFolderName : "NONE");
-			}
-		}
+		controls_setDefaultGame();
 		controlsEnd();
 		startDrawing();
 
@@ -5266,6 +5290,7 @@ void VNDSNavigationMenu(){
 			_chosenSaveSlot--;
 			itoa(_chosenSaveSlot,_chosenSlotAsString,10);
 		}
+		controls_setDefaultGame();
 		controlsEnd();
 		startDrawing();
 
@@ -5339,7 +5364,11 @@ void initializeNathanScript(){
 		strcat(_globalsSaveFilePath,"vndsGlobals");
 		if (checkFileExist(_globalsSaveFilePath)){
 			FILE* fp = fopen(_globalsSaveFilePath,"rb");
-			loadVariableList(fp,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
+			unsigned char _loadedFileFormat;
+			fread(&_loadedFileFormat,sizeof(unsigned char),1,fp);
+			if (_loadedFileFormat>=1){
+				loadVariableList(fp,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
+			}
 			fclose(fp);
 		}
 
@@ -5429,23 +5458,26 @@ signed char init(){
 
 		currentGameStatus = GAMESTATUS_LOADPRESET;
 	}else{
-		char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("/_defaultGame")+1];
-		strcpy(_defaultGameSaveFilenameBuffer,saveFolder);
-		strcat(_defaultGameSaveFilenameBuffer,"/defaultGame");
-		if (checkFileExist(_defaultGameSaveFilenameBuffer)){
-			FILE* fp;
-			fp = fopen(_defaultGameSaveFilenameBuffer,"r");
-			char _readGameFolderName[256];
-			fgets(_readGameFolderName,256,fp);
-			fclose(fp);
-			if (strcmp(_readGameFolderName,"NONE")!=0){
-				defaultGameIsSet=1;
-				currentGameFolderName = malloc(strlen(_readGameFolderName)+1);
-				strcpy(currentGameFolderName,_readGameFolderName);
-				startLoadingGameFolder(currentGameFolderName);
-				currentGameStatus=GAMESTATUS_LOADPRESET;
+		controlsStart();
+		if (!isDown(SCE_CTRL_RTRIGGER)){ // Hold R to skip default game check
+			char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("/_defaultGame")+1];
+			strcpy(_defaultGameSaveFilenameBuffer,saveFolder);
+			strcat(_defaultGameSaveFilenameBuffer,"/defaultGame");
+			if (checkFileExist(_defaultGameSaveFilenameBuffer)){
+				FILE* fp;
+				fp = fopen(_defaultGameSaveFilenameBuffer,"r");
+				char _readGameFolderName[256];
+				fgets(_readGameFolderName,256,fp);
+				fclose(fp);
+				if (strcmp(_readGameFolderName,"NONE")!=0){
+					defaultGameIsSet=1;
+					currentGameFolderName = malloc(strlen(_readGameFolderName)+1);
+					strcpy(currentGameFolderName,_readGameFolderName);
+					currentGameStatus=GAMESTATUS_LOADGAMEFOLDER;
+				}
 			}
 		}
+		controlsEnd();
 	}
 	// Check if this is the new game folder mode or the old preset file mode.
 	fixPath("Games/",globalTempConcat,TYPE_DATA);
@@ -5542,7 +5574,7 @@ int main(int argc, char *argv[]){
 			case GAMESTATUS_TITLE:
 				TitleScreen();
 				break;
-			case GAMESTATUS_LOADPRESET:
+			case GAMESTATUS_LOADPRESET: // Still needed because presets are loaded internally
 				// Next, we can try to switch the StreamingAssets directory to ux0:data/HIGURASHI/StreamingAssets_FILENAME/ if that directory exists
 				UpdatePresetStreamingAssetsDir(currentPresetFilename);
 				LoadGameSpecificStupidity();
@@ -5612,7 +5644,7 @@ int main(int argc, char *argv[]){
 				// Menu for selecting tip to view
 				TipMenu();
 				break;
-			case GAMESTATUS_GAMEFOLDERSELECTION:
+			case GAMESTATUS_GAMEFOLDERSELECTION: // Sets game folder selection folder name to currentGameFolderName
 				;
 				char* _chosenGameFolder;
 				if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a game")==2){
@@ -5624,33 +5656,40 @@ int main(int argc, char *argv[]){
 					currentGameStatus = GAMESTATUS_TITLE;
 					break;
 				}
-				char _possibleVNDSStatusFile[strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/Scripts/main.scr")+1];
+				currentGameFolderName = _chosenGameFolder; // Do not free _chosenGameFolder
+				currentGameStatus = GAMESTATUS_LOADGAMEFOLDER;
+				break;
+			case GAMESTATUS_LOADGAMEFOLDER: // Can load both Higurashi and VNDS games
+				;
+				char _possibleVNDSStatusFile[strlen(gamesFolder)+strlen(currentGameFolderName)+strlen("/Scripts/main.scr")+1];
 				strcpy(_possibleVNDSStatusFile,gamesFolder);
-				strcat(_possibleVNDSStatusFile,_chosenGameFolder);
+				strcat(_possibleVNDSStatusFile,currentGameFolderName);
 				strcat(_possibleVNDSStatusFile,"/isvnds");
 				if (checkFileExist(_possibleVNDSStatusFile)){
 					initializeNathanScript();
 					// Special settings for vnds
 					activateVNDSSettings();
 					// Setup StreamingAssets path
-					_possibleVNDSStatusFile[strlen(gamesFolder)+strlen(_chosenGameFolder)]=0;
+					_possibleVNDSStatusFile[strlen(gamesFolder)+strlen(currentGameFolderName)]=0;
 					GenerateStreamingAssetsPaths(_possibleVNDSStatusFile,0);
 					currentGameStatus = GAMESTATUS_NAVIGATIONMENU;
 					// VNDS games also support game specific lua
 					LoadGameSpecificStupidity();
 					VNDSNavigationMenu();
 				}else{
-					if (_chosenGameFolder==NULL){
-						currentGameStatus=GAMESTATUS_TITLE;
-					}else{
-						if (strcmp(_chosenGameFolder,"PLACEHOLDER.txt")==0){ // TODO - Either automatically delete this, or delete it when it's selected.
-							LazyMessage("Feel free to delete this file,","PLACEHOLDER.txt","in",gamesFolder);
-							free(_chosenGameFolder);
-							break;
-						}
-						startLoadingGameFolder(_chosenGameFolder);
-						currentGameFolderName = _chosenGameFolder; // Do not free _chosenGameFolder
+					if (strcmp(currentGameFolderName,"PLACEHOLDER.txt")==0){ // TODO - Either automatically delete this, or delete it when it's selected.
+						LazyMessage("Feel free to delete this file,","PLACEHOLDER.txt","in",gamesFolder);
+						free(currentGameFolderName);
+						break;
+					}
+					if (startLoadingGameFolder(currentGameFolderName)){
 						currentGameStatus=GAMESTATUS_LOADPRESET;
+					}else{
+						currentGameStatus=GAMESTATUS_TITLE;
+						if (defaultGameIsSet){
+							setDefaultGame("NONE"); // Prevent this message every time on startup if it's because of default game setting
+							LazyMessage("Reset default game","setting.",NULL,NULL);
+						}
 					}
 				}
 				break;

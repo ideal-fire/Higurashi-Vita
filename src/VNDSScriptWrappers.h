@@ -198,6 +198,8 @@ void vndswrapper_gsetvar(nathanscriptVariable* _argumentList, int _totalArgument
 	strcpy(_globalsSaveFilePath,saveFolder);
 	strcat(_globalsSaveFilePath,"vndsGlobals");
 	FILE* fp = fopen(_globalsSaveFilePath,"w");
+	unsigned char _tempFileFormat = VNDSGLOBALSSAVEFORMAT;
+	fwrite(&_tempFileFormat,sizeof(unsigned char),1,fp);
 	saveVariableList(fp,nathanscriptGlobalvarList,nathanscriptTotalGlobalvar);
 	fclose(fp);
 }
