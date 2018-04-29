@@ -23,7 +23,7 @@
 		TODO - Fix LazyMessage system. Let it take a variable number of arguments to put together. Maybe even make it printf style.
 	
 	TODO - Allow VNDS sound command to play sound multiple times
-	TODO - Test if audio on ux0 still works
+	TODO - Fix the little gap between expression changes
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -39,11 +39,13 @@
 	void XOutFunction();
 	void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]);
 	void SaveGameEditor();
-	void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot);
+	void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption);
 	char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage);
 	void initializeNathanScript();
 	void activateVNDSSettings();
 	void activateHigurashiSettings();
+	void showTextbox();
+	void hideTextbox();
 	typedef struct{
 		char** theArray;
 		unsigned char length;
@@ -105,6 +107,10 @@
 #define MENUCURSOROFFSET 5
 #define MENUOPTIONOFFSET menuCursorSpaceWidth+5
 ////////////////////////////////////
+#define TEXTBOXFADEOUTTIME 200 // In milliseconds
+#define TEXTBOXFADEINTIME 150
+#define TEXTBOXFADEOUTUPDATES(x) ((((double)x)/1000)*60) // Update frames
+////////////////////////////////////
 #define MAXMUSICARRAY 10
 #define MAXSOUNDEFFECTARRAY 10
 #define IMAGECHARSPACESTRING "   "
@@ -140,7 +146,8 @@
 // 5 adds textSpeed
 // 6 adds vndsClearAtBottom
 // 7 adds showVNDSWarnings
-#define OPTIONSFILEFORMAT 7
+// 8 adds higurashiUsesDynamicScale
+#define OPTIONSFILEFORMAT 8
 
 #define VNDSSAVEFORMAT 1
 
@@ -387,8 +394,9 @@ int scriptScreenWidth=640;
 int scriptScreenHeight=480;
 
 // X and Y scale applied to graphics size
-#define USENEWSCALE 1
 double graphicsScale=1.0;
+signed char dynamicScaleEnabled=1;
+signed char higurashiUsesDynamicScale=0;
 
 // This assumes the background is the biggest image. These values decide how much to scale all other elements, such as characters.
 int actualBackgroundWidth;
@@ -428,9 +436,14 @@ void removeFileExtension(char* _passedFilename){
 char* charToBoolString(char _boolValue){
 	if (_boolValue){
 		return "True";
-	}else{
-		return "False";
 	}
+	return "False";
+}
+char* charToSwitch(char _boolValue){
+	if (_boolValue){
+		return "On";
+	}
+	return "Off";
 }
 double applyGraphicsScale(double _valueToScale){
 	return _valueToScale*graphicsScale;
@@ -1101,7 +1114,7 @@ void updateControlsGeneral(){
 		isSkipping=0;
 	}
 	if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-		SettingsMenu(currentlyVNDSGame,currentlyVNDSGame,isActuallyUsingUma0==0 || PLATFORM != PLAT_VITA,!currentlyVNDSGame);
+		SettingsMenu(currentlyVNDSGame,currentlyVNDSGame,SOUNDPLAYER!=SND_VITA,!currentlyVNDSGame,0);
 	}
 	if (wasJustPressed(SCE_CTRL_SELECT)){
 		PlayMenuSound();
@@ -1134,7 +1147,7 @@ void outputLineWait(){
 
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			if (_didPressCircle==1){
-				MessageBoxEnabled=1;
+				showTextbox();
 			}
 			endType = Line_ContinueAfterTyping;
 		}
@@ -1162,12 +1175,12 @@ void outputLineWait(){
 }
 // This is used in background and bust drawing
 // For Higurashi, this is used to get the center of the screen for all images.
-// For vnds, this is just used to get the position of the background.
+// For VNDS, this is just used to get the position of the background.
 void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
-	#if USENEWSCALE
+	if (dynamicScaleEnabled){
 		*_tempXOffset = floor((screenWidth-applyGraphicsScale(getTextureWidth(_tempImg)))/2);
 		*_tempYOffset = floor((screenHeight-applyGraphicsScale(getTextureHeight(_tempImg)))/2);
-	#else // TODO - Remove if all goes well
+	}else{
 		*_tempXOffset = floor((screenWidth-getTextureWidth(_tempImg))/2);
 		*_tempYOffset = floor((screenHeight-getTextureHeight(_tempImg))/2);
 		// If they're bigger than the screen, assume that they're supposed to scroll or something
@@ -1177,27 +1190,27 @@ void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int
 		if (*_tempYOffset<0){
 			*_tempYOffset=0;
 		}
-	#endif
+	}
 }
 float GetXOffsetScale(CrossTexture* _tempImg){
-	#if USENEWSCALE
-		return (actualBackgroundWidth*graphicsScale)/(double)scriptScreenWidth;
-	#endif
-	// TODO - Remove below code if all goes well.
-	if (getTextureWidth(_tempImg)>screenWidth){
-		return (screenWidth/scriptScreenWidth);
+	if (dynamicScaleEnabled){
+		return applyGraphicsScale(actualBackgroundWidth)/(double)scriptScreenWidth;
+	}else{
+		if (getTextureWidth(_tempImg)>screenWidth){
+			return (screenWidth/scriptScreenWidth);
+		}
+		return (getTextureWidth(_tempImg)/(float)scriptScreenWidth);
 	}
-	return (getTextureWidth(_tempImg)/(float)scriptScreenWidth);
 }
 float GetYOffsetScale(CrossTexture* _tempImg){
-	#if USENEWSCALE
-		return (actualBackgroundHeight*graphicsScale)/(double)scriptScreenHeight;
-	#endif
-	// TODO - Remove below code if all goes well
-	if (getTextureHeight(_tempImg)>screenHeight){
-		return (screenHeight/scriptScreenHeight);
+	if (dynamicScaleEnabled){
+		return applyGraphicsScale(actualBackgroundHeight)/(double)scriptScreenHeight;
+	}else{
+		if (getTextureHeight(_tempImg)>screenHeight){
+			return (screenHeight/scriptScreenHeight);
+		}
+		return ( getTextureHeight(_tempImg)/(float)scriptScreenHeight);
 	}
-	return ( getTextureHeight(_tempImg)/(float)scriptScreenHeight);
 }
 void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlpha){
 	if (passedBackground!=NULL){
@@ -1216,6 +1229,7 @@ void DrawBust(bust* passedBust){
 	if (bustsStartInMiddle){
 		GetXAndYOffset(passedBust->image,&_tempXOffset,&_tempYOffset);
 	}else{
+		// If busts don't start in the middle, they start at the start of the background
 		if (currentBackground!=NULL){
 			GetXAndYOffset(currentBackground,&_tempXOffset,&_tempYOffset);
 		}
@@ -1530,14 +1544,17 @@ void updateTextPositions(){
 	#endif
 }
 // Using the global variables for background sizes, update the global graphics scale factor
+// Used for dynamic graphic scaling!
 void updateGraphicsScale(){
-	#if USENEWSCALE
+	if (dynamicScaleEnabled){
 		if (((double)screenWidth)/actualBackgroundWidth < ((double)screenHeight)/actualBackgroundHeight){
 			graphicsScale = ((double)screenWidth)/actualBackgroundWidth;
 		}else{
 			graphicsScale = ((double)screenHeight)/actualBackgroundHeight;
 		}
-	#endif
+	}else{
+		graphicsScale=1;
+	}
 }
 void setTextOnlyOverBackground(char _newValue){
 	textOnlyOverBackground=_newValue;
@@ -1976,7 +1993,6 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 	Busts[passedSlot].yOffset = _yoffset;
 	Busts[passedSlot].cacheXOffsetScale = GetXOffsetScale(Busts[passedSlot].image);
 	Busts[passedSlot].cacheYOffsetScale = GetYOffsetScale(Busts[passedSlot].image);
-
 	if (_isinvisible!=0){
 		Busts[passedSlot].isInvisible=1;
 	}else{
@@ -2130,7 +2146,6 @@ char* getSoundFilename(const char* _filename, char _preferedDirectory){
 	}
 	return tempstringconcat;
 }
-
 // _dirRelativeToStreamingAssetsNoEndSlash should start AND END with a slash
 // Example
 // /SE/
@@ -2177,7 +2192,9 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (isSkipping==1 || _autoskip==1 || textSpeed==TEXTSPEED_INSTANT){
 		_isDone=1;
 	}
-	MessageBoxEnabled=1;
+	if (!MessageBoxEnabled){
+		showTextbox();
+	}
 
 	unsigned char message[strlen(_tempMsg)+1+strlen(currentMessages[currentLine])];
 	// This will make the start of the message have whatever the start of the line says.
@@ -2259,21 +2276,23 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 						printf("Unknown image char! %d;%d\n",message[i+1],message[i+2]);
 						_imagechartype = IMAGECHARUNKNOWN;
 					}
-					message[i]=0; // So we can use textWidth
-					for (j=0;j<MAXIMAGECHAR;j++){
-						if (imageCharType[j]==-1){
-							imageCharX[j] = textWidth(fontSize,&(message[lastNewlinePosition+1]))+textboxXOffset+messageInBoxXOffset;
-							imageCharY[j] = messageInBoxYOffset+12+textboxYOffset+currentLine*(currentTextHeight);
-							imageCharLines[j] = currentLine;
-							message[i]='\0';
-							imageCharCharPositions[j] = strlenNO1(&(message[lastNewlinePosition+1]));
-							imageCharType[j] = _imagechartype;
-							//printf("Asssigned line %d and pos %d\n",imageCharLines[j],imageCharCharPositions[j]);
-							break;
+					if (_imagechartype != IMAGECHARUNKNOWN){
+						message[i]=0; // So we can use textWidth
+						for (j=0;j<MAXIMAGECHAR;j++){
+							if (imageCharType[j]==-1){
+								imageCharX[j] = textWidth(fontSize,&(message[lastNewlinePosition+1]))+textboxXOffset+messageInBoxXOffset;
+								imageCharY[j] = messageInBoxYOffset+12+textboxYOffset+currentLine*(currentTextHeight);
+								imageCharLines[j] = currentLine;
+								message[i]='\0';
+								imageCharCharPositions[j] = strlenNO1(&(message[lastNewlinePosition+1]));
+								imageCharType[j] = _imagechartype;
+								//printf("Asssigned line %d and pos %d\n",imageCharLines[j],imageCharCharPositions[j]);
+								break;
+							}
 						}
+						memset(&(message[i]),32,3);
+						i+=2;
 					}
-					memset(&(message[i]),32,3);
-					i+=2;
 				}else if (message[i]=='\n'){
 					message[i]='\0';
 					strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
@@ -2539,6 +2558,8 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // textOnlyOverBackground, 1 byte
 // textSpeed, 1 byte
 // vndsClearAtBottom, 1 byte
+// showVNDSWarnings, 1 byte
+// higurashiUsesDynamicScale, 1 byte
 void SaveSettings(){
 	FILE* fp;
 	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
@@ -2562,6 +2583,7 @@ void SaveSettings(){
 	fwrite(&textSpeed,1,1,fp);
 	fwrite(&vndsClearAtBottom,sizeof(signed char),1,fp);
 	fwrite(&showVNDSWarnings,sizeof(signed char),1,fp);
+	fwrite(&higurashiUsesDynamicScale,sizeof(signed char),1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -2611,6 +2633,9 @@ void LoadSettings(){
 		}
 		if (_tempOptionsFormat>=7){
 			fread(&showVNDSWarnings,sizeof(signed char),1,fp);
+		}
+		if (_tempOptionsFormat>=8){
+			fread(&higurashiUsesDynamicScale,sizeof(signed char),1,fp);
 		}
 		fclose(fp);
 
@@ -2873,6 +2898,7 @@ void activateVNDSSettings(){
 	scriptScreenWidth=256;
 	scriptScreenHeight=192;
 	scriptForceResourceUppercase=0;
+	dynamicScaleEnabled=1;
 	//shouldUseBustCache=1;
 }
 void activateHigurashiSettings(){
@@ -2882,70 +2908,73 @@ void activateHigurashiSettings(){
 	scriptScreenWidth=640;
 	scriptScreenHeight=480;
 	scriptForceResourceUppercase=0;
+	dynamicScaleEnabled=higurashiUsesDynamicScale;
 	//shouldUseBustCache=0;
 }
 #if PLATFORM == PLAT_VITA
 	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
-	if (_currentPad.buttons & _button){
-		if (!(_lastPad.buttons & _button)){
-			return 1;
+		if (_currentPad.buttons & _button){
+			if (!(_lastPad.buttons & _button)){
+				return 1;
+			}
 		}
+		return 0;
 	}
-	return 0;
-	}
-	// Wait for the user to suspend the game, save them, and be happy.
-	void* soundProtectThread(void *arg){
-	if (isActuallyUsingUma0==1){
-		return NULL;
-	}
-	SceCtrlData _currentPad;
-	SceCtrlData _lastPad;
-	sceCtrlPeekBufferPositive(0, &_lastPad, 1);
-	sceCtrlPeekBufferPositive(0, &_currentPad, 1);
-	while (1){
-		sceCtrlPeekBufferPositive(0, &_currentPad, 1);
-		if (wasJustPressedSpecific(_currentPad,_lastPad,SCE_CTRL_PSBUTTON) || wasJustPressedSpecific(_currentPad,_lastPad,SCE_CTRL_POWER)){
-			// Stop with WAV
-			int i;
-			for (i=0;i<MAXMUSICARRAY;i++){
-				StopBGM(i);
+	#if SOUNDPLAYER != SND_VITA
+		// Wait for the user to suspend the game, save them, and be happy.
+		void* soundProtectThread(void *arg){
+			if (isActuallyUsingUma0==1){
+				return NULL;
 			}
-			for (i=0;i<MAXSOUNDEFFECTARRAY;i++){
-				if (soundEffects[i]!=NULL){
-					stopSound(soundEffects[i]);
-				}
-			}
-			// Wait for the user to return.
-			SceRtcTick _firstPressedButtonTick;
-			sceRtcGetCurrentTick(&_firstPressedButtonTick);
-			SceRtcTick _checkForReturnTick;
-			sceRtcGetCurrentTick(&_checkForReturnTick);
-			uint32_t _rtcTickResolution = sceRtcGetTickResolution();
+			SceCtrlData _currentPad;
+			SceCtrlData _lastPad;
+			sceCtrlPeekBufferPositive(0, &_lastPad, 1);
+			sceCtrlPeekBufferPositive(0, &_currentPad, 1);
 			while (1){
-				sceRtcGetCurrentTick(&_checkForReturnTick);
-				// Wait a second, literally
-				if (_checkForReturnTick.tick>_firstPressedButtonTick.tick+_rtcTickResolution){
-					break;
+				sceCtrlPeekBufferPositive(0, &_currentPad, 1);
+				if (wasJustPressedSpecific(_currentPad,_lastPad,SCE_CTRL_PSBUTTON) || wasJustPressedSpecific(_currentPad,_lastPad,SCE_CTRL_POWER)){
+					// Stop with WAV
+					int i;
+					for (i=0;i<MAXMUSICARRAY;i++){
+						StopBGM(i);
+					}
+					for (i=0;i<MAXSOUNDEFFECTARRAY;i++){
+						if (soundEffects[i]!=NULL){
+							stopSound(soundEffects[i]);
+						}
+					}
+					// Wait for the user to return.
+					SceRtcTick _firstPressedButtonTick;
+					sceRtcGetCurrentTick(&_firstPressedButtonTick);
+					SceRtcTick _checkForReturnTick;
+					sceRtcGetCurrentTick(&_checkForReturnTick);
+					uint32_t _rtcTickResolution = sceRtcGetTickResolution();
+					while (1){
+						sceRtcGetCurrentTick(&_checkForReturnTick);
+						// Wait a second, literally
+						if (_checkForReturnTick.tick>_firstPressedButtonTick.tick+_rtcTickResolution){
+							break;
+						}
+						sceKernelDelayThread(1);
+					}
+					// The user has returned.
+					// Load and play
+					for (i=0;i<MAXMUSICARRAY;i++){
+						if (currentMusicFilepath[i]==NULL){
+							continue;
+						}
+						char* _tempHoldBuffer = malloc(strlen(currentMusicFilepath[i])+1);
+						strcpy(_tempHoldBuffer,currentMusicFilepath[i]);
+						PlayBGM(_tempHoldBuffer,currentMusicUnfixedVolume[i],i);
+						free(_tempHoldBuffer);
+					}
 				}
-				sceKernelDelayThread(1);
+				_lastPad=_currentPad;
+				sceKernelDelayThread(16);
 			}
-			// The user has returned.
-			// Load and play
-			for (i=0;i<MAXMUSICARRAY;i++){
-				if (currentMusicFilepath[i]==NULL){
-					continue;
-				}
-				char* _tempHoldBuffer = malloc(strlen(currentMusicFilepath[i])+1);
-				strcpy(_tempHoldBuffer,currentMusicFilepath[i]);
-				PlayBGM(_tempHoldBuffer,currentMusicUnfixedVolume[i],i);
-				free(_tempHoldBuffer);
-			}
+			return NULL;
 		}
-		_lastPad=_currentPad;
-		sceKernelDelayThread(16);
-	}
-	return NULL;
-	}
+	#endif
 #endif
 #if PLATFORM == PLAT_3DS
 	char getIsCiaBuild(){
@@ -3158,12 +3187,40 @@ void vndsNormalLoad(char* _filename){
 
 	nathanscriptDoScript(_tempLoadedFilename,_readFilePosition);
 }
-// TODO - Small fadein and fadeout transitions
+
+void _textboxTransition(char _isOn, int _totalTime){
+	if (MessageBoxEnabled!=_isOn){
+		signed short _fadeoutPerUpdate = ceil(MessageBoxAlpha/(double)TEXTBOXFADEOUTUPDATES(_totalTime));
+		unsigned char _oldMessageBoxAlpha = MessageBoxAlpha;
+		if (_isOn==0){
+			_fadeoutPerUpdate*=-1;
+		}
+		if (_isOn==1){
+			MessageBoxAlpha=0;
+		}
+		MessageBoxAlpha+=_fadeoutPerUpdate;
+		while (1){
+			fpsCapStart();
+			if (!(MessageBoxAlpha+_fadeoutPerUpdate<=0 || MessageBoxAlpha+_fadeoutPerUpdate>=_oldMessageBoxAlpha)){
+				MessageBoxAlpha+=_fadeoutPerUpdate;
+			}else{
+				break;
+			}
+			startDrawing();
+			Draw(1);
+			endDrawing();
+			fpsCapWait();
+		}
+		MessageBoxAlpha = _oldMessageBoxAlpha;
+	}
+	MessageBoxEnabled=_isOn;
+}
+
 void hideTextbox(){
-	MessageBoxEnabled=0;
+	_textboxTransition(0,TEXTBOXFADEOUTTIME);
 }
 void showTextbox(){
-	MessageBoxEnabled=1;
+	_textboxTransition(1,TEXTBOXFADEINTIME);
 }
 #if PLATFORM == PLAT_VITA
 	void invertImage(vita2d_texture* _passedImage, signed char _doInvertAlpha){
@@ -3254,6 +3311,32 @@ void addGamePresetToLegacyFolder(char* _streamingAssetsRoot, char* _presetFilena
 	}
 	fclose(fpr);
 	fclose(fpw);
+}
+char* readSpecificIniLine(FILE* fp, char* _prefix){
+	char _tempReadLine[256];
+	fgets(_tempReadLine,256,fp);
+	removeNewline(_tempReadLine);
+	if (strlen(_tempReadLine)>strlen(_prefix)){ // If string is long enough to contain title string
+		if (strncmp(_tempReadLine,_prefix,strlen(_prefix))==0){ // If the line starts with what we want it to
+			char* _foundValueString = &(_tempReadLine[strlen(_prefix)]);
+			char* _returnString = malloc(strlen(_foundValueString)+1);
+			strcpy(_returnString,_foundValueString);
+			return _returnString;
+		}else{
+			printf("Error, doesn't start with %s\n",_prefix);
+		}
+	}
+	return NULL;
+}
+char isNumberString(char* _inputString){
+	int i;
+	while (*(_inputString)!='\0'){
+		if (!(*(_inputString)>=48 && *(_inputString)<=57)){
+			return 0;
+		}
+		_inputString++;
+	}
+	return 1;
 }
 /*
 =================================================
@@ -4152,7 +4235,7 @@ void FontSizeSetup(){
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
 	b = _maxOptionSlotUsed;
-void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot){
+void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption){
 	controlsStart();
 	controlsEnd();
 	PlayMenuSound();
@@ -4181,6 +4264,7 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 	signed char _voiceVolumeSlot=-2;
 	signed char _bustLocationSlot=-2;
 	signed char _messageBoxAlphaSlot=-2;
+	signed char _higurashiScalingSlot=-2;
 
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
@@ -4233,6 +4317,9 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 		SETTINGSMENU_EASYADDOPTION("Clear at bottom:",_vndsHitBottomActionSlot);
 		SETTINGSMENU_EASYADDOPTION("VNDS Warnings:",_vndsErrorShowToggleSlot);
 	}
+	if (_showScalingOption){
+		SETTINGSMENU_EASYADDOPTION("Dynamic Scaling: ",_higurashiScalingSlot);
+	}
 	// Quit button is always last
 	if (currentGameStatus!=GAMESTATUS_TITLE){
 		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Quit";
@@ -4274,6 +4361,9 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 		}else{
 			_settingsOptionsValueText[_vndsErrorShowToggleSlot] = "Hide";
 		}
+	}
+	if (_showScalingOption){
+		_settingsOptionsValueText[_higurashiScalingSlot]=charToSwitch(higurashiUsesDynamicScale);
 	}
 
 	// Make strings
@@ -4522,6 +4612,18 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 				}else{
 					_settingsOptionsValueText[_vndsErrorShowToggleSlot] = "Hide";
 				}
+			}else if (_choice==_higurashiScalingSlot){
+				higurashiUsesDynamicScale=!higurashiUsesDynamicScale;
+				dynamicScaleEnabled=higurashiUsesDynamicScale;
+				updateGraphicsScale();
+				updateTextPositions();
+				_settingsOptionsValueText[_higurashiScalingSlot]=charToSwitch(higurashiUsesDynamicScale);
+				for (i=0;i<maxBusts;++i){
+					if (Busts[i].isActive){
+						Busts[i].cacheXOffsetScale = GetXOffsetScale(Busts[i].image);
+						Busts[i].cacheYOffsetScale = GetYOffsetScale(Busts[i].image);
+					}
+				}
 			}else if (_choice==_maxOptionSlotUsed){ // Quit
 				#if PLATFORM == PLAT_3DS
 					lockBGM();
@@ -4608,7 +4710,6 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 }
 void TitleScreen(){
 	signed char _choice=0;
-	printf("%s\n",presetFolder);
 	signed char _titlePassword=0;
 
 	int _versionStringWidth = textWidth(fontSize,VERSIONSTRING VERSIONSTRINGSUFFIX);
@@ -4726,7 +4827,7 @@ void TitleScreen(){
 				}
 			}else if (_choice==2){ // Go to setting menu
 				controlsEnd();
-				SettingsMenu(1,0,0,1);
+				SettingsMenu(1,0,0,1,0);
 				controlsEnd();
 				break;
 			}else if (_choice==3){ // Quit button
@@ -5208,7 +5309,10 @@ void NewGameMenu(){
 		fpsCapWait();
 	}
 }
+// Hold L to disable font loading
+// Hold R to disable all optional loading
 void VNDSNavigationMenu(){
+	controlsStart();
 	signed char _choice=0;
 	unsigned char _chosenSaveSlot=0;
 	char* _loadedNovelName=NULL;
@@ -5219,40 +5323,49 @@ void VNDSNavigationMenu(){
 	char _possibleThunbnailPath[strlen(streamingAssets)+strlen("/thumbnail.png")+1];
 	strcpy(_possibleThunbnailPath,streamingAssets);
 	strcat(_possibleThunbnailPath,"/thumbnail.png");
-	if (checkFileExist(_possibleThunbnailPath)){
+	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
 		_loadedThumbnail = SafeLoadPNG(_possibleThunbnailPath);
 	}
 
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
 	strcat(_possibleThunbnailPath,"/info.txt");
-	if (checkFileExist(_possibleThunbnailPath)){
+	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
 		FILE* fp = fopen(_possibleThunbnailPath,"r");
-		char _tempReadLine[256];
-		fgets(_tempReadLine,256,fp);
-		if (strlen(_tempReadLine)>6){ // If string is long enough to contain title string
-			char* _foundTitleString = &(_tempReadLine[6]);
-			_loadedNovelName = malloc(strlen(_foundTitleString)+1);
-			strcpy(_loadedNovelName,_foundTitleString);
+		_loadedNovelName = readSpecificIniLine(fp,"title=");
+		fclose(fp);
+	}
+	
+	_possibleThunbnailPath[strlen(streamingAssets)]=0;
+	strcat(_possibleThunbnailPath,"/img.ini");
+	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
+		FILE* fp = fopen(_possibleThunbnailPath,"r");
+		char* _widthString = readSpecificIniLine(fp,"width=");
+		char* _heightString = readSpecificIniLine(fp,"height=");\
+		if (_widthString!=NULL && _heightString!=NULL && isNumberString(_widthString) && isNumberString(_heightString)){
+			actualBackgroundWidth = atoi(_widthString);
+			actualBackgroundHeight = atoi(_heightString);
+			actualBackgroundSizesConfirmedForSmashFive=1;
+			updateGraphicsScale();
+			updateTextPositions();
 		}
+		free(_widthString);
+		free(_heightString);
+		fclose(fp);
 	}
 
-
-
-	controlsStart();
-	if (!isDown(SCE_CTRL_RTRIGGER)){
+	if (!isDown(SCE_CTRL_LTRIGGER) && !isDown(SCE_CTRL_RTRIGGER)){
 		_possibleThunbnailPath[strlen(streamingAssets)]=0;
 		strcat(_possibleThunbnailPath,"/default.ttf");
 		if (checkFileExist(_possibleThunbnailPath)){
 			_loadSpecificFont(_possibleThunbnailPath);
 		}
 	}
+	
 	controlsEnd();
-
 	if (_loadedNovelName==NULL){
 		_loadedNovelName = malloc(strlen("VNDS")+1);
 		strcpy(_loadedNovelName,"VNDS");
 	}
-
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		fpsCapStart();
 		controlsStart();
@@ -5548,7 +5661,8 @@ signed char init(){
 		ResetBustStruct(&(Busts[i]),0);
 	}
 
-	#if PLATFORM == PLAT_VITA && SOUNDPLAYER == SND_SOLOUD
+	// Somehow, I'm a master programmer who doesn't have their program crash when streaming sound files. Only prevent crashing if not using good sound code.
+	#if PLATFORM == PLAT_VITA && SOUNDPLAYER != SND_VITA
 		// Create the protection thread.
 		if (pthread_create(&soundProtectThreadId, NULL, &soundProtectThread, NULL) != 0){
 			return 2;
