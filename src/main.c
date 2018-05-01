@@ -811,10 +811,10 @@ void ResetBustStruct(bust* passedBust, int canfree){
 	if (canfree==1){
 		if (passedBust->image!=NULL){
 			freeTexture(passedBust->image);
-			if (passedBust->relativeFilename!=NULL){
+		}
+		if (passedBust->relativeFilename!=NULL){
 				free(passedBust->relativeFilename);
 			}
-		}
 		if (passedBust->transformTexture!=NULL){
 			freeTexture(passedBust->transformTexture);
 		}
@@ -1260,11 +1260,6 @@ void DrawBust(bust* passedBust){
 			drawTextureScaleAlpha(passedBust->transformTexture,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, 255-passedBust->alpha);
 		}
 		drawTextureScaleAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, passedBust->alpha);
-		//if (passedBust->bustStatus==BUST_STATUS_TRANSFORM_FADEIN){
-		//	drawTextureScaleAlpha(passedBust->transformTexture,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, 255);	
-		//}
-		//drawTextureScaleAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, passedBust->alpha);
-		
 	}
 }
 void RecalculateBustOrder(){
@@ -2005,19 +2000,19 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 			ResetBustStruct(&(Busts[passedSlot]),1);
 		}
 	}else{
-		ResetBustStruct(&(Busts[passedSlot]),0); // Remove leftovers
+		ResetBustStruct(&(Busts[passedSlot]),0); // Remove leftover data, nothing in here right now should be malloc'd
 	}
 
 	cachedImage* _possibleCachedImage = searchBustCache(_filename);
 	if (_possibleCachedImage!=NULL){
 		Busts[passedSlot].image = _possibleCachedImage->image;
-		Busts[passedSlot].relativeFilename = _possibleCachedImage->filename;
+		Busts[passedSlot].relativeFilename=_possibleCachedImage->filename;
 		// Remove from cache so we don't free it early
 		_possibleCachedImage->image = NULL;
 		_possibleCachedImage->filename = NULL;
 	}else{
 		Busts[passedSlot].image = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtensions);
-		Busts[passedSlot].relativeFilename = mallocForString(_filename);
+		Busts[passedSlot].relativeFilename=mallocForString(_filename);
 		if (Busts[passedSlot].image==NULL){
 			free(Busts[passedSlot].relativeFilename);
 			Busts[passedSlot].relativeFilename=NULL;
