@@ -170,10 +170,11 @@ char* saveFolder;
 char* gamesFolder;
 
 #define BUST_STATUS_NORMAL 0
-#define BUST_STATUS_FADEIN 1 // var 1 is alpha per frame. var 2 is time where 0 alpha
+#define BUST_STATUS_FADEIN 1 // var 1 is alpha per frame. var 2 is the time until we're actually going to start the fadein. Until var 2 is at 0, this bust will have 0 alpha. For some reason, the Higurashi engine wastes half of the specified time with the bust just not there.
 #define BUST_STATUS_FADEOUT 2 // var 1 is alpha per frame
 #define BUST_STATUS_FADEOUT_MOVE 3 // var 1 is alpha per frame. var 2 is x per frame. var 3 is y per frame
 #define BUST_STATUS_SPRITE_MOVE 4 // var 1 is x per frame, var 2 is y per frame
+#define BUST_STATUS_TRANSFORM_FADEIN 5 // The bust is fading into an already used slot. image is what the new texture is going to be thats fading in, transformTexture is the old texture that is fading out. var 1 is alpha per frame. added to image, subtracted from transformTexture.
 
 void invertImage(CrossTexture* _passedImage, signed char _doInvertAlpha);
 typedef struct{
@@ -189,6 +190,7 @@ typedef struct{
 	int statusVariable2;
 	int statusVariable3;
 	int statusVariable4;
+	CrossTexture* transformTexture; // See BUST_STATUS_TRANSFORM_FADEIN. This is the texture that is transforming
 	unsigned int lineCreatedOn;
 	float cacheXOffsetScale;
 	float cacheYOffsetScale;
@@ -806,13 +808,20 @@ void ClearDebugFile(){
 	free(_tempDebugFileLocationBuffer);
 }
 void ResetBustStruct(bust* passedBust, int canfree){
-	if (canfree==1 && passedBust->image!=NULL){
-		freeTexture(passedBust->image);
-		if (passedBust->relativeFilename!=NULL){
-			free(passedBust->relativeFilename);
+	if (canfree==1){
+		if (passedBust->image!=NULL){
+			freeTexture(passedBust->image);
+			if (passedBust->relativeFilename!=NULL){
+				free(passedBust->relativeFilename);
+			}
+		}
+		if (passedBust->transformTexture!=NULL){
+			freeTexture(passedBust->transformTexture);
 		}
 	}
+	
 	passedBust->image=NULL;
+	passedBust->transformTexture=NULL;
 	passedBust->xOffset=0;
 	passedBust->yOffset=0;
 	passedBust->isActive=0;
@@ -1046,13 +1055,14 @@ void changeIfLazyLastLineFix(int* _line, int* _toChange){
 		(*_toChange)-=1;
 	}
 }
+// Update what bustshots are doing depending on their bustStatus
 void Update(){
 	int i=0;
 	for (i = 0; i < maxBusts; i++){
 		if (Busts[i].bustStatus == BUST_STATUS_FADEIN){
 			if (Busts[i].statusVariable2>0){
 				Busts[i].statusVariable2-=17;
-				if (Busts[i].statusVariable2>4000000){
+				if (Busts[i].statusVariable2>4000000){ // If we went back too far, causing the int to wrap.
 					Busts[i].statusVariable2=0;
 					//Busts[i].bustStatus = BUST_STATUS_NORMAL;
 				}
@@ -1062,6 +1072,15 @@ void Update(){
 					Busts[i].alpha=255;
 					Busts[i].bustStatus = BUST_STATUS_NORMAL;
 				}
+			}
+		}
+		if (Busts[i].bustStatus == BUST_STATUS_TRANSFORM_FADEIN){
+			Busts[i].alpha+=Busts[i].statusVariable;
+			if (Busts[i].alpha>=255){
+				Busts[i].alpha=255;
+				Busts[i].bustStatus = BUST_STATUS_NORMAL;
+				freeTexture(Busts[i].transformTexture);
+				Busts[i].transformTexture=NULL;
 			}
 		}
 		if (Busts[i].bustStatus == BUST_STATUS_FADEOUT){
@@ -1237,8 +1256,16 @@ void DrawBust(bust* passedBust){
 	if (passedBust->alpha==255){
 		drawTextureScale(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale,graphicsScale,graphicsScale);
 	}else{
+		if (passedBust->bustStatus==BUST_STATUS_TRANSFORM_FADEIN){
+			drawTextureScaleAlpha(passedBust->transformTexture,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, 255-passedBust->alpha);
+		}
 		drawTextureScaleAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, passedBust->alpha);
-	}	
+		//if (passedBust->bustStatus==BUST_STATUS_TRANSFORM_FADEIN){
+		//	drawTextureScaleAlpha(passedBust->transformTexture,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, 255);	
+		//}
+		//drawTextureScaleAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, passedBust->alpha);
+		
+	}
 }
 void RecalculateBustOrder(){
 	int i, j, k;
@@ -1919,6 +1946,10 @@ void DrawScene(const char* _filename, int time){
 			cachedImage* _slotToUse = getFreeBustCacheSlot();
 			_slotToUse->filename = Busts[i].relativeFilename; // Already malloc'd, I think.
 			_slotToUse->image = Busts[i].image;
+
+			// Must set these to NULL because we free later
+			Busts[i].relativeFilename=NULL;
+			Busts[i].image=NULL;
 		}
 	}
 	// Fix the bust cache if cached images are inverted.
@@ -1931,7 +1962,7 @@ void DrawScene(const char* _filename, int time){
 	}
 	for (i=0;i<maxBusts;i++){
 		if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
-			ResetBustStruct(&Busts[i], 0);
+			ResetBustStruct(&Busts[i], 1); // Won't double free the busts in the cache because we set the references in the busts to NULL
 		}
 	}
 }
@@ -1962,10 +1993,20 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 		Draw(MessageBoxEnabled);
 		endDrawing();
 	}
-
-	int i;
 	unsigned char skippedInitialWait=0;
-	ResetBustStruct(&(Busts[passedSlot]),1); // Old bust does not go into cache
+	if (Busts[passedSlot].isActive){ // Detect if we need to do a fadein transition
+		if (_fadeintime!=0){ // Only do all this fade stupidity if we're going to fade in the first place.
+			CrossTexture* _cachedOldTexture = Busts[passedSlot].image;
+			Busts[passedSlot].image=NULL;
+			ResetBustStruct(&(Busts[passedSlot]),1);
+			Busts[passedSlot].transformTexture = _cachedOldTexture;
+			Busts[passedSlot].bustStatus = BUST_STATUS_TRANSFORM_FADEIN;
+		}else{
+			ResetBustStruct(&(Busts[passedSlot]),1);
+		}
+	}else{
+		ResetBustStruct(&(Busts[passedSlot]),0); // Remove leftovers
+	}
 
 	cachedImage* _possibleCachedImage = searchBustCache(_filename);
 	if (_possibleCachedImage!=NULL){
@@ -1984,7 +2025,6 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 			return 0;
 		}
 	}
-
 	if (filterActive==1 && currentFilterType==FILTERTYPE_NEGATIVE){
 		invertImage(Busts[passedSlot].image,0);
 	}
@@ -2010,7 +2050,12 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 	if (_fadeintime!=0){
 		Busts[passedSlot].alpha=0;
 		int _timeTotal = _fadeintime;
-		int _time = floor(_fadeintime/2);
+		int _time;
+		if (Busts[passedSlot].bustStatus == BUST_STATUS_TRANSFORM_FADEIN){
+			_time = _fadeintime; // Transform fadein doesn't waste time
+		}else{
+			_time = floor(_fadeintime/2); // Normal fadein wastes half the time for no reason
+		}
 		int _totalFrames = floor(60*(_time/(double)1000));
 		if (_totalFrames==0){
 			_totalFrames=1;
@@ -2020,13 +2065,15 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 			_alphaPerFrame=1;
 		}
 		Busts[passedSlot].statusVariable=_alphaPerFrame;
-		Busts[passedSlot].statusVariable2 = _timeTotal -_time;
-		Busts[passedSlot].bustStatus = BUST_STATUS_FADEIN;
+		if (Busts[passedSlot].bustStatus != BUST_STATUS_TRANSFORM_FADEIN){ // If we're not transforming, go ahead and set this as a normal fadein
+			Busts[passedSlot].statusVariable2 = _timeTotal -_time;
+			Busts[passedSlot].bustStatus = BUST_STATUS_FADEIN;
+		}else{
+			Busts[passedSlot].statusVariable2 = 0;
+		}
 	}else{
 		Busts[passedSlot].bustStatus = BUST_STATUS_NORMAL;
 	}
-
-	i=1;
 	if (_waitforfadein==1){
 		while (Busts[passedSlot].alpha<255){
 			fpsCapStart();
@@ -2048,7 +2095,6 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 				break;
 			}
 			controlsEnd();
-			i++;
 			fpsCapWait();
 		}
 	}
@@ -3329,7 +3375,6 @@ char* readSpecificIniLine(FILE* fp, char* _prefix){
 	return NULL;
 }
 char isNumberString(char* _inputString){
-	int i;
 	while (*(_inputString)!='\0'){
 		if (!(*(_inputString)>=48 && *(_inputString)<=57)){
 			return 0;
@@ -5674,7 +5719,6 @@ signed char init(){
 		svcGetThreadPriority(&_foundMainThreadPriority, CUR_THREAD_HANDLE);
 		_3dsSoundUpdateThread = threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
 	#endif
-
 	return 0;
 }
 int main(int argc, char *argv[]){
