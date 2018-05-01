@@ -17,13 +17,18 @@
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
-		TODO - Because we can have multiple BGM tracks at once, the restart BGM option may just activate and replay the second track only, which would often just be some higurashi.
 		TODO - Remove scriptFolder variable
-		TODO - Inform user of errors in game specific Lua
 		TODO - Fix LazyMessage system. Let it take a variable number of arguments to put together. Maybe even make it printf style.
-	
+		TODO - Inspect SetDrawingPointOfMessage
+			It appears to just set the line to draw on, or that's at least what it's usually used for.
+			Inspect what the max line I can use in it is.
+			Think about how I could implement this command if the value given is bigger than the total number of lines
+				Change the actual text box X and text box Y and use the input arg as a percentage of the screen?
+			How does this work in ADV mode?
+				Actually, the command is removed in ADV mode.
+		TODO - Expression changes look odd.
+
 	TODO - Allow VNDS sound command to play sound multiple times
-	TODO - Fix the little gap between expression changes
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -2807,7 +2812,9 @@ void RunGameSpecificLua(){
 	strcat(_completedSpecificLuaPath,"_GameSpecific.lua");
 	if (checkFileExist(_completedSpecificLuaPath)){
 		printf("Game specific LUA found.\n");
-		luaL_dofile(L,_completedSpecificLuaPath);
+		if(luaL_dofile(L,_completedSpecificLuaPath)==1){
+			LazyMessage("Error in Lua file",_completedSpecificLuaPath,NULL,NULL);
+		}
 	}
 }
 void generateADVBoxPath(char* _passedStringBuffer, char* _passedSystemString){
@@ -4705,13 +4712,13 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 		// Display sample Rena if changing bust location
 		#if PLATFORM == PLAT_3DS
 			startDrawingBottom();
-			if (_choice==3){
+			if (_choice==_bustLocationSlot){
 				if (_renaImage!=NULL){
 					drawTexture(_renaImage,0,screenHeight-getTextureHeight(_renaImage));
 				}
 			}
 		#else
-			if (_choice==3){
+			if (_choice==_bustLocationSlot){
 				if (_renaImage!=NULL){
 					drawTexture(_renaImage,screenWidth-getTextureWidth(_renaImage)-5,screenHeight-getTextureHeight(_renaImage));
 				}
@@ -5536,6 +5543,7 @@ signed char init(){
 	for (i=0;i<3;i++){
 		printf("====================================================\n");
 	}
+	
 	generalGoodInit();
 	initGraphics(960,544,&screenWidth,&screenHeight);
 	setClearColor(0,0,0,255);

@@ -133,10 +133,15 @@ void vndswrapper_cleartext(nathanscriptVariable* _passedArguments, int _numArgum
 
 // bgload filename.extention [dsFadeinFrames]
 void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	char* _passedFilename = nathanvariableToString(&_passedArguments[0]);
 	#if VNDS_HIDE_BOX_ON_BG_CHANGE
-		hideTextbox();
+		char _didHideBackground=0;
+		if (lastBackgroundFilename==NULL || strcmp(lastBackgroundFilename,_passedFilename)!=0){
+			_didHideBackground=1;
+			hideTextbox();
+		}
 	#endif
-	DrawScene(nathanvariableToString(&_passedArguments[0]),_numArguments==2 ? floor((nathanvariableToFloat(&_passedArguments[1])/60)*1000) : VNDS_IMPLIED_BACKGROUND_FADE);
+	DrawScene(_passedFilename,_numArguments==2 ? floor((nathanvariableToFloat(&_passedArguments[1])/60)*1000) : VNDS_IMPLIED_BACKGROUND_FADE);
 	nextVndsBustshotSlot=0;
 	// Move last image position buffers
 	memcpy(pastSetImgX,currentSetImgX,sizeof(signed int)*maxBusts);
@@ -145,7 +150,9 @@ void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArgument
 	memset(currentSetImgY,0,sizeof(signed int)*maxBusts);
 	//
 	#if VNDS_HIDE_BOX_ON_BG_CHANGE
-		showTextbox();
+		if (_didHideBackground){
+			showTextbox();
+		}
 	#endif
 }
 // setimg file x y
