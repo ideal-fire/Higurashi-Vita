@@ -767,6 +767,9 @@ void DrawMessageText(){
 	#if PLATFORM == PLAT_3DS
 		if (textIsBottomScreen==1){
 			startDrawingBottom();
+			if (strlen(currentMessages[i])==0){
+				goodDrawText(0,0,".",fontSize); // Hotfix to fix crash when no text on bottom screen.
+			}
 			for (i = 0; i < MAXLINES; i++){
 				goodDrawText(0,12+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 			}
@@ -2921,9 +2924,9 @@ char startLoadingGameFolder(char* _chosenGameFolder){
 	return 1;
 }
 void setDefaultGame(char* _defaultGameFolderName){
-	char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("/_defaultGame")+1];
+	char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("_defaultGame")+1];
 	strcpy(_defaultGameSaveFilenameBuffer,saveFolder);
-	strcat(_defaultGameSaveFilenameBuffer,"/defaultGame");
+	strcat(_defaultGameSaveFilenameBuffer,"_defaultGame");
 
 	FILE* fp;
 	fp = fopen(_defaultGameSaveFilenameBuffer, "w");
@@ -4331,7 +4334,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		_settingsOptionsMainText[2] = "Overclock CPU";
 	#elif PLATFORM == PLAT_3DS
 		_settingsOptionsMainText[2] = "Text:";
-		if (cpuOverclocked==1){
+		if (textIsBottomScreen==1){
 			_settingsOptionsValueText[2] = "Bottom Screen";
 		}else{
 			_settingsOptionsValueText[2] = "Top Screen";
@@ -4543,14 +4546,14 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					#if PLATFORM == PLAT_VITA
 						scePowerSetArmClockFrequency(444);
 					#elif PLATFORM == PLAT_3DS
-						_settingsOptionsValueText[4] = "Bottom Screen";
+						_settingsOptionsValueText[2] = "Bottom Screen";
 					#endif
 				}else if (cpuOverclocked==1){
 					cpuOverclocked=0;
 					#if PLATFORM == PLAT_VITA
 						scePowerSetArmClockFrequency(333);
 					#elif PLATFORM == PLAT_3DS
-						_settingsOptionsValueText[4] = "Top Screen";
+						_settingsOptionsValueText[2] = "Top Screen";
 					#endif
 				}
 			}else if (_choice==3){
@@ -5626,9 +5629,9 @@ signed char init(){
 	}else{
 		controlsStart();
 		if (!isDown(SCE_CTRL_RTRIGGER)){ // Hold R to skip default game check
-			char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("/_defaultGame")+1];
+			char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("_defaultGame")+1];
 			strcpy(_defaultGameSaveFilenameBuffer,saveFolder);
-			strcat(_defaultGameSaveFilenameBuffer,"/defaultGame");
+			strcat(_defaultGameSaveFilenameBuffer,"_defaultGame");
 			if (checkFileExist(_defaultGameSaveFilenameBuffer)){
 				FILE* fp;
 				fp = fopen(_defaultGameSaveFilenameBuffer,"r");
