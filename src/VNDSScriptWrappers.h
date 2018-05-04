@@ -221,12 +221,17 @@ void vndswrapper_music(nathanscriptVariable* _argumentList, int _totalArguments,
 	PlayBGM(_passedFilename,128,0);
 }
 
+// sound filename
+// sound ~
+// the argument to make it play multiple times is a lie, at least for the original VNDS
 void vndswrapper_sound(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (isSkipping==0 && seVolume>0){
 		char* _passedFilename = nathanvariableToString(&_passedArguments[0]);
 		if (_passedFilename[0]!='~'){
 			removeFileExtension(_passedFilename);
 			GenericPlaySound(0,_passedFilename,256,PREFER_DIR_SE,seVolume);
+		}else{
+			// TODO - Stop all sounds
 		}
 	}
 }

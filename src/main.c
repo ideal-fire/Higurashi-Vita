@@ -28,7 +28,7 @@
 				Actually, the command is removed in ADV mode.
 		TODO - Expression changes look odd.
 
-	TODO - Allow VNDS sound command to play sound multiple times
+	TODO - Allow VNDS sound command to stop all sounds
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -44,7 +44,7 @@
 	void XOutFunction();
 	void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]);
 	void SaveGameEditor();
-	void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption);
+	void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption);
 	char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage);
 	void initializeNathanScript();
 	void activateVNDSSettings();
@@ -587,6 +587,7 @@ void ReloadFont(){
 	#else
 		#error whoops
 	#endif
+	//_loadSpecificFont("sa0:data/font/pvf/ltn4.pvf");
 	_loadSpecificFont(globalTempConcat);
 }
 char MenuControls(char _choice,int _menuMin, int _menuMax){
@@ -1138,7 +1139,7 @@ void updateControlsGeneral(){
 		isSkipping=0;
 	}
 	if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-		SettingsMenu(currentlyVNDSGame,currentlyVNDSGame,SOUNDPLAYER!=SND_VITA,!currentlyVNDSGame,0);
+		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,SOUNDPLAYER!=SND_VITA,!currentlyVNDSGame,0);
 	}
 	if (wasJustPressed(SCE_CTRL_SELECT)){
 		PlayMenuSound();
@@ -2141,11 +2142,13 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 	if (checkFileExist(tempstringconcat)==1){
 		return tempstringconcat;
 	}
-	tempstringconcat[strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)]='\0';
-	strcat(tempstringconcat,".wav");
-	if (checkFileExist(tempstringconcat)==1){
-		return tempstringconcat;
-	}
+	#if SOUNDPLAYER != SND_VITA
+		tempstringconcat[strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)]='\0';
+		strcat(tempstringconcat,".wav");
+		if (checkFileExist(tempstringconcat)==1){
+			return tempstringconcat;
+		}
+	#endif
 	if (scriptUsesFileExtensions){
 		tempstringconcat[strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)]='\0';
 		if (checkFileExist(tempstringconcat)==1){
@@ -2206,6 +2209,7 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 		return;
 	}
 	if (soundEffects[passedSlot]!=NULL){
+		stopSound(soundEffects[passedSlot]);
 		freeSound(soundEffects[passedSlot]);
 		soundEffects[passedSlot]=NULL;
 	}
@@ -3235,9 +3239,8 @@ void vndsNormalLoad(char* _filename){
 
 	nathanscriptDoScript(_tempLoadedFilename,_readFilePosition);
 }
-
 void _textboxTransition(char _isOn, int _totalTime){
-	if (MessageBoxEnabled!=_isOn){
+	if (MessageBoxEnabled!=_isOn && !isSkipping){
 		signed short _fadeoutPerUpdate = ceil(MessageBoxAlpha/(double)TEXTBOXFADEOUTUPDATES(_totalTime));
 		unsigned char _oldMessageBoxAlpha = MessageBoxAlpha;
 		if (_isOn==0){
@@ -3263,7 +3266,6 @@ void _textboxTransition(char _isOn, int _totalTime){
 	}
 	MessageBoxEnabled=_isOn;
 }
-
 void hideTextbox(){
 	_textboxTransition(0,TEXTBOXFADEOUTTIME);
 }
@@ -4282,7 +4284,7 @@ void FontSizeSetup(){
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
 	b = _maxOptionSlotUsed;
-void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption){
+void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption){
 	controlsStart();
 	controlsEnd();
 	PlayMenuSound();
@@ -4319,7 +4321,7 @@ void SettingsMenu(signed char _shouldShowVNDSSettings, signed char _shouldShowVN
 	for (i=0;i<MAXOPTIONSSETTINGS;i++){
 		_settingsOptionsValueText[i]=NULL;
 	}
-	if (currentGameStatus == GAMESTATUS_TITLE){
+	if (currentGameStatus == _shouldShowQuit){
 		_settingsOptionsMainText[0] = "Back";
 	}else{
 		_settingsOptionsMainText[0] = "Resume";
@@ -4874,7 +4876,7 @@ void TitleScreen(){
 				}
 			}else if (_choice==2){ // Go to setting menu
 				controlsEnd();
-				SettingsMenu(1,0,0,1,0);
+				SettingsMenu(0,0,0,0,1,0);
 				controlsEnd();
 				break;
 			}else if (_choice==3){ // Quit button
@@ -4918,7 +4920,7 @@ void TitleScreen(){
 		// Menu options
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load game",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Manual mode",fontSize);
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"Settings",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"Basic Settings",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit",fontSize);
 		if (!isGameFolderMode){
 			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(4+2),"Upgrade to game folder mode",fontSize,0,255,0);
@@ -5417,7 +5419,7 @@ void VNDSNavigationMenu(){
 		fpsCapStart();
 		controlsStart();
 
-		_choice = MenuControls(_choice,0,2);
+		_choice = MenuControls(_choice,0,3);
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			if (_choice==0){
 				char _vndsSaveFileConcat[strlen(streamingAssets)+strlen("sav255")+1];
@@ -5440,6 +5442,8 @@ void VNDSNavigationMenu(){
 					LazyMessage("Main script file",_vndsMainScriptConcat,"not exist.",NULL);
 				}
 			}else if (_choice==2){
+				SettingsMenu(0,1,0,0,0,0);
+			}else if (_choice==3){
 				currentGameStatus = GAMESTATUS_QUIT;
 			}
 		}
@@ -5463,7 +5467,8 @@ void VNDSNavigationMenu(){
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load Save",fontSize);
 			goodDrawText(MENUOPTIONOFFSET+textWidth(fontSize,"Load Save")+singleSpaceWidth,5+currentTextHeight*(0+2),_chosenSlotAsString,fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"New Game",fontSize);
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"Exit",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"VNDS Settings",fontSize);
+		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit",fontSize);
 
 		goodDrawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR,fontSize);
 
