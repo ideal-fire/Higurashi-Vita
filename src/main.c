@@ -29,6 +29,21 @@
 		TODO - Expression changes look odd.
 
 	TODO - Allow VNDS sound command to stop all sounds
+
+
+	Colored text example:
+		text x1b[32;1mnamunamunamu
+		text x1b[0m."
+		
+		namunamunamu in green then ."
+		
+		text x1b[32;1mSento-kun
+		text x1b[0m'.
+		
+		x1b[<backgroundcolor>;<foregrouncolor>m
+		x1b[0m
+
+		Sento-kun and then probably just a peroid
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -2351,6 +2366,49 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 					strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
 					currentLine++;
 					lastNewlinePosition=i;
+				}
+			}else{
+				//http://jafrog.com/2013/11/23/colors-in-terminal.html
+				if (message[i]=='\\' || message[i]=='x'){ // I saw that Umineko VNDS doesn't use a backslash before
+					if (totalMessageLength-i>=strlen("x1b[0m")+(message[i]=='\\')){
+						if (strncmp(&(message[i+(message[i]=='\\')]),"x1b[",strlen("x1b["))==0){
+							int _oldIndex=i;
+							// Advance to the x character if we chose to use backslash
+							if (message[i]=='\\'){
+								i++;
+							}
+							i+=4; // We're now in the parameters
+							int _mSearchIndex;
+							for (_mSearchIndex=i;_mSearchIndex<totalMessageLength;++_mSearchIndex){
+								if (message[_mSearchIndex]=='m'){
+									break;
+								}
+							}
+							// If found the ending
+							if (message[_mSearchIndex]=='m'){
+								// TODO - Do stuff with the found color code
+
+								if (message[i]=='0'){ // If we're resetting the color
+
+								}else{
+									int _semiColonSearchIndex;
+									for (_semiColonSearchIndex=i;_semiColonSearchIndex<_mSearchIndex;++_semiColonSearchIndex){
+										if (message[_semiColonSearchIndex]==';'){
+											break;
+										}
+									}
+									message[_semiColonSearchIndex]=0;
+									printf("the number is %s\n",&(message[i]));
+									message[_semiColonSearchIndex]=';';
+								}
+								i=_oldIndex;
+								memset(&(message[i]),1,_mSearchIndex-i+1);
+							}else{
+								printf("Failed to parse color markup");
+								i=_oldIndex; // Must be invalid otherwise
+							}
+						}
+					}
 				}
 			}
 		}
