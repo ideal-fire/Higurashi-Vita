@@ -32,18 +32,8 @@
 
 
 	Colored text example:
-		text x1b[32;1mnamunamunamu
-		text x1b[0m."
-		
-		namunamunamu in green then ."
-		
-		text x1b[32;1mSento-kun
-		text x1b[0m'.
-		
-		x1b[<backgroundcolor>;<foregrouncolor>m
-		x1b[0m
-
-		Sento-kun and then probably just a peroid
+		text x1b[<colorID>;1m<restoftext>
+		text x1b[0m
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -98,8 +88,8 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.5" // This
-#define VERSIONNUMBER 5 // This
+#define VERSIONSTRING "v2.6" // This
+#define VERSIONNUMBER 6 // This
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1
 // Specific constants
@@ -212,8 +202,8 @@ typedef struct{
 	int statusVariable4;
 	CrossTexture* transformTexture; // See BUST_STATUS_TRANSFORM_FADEIN. This is the texture that is transforming
 	unsigned int lineCreatedOn;
-	float cacheXOffsetScale;
-	float cacheYOffsetScale;
+	double cacheXOffsetScale;
+	double cacheYOffsetScale;
 	char* relativeFilename; // Filename passed by the script
 }bust;
 typedef struct{
@@ -435,10 +425,18 @@ char nextVndsBustshotSlot=0;
 // If all the text should be cleared when the text reached the bottom of the screen when playing a VNDS game
 signed char vndsClearAtBottom=0;
 signed char showVNDSWarnings=1;
+signed char imagesAreJpg=0;
 
 /*
 ====================================================
 */
+CrossTexture* _loadGameImage(const char* path){
+	if (imagesAreJpg){
+		return loadJPG((char*)path);
+	}else{
+		return loadPNG((char*)path);
+	}
+}
 char shouldShowWarnings(){
 	if (currentlyVNDSGame && !showVNDSWarnings){
 		return 0;
@@ -813,7 +811,7 @@ int Password(int val, int _shouldHave){
 	}
 }
 void WriteIntToDebugFile(int a){
-	char _tempCompleteNumberBuffer[9]; // 8 000 000 null
+	char _tempCompleteNumberBuffer[11];
 	sprintf(_tempCompleteNumberBuffer,"%d",a);
 	WriteToDebugFile(_tempCompleteNumberBuffer);
 }
@@ -1235,7 +1233,7 @@ void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int
 		}
 	}
 }
-float GetXOffsetScale(CrossTexture* _tempImg){
+double GetXOffsetScale(CrossTexture* _tempImg){
 	if (dynamicScaleEnabled){
 		return applyGraphicsScale(actualBackgroundWidth)/(double)scriptScreenWidth;
 	}else{
@@ -1245,7 +1243,7 @@ float GetXOffsetScale(CrossTexture* _tempImg){
 		return (getTextureWidth(_tempImg)/(float)scriptScreenWidth);
 	}
 }
-float GetYOffsetScale(CrossTexture* _tempImg){
+double GetYOffsetScale(CrossTexture* _tempImg){
 	if (dynamicScaleEnabled){
 		return applyGraphicsScale(actualBackgroundHeight)/(double)scriptScreenHeight;
 	}else{
@@ -1594,9 +1592,9 @@ void updateTextPositions(){
 void updateGraphicsScale(){
 	if (dynamicScaleEnabled){
 		if (((double)screenWidth)/actualBackgroundWidth < ((double)screenHeight)/actualBackgroundHeight){
-			graphicsScale = ((double)screenWidth)/actualBackgroundWidth;
+			graphicsScale = (((double)screenWidth)/actualBackgroundWidth);
 		}else{
-			graphicsScale = ((double)screenHeight)/actualBackgroundHeight;
+			graphicsScale = (((double)screenHeight)/actualBackgroundHeight);
 		}
 	}else{
 		graphicsScale=1;
@@ -1707,8 +1705,9 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 	free(_workableFilename);
 	return _returnFoundString;
 }
+
 // Will load a PNG from CG or CGAlt
-CrossTexture* safeLoadGamePNG(const char* filename, char _folderPreference, char _extensionIncluded){
+CrossTexture* safeLoadGameImage(const char* filename, char _folderPreference, char _extensionIncluded){
 	char* _tempFoundFilename;
 	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extensionIncluded,scriptForceResourceUppercase);
 	if (_tempFoundFilename==NULL){
@@ -1717,7 +1716,7 @@ CrossTexture* safeLoadGamePNG(const char* filename, char _folderPreference, char
 		}
 		return NULL;
 	}
-	CrossTexture* _returnLoadedPNG = SafeLoadPNG(_tempFoundFilename);
+	CrossTexture* _returnLoadedPNG = _loadGameImage(_tempFoundFilename);
 	free(_tempFoundFilename);
 	return _returnLoadedPNG;
 }
@@ -1883,7 +1882,7 @@ void DrawScene(const char* _filename, int time){
 	// If we're NOT doing the VNDS easy bust reset trick
 	if (!(lastBackgroundFilename!=NULL && strcmp(lastBackgroundFilename,_filename)==0)){
 		changeMallocString(&lastBackgroundFilename,_filename);
-		CrossTexture* newBackground = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtensions);
+		CrossTexture* newBackground = safeLoadGameImage(_filename,graphicsLocation,scriptUsesFileExtensions);
 		if (newBackground==NULL){
 			freeTexture(currentBackground);
 			currentBackground=NULL;
@@ -2035,7 +2034,7 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 		_possibleCachedImage->image = NULL;
 		_possibleCachedImage->filename = NULL;
 	}else{
-		Busts[passedSlot].image = safeLoadGamePNG(_filename,graphicsLocation,scriptUsesFileExtensions);
+		Busts[passedSlot].image = safeLoadGameImage(_filename,graphicsLocation,scriptUsesFileExtensions);
 		Busts[passedSlot].relativeFilename=mallocForString(_filename);
 		if (Busts[passedSlot].image==NULL){
 			free(Busts[passedSlot].relativeFilename);
@@ -2244,9 +2243,17 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 		//WriteToDebugFile(filename);
 	}else{
 		soundEffects[passedSlot] = loadSound(tempstringconcat);
-		//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
-		CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1,passedSlot+10);
-		setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
+		if (soundEffects[passedSlot]==NULL){
+			if (shouldShowWarnings()){
+				LazyMessage("Loaded sound is NULL.",NULL,"File written to log.",NULL);
+			}
+			WriteToDebugFile(tempstringconcat);
+			WriteIntToDebugFile(strlen(tempstringconcat));
+		}else{
+			//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
+			CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1,passedSlot+10);
+			setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
+		}
 	}
 	free(tempstringconcat);
 }
@@ -3804,9 +3811,9 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		strcpy(noobOptions[i],nathanvariableGetArray(&_passedArguments[1],i));
 	}
 
-	if (currentlyVNDSGame){
-		nathanscriptBackLine(); // Fix file position for saving so when we load it reloads the choice command
-	}
+	//if (currentlyVNDSGame){
+	//	nathanscriptBackLine(); // Fix file position for saving so when we load it reloads the choice command
+	//}
 
 	// This is the actual loop for choosing the choice
 	signed char _choice=0;
@@ -3814,7 +3821,7 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		fpsCapStart();
 		controlsStart();
 		_choice = MenuControls(_choice,0,_totalOptions-1);
-		updateControlsGeneral();
+		//updateControlsGeneral();
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			lastSelectionAnswer = _choice;
 			break;
@@ -3835,9 +3842,9 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		fpsCapWait();
 	}
 
-	if (currentlyVNDSGame){
-		nathanscriptAdvanceLine(); // Fix what we did at the start of the function
-	}
+	//if (currentlyVNDSGame){
+	//	nathanscriptAdvanceLine(); // Fix what we did at the start of the function
+	//}
 
 	// Free strings that were made with calloc earlier
 	for (i=0;i<_totalOptions;i++){
@@ -3981,9 +3988,9 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 	_passedSelectImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
 
 	for (i=0;i<_numberOfChoices;i++){
-		_passedNormalImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+1-1]),graphicsLocation,scriptUsesFileExtensions);
-		_passedHoverImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+2-1]),graphicsLocation,scriptUsesFileExtensions);
-		_passedSelectImages[i] = safeLoadGamePNG(nathanvariableToString(&_passedArguments[i*3+3-1]),graphicsLocation,scriptUsesFileExtensions);
+		_passedNormalImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+1-1]),graphicsLocation,scriptUsesFileExtensions);
+		_passedHoverImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+2-1]),graphicsLocation,scriptUsesFileExtensions);
+		_passedSelectImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+3-1]),graphicsLocation,scriptUsesFileExtensions);
 	}
 
 	// Y position of the first choice graphic
@@ -4841,7 +4848,6 @@ void TitleScreen(){
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		fpsCapStart();
 		controlsStart();
-
 		// Password right left down up square
 			if (wasJustPressed(SCE_CTRL_RIGHT)){
 				_titlePassword=1;
@@ -5432,9 +5438,33 @@ void VNDSNavigationMenu(){
 
 	char _possibleThunbnailPath[strlen(streamingAssets)+strlen("/thumbnail.png")+1];
 	strcpy(_possibleThunbnailPath,streamingAssets);
+	strcat(_possibleThunbnailPath,"/vndsvitaproperties");
+	if (checkFileExist(_possibleThunbnailPath)){
+		printf("is upgraded converter ");
+		FILE* fp = fopen(_possibleThunbnailPath,"rb");
+		char _loadedVersionNumber;
+		char _loadedImageFormat;
+		fread(&_loadedVersionNumber,1,1,fp);
+		fread(&_loadedImageFormat,1,1,fp);
+		fclose(fp);
+		printf(" v%d\n",_loadedVersionNumber);
+
+		if (_loadedVersionNumber==1){ // PNG
+			imagesAreJpg=0;
+		}else if (_loadedVersionNumber==2){ // JPG
+			imagesAreJpg=1;
+		}else{
+			LazyMessage("Unknown image format number.",NULL,_possibleThunbnailPath,NULL);
+		}
+	}else{
+		LazyMessage("VNDSVita Game Converter < v1.1",NULL,"Game may crash.",NULL);
+		printf("is old converter.\n");
+	}
+
+	strcpy(_possibleThunbnailPath,streamingAssets);
 	strcat(_possibleThunbnailPath,"/thumbnail.png");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
-		_loadedThumbnail = SafeLoadPNG(_possibleThunbnailPath);
+		_loadedThumbnail = _loadGameImage(_possibleThunbnailPath);
 	}
 
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
