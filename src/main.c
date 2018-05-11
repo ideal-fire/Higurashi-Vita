@@ -5445,17 +5445,17 @@ void VNDSNavigationMenu(){
 		char _loadedVersionNumber;
 		char _loadedImageFormat;
 		fread(&_loadedVersionNumber,1,1,fp);
-		fread(&_loadedImageFormat,1,1,fp);
+		//fread(&_loadedImageFormat,1,1,fp);
 		fclose(fp);
 		printf(" v%d\n",_loadedVersionNumber);
 
-		if (_loadedVersionNumber==1){ // PNG
-			imagesAreJpg=0;
-		}else if (_loadedVersionNumber==2){ // JPG
-			imagesAreJpg=1;
-		}else{
-			LazyMessage("Unknown image format number.",NULL,_possibleThunbnailPath,NULL);
-		}
+		//if (_loadedVersionNumber==1){ // PNG
+		//	imagesAreJpg=0;
+		//}else if (_loadedVersionNumber==2){ // JPG
+		//	imagesAreJpg=1;
+		//}else{
+		//	LazyMessage("Unknown image format number.",NULL,_possibleThunbnailPath,NULL);
+		//}
 	}else{
 		LazyMessage("VNDSVita Game Converter < v1.1",NULL,"Game may crash.",NULL);
 		printf("is old converter.\n");
