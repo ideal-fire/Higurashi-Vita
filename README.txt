@@ -30,6 +30,4 @@ The libGeneralGood build in the ./lib/ folder could be outdated. If so, compile 
 Everything else can be obtained with vdpm.
 https://github.com/vitasdk/vdpm
 
-If a miracle happens and you actually get all the libraries that you need, it can be compiled by just calling `make -f makefile.vita`.
-
-Put the contents of the VpkContents/Shared and VpkContents/Vita folders into the VPK manually.
+If a miracle happens and you actually get all the libraries that you need, it can be compiled by just calling `make -f makefile.vita` and then `make -f makefile.vita stuffvpk`. (p)7zip is required for the `stuffvpk` target.

@@ -1,3 +1,0 @@
-unzip HIGURASHI.vpk -d /media/sf_C/Higurashi/tempUnzip
-curl -T ./tempUnzip/eboot.bin ftp://192.168.1.229:1337/ux0:/app/HIGURASHI/
-rm -r ./tempUnzip

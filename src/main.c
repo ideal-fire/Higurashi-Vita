@@ -91,7 +91,7 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.6" // This
+#define VERSIONSTRING "v2.6.1" // This
 #define VERSIONNUMBER 6 // This
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1

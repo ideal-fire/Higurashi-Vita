@@ -69,3 +69,7 @@ vpksend: $(TARGET).vpk
 send: eboot.bin
 	curl -T eboot.bin ftp://192.168.1.229:1337/ux0:/app/$(TITLE_ID)/
 	@echo "Sent."
+
+stuffvpk:
+	@7z a Higurashi.vpk ./VpkContents/Shared/*
+	@7z a Higurashi.vpk ./VpkContents/Vita/*
