@@ -91,8 +91,8 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.6.1" // This
-#define VERSIONNUMBER 6 // This
+#define VERSIONSTRING "v2.7" // This
+#define VERSIONNUMBER 7 // This
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1
 // Specific constants
@@ -1735,6 +1735,12 @@ CrossTexture* safeLoadGameImage(const char* filename, char _folderPreference, ch
 	}
 	CrossTexture* _returnLoadedPNG = _loadGameImage(_tempFoundFilename);
 	free(_tempFoundFilename);
+	#if PLATFORM == PLAT_VITA
+		// Smooth scaling
+		if (currentlyVNDSGame){
+			vita2d_texture_set_filters(_returnLoadedPNG,SCE_GXM_TEXTURE_FILTER_LINEAR,SCE_GXM_TEXTURE_FILTER_LINEAR);
+		}
+	#endif
 	return _returnLoadedPNG;
 }
 int decrementWithMax(int _passedCurrentValue, int _passedMax){
