@@ -77,8 +77,11 @@ build3ds/
 /_Notes/3dsCompile/
 /OldBuidls/
 
-# For Windows build
-/lib-custom/
+# Old Windows stuff
+run.bat
+build.bat
+lib/libGeneralGoodWindows.a
+lib/libSDLFontCacheWindows.a
 
 _Compiled3dsRelease/
 _3dsRelease.zip
