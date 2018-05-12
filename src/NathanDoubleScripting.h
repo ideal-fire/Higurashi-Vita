@@ -916,7 +916,7 @@ void nathanscriptBackLine(){
 	fseek(nathanscriptCurrentOpenFile,-1,SEEK_CUR);
 	while (1){
 		if (fseek(nathanscriptCurrentOpenFile,-1,SEEK_CUR)!=0){
-			printf("error.\n");
+			printf("Seek back error. At start of file?\n");
 			return;
 		}
 		if (fpeekchar(nathanscriptCurrentOpenFile)=='\n'){

@@ -59,7 +59,7 @@ void drawTextureScaleGood(const CrossTexture* texture, float x, float y, double 
 		sceGxmSetVertexStream(_vita2d_context, 0, vertices);
 		sceGxmDraw(_vita2d_context, SCE_GXM_PRIMITIVE_TRIANGLE_STRIP, SCE_GXM_INDEX_FORMAT_U16, indices_buf_addr, 4);
 	#else
-		drawTextureScale(texture,x,y,x_scale,y_scale);
+		drawTextureScale((CrossTexture*)texture,x,y,x_scale,y_scale);
 	#endif
 }
 void drawTextureScaleAlphaGood(const CrossTexture* texture, float x, float y, double x_scale, double y_scale, unsigned char alpha){
@@ -84,7 +84,7 @@ void drawTextureScaleAlphaGood(const CrossTexture* texture, float x, float y, do
 		// final
 		drawTextureScaleGood(texture, x, y, x_scale, y_scale);
 	#else
-		drawTextureScaleAlpha(texture,x,y,x_scale,y_scale,alpha);
+		drawTextureScaleAlpha((CrossTexture*)texture,x,y,x_scale,y_scale,alpha);
 	#endif
 }
 

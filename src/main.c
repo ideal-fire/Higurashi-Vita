@@ -3828,9 +3828,9 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		strcpy(noobOptions[i],nathanvariableGetArray(&_passedArguments[1],i));
 	}
 
-	//if (currentlyVNDSGame){
-	//	nathanscriptBackLine(); // Fix file position for saving so when we load it reloads the choice command
-	//}
+	if (currentlyVNDSGame){
+		nathanscriptBackLine(); // Fix file position for saving so when we load it reloads the choice command
+	}
 
 	// This is the actual loop for choosing the choice
 	signed char _choice=0;
@@ -3838,7 +3838,7 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		fpsCapStart();
 		controlsStart();
 		_choice = MenuControls(_choice,0,_totalOptions-1);
-		//updateControlsGeneral();
+		updateControlsGeneral();
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			lastSelectionAnswer = _choice;
 			break;
@@ -3859,9 +3859,9 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		fpsCapWait();
 	}
 
-	//if (currentlyVNDSGame){
-	//	nathanscriptAdvanceLine(); // Fix what we did at the start of the function
-	//}
+	if (currentlyVNDSGame){
+		nathanscriptAdvanceLine(); // Fix what we did at the start of the function
+	}
 
 	// Free strings that were made with calloc earlier
 	for (i=0;i<_totalOptions;i++){
@@ -5463,8 +5463,10 @@ void VNDSNavigationMenu(){
 		fclose(fp);
 		imagesAreJpg=0;
 	}else{
-		LazyMessage("VNDSVita Game Converter < v1.1",NULL,"Game may crash.",NULL);
-		printf("is old converter.\n");
+		if (!defaultGameIsSet){
+			LazyMessage("VNDSVita Game Converter < v1.1",NULL,"Game may crash.",NULL);
+		}
+		printf("Is old game converter.\n");
 	}
 
 	strcpy(_possibleThunbnailPath,streamingAssets);
