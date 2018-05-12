@@ -34,6 +34,9 @@
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
 		text x1b[0m
+
+	setimg but_defa2.png 11 20
+
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -430,6 +433,10 @@ signed char imagesAreJpg=0;
 /*
 ====================================================
 */
+
+#include "../stolenCode/goodvita2ddraw.h"
+
+
 CrossTexture* _loadGameImage(const char* path){
 	if (imagesAreJpg){
 		return loadJPG((char*)path);
@@ -1275,13 +1282,23 @@ void DrawBust(bust* passedBust){
 			GetXAndYOffset(currentBackground,&_tempXOffset,&_tempYOffset);
 		}
 	}
+
+	//printf("=====\n");
+	//printf("GraphicsScale:%f\n",graphicsScale);
+	//printf("TempYOffset:%d\n",_tempYOffset);
+	//printf("YOffset;%d\n",passedBust->yOffset);
+	//printf("cacheYOffsetScale:%f\n",passedBust->cacheYOffsetScale);
+	//printf("TotalYOffset:%d\n",(int)(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale));
+	//printf("ImageHeight:%d\n",getTextureHeight(passedBust->image));
+	//printf("SclaedImageHeight:%d\n",(int)(getTextureHeight(passedBust->image)*graphicsScale));
+
 	if (passedBust->alpha==255){
-		drawTextureScale(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale,graphicsScale,graphicsScale);
+		drawTextureScaleGood(passedBust->image,ceil(_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale),ceil(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale),graphicsScale,graphicsScale);
 	}else{
 		if (passedBust->bustStatus==BUST_STATUS_TRANSFORM_FADEIN){
-			drawTextureScaleAlpha(passedBust->transformTexture,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, 255-passedBust->alpha);
+			drawTextureScaleAlphaGood(passedBust->transformTexture,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, 255-passedBust->alpha);
 		}
-		drawTextureScaleAlpha(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, passedBust->alpha);
+		drawTextureScaleAlphaGood(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, passedBust->alpha);
 	}
 }
 void RecalculateBustOrder(){
