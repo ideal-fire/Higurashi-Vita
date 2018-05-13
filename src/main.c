@@ -30,7 +30,6 @@
 
 	TODO - Allow VNDS sound command to stop all sounds
 
-
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
 		text x1b[0m
@@ -52,13 +51,16 @@
 	void XOutFunction();
 	void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]);
 	void SaveGameEditor();
-	void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption);
+	void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption);
 	char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage);
 	void initializeNathanScript();
 	void activateVNDSSettings();
 	void activateHigurashiSettings();
 	void showTextbox();
 	void hideTextbox();
+	void testCode();
+	void drawAdvanced(char _shouldDrawMessageBox, char _shouldDrawMessageText);
+	void loadADVBox();
 	typedef struct{
 		char** theArray;
 		unsigned char length;
@@ -91,7 +93,7 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.7" // This
+#define VERSIONSTRING "v2.6.3" // This
 #define VERSIONNUMBER 7 // This
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1
@@ -99,12 +101,12 @@
 #if PLATFORM != PLAT_3DS
 	#define SELECTBUTTONNAME "X"
 	#define BACKBUTTONNAME "O"
-	#define ADVBOXHEIGHT 181
+	int advboxHeight = 181;
 	#define VERSIONSTRINGSUFFIX ""
 #else
 	#define SELECTBUTTONNAME "A"
 	#define BACKBUTTONNAME "B"
-	#define ADVBOXHEIGHT 75
+	int advboxHeight = 75;
 	#define cpuOverclocked textIsBottomScreen
 	#define VERSIONSTRINGSUFFIX ""
 #endif
@@ -344,7 +346,8 @@ int32_t autoModeWait=500;
 signed char cpuOverclocked=0;
 
 #define TEXTMODE_NVL 0
-#define TEXTMODE_AVD 1
+#define TEXTMODE_AVD 1 // Wrong spelling
+#define TEXTMODE_ADV 1
 char gameTextDisplayMode=TEXTMODE_NVL;
 char hasOwnVoiceSetting=0;
 
@@ -429,6 +432,7 @@ char nextVndsBustshotSlot=0;
 signed char vndsClearAtBottom=0;
 signed char showVNDSWarnings=1;
 signed char imagesAreJpg=0;
+signed char dynamicAdvBoxHeight=0;
 
 /*
 ====================================================
@@ -554,19 +558,19 @@ CrossTexture* LoadEmbeddedPNG(const char* path){
 	}
 	return _tempTex;
 }
-void DrawMessageBox(){
+void DrawMessageBox(char _textmodeToDraw){
 	#if PLATFORM == PLAT_3DS
 		if (textIsBottomScreen==1){
 			return;
 		}
 	#endif
-	if (gameTextDisplayMode == TEXTMODE_NVL || currentCustomTextbox==NULL){
+	if (_textmodeToDraw == TEXTMODE_NVL || currentCustomTextbox==NULL){
 		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,MessageBoxAlpha);
 	}else{
 		if (canChangeBoxAlpha){
-			drawTextureScaleAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset, (double)(outputLineScreenWidth-textboxXOffset)/(double)getTextureWidth(currentCustomTextbox), (double)(ADVBOXHEIGHT)/(double)getTextureHeight(currentCustomTextbox),MessageBoxAlpha);
+			drawTextureScaleAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset, (double)(outputLineScreenWidth-textboxXOffset)/(double)getTextureWidth(currentCustomTextbox), (double)(advboxHeight)/(double)getTextureHeight(currentCustomTextbox),MessageBoxAlpha);
 		}else{
-			drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (double)(outputLineScreenWidth-textboxXOffset)/(double)getTextureWidth(currentCustomTextbox), (double)(ADVBOXHEIGHT)/(double)getTextureHeight(currentCustomTextbox));
+			drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (double)(outputLineScreenWidth-textboxXOffset)/(double)getTextureWidth(currentCustomTextbox), (double)(advboxHeight)/(double)getTextureHeight(currentCustomTextbox));
 		}
 	}
 }
@@ -1162,7 +1166,7 @@ void updateControlsGeneral(){
 		isSkipping=0;
 	}
 	if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,SOUNDPLAYER!=SND_VITA,!currentlyVNDSGame,0);
+		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,SOUNDPLAYER!=SND_VITA,!currentlyVNDSGame,0,currentlyVNDSGame);
 	}
 	if (wasJustPressed(SCE_CTRL_SELECT)){
 		PlayMenuSound();
@@ -1292,13 +1296,16 @@ void DrawBust(bust* passedBust){
 	//printf("ImageHeight:%d\n",getTextureHeight(passedBust->image));
 	//printf("SclaedImageHeight:%d\n",(int)(getTextureHeight(passedBust->image)*graphicsScale));
 
+	// If the busts end one pixel off again, it may be because these are now int instead of float.
+	float _drawBustX = ceil(_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale);
+	float _drawBustY = ceil(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale);
 	if (passedBust->alpha==255){
-		drawTextureScaleGood(passedBust->image,ceil(_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale),ceil(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale),graphicsScale,graphicsScale);
+		drawTextureScaleGood(passedBust->image,_drawBustX,_drawBustY,graphicsScale,graphicsScale);
 	}else{
 		if (passedBust->bustStatus==BUST_STATUS_TRANSFORM_FADEIN){
-			drawTextureScaleAlphaGood(passedBust->transformTexture,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, 255-passedBust->alpha);
+			drawTextureScaleAlphaGood(passedBust->transformTexture,_drawBustX,_drawBustY, graphicsScale, graphicsScale, 255-passedBust->alpha);
 		}
-		drawTextureScaleAlphaGood(passedBust->image,_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale,_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale, graphicsScale, graphicsScale, passedBust->alpha);
+		drawTextureScaleAlphaGood(passedBust->image,_drawBustX,_drawBustY, graphicsScale, graphicsScale, passedBust->alpha);
 	}
 }
 void RecalculateBustOrder(){
@@ -1619,8 +1626,8 @@ void updateGraphicsScale(){
 }
 void setTextOnlyOverBackground(char _newValue){
 	textOnlyOverBackground=_newValue;
-	if (gameTextDisplayMode == TEXTMODE_AVD){
-		textboxYOffset=screenHeight-ADVBOXHEIGHT;
+	if (gameTextDisplayMode == TEXTMODE_ADV){
+		textboxYOffset=screenHeight-advboxHeight;
 	}else{
 		textboxYOffset=0;
 	}
@@ -1631,7 +1638,9 @@ void setTextOnlyOverBackground(char _newValue){
 		updateTextPositions();
 	}
 }
-
+void applyTextboxChanges(){
+	setTextOnlyOverBackground(textOnlyOverBackground);
+}
 // Returns the folder for CG or CGAlt depending on the user's settings
 char* getUserPreferredImageDirectory(char _folderPreference){
 	if (_folderPreference==LOCATION_CGALT){
@@ -1648,7 +1657,6 @@ char* getUserPreferredImageDirectoryFallback(char _folderPreference){
 		return locationStrings[LOCATION_CGALT];
 	}
 }
-
 // Location string fallback with a specific image format
 char* _locationStringFallbackFormat(const char* filename, char _folderPreference, char* _fileFormat){
 	char* _returnFoundString;
@@ -1671,7 +1679,6 @@ char* _locationStringFallbackFormat(const char* filename, char _folderPreference
 	free(_returnFoundString);
 	return NULL;
 }
-
 char* LocationStringFallback(const char* filename, char _folderPreference, char _extensionIncluded, char _isAllCaps){
 	char* _foundFileExtension=NULL;
 	char* _workableFilename = malloc(strlen(filename)+1);
@@ -1722,7 +1729,6 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 	free(_workableFilename);
 	return _returnFoundString;
 }
-
 // Will load a PNG from CG or CGAlt
 CrossTexture* safeLoadGameImage(const char* filename, char _folderPreference, char _extensionIncluded){
 	char* _tempFoundFilename;
@@ -1800,6 +1806,72 @@ void increaseBustArraysSize(int _oldMaxBusts, int _newMaxBusts){
 	bustOrder = recalloc(bustOrder, _newMaxBusts * sizeof(char), _oldMaxBusts * sizeof(char));
 	bustOrderOverBox = recalloc(bustOrderOverBox, _newMaxBusts * sizeof(char), _oldMaxBusts * sizeof(char));
 	RecalculateBustOrder();
+}
+signed int atLeastOne(signed int _input){
+	return _input==0 ? 1 : _input;
+}
+#define ADV_DYNAMICBOX_MILLISECONDSTRETCH 200
+void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight){
+	if (_oldHeight==_newHeight){
+		return;
+	}
+	if (!isSkipping){
+		// Absolute value
+		signed int _changePerFrame = atLeastOne(floor(((_newHeight-_oldHeight)/(60*((double)ADV_DYNAMICBOX_MILLISECONDSTRETCH/1000)))));
+		char _isGoingDown = _changePerFrame<0;
+		_changePerFrame = _changePerFrame < 0 ? _changePerFrame*-1 : _changePerFrame;
+		while (1){
+			fpsCapStart();
+			// Apply the changes
+			if (_isGoingDown){
+				advboxHeight-=_changePerFrame;
+				if (advboxHeight<_newHeight){
+					break;
+				}
+			}else{
+				advboxHeight+=_changePerFrame;
+				if (advboxHeight>_newHeight){
+					break;
+				}
+			}
+			applyTextboxChanges();
+			// Draw the changes
+			startDrawing();
+			drawAdvanced(1,0); // Don't draw message text during transitions
+			endDrawing();
+			fpsCapWait();
+		}
+	}
+	advboxHeight=_newHeight;
+	applyTextboxChanges();
+}
+void updateDynamicADVBox(char _includeDrawing){
+	short _totalLines=1; // One extra line to be safe
+	short i;
+	for (i=0;i<MAXLINES;++i){
+		if (currentMessages[i][0]!='\0'){
+			++_totalLines;
+		}
+	}
+	int _newAdvBoxHeight = _totalLines*currentTextHeight;
+	if (_includeDrawing){
+		smoothADVBoxHeightTransition(advboxHeight,_newAdvBoxHeight);
+	}else{
+		advboxHeight=_newAdvBoxHeight;
+		applyTextboxChanges();
+	}
+}
+void enableVNDSADVMode(){
+	gameTextDisplayMode=TEXTMODE_ADV;
+	dynamicAdvBoxHeight=1;
+	applyTextboxChanges();
+	loadADVBox();
+	updateDynamicADVBox(0);
+}
+void disableVNDSADVMode(){
+	gameTextDisplayMode=TEXTMODE_NVL;
+	dynamicAdvBoxHeight=0;
+	applyTextboxChanges();
 }
 //===================
 void FadeBustshot(int passedSlot,int _time,char _wait){
@@ -1940,7 +2012,7 @@ void DrawScene(const char* _filename, int time){
 				}
 			}
 			if (MessageBoxEnabled==1){
-				DrawMessageBox();
+				DrawMessageBox(gameTextDisplayMode);
 			}
 			for (i = maxBusts-1; i != -1; i--){
 				if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1 && Busts[bustOrderOverBox[i]].lineCreatedOn != currentScriptLine-1){
@@ -2204,7 +2276,7 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 // Will use fallbacks
 // Return NULL if file not exist
 char* getSoundFilename(const char* _filename, char _preferedDirectory){
-	char* tempstringconcat;
+	char* tempstringconcat=NULL;
 	if (_preferedDirectory==PREFER_DIR_BGM){
 		tempstringconcat = getSpecificPossibleSoundFilename(_filename,"BGM/");
 		if (tempstringconcat==NULL){
@@ -2283,6 +2355,9 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
 	if (strlen(_tempMsg)==0){
 		return;
+	}
+	if (currentlyVNDSGame && gameTextDisplayMode==TEXTMODE_ADV){
+		ClearMessageArray();
 	}
 
 	// 1 when finished displaying the text
@@ -2497,6 +2572,9 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (_currentDrawLine<0){
 		_currentDrawLine=0;
 	}
+	if (dynamicAdvBoxHeight){
+		updateDynamicADVBox(1);
+	}
 	#if PLATFORM == PLAT_3DS
 		int _oldMessageXOffset=textboxXOffset;
 		int _oldMessageInBoxXOffset=messageInBoxXOffset;
@@ -2542,7 +2620,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			DrawCurrentFilter();
 		}
 		if (MessageBoxEnabled==1){
-			DrawMessageBox();
+			DrawMessageBox(gameTextDisplayMode);
 		}
 		
 		for (i = maxBusts-1; i != -1; i--){
@@ -2789,7 +2867,7 @@ void LoadSettings(){
 				outputLineScreenHeight = 240;
 			#endif
 		}
-		setTextOnlyOverBackground(textOnlyOverBackground);
+		applyTextboxChanges();
 		printf("Loaded settings file.\n");
 	}
 }
@@ -2937,7 +3015,7 @@ void loadADVBox(){
 			currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBoxLowRes.png");
 		#endif
 	}
-	setTextOnlyOverBackground(textOnlyOverBackground);
+	applyTextboxChanges();
 }
 void LoadGameSpecificStupidity(){
 	TryLoadMenuSoundEffect(NULL);
@@ -3262,7 +3340,7 @@ void vndsNormalLoad(char* _filename){
 	unsigned char _readFileFormat;
 	fread(&_readFileFormat,sizeof(unsigned char),1,fp); //
 	if (_readFileFormat!=1){
-		LazyMessage("Bad file format version.\n",NULL,NULL,NULL);
+		LazyMessage("Bad file format version.",NULL,NULL,NULL);
 		fclose(fp);
 	}
 	char* _foundScriptFilename = readLengthStringFromFile(fp); //
@@ -3324,6 +3402,10 @@ void vndsNormalLoad(char* _filename){
 
 	controlsStart();
 	controlsEnd();
+
+	if (gameTextDisplayMode==TEXTMODE_ADV && dynamicAdvBoxHeight){
+		updateDynamicADVBox(1);
+	}
 
 	endType=Line_Normal;	
 	outputLineWait();
@@ -3852,7 +3934,7 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		controlsEnd();
 		startDrawing();
 		Draw(0);
-		DrawMessageBox();
+		DrawMessageBox(TEXTMODE_NVL);
 		for (i=0;i<_totalOptions;i++){
 			if (_choice!=i){
 				goodDrawText(MENUOPTIONOFFSET,i*currentTextHeight,noobOptions[i],fontSize);
@@ -3980,7 +4062,7 @@ void scriptOptionsEnableVoiceSetting(nathanscriptVariable* _passedArguments, int
 }
 void scriptOptionsSetTextMode(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	gameTextDisplayMode = nathanvariableToInt(&_passedArguments[0]);
-	setTextOnlyOverBackground(textOnlyOverBackground);
+	applyTextboxChanges();
 	return;
 }
 void scriptLoadADVBox(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -4103,7 +4185,7 @@ void scriptSetForceCapFilenames(nathanscriptVariable* _passedArguments, int _num
 }
 #include "LuaWrapperDefinitions.h"
 //======================================================
-void Draw(char _shouldDrawMessageBox){
+void drawAdvanced(char _shouldDrawMessageBox, char _shouldDrawMessageText){
 	int i;
 	if (currentBackground!=NULL){
 		DrawBackground(currentBackground);
@@ -4117,16 +4199,19 @@ void Draw(char _shouldDrawMessageBox){
 		DrawCurrentFilter();
 	}
 	if (_shouldDrawMessageBox==1){
-		DrawMessageBox();
+		DrawMessageBox(gameTextDisplayMode);
 	}
 	for (i = maxBusts-1; i != -1; i--){
 		if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
 			DrawBust(&(Busts[bustOrderOverBox[i]]));
 		}
 	}
-	if (_shouldDrawMessageBox==1){
+	if (_shouldDrawMessageText==1){
 		DrawMessageText();
 	}
+}
+void Draw(char _shouldDrawMessageBox){
+	drawAdvanced(_shouldDrawMessageBox,_shouldDrawMessageBox);
 }
 char upgradeToGameFolder(){
 	controlsEnd();
@@ -4371,11 +4456,11 @@ void FontSizeSetup(){
 	SaveFontSizeFile();
 }
 #define ISTEXTSPEEDBAR 0
-#define MAXOPTIONSSETTINGS 17
+#define MAXOPTIONSSETTINGS 18
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
 	b = _maxOptionSlotUsed;
-void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption){
+void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption){
 	controlsStart();
 	controlsEnd();
 	PlayMenuSound();
@@ -4405,6 +4490,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	signed char _bustLocationSlot=-2;
 	signed char _messageBoxAlphaSlot=-2;
 	signed char _higurashiScalingSlot=-2;
+	signed char _textboxModeSlot=-2;
 
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
@@ -4460,6 +4546,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	if (_showScalingOption){
 		SETTINGSMENU_EASYADDOPTION("Dynamic Scaling: ",_higurashiScalingSlot);
 	}
+	if (_showTextBoxModeOption){
+		SETTINGSMENU_EASYADDOPTION("Text Mode: ",_textboxModeSlot);
+	}
 	// Quit button is always last
 	if (currentGameStatus!=GAMESTATUS_TITLE){
 		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Quit";
@@ -4504,6 +4593,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}
 	if (_showScalingOption){
 		_settingsOptionsValueText[_higurashiScalingSlot]=charToSwitch(higurashiUsesDynamicScale);
+	}
+	if (_showTextBoxModeOption){
+		_settingsOptionsValueText[_textboxModeSlot]=(gameTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
 	}
 
 	// Make strings
@@ -4764,6 +4856,22 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 						Busts[i].cacheYOffsetScale = GetYOffsetScale(Busts[i].image);
 					}
 				}
+			}else if (_choice==_textboxModeSlot){
+				if (gameTextDisplayMode==TEXTMODE_ADV){
+					_settingsOptionsValueText[_textboxModeSlot]="NVL";
+					if (currentlyVNDSGame){
+						disableVNDSADVMode();
+					}else{
+						LazyMessage("TODO - Implement swap for Higurashi.",NULL,NULL,NULL);
+					}
+				}else if (gameTextDisplayMode==TEXTMODE_NVL){
+					_settingsOptionsValueText[_textboxModeSlot]="ADV";
+					if (currentlyVNDSGame){
+						enableVNDSADVMode();
+					}else{
+						LazyMessage("TODO - Implement swap for Higurashi.",NULL,NULL,NULL);
+					}
+				}
 			}else if (_choice==_maxOptionSlotUsed){ // Quit
 				#if PLATFORM == PLAT_3DS
 					lockBGM();
@@ -4801,6 +4909,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		// If message box alpha is very high or text is on the bottom screen then make the message box alpha text red
 		if ( (MessageBoxAlpha>=230 && canChangeBoxAlpha) || (PLATFORM == PLAT_3DS && cpuOverclocked)){
 			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(_messageBoxAlphaSlot-_scrollOffset),_settingsOptionsMainText[_messageBoxAlphaSlot],fontSize,255,0,0);
+		}
+		if (_shouldShowVNDSSettings && currentlyVNDSGame && gameTextDisplayMode == TEXTMODE_ADV){
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(_vndsHitBottomActionSlot-_scrollOffset),_settingsOptionsMainText[_vndsHitBottomActionSlot],fontSize,255,0,0);
 		}
 		// Display sample Rena if changing bust location
 		#if PLATFORM == PLAT_3DS
@@ -4966,7 +5077,7 @@ void TitleScreen(){
 				}
 			}else if (_choice==2){ // Go to setting menu
 				controlsEnd();
-				SettingsMenu(0,0,0,0,1,0);
+				SettingsMenu(0,0,0,0,1,0,0);
 				controlsEnd();
 				break;
 			}else if (_choice==3){ // Quit button
@@ -5451,6 +5562,10 @@ void NewGameMenu(){
 // Hold L to disable font loading
 // Hold R to disable all optional loading
 void VNDSNavigationMenu(){
+	#warning TODO - Make this an option and disable the "Clear at bottom" setting if it''s enabled.
+	enableVNDSADVMode();
+	//disableVNDSADVMode();
+
 	controlsStart();
 	signed char _choice=0;
 	unsigned char _chosenSaveSlot=0;
@@ -5547,7 +5662,7 @@ void VNDSNavigationMenu(){
 					LazyMessage("Main script file",_vndsMainScriptConcat,"not exist.",NULL);
 				}
 			}else if (_choice==2){
-				SettingsMenu(0,1,0,0,0,0);
+				SettingsMenu(0,1,0,0,0,0,1);
 			}else if (_choice==3){
 				currentGameStatus = GAMESTATUS_QUIT;
 			}
@@ -5644,6 +5759,9 @@ void initializeNathanScript(){
 
 		increaseVNDSBustInfoArraysSize(0,maxBusts);
 	}
+}
+void testCode(){
+	//#warning TEST CODE INCLUDED!
 }
 // Please exit if this function returns 2
 // Go ahead as normal if it returns 0
@@ -5832,6 +5950,8 @@ signed char init(){
 		svcGetThreadPriority(&_foundMainThreadPriority, CUR_THREAD_HANDLE);
 		_3dsSoundUpdateThread = threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
 	#endif
+
+	testCode();
 	return 0;
 }
 int main(int argc, char *argv[]){
