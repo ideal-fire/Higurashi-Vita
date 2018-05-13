@@ -162,7 +162,8 @@
 // 6 adds vndsClearAtBottom
 // 7 adds showVNDSWarnings
 // 8 adds higurashiUsesDynamicScale
-#define OPTIONSFILEFORMAT 8
+// 9 adds preferredTextDisplayMode
+#define OPTIONSFILEFORMAT 9
 
 #define VNDSSAVEFORMAT 1
 
@@ -433,14 +434,13 @@ signed char vndsClearAtBottom=0;
 signed char showVNDSWarnings=1;
 signed char imagesAreJpg=0;
 signed char dynamicAdvBoxHeight=0;
+// Will only be used in games it can be used in
+signed char preferredTextDisplayMode=TEXTMODE_NVL;
 
 /*
 ====================================================
 */
-
 #include "../stolenCode/goodvita2ddraw.h"
-
-
 CrossTexture* _loadGameImage(const char* path){
 	if (imagesAreJpg){
 		return loadJPG((char*)path);
@@ -2779,6 +2779,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // vndsClearAtBottom, 1 byte
 // showVNDSWarnings, 1 byte
 // higurashiUsesDynamicScale, 1 byte
+// preferredTextDisplayMode, 1 byte
 void SaveSettings(){
 	FILE* fp;
 	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
@@ -2803,6 +2804,7 @@ void SaveSettings(){
 	fwrite(&vndsClearAtBottom,sizeof(signed char),1,fp);
 	fwrite(&showVNDSWarnings,sizeof(signed char),1,fp);
 	fwrite(&higurashiUsesDynamicScale,sizeof(signed char),1,fp);
+	fwrite(&preferredTextDisplayMode,sizeof(signed char),1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -2855,6 +2857,9 @@ void LoadSettings(){
 		}
 		if (_tempOptionsFormat>=8){
 			fread(&higurashiUsesDynamicScale,sizeof(signed char),1,fp);
+		}
+		if (_tempOptionsFormat>=9){
+			fread(&preferredTextDisplayMode,sizeof(signed char),1,fp);
 		}
 		fclose(fp);
 
@@ -4455,6 +4460,20 @@ void FontSizeSetup(){
 	}
 	SaveFontSizeFile();
 }
+
+// Will change the global variables for you
+void switchTextDisplayMode(signed char _newMode){
+	if (currentlyVNDSGame){
+		if (_newMode==TEXTMODE_ADV){
+			enableVNDSADVMode();
+		}else if (_newMode==TEXTMODE_NVL){
+			disableVNDSADVMode();
+		}
+	}else{
+		LazyMessage("TODO",NULL,NULL,NULL);
+	}
+}
+
 #define ISTEXTSPEEDBAR 0
 #define MAXOPTIONSSETTINGS 18
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
@@ -4595,7 +4614,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		_settingsOptionsValueText[_higurashiScalingSlot]=charToSwitch(higurashiUsesDynamicScale);
 	}
 	if (_showTextBoxModeOption){
-		_settingsOptionsValueText[_textboxModeSlot]=(gameTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
+		_settingsOptionsValueText[_textboxModeSlot]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
 	}
 
 	// Make strings
@@ -4857,21 +4876,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					}
 				}
 			}else if (_choice==_textboxModeSlot){
-				if (gameTextDisplayMode==TEXTMODE_ADV){
-					_settingsOptionsValueText[_textboxModeSlot]="NVL";
-					if (currentlyVNDSGame){
-						disableVNDSADVMode();
-					}else{
-						LazyMessage("TODO - Implement swap for Higurashi.",NULL,NULL,NULL);
-					}
-				}else if (gameTextDisplayMode==TEXTMODE_NVL){
-					_settingsOptionsValueText[_textboxModeSlot]="ADV";
-					if (currentlyVNDSGame){
-						enableVNDSADVMode();
-					}else{
-						LazyMessage("TODO - Implement swap for Higurashi.",NULL,NULL,NULL);
-					}
-				}
+				preferredTextDisplayMode = (preferredTextDisplayMode==TEXTMODE_ADV ? TEXTMODE_NVL : TEXTMODE_ADV);
+				_settingsOptionsValueText[_textboxModeSlot]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
+				switchTextDisplayMode(preferredTextDisplayMode);
 			}else if (_choice==_maxOptionSlotUsed){ // Quit
 				#if PLATFORM == PLAT_3DS
 					lockBGM();
@@ -5562,10 +5569,7 @@ void NewGameMenu(){
 // Hold L to disable font loading
 // Hold R to disable all optional loading
 void VNDSNavigationMenu(){
-	#warning TODO - Make this an option and disable the "Clear at bottom" setting if it''s enabled.
-	enableVNDSADVMode();
-	//disableVNDSADVMode();
-
+	switchTextDisplayMode(preferredTextDisplayMode);
 	controlsStart();
 	signed char _choice=0;
 	unsigned char _chosenSaveSlot=0;
