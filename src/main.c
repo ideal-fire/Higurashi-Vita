@@ -33,42 +33,12 @@
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
 		text x1b[0m
-
-	setimg but_defa2.png 11 20
-
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
 #include "GeneralGoodConfig.h"
 
-// main.h
-	void startDrawing();
-	void Draw(char _shouldDrawMessageBox);
-	void RecalculateBustOrder();
-	void PlayBGM(const char* filename, int _volume, int _slot);
-	void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd);
-	void SaveSettings();
-	void XOutFunction();
-	void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]);
-	void SaveGameEditor();
-	void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption);
-	char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage);
-	void initializeNathanScript();
-	void activateVNDSSettings();
-	void activateHigurashiSettings();
-	void showTextbox();
-	void hideTextbox();
-	void testCode();
-	void drawAdvanced(char _shouldDrawMessageBox, char _shouldDrawMessageText);
-	void loadADVBox();
-	typedef struct{
-		char** theArray;
-		unsigned char length;
-	}goodStringMallocArray;
-	typedef struct{
-		unsigned char* theArray;
-		unsigned char length;
-	}goodu8MallocArray;
+#include "main.h"
 
 // Libraries all need
 #include <math.h>
@@ -121,6 +91,7 @@
 #define MENUCURSOR ">"
 #define MENUCURSOROFFSET 5
 #define MENUOPTIONOFFSET menuCursorSpaceWidth+5
+#define CLEARMESSAGEFADEOUTTIME 100
 ////////////////////////////////////
 #define TEXTBOXFADEOUTTIME 200 // In milliseconds
 #define TEXTBOXFADEINTIME 150
@@ -436,7 +407,6 @@ signed char imagesAreJpg=0;
 signed char dynamicAdvBoxHeight=0;
 // Will only be used in games it can be used in
 signed char preferredTextDisplayMode=TEXTMODE_NVL;
-
 /*
 ====================================================
 */
@@ -558,6 +528,41 @@ CrossTexture* LoadEmbeddedPNG(const char* path){
 	}
 	return _tempTex;
 }
+void DrawMessageText(unsigned char _alpha){
+	int i;
+	#if PLATFORM == PLAT_3DS
+		if (textIsBottomScreen==1){
+			startDrawingBottom();
+			if (strlen(currentMessages[i])==0){
+				goodDrawText(0,0,".",fontSize); // Hotfix to fix crash when no text on bottom screen.
+			}
+			for (i = 0; i < MAXLINES; i++){
+				goodDrawText(0,12+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+			}
+			for (i=0;i<MAXIMAGECHAR;i++){
+				if (imageCharType[i]!=-1){
+					drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i]-textboxXOffset-messageInBoxXOffset,imageCharY[i]-messageInBoxYOffset-textboxYOffset,((double)textWidth(fontSize,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
+				}
+			}
+			return;
+		}
+	#endif
+	if (_alpha==255){
+		for (i = 0; i < MAXLINES; i++){
+			goodDrawText(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+		}
+	}else{
+		for (i = 0; i < MAXLINES; i++){
+			goodDrawTextColoredAlpha(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize,255,255,255,_alpha);
+		}
+	}
+	
+	for (i=0;i<MAXIMAGECHAR;i++){
+		if (imageCharType[i]!=-1){
+			drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(fontSize,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
+		}
+	}
+}
 void DrawMessageBox(char _textmodeToDraw){
 	#if PLATFORM == PLAT_3DS
 		if (textIsBottomScreen==1){
@@ -575,7 +580,9 @@ void DrawMessageBox(char _textmodeToDraw){
 	}
 }
 void DrawCurrentFilter(){
-	drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,filterR,filterG,filterB,filterA);
+	if (currentFilterType!=FILTERTYPE_NEGATIVE){
+		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,filterR,filterG,filterB,filterA);
+	}
 	//drawRectangle(0,0,960,screenHeight,filterR,255-(filterG*filterA*.0011),filterB,255);
 }
 u64 waitwithCodeTarget;
@@ -760,16 +767,37 @@ void clearHistory(){
 		messageHistory[i][0]='\0';
 	}
 }
+signed int getChangePerFrame(signed int _totalRequiredChange, signed int _totalTime){
+	return atLeastOne(floor(((_totalRequiredChange)/(60*((double)_totalTime/1000)))));
+}
 void ClearMessageArray(){
 	currentLine=0;
 	int i,j;
+	int _totalAddedToHistory=0;
 	for (i = 0; i < MAXLINES; i++){
 		if (currentMessages[i][0]!='\0'){
 			addToMessageHistory(currentMessages[i]);
+			_totalAddedToHistory++;
 		}
-		for (j = 0; j < SINGLELINEARRAYSIZE; j++){
-			currentMessages[i][j]='\0';
+	}
+	if (_totalAddedToHistory!=0 && MessageBoxEnabled){ // If we actually added stuff
+		signed int _changePerFrame = getChangePerFrame(255,CLEARMESSAGEFADEOUTTIME);
+		signed int _currentTextAlpha = 255;
+		while (_currentTextAlpha>0){
+			fpsCapStart();
+			_currentTextAlpha-=_changePerFrame;
+			if (_currentTextAlpha<0){
+				_currentTextAlpha=0;
+			}
+			startDrawing();
+			drawAdvanced(1,1,1,MessageBoxEnabled,1,0);
+			DrawMessageText(_currentTextAlpha);
+			endDrawing();
+			fpsCapWait();
 		}
+	}
+	for (i = 0; i < MAXLINES; ++i){
+		currentMessages[i][0]='\0';
 	}
 	for (i=0;i<MAXIMAGECHAR;i++){
 		imageCharType[i]=-1;
@@ -785,34 +813,6 @@ void SetAllMusicVolume(int _passedFixedVolume){
 }
 int GetNextCharOnLine(int _linenum){
 	return u_strlen(currentMessages[_linenum]);
-}
-void DrawMessageText(){
-	int i;
-	#if PLATFORM == PLAT_3DS
-		if (textIsBottomScreen==1){
-			startDrawingBottom();
-			if (strlen(currentMessages[i])==0){
-				goodDrawText(0,0,".",fontSize); // Hotfix to fix crash when no text on bottom screen.
-			}
-			for (i = 0; i < MAXLINES; i++){
-				goodDrawText(0,12+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
-			}
-			for (i=0;i<MAXIMAGECHAR;i++){
-				if (imageCharType[i]!=-1){
-					drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i]-textboxXOffset-messageInBoxXOffset,imageCharY[i]-messageInBoxYOffset-textboxYOffset,((double)textWidth(fontSize,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
-				}
-			}
-			return;
-		}
-	#endif
-	for (i = 0; i < MAXLINES; i++){
-		goodDrawText(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
-	}
-	for (i=0;i<MAXIMAGECHAR;i++){
-		if (imageCharType[i]!=-1){
-			drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(fontSize,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
-		}
-	}
 }
 int Password(int val, int _shouldHave){
 	if (val==_shouldHave){
@@ -1837,7 +1837,7 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight){
 			applyTextboxChanges();
 			// Draw the changes
 			startDrawing();
-			drawAdvanced(1,0); // Don't draw message text during transitions
+			drawAdvanced(1,1,1,1,1,0); // Don't draw message text during transitions
 			endDrawing();
 			fpsCapWait();
 		}
@@ -2001,40 +2001,15 @@ void DrawScene(const char* _filename, int time){
 				_backgroundAlpha=255;
 			}
 			startDrawing();
-			
-			if (currentBackground!=NULL){
-				DrawBackground(currentBackground);
-			}
-			
-			for (i = maxBusts-1; i != -1; i--){
-				if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn != currentScriptLine-1){
-					DrawBust(&(Busts[bustOrder[i]]));
-				}
-			}
-			if (MessageBoxEnabled==1){
-				DrawMessageBox(gameTextDisplayMode);
-			}
-			for (i = maxBusts-1; i != -1; i--){
-				if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1 && Busts[bustOrderOverBox[i]].lineCreatedOn != currentScriptLine-1){
-					DrawBust(&(Busts[bustOrderOverBox[i]]));
-				}
-			}
-	
-			
+			drawAdvanced(1,1,0,1,1,0);
 			DrawBackgroundAlpha(newBackground,_backgroundAlpha);
-			
+			// Draw busts created on the last line. TODO - This is the source of ugly. Maybe don't show these busts until after the background change? But then how do we hide them before the background change?
 			for (i = maxBusts-1; i != -1; i--){
 				if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
 					DrawBust(&(Busts[bustOrder[i]]));
 				}
 			}
-	
-			if (filterActive==1){
-				DrawCurrentFilter();
-			}
-			if (MessageBoxEnabled==1){
-				DrawMessageText();
-			}
+			drawAdvanced(0,0,1,0,0,MessageBoxEnabled);
 			endDrawing();
 	
 			controlsStart();
@@ -2042,7 +2017,6 @@ void DrawScene(const char* _filename, int time){
 				_backgroundAlpha=254;
 			}
 			controlsEnd();
-	
 			fpsCapWait();
 		}
 
@@ -2607,27 +2581,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		controlsEnd();
 		
 		startDrawing();
-		if (currentBackground!=NULL){
-			DrawBackground(currentBackground);
-		}
-		
-		for (i = maxBusts-1; i != -1; i--){
-			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1){
-				DrawBust(&(Busts[bustOrder[i]]));
-			}
-		}
-		if (filterActive==1){
-			DrawCurrentFilter();
-		}
-		if (MessageBoxEnabled==1){
-			DrawMessageBox(gameTextDisplayMode);
-		}
-		
-		for (i = maxBusts-1; i != -1; i--){
-			if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
-				DrawBust(&(Busts[bustOrderOverBox[i]]));
-			}
-		}
+		drawAdvanced(1,1,1,MessageBoxEnabled,1,0);
 		#if PLATFORM == PLAT_3DS
 			if (textIsBottomScreen==1){
 				startDrawingBottom();
@@ -4190,33 +4144,37 @@ void scriptSetForceCapFilenames(nathanscriptVariable* _passedArguments, int _num
 }
 #include "LuaWrapperDefinitions.h"
 //======================================================
-void drawAdvanced(char _shouldDrawMessageBox, char _shouldDrawMessageText){
+void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _shouldDrawFilter, char _shouldDrawMessageBox, char _shouldDrawHighBusts, char _shouldDrawMessageText){
 	int i;
-	if (currentBackground!=NULL){
+	if (currentBackground!=NULL && _shouldDrawBackground){
 		DrawBackground(currentBackground);
 	}
-	for (i = maxBusts-1; i != -1; i--){
-		if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1){
-			DrawBust(&(Busts[bustOrder[i]]));
+	if (_shouldDrawLowBusts){
+		for (i = maxBusts-1; i != -1; i--){
+			if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1){
+				DrawBust(&(Busts[bustOrder[i]]));
+			}
 		}
 	}
-	if (filterActive==1){
+	if (filterActive==1 && _shouldDrawFilter){
 		DrawCurrentFilter();
 	}
 	if (_shouldDrawMessageBox==1){
 		DrawMessageBox(gameTextDisplayMode);
 	}
-	for (i = maxBusts-1; i != -1; i--){
-		if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
-			DrawBust(&(Busts[bustOrderOverBox[i]]));
+	if (_shouldDrawHighBusts){
+		for (i = maxBusts-1; i != -1; i--){
+			if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
+				DrawBust(&(Busts[bustOrderOverBox[i]]));
+			}
 		}
 	}
 	if (_shouldDrawMessageText==1){
-		DrawMessageText();
+		DrawMessageText(255);
 	}
 }
 void Draw(char _shouldDrawMessageBox){
-	drawAdvanced(_shouldDrawMessageBox,_shouldDrawMessageBox);
+	drawAdvanced(1,1,1,_shouldDrawMessageBox,1,_shouldDrawMessageBox);
 }
 char upgradeToGameFolder(){
 	controlsEnd();
@@ -4255,7 +4213,7 @@ char upgradeToGameFolder(){
 			fpsCapStart();
 			controlsEnd();
 			startDrawing();
-			DrawMessageText();
+			DrawMessageText(255);
 			endDrawing();
 			controlsStart();
 			fpsCapWait();
@@ -4460,7 +4418,6 @@ void FontSizeSetup(){
 	}
 	SaveFontSizeFile();
 }
-
 // Will change the global variables for you
 void switchTextDisplayMode(signed char _newMode){
 	if (currentlyVNDSGame){
@@ -4473,7 +4430,6 @@ void switchTextDisplayMode(signed char _newMode){
 		LazyMessage("TODO",NULL,NULL,NULL);
 	}
 }
-
 #define ISTEXTSPEEDBAR 0
 #define MAXOPTIONSSETTINGS 18
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
@@ -5103,7 +5059,7 @@ void TitleScreen(){
 						fpsCapStart();
 						controlsEnd();
 						startDrawing();
-						DrawMessageText();
+						DrawMessageText(255);
 						endDrawing();
 						controlsStart();
 						fpsCapWait();

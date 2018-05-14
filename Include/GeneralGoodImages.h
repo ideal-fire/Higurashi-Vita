@@ -21,6 +21,7 @@
 
 void drawTexturePartScaleRotate(CrossTexture* texture, int x, int y, int tex_x, int tex_y, int tex_w, int tex_h, double x_scale, double y_scale, double rad);
 void drawTexturePartScaleTint(CrossTexture* passedTexture, int destX, int destY, int texX, int texY, int texW, int texH, double texXScale, double texYScale, unsigned char r, unsigned char g, unsigned b);
+void drawTexturePartScaleTintAlpha(CrossTexture* passedTexture, int destX, int destY, int texX, int texY, int texW, int texH, double texXScale, double texYScale, unsigned char r, unsigned char g, unsigned b, unsigned char a);
 void drawTexturePartScale(CrossTexture* passedTexture, int destX, int destY, int texX, int texY, int texW, int texH, double texXScale, double texYScale);
 void drawTextureScaleSize(CrossTexture* passedTexture, int destX, int destY, double texXScale, double texYScale);
 void drawTextureScaleTint(CrossTexture* passedTexture, int destX, int destY, double texXScale, double texYScale, unsigned char r, unsigned char g, unsigned char b);

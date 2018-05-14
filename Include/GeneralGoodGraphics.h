@@ -5,6 +5,11 @@
 	void startDrawingBottom();
 #endif
 
+#if DOFIXCOORDS==1
+	int fixX(int x);
+	int fixY(int y);
+#endif
+
 void quitGraphics();
 void drawRectangle(int x, int y, int w, int h, int r, int g, int b, int a);
 void endDrawing();
