@@ -64,7 +64,7 @@
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
 #define VERSIONSTRING "v2.6.3" // This
-#define VERSIONNUMBER 7 // This
+#define VERSIONNUMBER 6 // This
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1
 // Specific constants
@@ -772,7 +772,7 @@ signed int getChangePerFrame(signed int _totalRequiredChange, signed int _totalT
 }
 void ClearMessageArray(){
 	currentLine=0;
-	int i,j;
+	int i;
 	int _totalAddedToHistory=0;
 	for (i = 0; i < MAXLINES; i++){
 		if (currentMessages[i][0]!='\0'){
