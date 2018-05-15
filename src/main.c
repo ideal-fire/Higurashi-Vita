@@ -770,7 +770,7 @@ void clearHistory(){
 signed int getChangePerFrame(signed int _totalRequiredChange, signed int _totalTime){
 	return atLeastOne(floor(((_totalRequiredChange)/(60*((double)_totalTime/1000)))));
 }
-void ClearMessageArray(){
+void ClearMessageArray(char _doFadeTransition){
 	currentLine=0;
 	int i;
 	int _totalAddedToHistory=0;
@@ -780,7 +780,7 @@ void ClearMessageArray(){
 			_totalAddedToHistory++;
 		}
 	}
-	if (_totalAddedToHistory!=0 && MessageBoxEnabled){ // If we actually added stuff
+	if (_totalAddedToHistory!=0 && MessageBoxEnabled && !isSkipping && _doFadeTransition){ // If we actually added stuff
 		signed int _changePerFrame = getChangePerFrame(255,CLEARMESSAGEFADEOUTTIME);
 		signed int _currentTextAlpha = 255;
 		while (_currentTextAlpha>0){
@@ -945,7 +945,7 @@ void PrintDebugCounter(){
 char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	activateHigurashiSettings();
 	// Hopefully, nobody tries to call a script from a script and wants to keep the current message display.
-	ClearMessageArray();
+	ClearMessageArray(0);
 	currentScriptLine=0;
 	char tempstringconcat[strlen(_scriptfolderlocation)+strlen(filename)+strlen(".txt")+1];
 	strcpy(tempstringconcat,_scriptfolderlocation);
@@ -2000,12 +2000,18 @@ void DrawScene(const char* _filename, int time){
 			if (_backgroundAlpha>255){
 				_backgroundAlpha=255;
 			}
+			// Change alpha of busts made on the last line
+			for (i = maxBusts-1; i != -1; i--){
+				if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1 && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
+					Busts[bustOrder[i]].alpha = _backgroundAlpha;
+				}
+			}
 			startDrawing();
 			drawAdvanced(1,1,0,1,1,0);
 			DrawBackgroundAlpha(newBackground,_backgroundAlpha);
-			// Draw busts created on the last line. TODO - This is the source of ugly. Maybe don't show these busts until after the background change? But then how do we hide them before the background change?
+			// Draw busts created on the last line at the same alpha as the new background
 			for (i = maxBusts-1; i != -1; i--){
-				if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1  && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
+				if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1 && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
 					DrawBust(&(Busts[bustOrder[i]]));
 				}
 			}
@@ -2024,6 +2030,12 @@ void DrawScene(const char* _filename, int time){
 			freeTexture(currentBackground);
 		}
 		currentBackground=newBackground;
+	}
+	// Fix alpha for busts created on the last line
+	for (i = maxBusts-1; i != -1; i--){
+		if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1 && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
+			Busts[bustOrder[i]].alpha = 255;
+		}
 	}
 	// Delete old bust cache before putting new ones in it
 	freeBustCache();
@@ -2074,7 +2086,7 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 		_fadeintime=0;
 		_waitforfadein=0;
 	}
-	if (!currentlyVNDSGame){ // HACK, just don't do this for VNDS because we don't have bust fadeout
+	if (!currentlyVNDSGame && _fadeintime!=0){ // HACK, just don't do this for VNDS because we don't have bust fadeout
 		// I wonder why these three lines are here. Probably something to do with the lack of redraw between frames.
 		startDrawing();
 		Draw(MessageBoxEnabled);
@@ -2331,7 +2343,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		return;
 	}
 	if (currentlyVNDSGame && gameTextDisplayMode==TEXTMODE_ADV){
-		ClearMessageArray();
+		ClearMessageArray(1);
 	}
 
 	// 1 when finished displaying the text
@@ -2547,6 +2559,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		_currentDrawLine=0;
 	}
 	if (dynamicAdvBoxHeight){
+		printf("a\n");
 		updateDynamicADVBox(1);
 	}
 	#if PLATFORM == PLAT_3DS
@@ -3390,7 +3403,7 @@ void _textboxTransition(char _isOn, int _totalTime){
 				break;
 			}
 			startDrawing();
-			Draw(1);
+			drawAdvanced(1,1,1,1,1,0); // Don't draw text
 			endDrawing();
 			fpsCapWait();
 		}
@@ -3528,7 +3541,7 @@ void scriptDisplayWindow(nathanscriptVariable* _passedArguments, int _numArgumen
 }
 void scriptClearMessage(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	currentLine=0;
-	ClearMessageArray();
+	ClearMessageArray(1);
 	return;
 }
 void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -4201,7 +4214,7 @@ char upgradeToGameFolder(){
 		}
 	}
 	if (_didUpgradeOne){
-		ClearMessageArray();
+		ClearMessageArray(0);
 		controlsStart();
 		controlsEnd();
 
@@ -5050,7 +5063,7 @@ void TitleScreen(){
 				if (isGameFolderMode){
 					LazyMessage("You really shouldn't be here.","You haven't escaped, you know?","You're not even going the right way.",NULL);
 				}else{
-					ClearMessageArray();
+					ClearMessageArray(0);
 					controlsStart();
 					controlsEnd();
 					OutputLine("This process will convert your legacy preset & StreamingAssets setup to the new game folder setup. It's makes everything easier, so you should do it.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
@@ -5107,7 +5120,7 @@ void TitleScreen(){
 	}
 }
 void tipMenuChangeDisplay(char* _passedCurrentName, char* _passedCurrentSlot, char* _passedMaxSlot){
-	ClearMessageArray();
+	ClearMessageArray(0);
 	char _tempNameBuffer[strlen(_passedCurrentName)+1+1+3+1+3+1+1]; // main name + space + left parentheses + three digit number + slash + three digit number + right parentheses + null
 	if (tipNamesLoaded==0){
 		_passedCurrentName="???";
@@ -5116,7 +5129,7 @@ void tipMenuChangeDisplay(char* _passedCurrentName, char* _passedCurrentSlot, ch
 	OutputLine(_tempNameBuffer,Line_ContinueAfterTyping,1);
 }
 void TipMenu(){
-	ClearMessageArray();
+	ClearMessageArray(0);
 	if (currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
 		LazyMessage("No tips unlocked.",NULL,NULL,NULL);
 		currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
@@ -5182,7 +5195,7 @@ void TipMenu(){
 		}
 		if (wasJustPressed(SCE_CTRL_CIRCLE)){
 			ChangeEasyTouchMode(TOUCHMODE_MENU);
-			ClearMessageArray();
+			ClearMessageArray(0);
 			currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 			#if PLAYTIPMUSIC == 1
 				StopBGM();
@@ -5888,7 +5901,7 @@ signed char init(){
 	}
 
 	// Fill with null char
-	ClearMessageArray();
+	ClearMessageArray(0);
 	if (initializeLua()==2){
 		return 2;
 	}

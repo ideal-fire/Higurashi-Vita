@@ -43,7 +43,7 @@ void _vndsChangeScriptFiles(const char* _newFilename){
 void vndswrapper_text(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (currentLine==MAXLINES){
 		if (vndsClearAtBottom){
-			ClearMessageArray();
+			ClearMessageArray(1);
 			currentLine=0;
 		}else{
 			LastLineLazyFix(&currentLine);
@@ -125,7 +125,7 @@ void vndswrapper_delay(nathanscriptVariable* _passedArguments, int _numArguments
 	}
 }
 void vndswrapper_cleartext(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	ClearMessageArray();
+	ClearMessageArray(1);
 	if (_numArguments==1 && (nathanvariableToString(&_passedArguments[0])[0]=='!')){
 		clearHistory();
 	}
