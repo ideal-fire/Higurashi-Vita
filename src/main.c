@@ -33,6 +33,8 @@
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
 		text x1b[0m
+
+	TODO - SetSpeedOfMessage
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -63,7 +65,7 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.6.3" // This
+#define VERSIONSTRING "v2.6.4-hotfix2" // This
 #define VERSIONNUMBER 6 // This
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1
@@ -1166,7 +1168,7 @@ void updateControlsGeneral(){
 		isSkipping=0;
 	}
 	if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,SOUNDPLAYER!=SND_VITA,!currentlyVNDSGame,0,currentlyVNDSGame);
+		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0,!currentlyVNDSGame,0,currentlyVNDSGame);
 	}
 	if (wasJustPressed(SCE_CTRL_SELECT)){
 		PlayMenuSound();
@@ -2559,7 +2561,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		_currentDrawLine=0;
 	}
 	if (dynamicAdvBoxHeight){
-		printf("a\n");
 		updateDynamicADVBox(1);
 	}
 	#if PLATFORM == PLAT_3DS
@@ -5910,7 +5911,6 @@ signed char init(){
 		ResetBustStruct(&(Busts[i]),0);
 	}
 
-	// Somehow, I'm a master programmer who doesn't have their program crash when streaming sound files. Only prevent crashing if not using good sound code.
 	#if PLATFORM == PLAT_VITA && SOUNDPLAYER != SND_VITA
 		// Create the protection thread.
 		if (pthread_create(&soundProtectThreadId, NULL, &soundProtectThread, NULL) != 0){
