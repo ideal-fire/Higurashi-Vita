@@ -65,7 +65,7 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "v2.6.4-hotfix2" // This
+#define VERSIONSTRING "forgotversionnumber" // This
 #define VERSIONNUMBER 6 // This
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1
@@ -2238,23 +2238,39 @@ int strlenNO1(char* src){
 	}
 #endif
 char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName){
-	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, _folderName, _filename, ".ogg");
+	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, _folderName, _filename, "");
+	//
+	if (scriptUsesFileExtensions){
+		if (checkFileExist(tempstringconcat)==1){
+			free(tempstringconcat);
+			return tempstringconcat;
+		}
+	}
+	//
+	strcat(tempstringconcat,".ogg");
 	if (checkFileExist(tempstringconcat)==1){
+		free(tempstringconcat);
 		return tempstringconcat;
 	}
+	//
 	#if SOUNDPLAYER != SND_VITA
 		tempstringconcat[strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)]='\0';
 		strcat(tempstringconcat,".wav");
 		if (checkFileExist(tempstringconcat)==1){
+			free(tempstringconcat);
 			return tempstringconcat;
 		}
 	#endif
-	if (scriptUsesFileExtensions){
+	//
+	#if SOUNDPLAYER == SND_VITA
 		tempstringconcat[strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)]='\0';
+		strcat(tempstringconcat,".mp3");
 		if (checkFileExist(tempstringconcat)==1){
+			free(tempstringconcat);
 			return tempstringconcat;
 		}
-	}
+	#endif
+	//
 	free(tempstringconcat);
 	return NULL;
 }
@@ -4606,8 +4622,8 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			_tempRenaPath = CombineStringsPLEASEFREE(streamingAssets,locationStrings[graphicsLocation],"re_se_de_a1.png",""); // New path for the user's specific graphic choice
 			_renaImage = SafeLoadPNG(_tempRenaPath);
 		}
-		free(_tempRenaPath);
 	}
+	free(_tempRenaPath);
 	
 	_optionsOnScreen = (screenHeight/(double)currentTextHeight)-1;
 	if (_optionsOnScreen>_maxOptionSlotUsed){
