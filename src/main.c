@@ -2238,18 +2238,16 @@ int strlenNO1(char* src){
 	}
 #endif
 char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName){
-	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, _folderName, _filename, "");
+	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, _folderName, _filename, NULL);
 	//
 	if (scriptUsesFileExtensions){
 		if (checkFileExist(tempstringconcat)==1){
-			free(tempstringconcat);
 			return tempstringconcat;
 		}
 	}
 	//
 	strcat(tempstringconcat,".ogg");
 	if (checkFileExist(tempstringconcat)==1){
-		free(tempstringconcat);
 		return tempstringconcat;
 	}
 	//
@@ -2257,7 +2255,6 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 		tempstringconcat[strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)]='\0';
 		strcat(tempstringconcat,".wav");
 		if (checkFileExist(tempstringconcat)==1){
-			free(tempstringconcat);
 			return tempstringconcat;
 		}
 	#endif
@@ -2266,7 +2263,6 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 		tempstringconcat[strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)]='\0';
 		strcat(tempstringconcat,".mp3");
 		if (checkFileExist(tempstringconcat)==1){
-			free(tempstringconcat);
 			return tempstringconcat;
 		}
 	#endif
