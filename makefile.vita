@@ -3,7 +3,7 @@ PSVITAIP=$(VITAIP)
 TITLE_ID = VSDK00001
 TITLE_ID = HIGURASHI
 TARGET   = Higurashi
-OBJS     = ./src/main.o
+OBJS     = ./src/main.o ./src/legarchive.o
 
 LIBS = -lGeneralGoodVita \
 	-lvorbisfile \

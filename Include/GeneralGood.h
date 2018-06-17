@@ -28,6 +28,10 @@
 #elif PLATFORM == PLAT_3DS
 	#define CROSSDIR Handle
 	#define CROSSDIRSTORAGE FS_DirectoryEntry
+#else
+	#warning NO DIRECTORY LISTING YET
+	#define CROSSDIR int
+	#define CROSSDIRSTORAGE int
 #endif
 
 #if RENDERER == REND_SDL

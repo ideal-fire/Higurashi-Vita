@@ -18,6 +18,9 @@
 #if TEXTRENDERER == TEXT_VITA2D
 	extern int fontSize;
 #endif
+#if TEXTRENDERER == TEXT_UNDEFINED
+	extern int fontSize;
+#endif
 
 void goodDrawTextColored(int x, int y, const char* text, float size, unsigned char r, unsigned char g, unsigned char b);
 void goodDrawText(int x, int y, const char* text, float size);

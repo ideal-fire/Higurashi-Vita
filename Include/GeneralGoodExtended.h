@@ -1,7 +1,7 @@
 #ifndef GENERALGOODEXTENDED_H
 #define GENERALGOODEXTENDED_H
 
-#if PLATFORM != PLAT_VITA
+#if PLATFORM != PLAT_VITA && PLATFORM != PLAT_3DS && PLATFORM != PLAT_VITA
 	enum SceCtrlPadButtons {
 		SCE_CTRL_SELECT      = 0,	//!< Select button.
 		SCE_CTRL_L3          = 1,	//!< L3 button.
@@ -50,6 +50,29 @@
 	#define SCE_CTRL_SELECT KEY_SELECT
 #endif
 
+#if PLATFORM == PLAT_SWITCH
+	#include <switch.h>
+
+	#define SCE_CTRL_CROSS KEY_A
+	#define SCE_CTRL_CIRCLE KEY_B
+	#define SCE_CTRL_TRIANGLE KEY_X
+	#define SCE_CTRL_SQUARE KEY_Y
+	#define SCE_CTRL_START KEY_PLUS
+	#define SCE_CTRL_SELECT KEY_MINUS
+	//
+	#define SCE_CTRL_LTRIGGER KEY_ZL
+	#define SCE_CTRL_RTRIGGER KEY_ZR
+	//
+	#define SCE_CTRL_UP KEY_UP
+	#define SCE_CTRL_DOWN KEY_DOWN
+	#define SCE_CTRL_LEFT KEY_LEFT
+	#define SCE_CTRL_RIGHT KEY_RIGHT
+
+	#define possibleControlNumberType u64
+#else
+	#define possibleControlNumberType int
+#endif
+
 extern char tempPathFixBuffer[256];
 extern char* DATAFOLDER;
 
@@ -70,13 +93,13 @@ void controlsStart();
 void fixCoords(int* _x, int* _y);
 void fixPath(char* filename,char _buffer[], char type);
 void generateDefaultDataDirectory(char** _dataDirPointer, char _useUma0);
-signed char isDown(int value);
 #if SUBPLATFORM == SUB_ANDROID
 	void itoa(int _num, char* _buffer, int _uselessBase);
 #endif
 void makeDataDirectory();
-signed char wasJustPressedRegardless(int value);
-signed char wasJustPressed(int value);
-signed char wasJustReleased(int value);
+possibleControlNumberType isDown(int value);
+possibleControlNumberType wasJustPressedRegardless(possibleControlNumberType value);
+possibleControlNumberType wasJustPressed(possibleControlNumberType value);
+possibleControlNumberType wasJustReleased(possibleControlNumberType value);
  
 #endif /* GENERALGOODEXTENDED_H */

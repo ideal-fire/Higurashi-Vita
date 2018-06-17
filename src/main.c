@@ -55,6 +55,7 @@
 #include <Lua/lualib.h>
 #include <Lua/lauxlib.h>
 //
+#include "legarchive.h"
 
 #define LOCATION_UNDEFINED 0
 #define LOCATION_CG 1
@@ -409,6 +410,8 @@ signed char imagesAreJpg=0;
 signed char dynamicAdvBoxHeight=0;
 // Will only be used in games it can be used in
 signed char preferredTextDisplayMode=TEXTMODE_NVL;
+signed char useSoundArchive=0;
+legArchive soundArchive;
 /*
 ====================================================
 */
@@ -1271,6 +1274,7 @@ void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlp
 		signed int _tempXOffset;
 		signed int _tempYOffset;
 		GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
+		//printf("%f;%d;%d;%d;%d\n",graphicsScale,_tempXOffset,_tempYOffset,(int)(getTextureWidth(passedBackground)*graphicsScale),(int)(getTextureHeight(passedBackground)*graphicsScale));
 		drawTextureScaleAlpha(passedBackground,_tempXOffset,_tempYOffset, graphicsScale, graphicsScale, passedAlpha);
 	}
 }
@@ -2238,7 +2242,10 @@ int strlenNO1(char* src){
 	}
 #endif
 char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName){
-	char* tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, _folderName, _filename, NULL);
+	char* tempstringconcat = malloc(strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)+1+4);
+	strcpy(tempstringconcat,streamingAssets);
+	strcat(tempstringconcat,_folderName);
+	strcat(tempstringconcat,_filename);
 	//
 	if (scriptUsesFileExtensions){
 		if (checkFileExist(tempstringconcat)==1){
@@ -2269,6 +2276,48 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 	//
 	free(tempstringconcat);
 	return NULL;
+}
+legArchiveFile soundArchiveGetFilename(const char* _filename){
+	legArchiveFile _possibleResult;
+	_possibleResult.fp=NULL; // How we know if file not found
+	if (scriptUsesFileExtensions){
+		_possibleResult = getAdvancedFile(soundArchive,_filename);
+		if (_possibleResult.fp!=NULL){
+			return _possibleResult;
+		}
+	}
+	//
+	char* tempstringconcat = malloc(strlen(_filename)+4+1);
+	strcpy(tempstringconcat,_filename);
+	strcat(tempstringconcat,".ogg");
+	_possibleResult = getAdvancedFile(soundArchive,tempstringconcat);
+	if (_possibleResult.fp!=NULL){
+		free(tempstringconcat);
+		return _possibleResult;
+	}
+	//
+	#if SOUNDPLAYER != SND_VITA
+		tempstringconcat[strlen(_filename)]='\0';
+		strcat(tempstringconcat,".wav");
+		_possibleResult = getAdvancedFile(soundArchive,tempstringconcat);
+		if (_possibleResult.fp!=NULL){
+			free(tempstringconcat);
+			return _possibleResult;
+		}
+	#endif
+	//
+	#if SOUNDPLAYER == SND_VITA
+		tempstringconcat[strlen(_filename)]='\0';
+		strcat(tempstringconcat,".mp3");
+		_possibleResult = getAdvancedFile(soundArchive,tempstringconcat);
+		if (_possibleResult.fp!=NULL){
+			free(tempstringconcat);
+			return _possibleResult;
+		}
+	#endif
+	//
+	free(tempstringconcat);
+	return _possibleResult;
 }
 #define PREFER_DIR_BGM 0
 #define PREFER_DIR_SE 1
@@ -2706,6 +2755,20 @@ void StopBGM(int _slot){
 		_bgmIsLock = 0;
 	#endif
 }
+#if SOUNDPLAYER == SND_VITA
+char getProbableSoundFormat(const char* _passedFilename){
+	if (strlen(_passedFilename)>=4){
+		if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".mp3")==0){
+			return FILE_FORMAT_MP3;
+		}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".wav")==0){
+			return FILE_FORMAT_WAV;
+		}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".ogg")==0){
+			return FILE_FORMAT_OGG;
+		}
+	}
+	return FILE_FORMAT_NONE;
+}
+#endif
 // Unfixed bgm
 void PlayBGM(const char* filename, int _volume, int _slot){
 	#if PLATFORM == PLAT_3DS
@@ -2719,16 +2782,31 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 	}else if (_slot>=MAXMUSICARRAY){
 		LazyMessage("Music slot too high.","No action will be taken.",NULL,NULL);
 	}else{
-		char* tempstringconcat = getSoundFilename(filename,PREFER_DIR_BGM);
-		if (tempstringconcat==NULL){
-			printf("BGM file not found, %s\n",filename);
+		CROSSMUSIC* _tempHoldSlot=NULL;
+		if (useSoundArchive){
+			#if SOUNDPLAYER == SND_VITA
+				legArchiveFile _foundArchiveFile = soundArchiveGetFilename(filename);
+				if (_foundArchiveFile.fp==NULL){
+					LazyMessage(filename,"not found in archive",NULL,NULL);
+				}else{
+					_tempHoldSlot = _mlgsnd_loadAudioFILE(_foundArchiveFile, getProbableSoundFormat(filename), 1, 1);
+				}
+			#else
+				LazyMessage("sound archive not supported.",NULL,NULL,NULL);
+			#endif
+		}else{
+			char* tempstringconcat = getSoundFilename(filename,PREFER_DIR_BGM);
+			_tempHoldSlot = loadMusic(tempstringconcat);
+			showErrorIfNull(_tempHoldSlot);
+			free(tempstringconcat);
+		}
+		if (_tempHoldSlot==NULL){
+			printf("BGM file gone or failed to load, %s\n",filename);
 			__freeBGMNoLock(_slot);
 		}else{
 			char* _tempHoldFilepathConcat = malloc(strlen(filename)+1);
 			strcpy(_tempHoldFilepathConcat,filename);
-			CROSSMUSIC* _tempHoldSlot = loadMusic(tempstringconcat);
-			showErrorIfNull(_tempHoldSlot);
-			// FreeBGM is right here so the player can listen to the old BGM as the new one loads.
+			// FreeBGM is right here, after load but before play, so the player can listen to the old BGM as the new one loads.
 			__freeBGMNoLock(_slot);
 			currentMusic[_slot] = _tempHoldSlot;
 			currentMusicFilepath[_slot] = _tempHoldFilepathConcat;
@@ -2736,8 +2814,6 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 			currentMusicHandle[_slot] = playMusic(currentMusic[_slot],_slot);
 			setMusicVolume(currentMusicHandle[_slot],FixBGMVolume(_volume));
 			lastBGMVolume=_volume;
-			
-			free(tempstringconcat);
 		}
 	}
 	#if PLATFORM == PLAT_3DS
@@ -5560,10 +5636,12 @@ void VNDSNavigationMenu(){
 	CrossTexture* _loadedThumbnail=NULL;
 	char _chosenSlotAsString[4] = "0";
 
-	char _possibleThunbnailPath[strlen(streamingAssets)+strlen("/thumbnail.png")+1];
+	//
+	char _possibleThunbnailPath[strlen(streamingAssets)+strlen("/SEArchive.legArchive.legList")+1];
 	strcpy(_possibleThunbnailPath,streamingAssets);
 	strcat(_possibleThunbnailPath,"/vndsvitaproperties");
 	if (checkFileExist(_possibleThunbnailPath)){
+		WriteToDebugFile("Loading info file.");
 		FILE* fp = fopen(_possibleThunbnailPath,"rb");
 		char _loadedVersionNumber;
 		fread(&_loadedVersionNumber,1,1,fp);
@@ -5575,24 +5653,31 @@ void VNDSNavigationMenu(){
 		}
 		printf("Is old game converter.\n");
 	}
-
+	//
 	strcpy(_possibleThunbnailPath,streamingAssets);
 	strcat(_possibleThunbnailPath,"/thumbnail.png");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
+		WriteToDebugFile("Loading thumbnail.");
 		_loadedThumbnail = _loadGameImage(_possibleThunbnailPath);
 	}
-
+	//
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
 	strcat(_possibleThunbnailPath,"/info.txt");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
+		WriteToDebugFile("Loading info.txt");
 		FILE* fp = fopen(_possibleThunbnailPath,"r");
 		_loadedNovelName = readSpecificIniLine(fp,"title=");
 		fclose(fp);
 	}
-	
+	if (_loadedNovelName==NULL){
+		_loadedNovelName = malloc(strlen("VNDS")+1);
+		strcpy(_loadedNovelName,"VNDS");
+	}
+	//
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
 	strcat(_possibleThunbnailPath,"/img.ini");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
+		WriteToDebugFile("Loading img.ini");
 		FILE* fp = fopen(_possibleThunbnailPath,"r");
 		char* _widthString = readSpecificIniLine(fp,"width=");
 		char* _heightString = readSpecificIniLine(fp,"height=");\
@@ -5607,20 +5692,26 @@ void VNDSNavigationMenu(){
 		free(_heightString);
 		fclose(fp);
 	}
-
+	//
 	if (!isDown(SCE_CTRL_LTRIGGER) && !isDown(SCE_CTRL_RTRIGGER)){
 		_possibleThunbnailPath[strlen(streamingAssets)]=0;
 		strcat(_possibleThunbnailPath,"/default.ttf");
 		if (checkFileExist(_possibleThunbnailPath)){
+			WriteToDebugFile("Loading font.");
 			_loadSpecificFont(_possibleThunbnailPath);
 		}
 	}
+	//
+	_possibleThunbnailPath[strlen(streamingAssets)]=0;
+	strcat(_possibleThunbnailPath,"/SEArchive.legArchive");
+	if (checkFileExist(_possibleThunbnailPath)){
+		WriteToDebugFile("Loading sound archive");
+		soundArchive = loadLegArchive(_possibleThunbnailPath);
+		useSoundArchive=1;
+	}
+	WriteToDebugFile("Done loading.");
 	
 	controlsEnd();
-	if (_loadedNovelName==NULL){
-		_loadedNovelName = malloc(strlen("VNDS")+1);
-		strcpy(_loadedNovelName,"VNDS");
-	}
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		fpsCapStart();
 		controlsStart();

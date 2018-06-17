@@ -71,6 +71,15 @@
 	#define CROSSMUSIC NathanAudio
 	#define CROSSSFX CROSSMUSIC
 	#define CROSSPLAYHANDLE CROSSMUSIC*
+
+	#define FILE_FORMAT_NONE 0
+	#define FILE_FORMAT_OGG 1
+	#define FILE_FORMAT_MP3 2
+	#define FILE_FORMAT_WAV 3
+
+	CROSSMUSIC* loadMusicFILE(FILE* fp, char _passedFormat);
+	CROSSSFX* loadSoundFILE(FILE* fp, char _passedFormat);
+	CROSSMUSIC* _mlgsnd_loadAudioFILE(legArchiveFile _passedFile, char _passedFileFormat, char _passedShouldLoop, char _passedShouldStream);
 #endif
 
 void quitAudio();
@@ -91,5 +100,5 @@ void setSFXVolumeBefore(CROSSSFX* tochange, int toval);
 void setSFXVolume(CROSSPLAYHANDLE tochange, int toval);
 void stopMusic(CROSSPLAYHANDLE toStop);
 void stopSound(CROSSSFX* toStop);
- 
+
 #endif /* GENERALGOODGRAPHICS_H */

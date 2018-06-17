@@ -4,7 +4,7 @@
 		extern char* ANDROIDPACKAGENAME;
 		extern char* VITAAPPID;
 	#else
-		char* ANDROIDPACKAGENAME = "com.mylegguy.higurashi";
+		char* ANDROIDPACKAGENAME = "good.package.name";
 		// 9 characters
 		char* VITAAPPID = "HIGURASHI";
 	#endif
@@ -12,6 +12,7 @@
 	#define PLAT_VITA 1
 	#define PLAT_COMPUTER 2
 	#define PLAT_3DS 3
+	#define PLAT_SWITCH 4
 	
 	#define SUB_NONE 0
 	#define SUB_ANDROID 1
@@ -22,7 +23,7 @@
 	#define SND_SDL 1
 	#define SND_SOLOUD 2
 	#define SND_3DS 3 // Only OGG supported
-	#define SND_VITA 4
+	#define SND_VITA 4 // OGG and MP3
 
 	#define REND_UNDEFINED 0
 	#define REND_SDL 1
@@ -40,7 +41,8 @@
 	#define PRE_VITA 2
 	#define PRE_3DS 3
 	#define PRE_ANDROID 4
-	
+	#define PRE_SWITCH 5
+
 	//===============================
 	// Auto platform
 	//===============================
@@ -54,6 +56,8 @@
 		#define PRESET PRE_VITA
 	#elif _3DS
 		#define PRESET PRE_3DS
+	#elif __SWITCH__
+		#define PRESET PRE_SWITCH
 	#endif
 	#ifndef PRESET
 		#warning No preset defined. Will use manual settings.
@@ -101,8 +105,13 @@
 		#define SOUNDPLAYER SND_SDL
 		#define RENDERER REND_SDL
 		#define TEXTRENDERER TEXT_FONTCACHE
+	#elif PRESET == PRE_SWITCH
+		#define PLATFORM PLAT_SWITCH
+		#define SOUNDPLAYER SND_NONE
+		#define RENDERER REND_SDL
+		#define TEXTRENDERER TEXT_UNDEFINED
 	#else
-		// Put custom stuff here
+		#warning Put custom stuff here
 		// #define PLATFORM a
 		// #define SUBPLATFORM a
 		// #define SOUNDPLAYER a

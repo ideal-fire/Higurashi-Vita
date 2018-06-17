@@ -1,3 +1,3 @@
 #!/bin/bash
 # for linux build
-gcc -g -IInclude -Llib src/main.c -lGeneralGoodLinux -lSDLFontCacheLinux -lm -lpthread -lSDL2_image -lSDL2_ttf -lSDL2_mixer `sdl2-config --cflags --libs` -Llib -lluaLinux -ldl -o build/a.exe
+gcc -g -IInclude -Llib src/main.c src/legarchive.c -lGeneralGoodLinux -lSDLFontCacheLinux -lm -lpthread -lSDL2_image -lSDL2_ttf -lSDL2_mixer `sdl2-config --cflags --libs` -Llib -lluaLinux -ldl -o build/a.exe
