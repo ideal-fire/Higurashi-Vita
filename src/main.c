@@ -105,6 +105,11 @@
 #define IMAGECHARSPACESTRING "   "
 #define MESSAGEEDGEOFFSET 10
 
+#define PREFER_DIR_BGM 0
+#define PREFER_DIR_SE 1
+#define PREFER_DIR_VOICE 2
+#define PREFER_DIR_NOMEIMPORTA 3
+
 #include "GeneralGoodExtended.h"
 #include "GeneralGood.h"
 #include "GeneralGoodGraphics.h"
@@ -508,7 +513,7 @@ void DebugLuaReg(char* name){
 	}
 }
 void PlayMenuSound(){
-	if (menuSoundLoaded==1){
+	if (menuSoundLoaded==1 && seVolume>0){
 		playSound(menuSound,1,10);
 	}
 }
@@ -1521,10 +1526,10 @@ void ResetDataDirectory(){
 		generateDefaultDataDirectory(&DATAFOLDER,0);
 	#endif
 }
-void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd){
+void _LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd, char _doWait){
 	controlsStart();
 	controlsEnd();
-	while (currentGameStatus!=GAMESTATUS_QUIT){
+	do{
 		fpsCapStart();
 		controlsStart();
 		if (wasJustPressed(SCE_CTRL_CROSS)){
@@ -1546,11 +1551,16 @@ void LazyMessage(const char* stra, const char* strb, const char* strc, const cha
 		if (strd!=NULL){
 			goodDrawText(32,5+currentTextHeight*(3+2),strd,fontSize);
 		}
-		goodDrawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.",fontSize);
+		if (_doWait){
+			goodDrawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.",fontSize);
+		}
 		endDrawing();
 		fpsCapWait();
 		exitIfForceQuit();
-	}
+	}while (currentGameStatus!=GAMESTATUS_QUIT && _doWait);
+}
+void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd){
+	_LazyMessage(stra,strb,strc,strd,1);
 }
 void LoadGame(){
 	strcpy((char*)globalTempConcat,saveFolder);
@@ -1878,6 +1888,9 @@ void disableVNDSADVMode(){
 	gameTextDisplayMode=TEXTMODE_NVL;
 	dynamicAdvBoxHeight=0;
 	applyTextboxChanges();
+}
+char* getFileExtension(char* _passedFilename){
+	return &(_passedFilename[strlen(_passedFilename)-3]);
 }
 //===================
 void FadeBustshot(int passedSlot,int _time,char _wait){
@@ -2319,9 +2332,6 @@ legArchiveFile soundArchiveGetFilename(const char* _filename){
 	free(tempstringconcat);
 	return _possibleResult;
 }
-#define PREFER_DIR_BGM 0
-#define PREFER_DIR_SE 1
-#define PREFER_DIR_VOICE 2
 // Will use fallbacks
 // Return NULL if file not exist
 char* getSoundFilename(const char* _filename, char _preferedDirectory){
@@ -2356,6 +2366,57 @@ char* getSoundFilename(const char* _filename, char _preferedDirectory){
 	}
 	return tempstringconcat;
 }
+#if SOUNDPLAYER == SND_VITA
+char getProbableSoundFormat(const char* _passedFilename){
+	if (strlen(_passedFilename)>=4){
+		if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".mp3")==0){
+			return FILE_FORMAT_MP3;
+		}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".wav")==0){
+			return FILE_FORMAT_WAV;
+		}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".ogg")==0){
+			return FILE_FORMAT_OGG;
+		}
+	}
+	LazyMessage("File format not found.",_passedFilename,NULL,NULL);
+	return FILE_FORMAT_NONE;
+}
+#endif
+// Cast returned pointer
+void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
+	void* _tempHoldSlot=NULL;
+	// Attempt to use sound archive first if possible
+	if (useSoundArchive){
+		#if SOUNDPLAYER == SND_VITA
+			legArchiveFile _foundArchiveFile = soundArchiveGetFilename(_filename);
+			if (_foundArchiveFile.fp==NULL){
+				//LazyMessage(filename,"not found in archive",NULL,NULL);
+			}else{
+				_tempHoldSlot = _mlgsnd_loadAudioFILE(_foundArchiveFile, getProbableSoundFormat(_filename), !_isSE, 1);
+			}
+		#else
+			LazyMessage("sound archive not supported.",NULL,NULL,NULL);
+		#endif
+	}
+	// Attempt to use regular files if still not found
+	if (_tempHoldSlot==NULL){
+		char* tempstringconcat = getSoundFilename(_filename,_preferedDirectory);
+		if (checkFileExist(tempstringconcat)){
+			if (_isSE){
+				_tempHoldSlot = loadSound(tempstringconcat);
+			}else{
+				_tempHoldSlot = loadMusic(tempstringconcat);
+			}
+			showErrorIfNull(_tempHoldSlot);
+		}
+		free(tempstringconcat);
+	}
+	if (_tempHoldSlot==NULL){
+		if (shouldShowWarnings()){
+			LazyMessage(_filename,"Sound not found in folders.",useSoundArchive ? "Not found in archive either." : NULL,NULL);
+		}
+	}
+	return _tempHoldSlot;
+}
 // _dirRelativeToStreamingAssetsNoEndSlash should start AND END with a slash
 // Example
 // /SE/
@@ -2374,9 +2435,8 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 		freeSound(soundEffects[passedSlot]);
 		soundEffects[passedSlot]=NULL;
 	}
-	// Play WAV version if found.
-	char* tempstringconcat = getSoundFilename(filename,_preferedDirectory);
-	if (tempstringconcat==NULL){
+	soundEffects[passedSlot] = loadGameAudio(filename,_preferedDirectory,1);
+	if (soundEffects[passedSlot]==NULL){
 		//// Don't try if it's .aac file
 		//if (currentlyVNDSGame && strlen(filename)>=4){
 		//	if (strcmp(&(filename[strlen(filename)-4]),".aac")==0){ // No aac support
@@ -2386,20 +2446,9 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 		//WriteToDebugFile("SE file not found");
 		//WriteToDebugFile(filename);
 	}else{
-		soundEffects[passedSlot] = loadSound(tempstringconcat);
-		if (soundEffects[passedSlot]==NULL){
-			if (shouldShowWarnings()){
-				LazyMessage("Loaded sound is NULL.",NULL,"File written to log.",NULL);
-			}
-			WriteToDebugFile(tempstringconcat);
-			WriteIntToDebugFile(strlen(tempstringconcat));
-		}else{
-			//setSFXVolume(soundEffects[passedSlot],FixSEVolume(unfixedVolume));
-			CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1,passedSlot+10);
-			setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
-		}
+		CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1,passedSlot+10);
+		setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
 	}
-	free(tempstringconcat);
 }
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
 	if (strlen(_tempMsg)==0){
@@ -2755,20 +2804,6 @@ void StopBGM(int _slot){
 		_bgmIsLock = 0;
 	#endif
 }
-#if SOUNDPLAYER == SND_VITA
-char getProbableSoundFormat(const char* _passedFilename){
-	if (strlen(_passedFilename)>=4){
-		if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".mp3")==0){
-			return FILE_FORMAT_MP3;
-		}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".wav")==0){
-			return FILE_FORMAT_WAV;
-		}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".ogg")==0){
-			return FILE_FORMAT_OGG;
-		}
-	}
-	return FILE_FORMAT_NONE;
-}
-#endif
 // Unfixed bgm
 void PlayBGM(const char* filename, int _volume, int _slot){
 	#if PLATFORM == PLAT_3DS
@@ -2782,26 +2817,8 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 	}else if (_slot>=MAXMUSICARRAY){
 		LazyMessage("Music slot too high.","No action will be taken.",NULL,NULL);
 	}else{
-		CROSSMUSIC* _tempHoldSlot=NULL;
-		if (useSoundArchive){
-			#if SOUNDPLAYER == SND_VITA
-				legArchiveFile _foundArchiveFile = soundArchiveGetFilename(filename);
-				if (_foundArchiveFile.fp==NULL){
-					LazyMessage(filename,"not found in archive",NULL,NULL);
-				}else{
-					_tempHoldSlot = _mlgsnd_loadAudioFILE(_foundArchiveFile, getProbableSoundFormat(filename), 1, 1);
-				}
-			#else
-				LazyMessage("sound archive not supported.",NULL,NULL,NULL);
-			#endif
-		}else{
-			char* tempstringconcat = getSoundFilename(filename,PREFER_DIR_BGM);
-			_tempHoldSlot = loadMusic(tempstringconcat);
-			showErrorIfNull(_tempHoldSlot);
-			free(tempstringconcat);
-		}
+		CROSSMUSIC* _tempHoldSlot=loadGameAudio(filename,PREFER_DIR_BGM,0);
 		if (_tempHoldSlot==NULL){
-			printf("BGM file gone or failed to load, %s\n",filename);
 			__freeBGMNoLock(_slot);
 		}else{
 			char* _tempHoldFilepathConcat = malloc(strlen(filename)+1);
@@ -3444,7 +3461,9 @@ void vndsNormalLoad(char* _filename){
 
 	char* _foundBGMFilename = readLengthStringFromFile(fp);
 	fread(&lastBGMVolume,sizeof(int),1,fp);
-	PlayBGM(_foundBGMFilename,lastBGMVolume,0);
+	if (strlen(_foundBGMFilename)!=0){
+		PlayBGM(_foundBGMFilename,lastBGMVolume,0);
+	}
 	free(_foundBGMFilename);
 
 	loadVariableList(fp,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
@@ -4682,7 +4701,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
 	itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
 	makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
-	strcpy(_tempHoldSaveSlotSelection,"0=");
+	sprintf(_tempHoldSaveSlotSelection,"%d=",_chosenSaveSlot);
 
 	// This checks if we have Rena busts in CG AND CGAlt also loads Rena, if possible
 	char* _tempRenaPath = CombineStringsPLEASEFREE(streamingAssets,"CG/","re_se_de_a1.png","");
@@ -5641,7 +5660,7 @@ void VNDSNavigationMenu(){
 	strcpy(_possibleThunbnailPath,streamingAssets);
 	strcat(_possibleThunbnailPath,"/vndsvitaproperties");
 	if (checkFileExist(_possibleThunbnailPath)){
-		WriteToDebugFile("Loading info file.");
+		_LazyMessage("Loading properties",NULL,NULL,NULL,0);
 		FILE* fp = fopen(_possibleThunbnailPath,"rb");
 		char _loadedVersionNumber;
 		fread(&_loadedVersionNumber,1,1,fp);
@@ -5657,14 +5676,14 @@ void VNDSNavigationMenu(){
 	strcpy(_possibleThunbnailPath,streamingAssets);
 	strcat(_possibleThunbnailPath,"/thumbnail.png");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
-		WriteToDebugFile("Loading thumbnail.");
+		_LazyMessage("Loading thumbnail",NULL,NULL,NULL,0);
 		_loadedThumbnail = _loadGameImage(_possibleThunbnailPath);
 	}
 	//
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
 	strcat(_possibleThunbnailPath,"/info.txt");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
-		WriteToDebugFile("Loading info.txt");
+		_LazyMessage("Loading info.txt",NULL,NULL,NULL,0);
 		FILE* fp = fopen(_possibleThunbnailPath,"r");
 		_loadedNovelName = readSpecificIniLine(fp,"title=");
 		fclose(fp);
@@ -5677,7 +5696,7 @@ void VNDSNavigationMenu(){
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
 	strcat(_possibleThunbnailPath,"/img.ini");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
-		WriteToDebugFile("Loading img.ini");
+		_LazyMessage("Loading img.ini",NULL,NULL,NULL,0);
 		FILE* fp = fopen(_possibleThunbnailPath,"r");
 		char* _widthString = readSpecificIniLine(fp,"width=");
 		char* _heightString = readSpecificIniLine(fp,"height=");\
@@ -5694,6 +5713,7 @@ void VNDSNavigationMenu(){
 	}
 	//
 	if (!isDown(SCE_CTRL_LTRIGGER) && !isDown(SCE_CTRL_RTRIGGER)){
+		_LazyMessage("Loading font",NULL,NULL,NULL,0);
 		_possibleThunbnailPath[strlen(streamingAssets)]=0;
 		strcat(_possibleThunbnailPath,"/default.ttf");
 		if (checkFileExist(_possibleThunbnailPath)){
@@ -5705,11 +5725,11 @@ void VNDSNavigationMenu(){
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
 	strcat(_possibleThunbnailPath,"/SEArchive.legArchive");
 	if (checkFileExist(_possibleThunbnailPath)){
-		WriteToDebugFile("Loading sound archive");
+		_LazyMessage("Loading sound archive",NULL,NULL,NULL,0);
 		soundArchive = loadLegArchive(_possibleThunbnailPath);
 		useSoundArchive=1;
 	}
-	WriteToDebugFile("Done loading.");
+	_LazyMessage("Body is ready.",NULL,NULL,NULL,0);
 	
 	controlsEnd();
 	while (currentGameStatus!=GAMESTATUS_QUIT){

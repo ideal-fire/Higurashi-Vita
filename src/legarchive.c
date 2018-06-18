@@ -17,6 +17,11 @@ typedef struct{
 	FILE* fp;
 	int internalPosition; // Relative to the start of this file
 	int totalLength;
+	char inArchive;
+
+	// These next two are for reloading the file.
+	char* filename; // Filename of the archive, malloc'd
+	int64_t startPosition; // Start position in the archive
 }legArchiveFile;
 
 char* strstrGood(char* _big, char* _small, int _length){
@@ -73,6 +78,10 @@ legArchiveFile getAdvancedFile(legArchive _passedArchive, const char* _passedFil
 			fseek(_returnFile.fp,_passedArchive.fileList[i].position,SEEK_SET);
 			_returnFile.internalPosition=0;
 			_returnFile.totalLength = _passedArchive.fileList[i].length;
+			_returnFile.startPosition = _passedArchive.fileList[i].position;
+			_returnFile.inArchive=1;
+			_returnFile.filename = malloc(strlen(_passedArchive.filename)+1);
+				strcpy(_returnFile.filename,_passedArchive.filename);
 			return _returnFile;
 		}
 	}

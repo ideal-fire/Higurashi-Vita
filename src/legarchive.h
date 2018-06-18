@@ -16,6 +16,11 @@ typedef struct{
 	FILE* fp;
 	int internalPosition; // Relative to the start of this file
 	int totalLength;
+	char inArchive;
+
+	// These next two are for reloading the file.
+	char* filename; // Filename of the archive, malloc'd
+	int64_t startPosition; // Start position in the archive
 }legArchiveFile;
 
 FILE* openArchiveFile(legArchive _passedArchive, const char* _passedFilename);

@@ -228,7 +228,12 @@ void vndswrapper_sound(nathanscriptVariable* _passedArguments, int _numArguments
 	if (isSkipping==0 && seVolume>0){
 		char* _passedFilename = nathanvariableToString(&_passedArguments[0]);
 		if (_passedFilename[0]!='~'){
-			removeFileExtension(_passedFilename);
+			// Change to OGG if needed
+			if (strcmp(getFileExtension(_passedFilename),"aac")==0){
+				_passedFilename[strlen(_passedFilename)-3]='\0';
+				strcat(_passedFilename,"ogg");
+			}
+			//removeFileExtension(_passedFilename);
 			GenericPlaySound(0,_passedFilename,256,PREFER_DIR_SE,seVolume);
 		}else{
 			// TODO - Stop all sounds
