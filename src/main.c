@@ -67,7 +67,7 @@
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
 #define VERSIONSTRING "forgotversionnumber" // This
-#define VERSIONNUMBER 6 // This
+#define VERSIONNUMBER 7 // This
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1
 // Specific constants
@@ -5717,7 +5717,6 @@ void VNDSNavigationMenu(){
 		_possibleThunbnailPath[strlen(streamingAssets)]=0;
 		strcat(_possibleThunbnailPath,"/default.ttf");
 		if (checkFileExist(_possibleThunbnailPath)){
-			WriteToDebugFile("Loading font.");
 			_loadSpecificFont(_possibleThunbnailPath);
 		}
 	}

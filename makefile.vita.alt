@@ -1,7 +1,5 @@
-PSVITAIP=$(VITAIP)
-
-TITLE_ID = HIGURASHI
-TARGET   = Higurashi
+TITLE_ID = VNDSCLONE
+TARGET   = VNDSCLONE
 OBJS     = ./src/main.o ./src/legarchive.o
 
 LIBS = -lGeneralGoodVita \
@@ -41,9 +39,9 @@ ASFLAGS = $(CFLAGS)
 all: $(TARGET).vpk
 
 %.vpk: eboot.bin
-	vita-mksfoex -s TITLE_ID=$(TITLE_ID) "Higurashi When They Cry Hou" param.sfo
+	vita-mksfoex -s TITLE_ID=$(TITLE_ID) "VNDS" param.sfo
 	vita-pack-vpk -s param.sfo -b eboot.bin \
-	Higurashi.vpk
+	VNDSCLONE.vpk
 
 eboot.bin: $(TARGET).velf
 	vita-make-fself -s $< $@
@@ -61,16 +59,8 @@ clean:
 	@rm -rf $(TARGET).vpk $(TARGET).velf $(TARGET).elf $(OBJS) \
 		eboot.bin param.sfo
 
-vpksend: $(TARGET).vpk
-	curl -T $(TARGET).vpk ftp://$(PSVITAIP):1337/ux0:/_stuffz/
-	@echo "Sent."
-
-send: eboot.bin
-	curl -T eboot.bin ftp://192.168.1.229:1337/ux0:/app/$(TITLE_ID)/
-	@echo "Sent."
-
 stuffvpk:
-	@7z a Higurashi.vpk ./VpkContents-Shared/Shared/*
-	@7z a Higurashi.vpk ./VpkContents-Primary/Shared/*
-	@7z a Higurashi.vpk ./VpkContents-Shared/Vita/*
-	@7z a Higurashi.vpk ./VpkContents-Primary/Vita/*
+	@7z a VNDSCLONE.vpk ./VpkContents-Shared/Shared/*
+	@7z a VNDSCLONE.vpk ./VpkContents-Alternate/Shared/*
+	@7z a VNDSCLONE.vpk ./VpkContents-Shared/Vita/*
+	@7z a VNDSCLONE.vpk ./VpkContents-Alternate/Vita/*
