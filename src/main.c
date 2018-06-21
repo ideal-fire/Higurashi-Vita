@@ -2384,8 +2384,23 @@ char getProbableSoundFormat(const char* _passedFilename){
 // Cast returned pointer
 void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 	void* _tempHoldSlot=NULL;
-	// Attempt to use sound archive first if possible
-	if (useSoundArchive){
+	
+	// First try and find the file in the folders
+	char* tempstringconcat = getSoundFilename(_filename,_preferedDirectory);
+	if (tempstringconcat!=NULL && checkFileExist(tempstringconcat)){
+		if (_isSE){
+			_tempHoldSlot = loadSound(tempstringconcat);
+		}else{
+			_tempHoldSlot = loadMusic(tempstringconcat);
+		}
+		showErrorIfNull(_tempHoldSlot);
+	}else{
+		//LazyMessage("[DEBUG MESSAGE] not found in SE folder.",_filename,tempstringconcat,"will fallback on archive.");
+	}
+	free(tempstringconcat);
+	
+	// If we didn't find the file in the folders and we can use the sound archive, try that
+	if (_tempHoldSlot==NULL && useSoundArchive){
 		#if SOUNDPLAYER == SND_VITA
 			legArchiveFile _foundArchiveFile = soundArchiveGetFilename(_filename);
 			if (_foundArchiveFile.fp==NULL){
@@ -2396,19 +2411,6 @@ void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 		#else
 			LazyMessage("sound archive not supported.",NULL,NULL,NULL);
 		#endif
-	}
-	// Attempt to use regular files if still not found
-	if (_tempHoldSlot==NULL){
-		char* tempstringconcat = getSoundFilename(_filename,_preferedDirectory);
-		if (checkFileExist(tempstringconcat)){
-			if (_isSE){
-				_tempHoldSlot = loadSound(tempstringconcat);
-			}else{
-				_tempHoldSlot = loadMusic(tempstringconcat);
-			}
-			showErrorIfNull(_tempHoldSlot);
-		}
-		free(tempstringconcat);
 	}
 	if (_tempHoldSlot==NULL){
 		if (shouldShowWarnings()){
