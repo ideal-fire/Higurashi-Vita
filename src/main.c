@@ -133,6 +133,11 @@
 	#define SYSTEMSTRING "UNKNOWN"
 #endif
 
+// TODO - Proper libGeneralGood support for this
+#if SOUNDPLAYER == SND_VITA
+	char mlgsndIsPlaying(NathanAudio* _passedAudio);
+#endif
+
 // 1 is start
 // 2 adds BGM and SE volume
 // 3 adds voice volume
@@ -417,6 +422,7 @@ signed char dynamicAdvBoxHeight=0;
 signed char preferredTextDisplayMode=TEXTMODE_NVL;
 signed char useSoundArchive=0;
 legArchive soundArchive;
+signed char lastVoiceSlot=-1;
 /*
 ====================================================
 */
@@ -1176,7 +1182,7 @@ void updateControlsGeneral(){
 		isSkipping=0;
 	}
 	if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0,!currentlyVNDSGame,0,currentlyVNDSGame);
+		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && PLATFORM != PLAT_VITA,!currentlyVNDSGame,0,currentlyVNDSGame);
 	}
 	if (wasJustPressed(SCE_CTRL_SELECT)){
 		PlayMenuSound();
@@ -1197,7 +1203,23 @@ void outputLineWait(){
 			endType=Line_ContinueAfterTyping;
 		}
 	}
-	u64 _inBetweenLinesMilisecondsStart = getTicks();
+	// 0 if we need to wait for sound to end.
+	u64 _inBetweenLinesMilisecondsStart;
+	#if SOUNDPLAYER == SND_VITA
+		if (lastVoiceSlot!=-1 && soundEffects[lastVoiceSlot]!=NULL && mlgsndIsPlaying(soundEffects[lastVoiceSlot])){
+			_inBetweenLinesMilisecondsStart=0;
+		}else{
+			_inBetweenLinesMilisecondsStart = getTicks();
+			if (_inBetweenLinesMilisecondsStart==0){
+				_inBetweenLinesMilisecondsStart=1;
+			}
+		}
+	#else
+		_inBetweenLinesMilisecondsStart = getTicks();
+		if (_inBetweenLinesMilisecondsStart==0){
+			_inBetweenLinesMilisecondsStart=1;
+		}
+	#endif
 	char _didPressCircle=0;
 	do{
 		fpsCapStart();
@@ -1228,12 +1250,20 @@ void outputLineWait(){
 		controlsEnd();
 		fpsCapWait();
 		if (autoModeOn==1){
-			if (getTicks()>=(_inBetweenLinesMilisecondsStart+autoModeWait)){
-				endType = Line_ContinueAfterTyping;
+			if (_inBetweenLinesMilisecondsStart!=0){ // If we're not waiting for audio to end
+				if (getTicks()>=(_inBetweenLinesMilisecondsStart+autoModeWait)){
+					endType = Line_ContinueAfterTyping;
+				}
+			}else{
+				// Check if audio has ended yet.
+				if (mlgsndIsPlaying(soundEffects[lastVoiceSlot])==0){
+					_inBetweenLinesMilisecondsStart = getTicks();
+				}
 			}
 		}
 		exitIfForceQuit();
 	}while(endType==Line_Normal || endType == Line_WaitForInput);
+	lastVoiceSlot=-1;
 }
 // This is used in background and bust drawing
 // For Higurashi, this is used to get the center of the screen for all images.
@@ -2423,7 +2453,7 @@ void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 // Example
 // /SE/
 // DO NOT FIX THE SE VOLUME BEFORE PASSING ARGUMENT
-void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, char _preferedDirectory, float _passedVolumeFixScale){
+void GenericPlayGameSound(int passedSlot, const char* filename, int unfixedVolume, char _preferedDirectory, float _passedVolumeFixScale){
 	if (passedSlot>=MAXSOUNDEFFECTARRAY){
 		LazyMessage("Sound effect slot too high.","No action will be taken.",NULL,NULL);
 		return;
@@ -2450,6 +2480,8 @@ void GenericPlaySound(int passedSlot, const char* filename, int unfixedVolume, c
 	}else{
 		CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1,passedSlot+10);
 		setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
+		// Used for auto mode
+		lastVoiceSlot=passedSlot;
 	}
 }
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
@@ -3872,14 +3904,14 @@ void scriptFadeBustshot(nathanscriptVariable* _passedArguments, int _numArgument
 // Slot, file, volume
 void scriptPlaySE(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (isSkipping==0 && seVolume>0){
-		GenericPlaySound(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),PREFER_DIR_SE,seVolume);
+		GenericPlayGameSound(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),PREFER_DIR_SE,seVolume);
 	}
 	return;
 }
 // PlayVoice(channel, filename, volume)
 void scriptPlayVoice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (isSkipping==0 && (hasOwnVoiceSetting==1 ? voiceVolume : seVolume)>0){
-		GenericPlaySound(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),PREFER_DIR_VOICE, hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
+		GenericPlayGameSound(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),PREFER_DIR_VOICE, hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
 	}
 	return;
 }
@@ -4747,9 +4779,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		if (wasJustPressed(SCE_CTRL_LEFT)){
 			if (_choice==1){
 				if (isDown(SCE_CTRL_LTRIGGER)){
-					autoModeWait-=200;
+					autoModeWait-=10;
 				}else{
-					autoModeWait-=500;
+					autoModeWait-=50;
 				}
 				if (autoModeWait<=0){
 					autoModeWait=500;
@@ -4812,9 +4844,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				break;
 			}else if (_choice==1){
 				if (isDown(SCE_CTRL_LTRIGGER)){
-					autoModeWait+=200;
+					autoModeWait+=10;
 				}else{
-					autoModeWait+=500;
+					autoModeWait+=50;
 				}
 				itoa(autoModeWait,_tempAutoModeString,10);
 			}else if (_choice==2){ // CPU speed

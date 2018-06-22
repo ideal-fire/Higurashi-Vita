@@ -64,7 +64,6 @@ void vndswrapper_text(nathanscriptVariable* _passedArguments, int _numArguments,
 		currentLine++;
 		outputLineWait();
 	}
-	
 }
 void vndswrapper_choice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* _choiceSet = nathanvariableToString(&_passedArguments[0]);
@@ -234,7 +233,7 @@ void vndswrapper_sound(nathanscriptVariable* _passedArguments, int _numArguments
 				strcat(_passedFilename,"ogg");
 			}
 			//removeFileExtension(_passedFilename);
-			GenericPlaySound(0,_passedFilename,256,PREFER_DIR_SE,seVolume);
+			GenericPlayGameSound(0,_passedFilename,256,PREFER_DIR_SE,seVolume);
 		}else{
 			// TODO - Stop all sounds
 		}
