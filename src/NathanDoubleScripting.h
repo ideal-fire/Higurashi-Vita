@@ -71,6 +71,8 @@ nathanscriptGameVariable* nathanscriptGlobalvarList;
 
 typedef void(*nathanscriptFunction)(nathanscriptVariable* _madeArgs, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize);
 
+typedef int(*intFunction)(int _passedInt);
+
 int nathanCurrentMaxFunctions=0;
 int nathanCurrentRegisteredFunctions=0;
 
@@ -871,7 +873,7 @@ void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nat
 	return;
 }
 
-void nathanscriptDoScript(char* _filename, long int _startingOffset){
+void nathanscriptDoScript(char* _filename, long int _startingOffset, intFunction _beforeExecuteFunction){
 	nathanscriptCurrentOpenFile = fopen(_filename,"rb");
 	if (_startingOffset>0){
 		fseek(nathanscriptCurrentOpenFile,_startingOffset,SEEK_SET);
@@ -887,15 +889,21 @@ void nathanscriptDoScript(char* _filename, long int _startingOffset){
 				printf("invalid command.\n");
 			}
 		}else{
-			if (nathanFunctionList[_foundCommandIndex]!=NULL){ // If the command has a valid function to go with it.
-				nathanscriptVariable* _gottenReturnArray=NULL;
-				int _gottenReturnArrayLength;
-				nathanFunctionList[_foundCommandIndex](_parsedCommandArgument,_parsedArgumentListSize,&_gottenReturnArray,&_gottenReturnArrayLength);
-				freeNathanscriptVariableArray(_parsedCommandArgument,_parsedArgumentListSize); // Free the arguments we passed to that function
-				if (_gottenReturnArray!=NULL){ // Return variables not supported
-					freeNathanscriptVariableArray(_gottenReturnArray,_gottenReturnArrayLength);
+			if (_beforeExecuteFunction!=NULL && _beforeExecuteFunction(_foundCommandIndex)<0){
+				// Make the function return not 0 to not do the command
+			}else{
+				if (nathanFunctionList[_foundCommandIndex]!=NULL){ // If the command has a valid function to go with it.
+					nathanscriptVariable* _gottenReturnArray=NULL;
+					int _gottenReturnArrayLength;
+					nathanFunctionList[_foundCommandIndex](_parsedCommandArgument,_parsedArgumentListSize,&_gottenReturnArray,&_gottenReturnArrayLength);
+					if (_gottenReturnArray!=NULL){ // Return variables not supported
+						freeNathanscriptVariableArray(_gottenReturnArray,_gottenReturnArrayLength);
+					}
 				}
 			}
+		}
+		if (_parsedCommandArgument!=NULL){
+			freeNathanscriptVariableArray(_parsedCommandArgument,_parsedArgumentListSize);  // Free the arguments we passed to that function
 		}
 		nathanscriptCurrentLine++;
 	}

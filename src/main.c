@@ -147,7 +147,8 @@
 // 7 adds showVNDSWarnings
 // 8 adds higurashiUsesDynamicScale
 // 9 adds preferredTextDisplayMode
-#define OPTIONSFILEFORMAT 9
+// 10 adds autoModeVoicedWait
+#define OPTIONSFILEFORMAT 10
 
 #define VNDSSAVEFORMAT 1
 
@@ -327,6 +328,7 @@ signed char currentFilterType=FILTERTYPE_INACTIVE;
 
 signed char autoModeOn=0;
 int32_t autoModeWait=500;
+int32_t autoModeVoicedWait=500;
 
 signed char cpuOverclocked=0;
 
@@ -423,6 +425,7 @@ signed char preferredTextDisplayMode=TEXTMODE_NVL;
 signed char useSoundArchive=0;
 legArchive soundArchive;
 signed char lastVoiceSlot=-1;
+int foundSetImgIndex = -1;
 /*
 ====================================================
 */
@@ -1154,8 +1157,6 @@ void Update(){
 			}else{
 				Busts[i].yOffset=Busts[i].statusVariable4;
 			}
-
-
 			if ((Busts[i].xOffset == Busts[i].statusVariable3) && (Busts[i].yOffset==Busts[i].statusVariable4)){
 				Busts[i].bustStatus = BUST_STATUS_NORMAL;
 				printf("DONE SPRITE MOVING\n");
@@ -1205,17 +1206,21 @@ void outputLineWait(){
 	}
 	// 0 if we need to wait for sound to end.
 	u64 _inBetweenLinesMilisecondsStart;
+	int _chosenAutoWait;
 	#if SOUNDPLAYER == SND_VITA
 		if (lastVoiceSlot!=-1 && soundEffects[lastVoiceSlot]!=NULL && mlgsndIsPlaying(soundEffects[lastVoiceSlot])){
 			_inBetweenLinesMilisecondsStart=0;
+			_chosenAutoWait = autoModeVoicedWait;
 		}else{
 			_inBetweenLinesMilisecondsStart = getTicks();
 			if (_inBetweenLinesMilisecondsStart==0){
 				_inBetweenLinesMilisecondsStart=1;
 			}
+			_chosenAutoWait = autoModeWait;
 		}
 	#else
 		_inBetweenLinesMilisecondsStart = getTicks();
+		_chosenAutoWait = autoModeWait;
 		if (_inBetweenLinesMilisecondsStart==0){
 			_inBetweenLinesMilisecondsStart=1;
 		}
@@ -1251,14 +1256,16 @@ void outputLineWait(){
 		fpsCapWait();
 		if (autoModeOn==1){
 			if (_inBetweenLinesMilisecondsStart!=0){ // If we're not waiting for audio to end
-				if (getTicks()>=(_inBetweenLinesMilisecondsStart+autoModeWait)){
+				if (getTicks()>=(_inBetweenLinesMilisecondsStart+_chosenAutoWait)){
 					endType = Line_ContinueAfterTyping;
 				}
 			}else{
-				// Check if audio has ended yet.
-				if (mlgsndIsPlaying(soundEffects[lastVoiceSlot])==0){
-					_inBetweenLinesMilisecondsStart = getTicks();
-				}
+				#if PLATFORM == PLAT_VITA
+					// Check if audio has ended yet.
+					if (mlgsndIsPlaying(soundEffects[lastVoiceSlot])==0){
+						_inBetweenLinesMilisecondsStart = getTicks();
+					}
+				#endif
 			}
 		}
 		exitIfForceQuit();
@@ -2005,6 +2012,30 @@ void FadeAllBustshots(int _time, char _wait){
 		}
 	}
 }
+void waitForBustFade(){
+	int i;
+	while(1){
+		char _didBreak=0;
+		for (i=0;i<maxBusts;i++){
+			//printf("%d is not done.",i);
+			if (Busts[i].isActive==1){
+				if (Busts[i].bustStatus!=BUST_STATUS_NORMAL){
+					_didBreak=1;
+					break;
+				}
+			}
+		}
+		if (!_didBreak){
+			break;
+		}
+		fpsCapStart();
+		Update();
+		startDrawing();
+		Draw(MessageBoxEnabled);
+		endDrawing();
+		fpsCapWait();
+	}
+}
 void DrawScene(const char* _filename, int time){
 	if (isSkipping==1){
 		time=0;
@@ -2115,6 +2146,9 @@ void DrawScene(const char* _filename, int time){
 	}
 }
 void MoveBustSlot(unsigned char _sourceSlot, unsigned char _destSlot){
+	if (_sourceSlot==_destSlot){
+		return;
+	}
 	ResetBustStruct(&(Busts[_destSlot]),1);
 	memcpy(&(Busts[_destSlot]),&(Busts[_sourceSlot]),sizeof(bust));
 	ResetBustStruct(&(Busts[_sourceSlot]),0);
@@ -2887,6 +2921,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // showVNDSWarnings, 1 byte
 // higurashiUsesDynamicScale, 1 byte
 // preferredTextDisplayMode, 1 byte
+// autoModeVoicedWait, 4 bytes
 void SaveSettings(){
 	FILE* fp;
 	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
@@ -2912,6 +2947,7 @@ void SaveSettings(){
 	fwrite(&showVNDSWarnings,sizeof(signed char),1,fp);
 	fwrite(&higurashiUsesDynamicScale,sizeof(signed char),1,fp);
 	fwrite(&preferredTextDisplayMode,sizeof(signed char),1,fp);
+	fwrite(&autoModeVoicedWait,sizeof(int32_t),1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -2967,6 +3003,9 @@ void LoadSettings(){
 		}
 		if (_tempOptionsFormat>=9){
 			fread(&preferredTextDisplayMode,sizeof(signed char),1,fp);
+		}
+		if (_tempOptionsFormat>=10){
+			fread(&autoModeVoicedWait,sizeof(int32_t),1,fp);
 		}
 		fclose(fp);
 
@@ -3134,17 +3173,14 @@ void LoadGameSpecificStupidity(){
 	RunGameSpecificLua();
 }
 void resetSettings(){
-	autoModeWait=500;
-	graphicsLocation = LOCATION_CGALT;
-	cpuOverclocked=0; // We don't actually change the CPU speed. They'll never notice. ;)
-	bgmVolume=.75;
-	seVolume=1.0;
-	voiceVolume=1.0;
-	MessageBoxAlpha=100;
-	textOnlyOverBackground=0;
-	textSpeed=1;
-	// Update music volume using new default setting
-	SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
+	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
+	if (checkFileExist(globalTempConcat)){
+		remove(globalTempConcat);
+	}
+	fixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
+	if (checkFileExist(globalTempConcat)){
+		remove(globalTempConcat);
+	}
 }
 // This will assume that trying to create a directory that already exists is okay.
 // Must call this function after paths are set up.
@@ -3524,7 +3560,7 @@ void vndsNormalLoad(char* _filename){
 	endType=Line_Normal;	
 	outputLineWait();
 
-	nathanscriptDoScript(_tempLoadedFilename,_readFilePosition);
+	nathanscriptDoScript(_tempLoadedFilename,_readFilePosition,inBetweenVNDSLines);
 }
 void _textboxTransition(char _isOn, int _totalTime){
 	if (MessageBoxEnabled!=_isOn && !isSkipping){
@@ -4585,8 +4621,20 @@ void switchTextDisplayMode(signed char _newMode){
 		LazyMessage("TODO",NULL,NULL,NULL);
 	}
 }
+void _settingsChangeAuto(int32_t* _storeValue, char* _storeString){
+	char _isNegative = wasJustPressed(SCE_CTRL_LEFT) ? -1 : 1;
+	if (isDown(SCE_CTRL_LTRIGGER)){
+		*_storeValue+=_isNegative*50;
+	}else{
+		*_storeValue+=_isNegative*100;
+	}
+	if (*_storeValue<=0){
+		*_storeValue=0;
+	}
+	itoa(*_storeValue,_storeString,10);
+}
 #define ISTEXTSPEEDBAR 0
-#define MAXOPTIONSSETTINGS 18
+#define MAXOPTIONSSETTINGS 19
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
 	b = _maxOptionSlotUsed;
@@ -4608,6 +4656,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	char _tempItoaHoldBoxAlpha[5] = {'\0'};
 	char _tempItoaHoldTextSpeed[8] = {'\0'}; // Needs to be big enough to hold "instant"
 	char _tempAutoModeString[10] = {'\0'};
+	char _tempAutoModeVoiceString[10] = {'\0'};
 	char _tempHoldSaveSlotSelection[5] = {'\0'};
 	char _maxOptionSlotUsed=0;
 
@@ -4621,6 +4670,8 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	signed char _messageBoxAlphaSlot=-2;
 	signed char _higurashiScalingSlot=-2;
 	signed char _textboxModeSlot=-2;
+	signed char _autoModeSpeedSlot=-2;
+	signed char _autoModeSpeedVoiceSlot=-2;
 
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
@@ -4633,27 +4684,28 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}else{
 		_settingsOptionsMainText[0] = "Resume";
 	}
-	_settingsOptionsMainText[1] = "Auto Mode Speed:";
 	#if PLATFORM == PLAT_VITA
-		_settingsOptionsMainText[2] = "Overclock CPU";
+		_settingsOptionsMainText[1] = "Overclock CPU";
 	#elif PLATFORM == PLAT_3DS
-		_settingsOptionsMainText[2] = "Text:";
+		_settingsOptionsMainText[1] = "Text:";
 		if (textIsBottomScreen==1){
-			_settingsOptionsValueText[2] = "Bottom Screen";
+			_settingsOptionsValueText[1] = "Bottom Screen";
 		}else{
-			_settingsOptionsValueText[2] = "Top Screen";
+			_settingsOptionsValueText[1] = "Top Screen";
 		}
 	#else
-		_settingsOptionsMainText[2] = "Nothing";
+		_settingsOptionsMainText[1] = "Nothing";
 	#endif
-	_settingsOptionsMainText[3] = "BGM Volume:";
-	_settingsOptionsMainText[4] = "SE Volume:";
-	_settingsOptionsMainText[5] = "Font Size";
-	_settingsOptionsMainText[6] = "Defaults";
-	_settingsOptionsMainText[7] = "Textbox:";
-	_settingsOptionsMainText[8] = "Text Speed:";
-	_maxOptionSlotUsed=8;
+	_settingsOptionsMainText[2] = "BGM Volume:";
+	_settingsOptionsMainText[3] = "SE Volume:";
+	_settingsOptionsMainText[4] = "Font Size";
+	_settingsOptionsMainText[5] = "Defaults";
+	_settingsOptionsMainText[6] = "Textbox:";
+	_settingsOptionsMainText[7] = "Text Speed:";
+	_maxOptionSlotUsed=7;
 	// Add new, optional settings here
+	SETTINGSMENU_EASYADDOPTION("Auto Speed:",_autoModeSpeedSlot);
+	SETTINGSMENU_EASYADDOPTION("Auto Voiced Speed:",_autoModeSpeedVoiceSlot);
 	if (canChangeBoxAlpha){
 		SETTINGSMENU_EASYADDOPTION("Message Box Alpha:",_messageBoxAlphaSlot);
 	}
@@ -4688,10 +4740,11 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	// Set values here
 	//////////////////
 	// Set pointers to menu option value text
+	_settingsOptionsValueText[_autoModeSpeedSlot]=&(_tempAutoModeString[0]);
+	_settingsOptionsValueText[_autoModeSpeedVoiceSlot]=&(_tempAutoModeVoiceString[0]);
 	if (hasOwnVoiceSetting){
 		_settingsOptionsValueText[_voiceVolumeSlot] = &(_tempItoaHoldVoice[0]);
 	}
-	_settingsOptionsValueText[1]=&(_tempAutoModeString[0]);
 	if (_showArtLocationSlot){
 		if (graphicsLocation == LOCATION_CG){
 			_settingsOptionsValueText[_bustLocationSlot]="CG";
@@ -4699,17 +4752,17 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			_settingsOptionsValueText[_bustLocationSlot]="CGAlt";
 		}
 	}
-	_settingsOptionsValueText[3] = &(_tempItoaHoldBGM[0]);
-	_settingsOptionsValueText[4] = &(_tempItoaHoldSE[0]);
+	_settingsOptionsValueText[2] = &(_tempItoaHoldBGM[0]);
+	_settingsOptionsValueText[3] = &(_tempItoaHoldSE[0]);
 	if (canChangeBoxAlpha){
 		_settingsOptionsValueText[_messageBoxAlphaSlot] = &(_tempItoaHoldBoxAlpha[0]);
 	}
 	if (textOnlyOverBackground){
-		_settingsOptionsValueText[7] = "Small";
+		_settingsOptionsValueText[6] = "Small";
 	}else{
-		_settingsOptionsValueText[7] = "Full";
+		_settingsOptionsValueText[6] = "Full";
 	}
-	_settingsOptionsValueText[8] = &(_tempItoaHoldTextSpeed[0]);
+	_settingsOptionsValueText[7] = &(_tempItoaHoldTextSpeed[0]);
 	if (_shouldShowVNDSSave){
 		_settingsOptionsValueText[_vndsSaveOptionsSlot]=&(_tempHoldSaveSlotSelection[0]);
 	}
@@ -4730,6 +4783,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 
 	// Make strings
 	itoa(autoModeWait,_tempAutoModeString,10);
+	itoa(autoModeVoicedWait,_tempAutoModeVoiceString,10);
 	itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 	itoa(seVolume*4, _tempItoaHoldSE,10);
 	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
@@ -4777,24 +4831,14 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			}
 		}
 		if (wasJustPressed(SCE_CTRL_LEFT)){
-			if (_choice==1){
-				if (isDown(SCE_CTRL_LTRIGGER)){
-					autoModeWait-=10;
-				}else{
-					autoModeWait-=50;
-				}
-				if (autoModeWait<=0){
-					autoModeWait=500;
-				}
-				itoa(autoModeWait,_tempAutoModeString,10);
-			}else if (_choice==3){
+			if (_choice==2){
 				if (bgmVolume==0){
 					bgmVolume=1.25;
 				}
 				bgmVolume-=.25;
 				itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 				SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
-			}else if (_choice==4){
+			}else if (_choice==3){
 				if (seVolume==0){
 					seVolume=1.25;
 				}
@@ -4804,7 +4848,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
-			}else if (_choice==8){
+			}else if (_choice==7){
 				textSpeed--;
 				if (textSpeed==-11){
 					textSpeed=-10;
@@ -4814,6 +4858,10 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					textSpeed=-1;
 				}
 				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
+			}else if (_choice==_autoModeSpeedSlot){
+				_settingsChangeAuto(&autoModeWait,_tempAutoModeString);
+			}else if (_choice==_autoModeSpeedVoiceSlot){
+				_settingsChangeAuto(&autoModeVoicedWait,_tempAutoModeVoiceString);
 			}else if (_choice==_messageBoxAlphaSlot){ /////////////////////////////////////////////
 				// char will wrap, we don't want that
 				int _tempHoldChar = MessageBoxAlpha;
@@ -4842,14 +4890,14 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			if (_choice==0){ // Resume
 				PlayMenuSound();
 				break;
-			}else if (_choice==1){
+			}/*else if (_choice==1){
 				if (isDown(SCE_CTRL_LTRIGGER)){
-					autoModeWait+=10;
-				}else{
 					autoModeWait+=50;
+				}else{
+					autoModeWait+=100;
 				}
 				itoa(autoModeWait,_tempAutoModeString,10);
-			}else if (_choice==2){ // CPU speed
+			}*/else if (_choice==1){ // CPU speed
 				PlayMenuSound();
 				if (cpuOverclocked==0){
 					cpuOverclocked=1;
@@ -4866,7 +4914,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 						_settingsOptionsValueText[2] = "Top Screen";
 					#endif
 				}
-			}else if (_choice==3){
+			}else if (_choice==2){
 				if (bgmVolume==1){
 					bgmVolume=0;
 				}else{
@@ -4874,7 +4922,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				}
 				itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 				SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
-			}else if (_choice==4){
+			}else if (_choice==3){
 				if (seVolume==1){
 					seVolume=0;
 				}else{
@@ -4886,28 +4934,23 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
-			}else if (_choice==5){
+			}else if (_choice==4){
 				FontSizeSetup();
 				currentTextHeight = textHeight(fontSize);
-			}else if (_choice==6){
+			}else if (_choice==5){
 				PlayMenuSound();
 				if (LazyChoice("This will reset your settings.","Is this okay?",NULL,NULL)==1){
 					resetSettings();
-					// Some need to have their strings changed so the user can actually see the changes
-					itoa(autoModeWait,_tempAutoModeString,10);
-					itoa(bgmVolume*4,_tempItoaHoldBGM,10);
-					itoa(seVolume*4, _tempItoaHoldSE,10);
-					itoa(voiceVolume*4, _tempItoaHoldVoice,10);
-					itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
+					LazyMessage("Restart for the changes to","take effect.",NULL,NULL);
 				}
-			}else if (_choice==7){
+			}else if (_choice==6){
 				setTextOnlyOverBackground(!textOnlyOverBackground);
 				if (textOnlyOverBackground){
-					_settingsOptionsValueText[7] = "Small";
+					_settingsOptionsValueText[6] = "Small";
 				}else{
-					_settingsOptionsValueText[7] = "Full";
+					_settingsOptionsValueText[6] = "Full";
 				}
-			}else if (_choice==8){
+			}else if (_choice==7){
 				textSpeed++;
 				if (textSpeed==11){
 					textSpeed=TEXTSPEED_INSTANT;
@@ -4917,6 +4960,10 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					textSpeed=1;
 				}
 				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
+			}else if (_choice==_autoModeSpeedSlot){
+				_settingsChangeAuto(&autoModeWait,_tempAutoModeString);
+			}else if (_choice==_autoModeSpeedVoiceSlot){
+				_settingsChangeAuto(&autoModeVoicedWait,_tempAutoModeVoiceString);
 			}else if (_choice==_messageBoxAlphaSlot){ /////////////////////////////////////////////
 				int _tempHoldChar = MessageBoxAlpha;
 				if (isDown(SCE_CTRL_LTRIGGER)){
@@ -5022,7 +5069,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		
 		// Color CPU overclock text if enabled
 		if (cpuOverclocked && PLATFORM != PLAT_3DS){
-			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(2-_scrollOffset),_settingsOptionsMainText[2],fontSize,0,255,0);
+			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(1-_scrollOffset),_settingsOptionsMainText[1],fontSize,0,255,0);
 		}
 		// If message box alpha is very high or text is on the bottom screen then make the message box alpha text red
 		if ( (MessageBoxAlpha>=230 && canChangeBoxAlpha) || (PLATFORM == PLAT_3DS && cpuOverclocked)){
@@ -5177,7 +5224,7 @@ void TitleScreen(){
 						strcat(_tempFilepathBuffer,_tempManualFileSelectionResult);
 
 						changeMallocString(&currentScriptFilename,_tempManualFileSelectionResult);
-						nathanscriptDoScript(_tempFilepathBuffer,0);
+						nathanscriptDoScript(_tempFilepathBuffer,0,inBetweenVNDSLines);
 
 						free(_tempManualFileSelectionResult);
 						currentGameStatus=GAMESTATUS_TITLE;
@@ -5634,11 +5681,11 @@ void NavigationMenu(){
 			_currentListDrawPosition++;
 		}
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Chapter Jump",fontSize);
-		if (gameHasTips==1){
-			_currentListDrawPosition++;
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"View Tips",fontSize);
-		}
 		_currentListDrawPosition++;
+		if (gameHasTips==1){	
+			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"View Tips",fontSize);
+			_currentListDrawPosition++;
+		}
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Exit",fontSize);
 		goodDrawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR,fontSize);
 		endDrawing();
@@ -5786,7 +5833,7 @@ void VNDSNavigationMenu(){
 				if (checkFileExist(_vndsMainScriptConcat)){
 					currentGameStatus = GAMESTATUS_MAINGAME;
 					changeMallocString(&currentScriptFilename,"main.scr");
-					nathanscriptDoScript(_vndsMainScriptConcat,0);
+					nathanscriptDoScript(_vndsMainScriptConcat,0,inBetweenVNDSLines);
 					currentGameStatus = GAMESTATUS_NAVIGATIONMENU;
 				}else{
 					LazyMessage("Main script file",_vndsMainScriptConcat,"not exist.",NULL);
@@ -5866,6 +5913,7 @@ void initializeNathanScript(){
 		nathanscriptAddFunction(vndswrapper_cleartext,0,"cleartext");
 		nathanscriptAddFunction(vndswrapper_bgload,0,"bgload");
 		nathanscriptAddFunction(vndswrapper_setimg,0,"setimg");
+			foundSetImgIndex = nathanCurrentRegisteredFunctions-1;
 		nathanscriptAddFunction(vndswrapper_jump,0,"jump");
 		nathanscriptAddFunction(vndswrapper_music,0,"music");
 		nathanscriptAddFunction(vndswrapper_gsetvar,nathanscriptMakeConfigByte(0,1),"gsetvar");
@@ -6197,8 +6245,10 @@ int main(int argc, char *argv[]){
 					LoadGameSpecificStupidity();
 					VNDSNavigationMenu();
 				}else{
-					if (strcmp(currentGameFolderName,"PLACEHOLDER.txt")==0){ // TODO - Either automatically delete this, or delete it when it's selected.
-						LazyMessage("Feel free to delete this file,","PLACEHOLDER.txt","in",gamesFolder);
+					if (strcmp(currentGameFolderName,"PLACEHOLDER.txt")==0){
+						strcpy(_possibleVNDSStatusFile,gamesFolder);
+						strcat(_possibleVNDSStatusFile,currentGameFolderName);
+						remove(_possibleVNDSStatusFile);
 						free(currentGameFolderName);
 						break;
 					}

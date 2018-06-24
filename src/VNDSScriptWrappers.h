@@ -6,6 +6,17 @@
 #define VNDS_IMPLIED_BACKGROUND_FADE 300
 #define VNDS_IMPLIED_SETIMG_FADE 200
 #define VNDS_HIDE_BOX_ON_BG_CHANGE 1
+#define MAXBUSTQUEUE 10
+
+typedef struct{
+	char* filename;
+	signed int x;
+	signed int y;
+}bustQueue;
+
+bustQueue currentBustQueue[MAXBUSTQUEUE] = {NULL};
+signed char nextBustQueueSlot=0;
+char isSpecialBustChange=0;
 
 signed int* pastSetImgX;
 signed int* pastSetImgY;
@@ -18,6 +29,148 @@ void increaseVNDSBustInfoArraysSize(int _oldMaxBusts, int _newMaxBusts){
 	currentSetImgX = recalloc(currentSetImgX, _newMaxBusts * sizeof(signed int), _oldMaxBusts * sizeof(signed int));
 	currentSetImgY= recalloc(currentSetImgY, _newMaxBusts * sizeof(signed int), _oldMaxBusts * sizeof(signed int));
 }
+
+char isNear(int _unknownSpot, int _originalSpot , int _leeway){
+	if (_originalSpot>=_unknownSpot-_leeway && _originalSpot<=_unknownSpot+_leeway){
+		return 1;
+	}
+	return 0;
+}
+
+void drawVNDSBust(bustQueue _passedBust){
+	signed int _cachedX = _passedBust.x;
+	signed int _cachedY = _passedBust.y;
+	signed int _imageFadein = VNDS_IMPLIED_SETIMG_FADE;
+	if (nextVndsBustshotSlot>=maxBusts){
+		increaseVNDSBustInfoArraysSize(maxBusts,nextVndsBustshotSlot+1); // No need to change maxBusts variable here, it will be changed in DrawBustshot call
+	}/*else{*/
+		int i;
+		for (i=0;i<nextBustQueueSlot;++i){
+			printf("%d x (%d and %d) y (%d and %d)\n",i,_cachedX,pastSetImgX[i],_cachedY,pastSetImgY[i]);
+			if (isNear(_cachedX,pastSetImgX[i],20) && isNear(_cachedY,pastSetImgY[i],20)){
+				printf("confirmed.\n");
+				_imageFadein=0;
+				pastSetImgX[i] = pastSetImgX[nextVndsBustshotSlot];
+				pastSetImgY[i] = pastSetImgY[nextVndsBustshotSlot];
+				break;
+			}
+		}
+		//printf("do the check.\n");
+		//printf("%d: %d;%d;%d;%d\n",nextVndsBustshotSlot,_cachedX,_cachedY,pastSetImgX[nextVndsBustshotSlot],pastSetImgY[nextVndsBustshotSlot]);
+		
+	//}
+	currentSetImgX[nextVndsBustshotSlot]=_cachedX;
+	currentSetImgY[nextVndsBustshotSlot]=_cachedY;
+	DrawBustshot(nextVndsBustshotSlot, _passedBust.filename, _cachedX, _cachedY, 0, _imageFadein, 0, 0);
+	nextVndsBustshotSlot++; // Prepare for next bust
+}
+
+int getEmptyBustshotSlot(){
+	int i;
+	for (i=0;i<maxBusts;++i){
+		if (Busts[i].isActive==0){
+			return i;
+		}
+	}
+	return i; // Array automatically expands when calling DrawBustshot
+}
+// Called in between VNDS command executions. Return < 0 if you don't want to execute the passed command.
+int inBetweenVNDSLines(int _aboutToCommandIndex){
+	if (isSpecialBustChange){
+		if (_aboutToCommandIndex!=foundSetImgIndex){
+			//printf("release queue");
+			isSpecialBustChange=0;
+
+			// Fadeout all bustshots that we definitely don't need anymore because they don't overlap any new ones
+			signed int i, j;
+			for (i=0;i<maxBusts;++i){
+				if (Busts[i].isActive){
+					char _bustIsSaved=0;
+					for (j=0;j<nextBustQueueSlot;++j){
+						//printf("%d x (%d and %d) y (%d and %d)\n",i,currentBustQueue[j].x,Busts[i].xOffset,currentBustQueue[j].y,Busts[i].yOffset);
+						if (isNear(currentBustQueue[j].x,Busts[i].xOffset,20) && isNear(currentBustQueue[j].y,Busts[i].yOffset,20)){
+							//printf("confirmed.\n");
+							_bustIsSaved=1;
+							break;
+						}
+					}
+					if (_bustIsSaved==0){
+						//printf("Remove unreplaced character %d\n",i);
+						FadeBustshot(i,VNDS_IMPLIED_SETIMG_FADE,0);
+					}
+				}
+			}
+			
+
+			// Forget about all the duplicates
+			for (j=0;j<nextBustQueueSlot;++j){
+				for (i=0;i<maxBusts;++i){
+					if (Busts[i].isActive){
+						if (isNear(currentBustQueue[j].x,Busts[i].xOffset,20) && isNear(currentBustQueue[j].y,Busts[i].yOffset,20)){
+							//printf("%s;%s;%d;%d\n",currentBustQueue[j].filename,Busts[i].relativeFilename,strlen(currentBustQueue[j].filename),strlen(Busts[i].relativeFilename));
+							if (strcmp(currentBustQueue[j].filename,Busts[i].relativeFilename)==0){
+								//printf("%d is a duplicate.",i);
+								free(currentBustQueue[j].filename);
+								currentBustQueue[j].filename=NULL;
+								//MoveBustSlot(i,nextVndsBustshotSlot);
+								//++nextVndsBustshotSlot;
+							}
+						}
+					}
+				}
+			}
+
+			// This is a bad idea.
+			//waitForBustFade();
+
+			// Show instantly our new stuff
+			for (j=0;j<nextBustQueueSlot;++j){
+				if (currentBustQueue[j].filename!=NULL){
+					// Delete old busts under them instantly
+					char _didDeleteAParent=0;
+					for (i=0;i<maxBusts;++i){
+						if (Busts[i].isActive && Busts[i].bustStatus == BUST_STATUS_NORMAL){
+							if (isNear(currentBustQueue[j].x,Busts[i].xOffset,20) && isNear(currentBustQueue[j].y,Busts[i].yOffset,20)){
+								//printf("Remove %d because it's too close.",i);
+								FadeBustshot(i,0,0);
+								
+								DrawBustshot(getEmptyBustshotSlot(), currentBustQueue[j].filename, currentBustQueue[j].x, currentBustQueue[j].y, 0, 0, 0, 0);
+								_didDeleteAParent=1;
+								break;
+							}
+						}
+					}
+					if (_didDeleteAParent==0){
+						//printf("will fadein %d\n",getEmptyBustshotSlot());
+						DrawBustshot(getEmptyBustshotSlot(), currentBustQueue[j].filename, currentBustQueue[j].x, currentBustQueue[j].y, 0, VNDS_IMPLIED_SETIMG_FADE, 0, 0);
+					}
+					free(currentBustQueue[j].filename);
+				}
+			}
+
+			waitForBustFade();
+
+			// Shift busts back to their lowest possible slots
+			for (i=1;i<maxBusts;++i){
+				int _foundNewIndex = getEmptyBustshotSlot();
+				if (_foundNewIndex!=i){
+					Busts[getEmptyBustshotSlot()]=Busts[i];
+					Busts[i].isActive=0;
+				}
+			}
+			nextVndsBustshotSlot = getEmptyBustshotSlot();
+			//char i;
+			//for (i=0;i<nextBustQueueSlot;++i){
+			//	drawVNDSBust(currentBustQueue[i]);
+			//	free(currentBustQueue[i].filename);
+			//}
+			//waitForBustFade();
+			//nextBustQueueSlot=0;
+		}
+	}
+	return 0;
+}
+
 
 
 //char nextVndsBustshotSlot=0;
@@ -133,47 +286,58 @@ void vndswrapper_cleartext(nathanscriptVariable* _passedArguments, int _numArgum
 // bgload filename.extention [dsFadeinFrames]
 void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* _passedFilename = nathanvariableToString(&_passedArguments[0]);
-	#if VNDS_HIDE_BOX_ON_BG_CHANGE
-		char _didHideBackground=0;
-		if (lastBackgroundFilename==NULL || strcmp(lastBackgroundFilename,_passedFilename)!=0){
-			_didHideBackground=1;
-			hideTextbox();
-		}
-	#endif
-	DrawScene(_passedFilename,_numArguments==2 ? floor((nathanvariableToFloat(&_passedArguments[1])/60)*1000) : VNDS_IMPLIED_BACKGROUND_FADE);
-	nextVndsBustshotSlot=0;
-	// Move last image position buffers
-	memcpy(pastSetImgX,currentSetImgX,sizeof(signed int)*maxBusts);
-	memcpy(pastSetImgY,currentSetImgY,sizeof(signed int)*maxBusts);
-	memset(currentSetImgX,0,sizeof(signed int)*maxBusts);
-	memset(currentSetImgY,0,sizeof(signed int)*maxBusts);
-	//
-	#if VNDS_HIDE_BOX_ON_BG_CHANGE
-		if (_didHideBackground){
-			showTextbox();
-		}
-	#endif
+	if (lastBackgroundFilename!=NULL && strcmp(lastBackgroundFilename,_passedFilename)==0){
+		// If we're not really changing the background, just busts
+		isSpecialBustChange=1;
+		nextBustQueueSlot=0;
+		nextVndsBustshotSlot=0;
+	}else{
+		#if VNDS_HIDE_BOX_ON_BG_CHANGE
+			char _didHideBackground=0;
+			if (lastBackgroundFilename==NULL || strcmp(lastBackgroundFilename,_passedFilename)!=0){
+				_didHideBackground=1;
+				hideTextbox();
+			}
+		#endif
+		DrawScene(_passedFilename,_numArguments==2 ? floor((nathanvariableToFloat(&_passedArguments[1])/60)*1000) : VNDS_IMPLIED_BACKGROUND_FADE);
+		nextVndsBustshotSlot=0;
+		// Move last image position buffers
+		memcpy(pastSetImgX,currentSetImgX,sizeof(signed int)*maxBusts);
+		memcpy(pastSetImgY,currentSetImgY,sizeof(signed int)*maxBusts);
+		memset(currentSetImgX,0,sizeof(signed int)*maxBusts);
+		memset(currentSetImgY,0,sizeof(signed int)*maxBusts);
+		//
+		#if VNDS_HIDE_BOX_ON_BG_CHANGE
+			if (_didHideBackground){
+				if (gameTextDisplayMode==TEXTMODE_ADV){
+					ClearMessageArray(0);
+				}
+				showTextbox();
+			}
+		#endif
+	}
 }
 // setimg file x y
 // setimg MGE_000099.png 75 0
 void vndswrapper_setimg(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	signed int _cachedX = nathanvariableToInt(&_passedArguments[1]);
-	signed int _cachedY = nathanvariableToInt(&_passedArguments[2]);
-	signed int _imageFadein = VNDS_IMPLIED_SETIMG_FADE;
-	if (nextVndsBustshotSlot>=maxBusts){
-		increaseVNDSBustInfoArraysSize(maxBusts,nextVndsBustshotSlot+1); // No need to change maxBusts variable here, it will be changed in DrawBustshot call
+	if (!isSpecialBustChange){
+		if (nextVndsBustshotSlot>=maxBusts){
+			increaseVNDSBustInfoArraysSize(maxBusts,nextVndsBustshotSlot+1); // No need to change maxBusts variable here, it will be changed in DrawBustshot call
+		}
+		currentSetImgX[nextVndsBustshotSlot]=nathanvariableToInt(&_passedArguments[1]);
+		currentSetImgY[nextVndsBustshotSlot]=nathanvariableToInt(&_passedArguments[2]);
+		DrawBustshot(nextVndsBustshotSlot, nathanvariableToString(&_passedArguments[0]), currentSetImgX[nextVndsBustshotSlot], currentSetImgY[nextVndsBustshotSlot], 0, VNDS_IMPLIED_SETIMG_FADE, 1, 0);
+		nextVndsBustshotSlot++; // Prepare for next bust
 	}else{
-		//printf("do the check.\n");
-		//printf("%d: %d;%d;%d;%d\n",nextVndsBustshotSlot,_cachedX,_cachedY,pastSetImgX[nextVndsBustshotSlot],pastSetImgY[nextVndsBustshotSlot]);
-		if (_cachedX==pastSetImgX[nextVndsBustshotSlot] && _cachedY==pastSetImgY[nextVndsBustshotSlot]){
-			//printf("is confirme dfor smash 5.\n");
-			_imageFadein=0;
+		if (nextBustQueueSlot==MAXBUSTQUEUE){
+			LazyMessage("Too many busts in queue.","No action will be taken.",NULL,"Report to MyLegGuy.");
+		}else{
+			currentBustQueue[nextBustQueueSlot].x = nathanvariableToInt(&_passedArguments[1]);
+			currentBustQueue[nextBustQueueSlot].y = nathanvariableToInt(&_passedArguments[2]);
+			currentBustQueue[nextBustQueueSlot].filename = mallocForString(nathanvariableToString(&_passedArguments[0]));
+			nextBustQueueSlot++;
 		}
 	}
-	currentSetImgX[nextVndsBustshotSlot]=_cachedX;
-	currentSetImgY[nextVndsBustshotSlot]=_cachedY;
-	DrawBustshot(nextVndsBustshotSlot, nathanvariableToString(&_passedArguments[0]), _cachedX, _cachedY, 0, _imageFadein, (_imageFadein!=0), 0);
-	nextVndsBustshotSlot++; // Prepare for next bust
 }
 
 // jump file.scr [label]

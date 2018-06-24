@@ -21,6 +21,7 @@ void testCode();
 signed int atLeastOne(signed int _input);
 void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _shouldDrawFilter, char _shouldDrawMessageBox, char _shouldDrawHighBusts, char _shouldDrawMessageText);
 void loadADVBox();
+int inBetweenVNDSLines(int _aboutToCommandIndex);
 typedef struct{
 	char** theArray;
 	unsigned char length;
