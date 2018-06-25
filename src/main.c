@@ -1,5 +1,4 @@
 /*
-	
 	(OPTIONAL TODO)
 		TODO - (optional) Garbage collector won't collect functions made in script files??? i.e: function hima_tips_09_b()
 			Maybe I can make a system similar to the one I made in MrDude that tracks all the global variables made between two points of time.
@@ -327,8 +326,8 @@ unsigned char filterActive=0;
 signed char currentFilterType=FILTERTYPE_INACTIVE;
 
 signed char autoModeOn=0;
-int32_t autoModeWait=500;
-int32_t autoModeVoicedWait=500;
+int autoModeWait=500;
+int autoModeVoicedWait=500;
 
 signed char cpuOverclocked=0;
 
@@ -1225,6 +1224,12 @@ void outputLineWait(){
 			_inBetweenLinesMilisecondsStart=1;
 		}
 	#endif
+	// On PS Vita, prevent sleep mode if using auto mode
+	#if PLATFORM == PLAT_VITA
+		if (autoModeOn){
+			sceKernelPowerTick(0);
+		}
+	#endif
 	char _didPressCircle=0;
 	do{
 		fpsCapStart();
@@ -1348,7 +1353,7 @@ void DrawBust(bust* passedBust){
 	float _drawBustX = ceil(_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale);
 	float _drawBustY = ceil(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale);
 	if (passedBust->alpha==255){
-		drawTextureScaleGood(passedBust->image,_drawBustX,_drawBustY,graphicsScale,graphicsScale);
+		drawTextureScaleAlphaGood(passedBust->image,_drawBustX,_drawBustY,graphicsScale,graphicsScale,255);
 	}else{
 		if (passedBust->bustStatus==BUST_STATUS_TRANSFORM_FADEIN){
 			drawTextureScaleAlphaGood(passedBust->transformTexture,_drawBustX,_drawBustY, graphicsScale, graphicsScale, 255-passedBust->alpha);
@@ -1934,7 +1939,6 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 	if (isSkipping==1){
 		_time=0;
 	}
-
 	//int passedSlot = nathanvariableToInt(&_passedArguments[1)-1;
 	//Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
 	//Busts[passedSlot].statusVariable = 
@@ -2935,7 +2939,7 @@ void SaveSettings(){
 	fwrite(&_tempOptionsFormat,1,1,fp);
 	fwrite(&cpuOverclocked,1,1,fp);
 	fwrite(&graphicsLocation,1,1,fp);
-	fwrite(&autoModeWait,4,1,fp);
+	fwrite(&autoModeWait,sizeof(int),1,fp);
 
 	fwrite(&_bgmTemp,1,1,fp);
 	fwrite(&_seTemp,1,1,fp);
@@ -2947,7 +2951,7 @@ void SaveSettings(){
 	fwrite(&showVNDSWarnings,sizeof(signed char),1,fp);
 	fwrite(&higurashiUsesDynamicScale,sizeof(signed char),1,fp);
 	fwrite(&preferredTextDisplayMode,sizeof(signed char),1,fp);
-	fwrite(&autoModeVoicedWait,sizeof(int32_t),1,fp);
+	fwrite(&autoModeVoicedWait,sizeof(int),1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -2969,7 +2973,7 @@ void LoadSettings(){
 		if (_tempOptionsFormat>=1){
 			fread(&cpuOverclocked,1,1,fp);
 			fread(&graphicsLocation,1,1,fp);
-			fread(&autoModeWait,4,1,fp);
+			fread(&autoModeWait,sizeof(int),1,fp);
 		}
 		if (_tempOptionsFormat>=2){
 			unsigned char _bgmTemp;
@@ -3005,7 +3009,7 @@ void LoadSettings(){
 			fread(&preferredTextDisplayMode,sizeof(signed char),1,fp);
 		}
 		if (_tempOptionsFormat>=10){
-			fread(&autoModeVoicedWait,sizeof(int32_t),1,fp);
+			fread(&autoModeVoicedWait,sizeof(int),1,fp);
 		}
 		fclose(fp);
 
@@ -4621,12 +4625,12 @@ void switchTextDisplayMode(signed char _newMode){
 		LazyMessage("TODO",NULL,NULL,NULL);
 	}
 }
-void _settingsChangeAuto(int32_t* _storeValue, char* _storeString){
-	char _isNegative = wasJustPressed(SCE_CTRL_LEFT) ? -1 : 1;
+void _settingsChangeAuto(int* _storeValue, char* _storeString){
+	signed char _isNegative = wasJustPressed(SCE_CTRL_LEFT) ? -1 : 1;
 	if (isDown(SCE_CTRL_LTRIGGER)){
-		*_storeValue+=_isNegative*50;
+		*_storeValue+=(int)(_isNegative*50);
 	}else{
-		*_storeValue+=_isNegative*100;
+		*_storeValue+=(int)(_isNegative*100);
 	}
 	if (*_storeValue<=0){
 		*_storeValue=0;

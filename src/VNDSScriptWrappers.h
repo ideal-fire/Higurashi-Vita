@@ -1,10 +1,11 @@
 #ifndef VNDSSCRIPTWRAPPERS
 #define VNDSSCRIPTWRAPPERS
 
+#define VNDSDOESFADEREPLACE 0
 #define _VNDSWAITDISABLE 0
 // Fadein time in milliseconds used if one not given by vnds script
 #define VNDS_IMPLIED_BACKGROUND_FADE 300
-#define VNDS_IMPLIED_SETIMG_FADE 200
+#define VNDS_IMPLIED_SETIMG_FADE 300
 #define VNDS_HIDE_BOX_ON_BG_CHANGE 1
 #define MAXBUSTQUEUE 10
 
@@ -37,33 +38,33 @@ char isNear(int _unknownSpot, int _originalSpot , int _leeway){
 	return 0;
 }
 
-void drawVNDSBust(bustQueue _passedBust){
-	signed int _cachedX = _passedBust.x;
-	signed int _cachedY = _passedBust.y;
-	signed int _imageFadein = VNDS_IMPLIED_SETIMG_FADE;
-	if (nextVndsBustshotSlot>=maxBusts){
-		increaseVNDSBustInfoArraysSize(maxBusts,nextVndsBustshotSlot+1); // No need to change maxBusts variable here, it will be changed in DrawBustshot call
-	}/*else{*/
-		int i;
-		for (i=0;i<nextBustQueueSlot;++i){
-			printf("%d x (%d and %d) y (%d and %d)\n",i,_cachedX,pastSetImgX[i],_cachedY,pastSetImgY[i]);
-			if (isNear(_cachedX,pastSetImgX[i],20) && isNear(_cachedY,pastSetImgY[i],20)){
-				printf("confirmed.\n");
-				_imageFadein=0;
-				pastSetImgX[i] = pastSetImgX[nextVndsBustshotSlot];
-				pastSetImgY[i] = pastSetImgY[nextVndsBustshotSlot];
-				break;
-			}
-		}
-		//printf("do the check.\n");
-		//printf("%d: %d;%d;%d;%d\n",nextVndsBustshotSlot,_cachedX,_cachedY,pastSetImgX[nextVndsBustshotSlot],pastSetImgY[nextVndsBustshotSlot]);
-		
-	//}
-	currentSetImgX[nextVndsBustshotSlot]=_cachedX;
-	currentSetImgY[nextVndsBustshotSlot]=_cachedY;
-	DrawBustshot(nextVndsBustshotSlot, _passedBust.filename, _cachedX, _cachedY, 0, _imageFadein, 0, 0);
-	nextVndsBustshotSlot++; // Prepare for next bust
-}
+//void drawVNDSBust(bustQueue _passedBust){
+//	signed int _cachedX = _passedBust.x;
+//	signed int _cachedY = _passedBust.y;
+//	signed int _imageFadein = VNDS_IMPLIED_SETIMG_FADE;
+//	if (nextVndsBustshotSlot>=maxBusts){
+//		increaseVNDSBustInfoArraysSize(maxBusts,nextVndsBustshotSlot+1); // No need to change maxBusts variable here, it will be changed in DrawBustshot call
+//	}/*else{*/
+//		int i;
+//		for (i=0;i<nextBustQueueSlot;++i){
+//			printf("%d x (%d and %d) y (%d and %d)\n",i,_cachedX,pastSetImgX[i],_cachedY,pastSetImgY[i]);
+//			if (isNear(_cachedX,pastSetImgX[i],20) && isNear(_cachedY,pastSetImgY[i],20)){
+//				printf("confirmed.\n");
+//				_imageFadein=0;
+//				pastSetImgX[i] = pastSetImgX[nextVndsBustshotSlot];
+//				pastSetImgY[i] = pastSetImgY[nextVndsBustshotSlot];
+//				break;
+//			}
+//		}
+//		//printf("do the check.\n");
+//		//printf("%d: %d;%d;%d;%d\n",nextVndsBustshotSlot,_cachedX,_cachedY,pastSetImgX[nextVndsBustshotSlot],pastSetImgY[nextVndsBustshotSlot]);
+//		
+//	//}
+//	currentSetImgX[nextVndsBustshotSlot]=_cachedX;
+//	currentSetImgY[nextVndsBustshotSlot]=_cachedY;
+//	DrawBustshot(nextVndsBustshotSlot, _passedBust.filename, _cachedX, _cachedY, 0, _imageFadein, 0, 0);
+//	nextVndsBustshotSlot++; // Prepare for next bust
+//}
 
 int getEmptyBustshotSlot(){
 	int i;
@@ -78,7 +79,6 @@ int getEmptyBustshotSlot(){
 int inBetweenVNDSLines(int _aboutToCommandIndex){
 	if (isSpecialBustChange){
 		if (_aboutToCommandIndex!=foundSetImgIndex){
-			//printf("release queue");
 			isSpecialBustChange=0;
 
 			// Fadeout all bustshots that we definitely don't need anymore because they don't overlap any new ones
@@ -101,7 +101,6 @@ int inBetweenVNDSLines(int _aboutToCommandIndex){
 				}
 			}
 			
-
 			// Forget about all the duplicates
 			for (j=0;j<nextBustQueueSlot;++j){
 				for (i=0;i<maxBusts;++i){
@@ -120,26 +119,30 @@ int inBetweenVNDSLines(int _aboutToCommandIndex){
 				}
 			}
 
-			// This is a bad idea.
-			//waitForBustFade();
-
-			// Show instantly our new stuff
+			// Show our new stuff
 			for (j=0;j<nextBustQueueSlot;++j){
+				// Don't do removed duplicates
 				if (currentBustQueue[j].filename!=NULL){
-					// Delete old busts under them instantly
+
+					// If this is an expression change, instantly delete the old bust and show the new one
 					char _didDeleteAParent=0;
 					for (i=0;i<maxBusts;++i){
 						if (Busts[i].isActive && Busts[i].bustStatus == BUST_STATUS_NORMAL){
 							if (isNear(currentBustQueue[j].x,Busts[i].xOffset,20) && isNear(currentBustQueue[j].y,Busts[i].yOffset,20)){
-								//printf("Remove %d because it's too close.",i);
-								FadeBustshot(i,0,0);
-								
-								DrawBustshot(getEmptyBustshotSlot(), currentBustQueue[j].filename, currentBustQueue[j].x, currentBustQueue[j].y, 0, 0, 0, 0);
+								if (VNDSDOESFADEREPLACE){
+									DrawBustshot(i, currentBustQueue[j].filename, currentBustQueue[j].x, currentBustQueue[j].y, 0, VNDS_IMPLIED_SETIMG_FADE, 0, 0);
+								}else{
+									//printf("Remove %d because it's too close.",i);
+									FadeBustshot(i,0,0);
+									DrawBustshot(getEmptyBustshotSlot(), currentBustQueue[j].filename, currentBustQueue[j].x, currentBustQueue[j].y, 0, 0, 0, 0);
+								}
 								_didDeleteAParent=1;
 								break;
 							}
 						}
 					}
+
+					// If it's a brand new bust, fade it in.
 					if (_didDeleteAParent==0){
 						//printf("will fadein %d\n",getEmptyBustshotSlot());
 						DrawBustshot(getEmptyBustshotSlot(), currentBustQueue[j].filename, currentBustQueue[j].x, currentBustQueue[j].y, 0, VNDS_IMPLIED_SETIMG_FADE, 0, 0);
@@ -154,18 +157,10 @@ int inBetweenVNDSLines(int _aboutToCommandIndex){
 			for (i=1;i<maxBusts;++i){
 				int _foundNewIndex = getEmptyBustshotSlot();
 				if (_foundNewIndex!=i){
-					Busts[getEmptyBustshotSlot()]=Busts[i];
-					Busts[i].isActive=0;
+					MoveBustSlot(i,_foundNewIndex);
 				}
 			}
 			nextVndsBustshotSlot = getEmptyBustshotSlot();
-			//char i;
-			//for (i=0;i<nextBustQueueSlot;++i){
-			//	drawVNDSBust(currentBustQueue[i]);
-			//	free(currentBustQueue[i].filename);
-			//}
-			//waitForBustFade();
-			//nextBustQueueSlot=0;
 		}
 	}
 	return 0;
@@ -282,7 +277,6 @@ void vndswrapper_cleartext(nathanscriptVariable* _passedArguments, int _numArgum
 		clearHistory();
 	}
 }
-
 // bgload filename.extention [dsFadeinFrames]
 void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* _passedFilename = nathanvariableToString(&_passedArguments[0]);

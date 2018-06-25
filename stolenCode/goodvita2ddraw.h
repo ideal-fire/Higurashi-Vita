@@ -23,7 +23,7 @@
 	extern SceGxmProgramParameter *_vita2d_textureTintColorParam;
 #endif
 
-void drawTextureScaleGood(const CrossTexture* texture, float x, float y, double x_scale, double y_scale){
+void ____drawTextureScaleGood(const CrossTexture* texture, float x, float y, double x_scale, double y_scale){
 	#if PLATFORM == PLAT_VITA
 		vita2d_texture_vertex *vertices = (vita2d_texture_vertex *)vita2d_pool_memalign(4 * sizeof(vita2d_texture_vertex), sizeof(vita2d_texture_vertex));
 	
@@ -82,7 +82,7 @@ void drawTextureScaleAlphaGood(const CrossTexture* texture, float x, float y, do
 		tint_color[3] = ((color >> 8*3) & 0xFF)/255.0f;
 		sceGxmSetUniformDataF(texture_tint_color_buffer, _vita2d_textureTintColorParam, 0, 4, tint_color);
 		// final
-		drawTextureScaleGood(texture, x, y, x_scale, y_scale);
+		____drawTextureScaleGood(texture, x, y, x_scale, y_scale);
 	#else
 		drawTextureScaleAlpha((CrossTexture*)texture,x,y,x_scale,y_scale,alpha);
 	#endif
