@@ -147,7 +147,8 @@
 // 8 adds higurashiUsesDynamicScale
 // 9 adds preferredTextDisplayMode
 // 10 adds autoModeVoicedWait
-#define OPTIONSFILEFORMAT 10
+// 11 adds vndsSpritesFade
+#define OPTIONSFILEFORMAT 11
 
 #define VNDSSAVEFORMAT 1
 
@@ -425,6 +426,7 @@ signed char useSoundArchive=0;
 legArchive soundArchive;
 signed char lastVoiceSlot=-1;
 int foundSetImgIndex = -1;
+signed char vndsSpritesFade=1;
 /*
 ====================================================
 */
@@ -1182,7 +1184,7 @@ void updateControlsGeneral(){
 		isSkipping=0;
 	}
 	if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && PLATFORM != PLAT_VITA,!currentlyVNDSGame,0,currentlyVNDSGame);
+		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && PLATFORM != PLAT_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame);
 	}
 	if (wasJustPressed(SCE_CTRL_SELECT)){
 		PlayMenuSound();
@@ -2952,6 +2954,7 @@ void SaveSettings(){
 	fwrite(&higurashiUsesDynamicScale,sizeof(signed char),1,fp);
 	fwrite(&preferredTextDisplayMode,sizeof(signed char),1,fp);
 	fwrite(&autoModeVoicedWait,sizeof(int),1,fp);
+	fwrite(&vndsSpritesFade,sizeof(signed char),1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -3010,6 +3013,9 @@ void LoadSettings(){
 		}
 		if (_tempOptionsFormat>=10){
 			fread(&autoModeVoicedWait,sizeof(int),1,fp);
+		}
+		if (_tempOptionsFormat>=11){
+			fread(&vndsSpritesFade,sizeof(signed char),1,fp);
 		}
 		fclose(fp);
 
@@ -3528,7 +3534,7 @@ void vndsNormalLoad(char* _filename){
 		_tempReadFilename = readLengthStringFromFile(fp); //
 		if (_tempReadFilename[0]!='\0'){
 			nextVndsBustshotSlot = i+1;
-			DrawBustshot(i,_tempReadFilename,_tempReadX,_tempReadY,0,0,0,0);
+			DrawBustshot(i,_tempReadFilename,_tempReadX,_tempReadY,i,0,0,0);
 		}
 		free(_tempReadFilename);
 	}
@@ -4638,11 +4644,11 @@ void _settingsChangeAuto(int* _storeValue, char* _storeString){
 	itoa(*_storeValue,_storeString,10);
 }
 #define ISTEXTSPEEDBAR 0
-#define MAXOPTIONSSETTINGS 19
+#define MAXOPTIONSSETTINGS 20
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
 	b = _maxOptionSlotUsed;
-void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption){
+void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption, signed char _showVNDSFadeOption){
 	controlsStart();
 	controlsEnd();
 	PlayMenuSound();
@@ -4676,6 +4682,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	signed char _textboxModeSlot=-2;
 	signed char _autoModeSpeedSlot=-2;
 	signed char _autoModeSpeedVoiceSlot=-2;
+	signed char _vndsBustFadeEnableSlot=-2;
 
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
@@ -4735,6 +4742,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	if (_showTextBoxModeOption){
 		SETTINGSMENU_EASYADDOPTION("Text Mode: ",_textboxModeSlot);
 	}
+	if (_showVNDSFadeOption){
+		SETTINGSMENU_EASYADDOPTION("VNDS Image Fade:",_vndsBustFadeEnableSlot);
+	}
 	// Quit button is always last
 	if (currentGameStatus!=GAMESTATUS_TITLE){
 		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Quit";
@@ -4783,6 +4793,13 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}
 	if (_showTextBoxModeOption){
 		_settingsOptionsValueText[_textboxModeSlot]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
+	}
+	if (_showVNDSFadeOption){
+		if (vndsSpritesFade){
+			_settingsOptionsValueText[_vndsBustFadeEnableSlot]="On";
+		}else{
+			_settingsOptionsValueText[_vndsBustFadeEnableSlot]="Off";
+		}
 	}
 
 	// Make strings
@@ -5041,6 +5058,15 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				preferredTextDisplayMode = (preferredTextDisplayMode==TEXTMODE_ADV ? TEXTMODE_NVL : TEXTMODE_ADV);
 				_settingsOptionsValueText[_textboxModeSlot]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
 				switchTextDisplayMode(preferredTextDisplayMode);
+			}else if (_choice==_vndsBustFadeEnableSlot){
+				vndsSpritesFade=!vndsSpritesFade;
+				if (_showVNDSFadeOption){
+					if (vndsSpritesFade){
+						_settingsOptionsValueText[_vndsBustFadeEnableSlot]="On";
+					}else{
+						_settingsOptionsValueText[_vndsBustFadeEnableSlot]="Off";
+					}
+				}
 			}else if (_choice==_maxOptionSlotUsed){ // Quit
 				#if PLATFORM == PLAT_3DS
 					lockBGM();
@@ -5246,7 +5272,7 @@ void TitleScreen(){
 				}
 			}else if (_choice==2){ // Go to setting menu
 				controlsEnd();
-				SettingsMenu(0,0,0,0,1,0,0);
+				SettingsMenu(0,0,0,0,1,0,0,0);
 				controlsEnd();
 				break;
 			}else if (_choice==3){ // Quit button
@@ -5843,7 +5869,7 @@ void VNDSNavigationMenu(){
 					LazyMessage("Main script file",_vndsMainScriptConcat,"not exist.",NULL);
 				}
 			}else if (_choice==2){
-				SettingsMenu(0,1,0,0,0,0,1);
+				SettingsMenu(0,1,0,0,0,0,1,1);
 			}else if (_choice==3){
 				currentGameStatus = GAMESTATUS_QUIT;
 			}
