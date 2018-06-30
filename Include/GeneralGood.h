@@ -34,13 +34,23 @@
 	#define CROSSDIRSTORAGE int
 #endif
 
-#if RENDERER == REND_SDL
+#if PLATFORM == PLAT_VITA
+	typedef struct{
+		char* filename; // Malloc
+		int internalPosition;
+		FILE* fp;
+	}vitaFile;
+	#define CROSSFILE vitaFile
+#elif RENDERER == REND_SDL
 	#define CROSSFILE SDL_RWops
 	#define CROSSFILE_START RW_SEEK_SET
 	#define CROSSFILE_CUR RW_SEEK_CUR
 	#define CROSSFILE_END RW_SEEK_END
 #else
 	#define CROSSFILE FILE
+#endif
+// Defaults
+#ifndef CROSSFILE_START
 	#define CROSSFILE_START SEEK_SET
 	#define CROSSFILE_CUR SEEK_CUR
 	#define CROSSFILE_END SEEK_END
@@ -112,5 +122,6 @@ void quitApplication();
 void removeNewline(char* _toRemove);
 char showErrorIfNull(void* _thingie);
 void wait(int miliseconds);
+int crossungetc(int c, CROSSFILE* stream);
  
 #endif /* GENERALGOOD_H */

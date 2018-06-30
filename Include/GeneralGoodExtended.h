@@ -1,7 +1,7 @@
 #ifndef GENERALGOODEXTENDED_H
 #define GENERALGOODEXTENDED_H
 
-#if PLATFORM != PLAT_VITA && PLATFORM != PLAT_3DS && PLATFORM != PLAT_VITA
+#if PLATFORM != PLAT_VITA && PLATFORM != PLAT_3DS
 	enum SceCtrlPadButtons {
 		SCE_CTRL_SELECT      = 0,	//!< Select button.
 		SCE_CTRL_L3          = 1,	//!< L3 button.
@@ -48,6 +48,8 @@
 	#define SCE_CTRL_SQUARE KEY_Y
 	#define SCE_CTRL_START KEY_START
 	#define SCE_CTRL_SELECT KEY_SELECT
+	#define SCE_CTRL_LTRIGGER KEY_L
+	#define SCE_CTRL_RTRIGGER KEY_R
 #endif
 
 #if PLATFORM == PLAT_SWITCH

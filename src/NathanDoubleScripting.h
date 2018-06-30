@@ -81,12 +81,10 @@ nathanscriptFunction* nathanFunctionList=NULL;
 char** nathanFunctionNameList=NULL;
 char* nathanFunctionPropertyList=NULL;
 
-FILE* nathanscriptCurrentOpenFile;
+CROSSFILE* nathanscriptCurrentOpenFile;
 int nathanscriptFoundFiIndex; // Array index of the fi command from the line parser
 int nathanscriptFoundLabelIndex;
 
-////////////////////////////////////////////////
-void saveVariableList(FILE* fp, nathanscriptGameVariable* _listToSave, int _totalListLength);
 ////////////////////////////////////////////////
 
 char nathanGetBit(char _value, char _bitNumber){
@@ -568,12 +566,12 @@ void nathanscriptParseString(char* _tempReadLine, int* _storeCommandIndex, natha
 	free(_tempSingleElementBuffer);
 }
 
-void nathanscriptParseSingleLine(FILE* fp, int* _storeCommandIndex, nathanscriptVariable** _storeArguments, int* _storeNumArguments){
+void nathanscriptParseSingleLine(CROSSFILE* fp, int* _storeCommandIndex, nathanscriptVariable** _storeArguments, int* _storeNumArguments){
 	// Contains the entire line. Will be resized by getline function
 	char* _tempReadLine = calloc(1,512);
 	// Will be changed if the buffer isn't big enough
 	size_t _readLineBufferSize = 512;
-	getline(&_tempReadLine,&_readLineBufferSize,fp);
+	custom_getline(&_tempReadLine,&_readLineBufferSize,fp);
 	// getline function includes the new line character in the string
 	removeNewline(_tempReadLine);
 	// If it's just an empty line,
@@ -650,12 +648,12 @@ void makeNewReturnArray(nathanscriptVariable** _returnedReturnArray, int* _retur
 }
 
 void genericGotoLabel(char* labelName){
-	long int _startSearchSpot = ftell(nathanscriptCurrentOpenFile);
+	long int _startSearchSpot = crossftell(nathanscriptCurrentOpenFile);
 	char _didFoundLabel=0;
-	if (fseek(nathanscriptCurrentOpenFile,0,SEEK_SET)!=0){
+	if (crossfseek(nathanscriptCurrentOpenFile,0,SEEK_SET)!=0){
 		printf("Seek error 1.\n");
 	}
-	while (!feof(nathanscriptCurrentOpenFile)){
+	while (!crossfeof(nathanscriptCurrentOpenFile)){
 		int _foundCommandIndex;
 		nathanscriptVariable* _parsedArguments=NULL;
 		int _parsedArgumentsLength;
@@ -671,7 +669,7 @@ void genericGotoLabel(char* labelName){
 	}
 	if (_didFoundLabel==0){
 		printf("Label not found.\n");
-		if (fseek(nathanscriptCurrentOpenFile,_startSearchSpot,SEEK_SET)!=0){
+		if (crossfseek(nathanscriptCurrentOpenFile,_startSearchSpot,SEEK_SET)!=0){
 			printf("Seek error 2.\n");
 		}
 	}
@@ -850,7 +848,7 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 		}
 	}
 	if (_ifStatementResult==0){
-		while (!feof(nathanscriptCurrentOpenFile)){
+		while (!crossfeof(nathanscriptCurrentOpenFile)){
 			int _foundCommandIndex;
 			nathanscriptVariable* _parsedArguments=NULL;
 			int _parsedArgumentsLength;
@@ -874,12 +872,12 @@ void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nat
 }
 
 void nathanscriptDoScript(char* _filename, long int _startingOffset, intFunction _beforeExecuteFunction){
-	nathanscriptCurrentOpenFile = fopen(_filename,"rb");
+	nathanscriptCurrentOpenFile = crossfopen(_filename,"rb");
 	if (_startingOffset>0){
-		fseek(nathanscriptCurrentOpenFile,_startingOffset,SEEK_SET);
+		crossfseek(nathanscriptCurrentOpenFile,_startingOffset,CROSSFILE_START);
 		//printf("Wanted to be at: %d\nActually at %d\n",_startingOffset,ftell(nathanscriptCurrentOpenFile));
 	}
-	while (!feof(nathanscriptCurrentOpenFile)){
+	while (!crossfeof(nathanscriptCurrentOpenFile)){
 		int _foundCommandIndex;
 		nathanscriptVariable* _parsedCommandArgument;
 		int _parsedArgumentListSize;
@@ -907,28 +905,28 @@ void nathanscriptDoScript(char* _filename, long int _startingOffset, intFunction
 		}
 		nathanscriptCurrentLine++;
 	}
-	fclose(nathanscriptCurrentOpenFile);
+	crossfclose(nathanscriptCurrentOpenFile);
 }
 
-int fpeekchar(FILE *stream){
+int fpeekchar(CROSSFILE* stream){
 	int c;
 
-	c = fgetc(stream);
-	ungetc(c, stream);
+	c = crossgetc(stream);
+	crossungetc(c, stream);
 
 	return c;
 }
 
 void nathanscriptBackLine(){
 	// We're now on the previous line's newline character
-	fseek(nathanscriptCurrentOpenFile,-1,SEEK_CUR);
+	crossfseek(nathanscriptCurrentOpenFile,-1,CROSSFILE_CUR);
 	while (1){
-		if (fseek(nathanscriptCurrentOpenFile,-1,SEEK_CUR)!=0){
+		if (crossfseek(nathanscriptCurrentOpenFile,-1,CROSSFILE_CUR)!=0){
 			printf("Seek back error. At start of file?\n");
 			return;
 		}
 		if (fpeekchar(nathanscriptCurrentOpenFile)=='\n'){
-			fseek(nathanscriptCurrentOpenFile,1,SEEK_CUR);
+			crossfseek(nathanscriptCurrentOpenFile,1,CROSSFILE_CUR);
 			return;
 		}
 	}
@@ -937,7 +935,7 @@ void nathanscriptBackLine(){
 void nathanscriptAdvanceLine(){
 	int _lastReadChar;
 	do{
-		_lastReadChar = fgetc(nathanscriptCurrentOpenFile);
+		_lastReadChar = crossgetc(nathanscriptCurrentOpenFile);
 	}while(_lastReadChar!=EOF && _lastReadChar!='\n');
 }
 

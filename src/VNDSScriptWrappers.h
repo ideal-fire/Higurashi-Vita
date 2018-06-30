@@ -4,7 +4,7 @@
 #define VNDSDOESFADEREPLACE 0
 #define _VNDSWAITDISABLE 0
 // Fadein time in milliseconds used if one not given by vnds script
-#define VNDS_IMPLIED_BACKGROUND_FADE 300
+#define VNDS_IMPLIED_BACKGROUND_FADE 3000
 #define VNDS_IMPLIED_SETIMG_FADE 300
 #define VNDS_HIDE_BOX_ON_BG_CHANGE 1
 #define MAXBUSTQUEUE 10
@@ -157,8 +157,8 @@ void _vndsChangeScriptFiles(const char* _newFilename){
 		LazyMessage("Script file not found,",_tempstringconcat,NULL,NULL);
 		return;
 	}
-	fclose(nathanscriptCurrentOpenFile);
-	nathanscriptCurrentOpenFile = fopen(_tempstringconcat,"r");
+	crossfclose(nathanscriptCurrentOpenFile);
+	nathanscriptCurrentOpenFile = crossfopen(_tempstringconcat,"rb");
 	nathanscriptCurrentLine=1;
 }
 
@@ -172,18 +172,32 @@ void vndswrapper_text(nathanscriptVariable* _passedArguments, int _numArguments,
 			LastLineLazyFix(&currentLine);
 		}
 	}
-	if (nathanvariableToString(&_passedArguments[0])[0]=='@'){ // Line that doesn't wait for input
-		OutputLine(&(nathanvariableToString(&_passedArguments[0])[1]),Line_ContinueAfterTyping,isSkipping);
-		currentLine++;
+	char* _gottenMessageString = nathanvariableToString(&_passedArguments[0]);
+
+	// If there's no point in adding a blank line because we have an empty ADV box.
+	char _shouldSkipSymbolLines=0;
+	if (strlen(_gottenMessageString)<=1 && currentLine==0 && gameTextDisplayMode==TEXTMODE_ADV){
+		_shouldSkipSymbolLines=1;
+	}
+
+	if (_gottenMessageString[0]=='@'){ // Line that doesn't wait for input
+		if (!_shouldSkipSymbolLines){
+			OutputLine(&(_gottenMessageString[1]),Line_ContinueAfterTyping,isSkipping);
+			currentLine++;
+			outputLineWait();
+		}
+	}else if (_gottenMessageString[0]=='!'){ // Blank line that requires button push
+		if (!_shouldSkipSymbolLines){
+			OutputLine("\n",Line_WaitForInput,isSkipping);
+		}
 		outputLineWait();
-	}else if (nathanvariableToString(&_passedArguments[0])[0]=='!'){ // Blank line that requires button push
-		OutputLine("\n",Line_WaitForInput,isSkipping);
-		outputLineWait();
-	}else if (nathanvariableToString(&_passedArguments[0])[0]=='~'){ // I guess insert a blank line, don't wait for input.
-		currentMessages[currentLine][0]=0;
-		currentLine++;
+	}else if (_gottenMessageString[0]=='~'){ // I guess insert a blank line, don't wait for input.
+		if (!_shouldSkipSymbolLines){
+			currentMessages[currentLine][0]=0;
+			currentLine++;
+		}
 	}else{ // Normal line
-		OutputLine(nathanvariableToString(&_passedArguments[0]),Line_WaitForInput,isSkipping);
+		OutputLine(_gottenMessageString,Line_WaitForInput,isSkipping);
 		currentLine++;
 		outputLineWait();
 	}
@@ -262,9 +276,7 @@ void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArgument
 		nextVndsBustshotSlot=0;
 	}else{
 		#if VNDS_HIDE_BOX_ON_BG_CHANGE
-			char _didHideBackground=0;
 			if (lastBackgroundFilename==NULL || strcmp(lastBackgroundFilename,_passedFilename)!=0){
-				_didHideBackground=1;
 				hideTextbox();
 			}
 		#endif
@@ -276,14 +288,14 @@ void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArgument
 		memset(currentSetImgX,0,sizeof(signed int)*maxBusts);
 		memset(currentSetImgY,0,sizeof(signed int)*maxBusts);
 		//
-		#if VNDS_HIDE_BOX_ON_BG_CHANGE
-			if (_didHideBackground){
-				if (gameTextDisplayMode==TEXTMODE_ADV){
-					ClearMessageArray(0);
-				}
-				showTextbox();
-			}
-		#endif
+		//#if VNDS_HIDE_BOX_ON_BG_CHANGE
+		//	if (_didHideBackground){
+		//		if (gameTextDisplayMode==TEXTMODE_ADV){
+		//			ClearMessageArray(0); // Don't want fade transition so we need to do this here before OutputLine
+		//		}
+		//		//showTextbox();
+		//	}
+		//#endif
 	}
 }
 // setimg file x y

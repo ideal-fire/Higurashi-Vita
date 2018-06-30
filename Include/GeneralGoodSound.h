@@ -100,6 +100,6 @@ void setSFXVolumeBefore(CROSSSFX* tochange, int toval);
 void setSFXVolume(CROSSPLAYHANDLE tochange, int toval);
 void stopMusic(CROSSPLAYHANDLE toStop);
 void stopSound(CROSSSFX* toStop);
-char isAudioPlaying(CROSSPLAYHANDLE _passedHandle);
+//char isAudioPlaying(CROSSPLAYHANDLE _passedHandle);
 
 #endif /* GENERALGOODGRAPHICS_H */

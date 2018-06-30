@@ -35,8 +35,10 @@
 #include <errno.h>
 #include <string.h>
 
+// Rename both to prevent conflict on Linux
+
 ssize_t
-getdelim(char **buf, size_t *bufsiz, int delimiter, FILE *fp)
+__special_getdelim(char **buf, size_t *bufsiz, int delimiter, CROSSFILE* fp)
 {
 	char *ptr, *eptr;
 
@@ -47,9 +49,9 @@ getdelim(char **buf, size_t *bufsiz, int delimiter, FILE *fp)
 	}
 
 	for (ptr = *buf, eptr = *buf + *bufsiz;;) {
-		int c = fgetc(fp);
+		int c = crossgetc(fp);
 		if (c == -1) {
-			if (feof(fp)) {
+			if (crossfeof(fp)) {
 				*ptr = '\0';
 				return ptr - *buf;
 			} else {
@@ -74,9 +76,7 @@ getdelim(char **buf, size_t *bufsiz, int delimiter, FILE *fp)
 		}
 	}
 }
-
-ssize_t
-getline(char **buf, size_t *bufsiz, FILE *fp)
+ssize_t custom_getline(char **buf, size_t *bufsiz, CROSSFILE* fp)
 {
-  return getdelim(buf, bufsiz, '\n', fp);
+  return __special_getdelim(buf, bufsiz, '\n', fp);
 }

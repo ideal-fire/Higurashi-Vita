@@ -41,7 +41,7 @@ APP_AUTHOR		:= MyLegGuy
 #---------------------------------------------------------------------------------
 # options for code generation
 #---------------------------------------------------------------------------------
-ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=softfp -mtp=soft
+ARCH	:=	-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft
 #ARCH := -march=armv6k -mtune=mpcore -mfloat-abi=softfp
 
 CFLAGS	:=	-g -O2 -mword-relocations \
@@ -55,7 +55,9 @@ CXXFLAGS	:= $(CFLAGS) -fno-rtti -fno-exceptions -std=gnu++11
 ASFLAGS	:=	-g $(ARCH)
 LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
-LIBS	:=  -lGeneralGood3ds -lSDL_mixer -logg -lvorbis -lvorbisfile -lSDLmain -lSDL -lsfil -lpng -lz -lsf2d -lcitro3d -lctru -llua -lm
+#LIBS	:=  -lGeneralGood3ds -lSDL_mixer -logg -lvorbis -lvorbisfile -lSDLmain -lSDL -lsfil -lpng -lz -lsf2d -lcitro3d -lctru -llua -lm
+#LIBS	:=  -lGeneralGood3ds -lvorbisfile -lvorbisidec -logg -lsfil -lpng -lz -lsf2d -lcitro3d -lctru -llua3ds -lm
+LIBS    :=  -lGeneralGood3ds -lvorbisfile -lvorbis -logg -lsfil -lpng -lz -lsf2d -lcitro3d -lctru -llua3ds -lm
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
@@ -146,6 +148,7 @@ clean:
 	@echo clean ...
 	@rm -rf ./_tempRomfsCompileDir
 	@rm -rf ./_Compiled3dsRelease
+	@rm -rf ./build3ds
 	@rm -f _3dsRelease.zip
 	@rm -f romfs.bin
 	@rm -fr $(BUILD) $(TARGET).3dsx $(OUTPUT).smdh $(TARGET).elf $(TARGET)-strip.elf $(TARGET).cia $(TARGET).3ds $(TARGET).banner

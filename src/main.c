@@ -34,10 +34,6 @@
 		text x1b[0m
 
 	TODO - SetSpeedOfMessage
-
-
-	How to fix that one game with nametags:
-		Expand the ADV textbox until you reach a line that does require the user to press a button.
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -227,10 +223,12 @@ lua_State* L = NULL;
 	Line_ContinueAfterTyping=0; (No wait after text display, go right to next script line)
 	Line_WaitForInput=1; (Wait for the player to click. Displays an arrow.)
 	Line_Normal=2; (Wait for the player to click. DIsplays a page icon and almost 100% of the time has the screen cleared with the next command)
+	LINE_RESERVED=3; (=This is a value that is guaranteed not to represent an actual line end type.)
 */
 #define Line_ContinueAfterTyping 0
 #define Line_WaitForInput 1
 #define Line_Normal 2
+#define LINE_RESERVED 3
 int endType;
 signed char useVsync=0;
 unsigned char currentMessages[MAXLINES][SINGLELINEARRAYSIZE];
@@ -556,7 +554,11 @@ CrossTexture* LoadEmbeddedPNG(const char* path){
 	}
 	return _tempTex;
 }
-void DrawMessageText(unsigned char _alpha){
+// Number of lines to draw is not zero based
+void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
+	if (_maxDrawLine==-1){
+		_maxDrawLine=MAXLINES;
+	}
 	int i;
 	#if PLATFORM == PLAT_3DS
 		if (textIsBottomScreen==1){
@@ -564,7 +566,7 @@ void DrawMessageText(unsigned char _alpha){
 			if (strlen(currentMessages[i])==0){
 				goodDrawText(0,0,".",fontSize); // Hotfix to fix crash when no text on bottom screen.
 			}
-			for (i = 0; i < MAXLINES; i++){
+			for (i = 0; i < _maxDrawLine; i++){
 				goodDrawText(0,12+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 			}
 			for (i=0;i<MAXIMAGECHAR;i++){
@@ -576,11 +578,11 @@ void DrawMessageText(unsigned char _alpha){
 		}
 	#endif
 	if (_alpha==255){
-		for (i = 0; i < MAXLINES; i++){
+		for (i = 0; i < _maxDrawLine; i++){
 			goodDrawText(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
 		}
 	}else{
-		for (i = 0; i < MAXLINES; i++){
+		for (i = 0; i < _maxDrawLine; i++){
 			goodDrawTextColoredAlpha(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize,255,255,255,_alpha);
 		}
 	}
@@ -658,8 +660,6 @@ void _loadSpecificFont(char* _filename){
 	#endif
 	currentTextHeight = textHeight(fontSize);
 	singleSpaceWidth = textWidth(fontSize," ");
-
-
 }
 void ReloadFont(){
 	#if PLATFORM != PLAT_3DS
@@ -841,7 +841,7 @@ void ClearMessageArray(char _doFadeTransition){
 			}
 			startDrawing();
 			drawAdvanced(1,1,1,MessageBoxEnabled,1,0);
-			DrawMessageText(_currentTextAlpha);
+			DrawMessageText(_currentTextAlpha,-1);
 			endDrawing();
 			fpsCapWait();
 		}
@@ -1276,7 +1276,7 @@ void outputLineWait(){
 			if (_didPressCircle==1){
 				showTextbox();
 			}
-			endType = Line_ContinueAfterTyping;
+			endType = LINE_RESERVED;
 		}
 		if (wasJustPressed(SCE_CTRL_CIRCLE)){
 			if (_didPressCircle==1){
@@ -1300,7 +1300,7 @@ void outputLineWait(){
 		if (autoModeOn==1 && _toggledTextboxTime==0){
 			if (_inBetweenLinesMilisecondsStart!=0){ // If we're not waiting for audio to end
 				if (getTicks()>=(_inBetweenLinesMilisecondsStart+_chosenAutoWait)){
-					endType = Line_ContinueAfterTyping;
+					endType = LINE_RESERVED;
 				}
 			}else{
 				#if PLATFORM == PLAT_VITA
@@ -1313,6 +1313,12 @@ void outputLineWait(){
 		}
 		exitIfForceQuit();
 	}while(endType==Line_Normal || endType == Line_WaitForInput);
+	// If we pressed a button to continue the text and we're doing VNDS ADV mode
+	if (currentlyVNDSGame && gameTextDisplayMode==TEXTMODE_ADV && endType==LINE_RESERVED){
+		ClearMessageArray(1);
+	}
+
+	endType=Line_ContinueAfterTyping;
 	lastVoiceSlot=-1;
 }
 // This is used in background and bust drawing
@@ -1907,7 +1913,7 @@ signed int atLeastOne(signed int _input){
 	return _input==0 ? 1 : _input;
 }
 #define ADV_DYNAMICBOX_MILLISECONDSTRETCH 200
-void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight){
+void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLine){
 	if (_oldHeight==_newHeight){
 		return;
 	}
@@ -1934,6 +1940,9 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight){
 			// Draw the changes
 			startDrawing();
 			drawAdvanced(1,1,1,1,1,0); // Don't draw message text during transitions
+			if (_maxDrawLine!=0){
+				DrawMessageText(255,_maxDrawLine);
+			}
 			endDrawing();
 			fpsCapWait();
 		}
@@ -1941,17 +1950,22 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight){
 	advboxHeight=_newHeight;
 	applyTextboxChanges();
 }
-void updateDynamicADVBox(char _includeDrawing){
-	short _totalLines=1; // One extra line to be safe
-	short i;
-	for (i=0;i<MAXLINES;++i){
-		if (currentMessages[i][0]!='\0'){
-			++_totalLines;
+void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
+	if (_maxDrawLine==-1){
+		_maxDrawLine=MAXLINES;
+	}
+	if (_overrideNewHeight==-1){
+		_overrideNewHeight=1; // One extra line to be safe
+		short i;
+		for (i=0;i<MAXLINES;++i){
+			if (currentMessages[i][0]!='\0'){
+				_overrideNewHeight=i+2; // Last non-empty line. Adding 1 is for the free line, adding another 1 is because line index is 0 based
+			}
 		}
 	}
-	int _newAdvBoxHeight = _totalLines*currentTextHeight;
-	if (_includeDrawing){
-		smoothADVBoxHeightTransition(advboxHeight,_newAdvBoxHeight);
+	int _newAdvBoxHeight = _overrideNewHeight*currentTextHeight;
+	if (_maxDrawLine!=0){
+		smoothADVBoxHeightTransition(advboxHeight,_newAdvBoxHeight,_maxDrawLine);
 	}else{
 		advboxHeight=_newAdvBoxHeight;
 		applyTextboxChanges();
@@ -1962,7 +1976,7 @@ void enableVNDSADVMode(){
 	dynamicAdvBoxHeight=1;
 	applyTextboxChanges();
 	loadADVBox();
-	updateDynamicADVBox(0);
+	updateDynamicADVBox(0,-1);
 }
 void disableVNDSADVMode(){
 	gameTextDisplayMode=TEXTMODE_NVL;
@@ -2129,7 +2143,7 @@ void DrawScene(const char* _filename, int time){
 				}
 			}
 			startDrawing();
-			drawAdvanced(1,1,0,1,1,0);
+			drawAdvanced(1,1,0,0,1,0);
 			DrawBackgroundAlpha(newBackground,_backgroundAlpha);
 			// Draw busts created on the last line at the same alpha as the new background
 			for (i = maxBusts-1; i != -1; i--){
@@ -2137,7 +2151,7 @@ void DrawScene(const char* _filename, int time){
 					DrawBust(&(Busts[bustOrder[i]]));
 				}
 			}
-			drawAdvanced(0,0,1,0,0,MessageBoxEnabled);
+			drawAdvanced(0,0,1,MessageBoxEnabled,0,MessageBoxEnabled);
 			endDrawing();
 	
 			controlsStart();
@@ -2566,9 +2580,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (strlen(_tempMsg)==0){
 		return;
 	}
-	if (currentlyVNDSGame && gameTextDisplayMode==TEXTMODE_ADV){
-		ClearMessageArray(1);
-	}
 
 	// 1 when finished displaying the text
 	char _isDone=0;
@@ -2783,7 +2794,17 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		_currentDrawLine=0;
 	}
 	if (dynamicAdvBoxHeight){
-		updateDynamicADVBox(1);
+		if (0){
+			// Don't add 1 to this value. For VNDS games, this always represents the next line.
+			updateDynamicADVBox(_currentDrawLine,-1);
+		}else{
+			// TODO - Untested
+			// If not VNDS, there is a chance _currentDrawLine won't represent the next line, so we need to make sure we're actually drawing the _currentDrawLine and that it doesn't draw newly added text.
+			char _archivedCharacter = currentMessages[_currentDrawLine][_currentDrawChar];
+			currentMessages[_currentDrawLine][_currentDrawChar] = '\0';
+			updateDynamicADVBox(_currentDrawLine+1,currentLine+2);
+			currentMessages[_currentDrawLine][_currentDrawChar] = _archivedCharacter;
+		}
 	}
 	#if PLATFORM == PLAT_3DS
 		int _oldMessageXOffset=textboxXOffset;
@@ -3602,7 +3623,7 @@ void vndsNormalLoad(char* _filename){
 	controlsEnd();
 
 	if (gameTextDisplayMode==TEXTMODE_ADV && dynamicAdvBoxHeight){
-		updateDynamicADVBox(1);
+		updateDynamicADVBox(-1,-1);
 	}
 
 	endType=Line_Normal;	
@@ -4441,7 +4462,7 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 		}
 	}
 	if (_shouldDrawMessageText==1){
-		DrawMessageText(255);
+		DrawMessageText(255,-1);
 	}
 }
 void Draw(char _shouldDrawMessageBox){
@@ -4484,7 +4505,7 @@ char upgradeToGameFolder(){
 			fpsCapStart();
 			controlsEnd();
 			startDrawing();
-			DrawMessageText(255);
+			DrawMessageText(255,-1);
 			endDrawing();
 			controlsStart();
 			fpsCapWait();
@@ -5361,7 +5382,7 @@ void TitleScreen(){
 						fpsCapStart();
 						controlsEnd();
 						startDrawing();
-						DrawMessageText(255);
+						DrawMessageText(255,-1);
 						endDrawing();
 						controlsStart();
 						fpsCapWait();
