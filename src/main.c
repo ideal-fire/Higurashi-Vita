@@ -34,6 +34,10 @@
 		text x1b[0m
 
 	TODO - SetSpeedOfMessage
+
+
+	How to fix that one game with nametags:
+		Expand the ADV textbox until you reach a line that does require the user to press a button.
 */
 #define SINGLELINEARRAYSIZE 121
 #define PLAYTIPMUSIC 0
@@ -359,6 +363,10 @@ int currentTextHeight;
 int singleSpaceWidth;
 #if PLATFORM == PLAT_VITA
 	pthread_t soundProtectThreadId;
+
+	// For Vita specific font workaround
+	extern CrossFont* fontImage;
+	void* _loadedFontBuffer=NULL;
 #endif
 #if PLATFORM == PLAT_3DS
 	char _3dsSoundProtectThreadIsAlive=1;
@@ -626,9 +634,32 @@ void SetDefaultFontSize(){
 	#endif
 }
 void _loadSpecificFont(char* _filename){
-	loadFont(_filename);
+	#if PLATFORM != PLAT_VITA
+		loadFont(_filename);
+	#else
+		// Here I put custom code for loading fonts on the Vita. I need this for fonts with a lot of characters. Why? Well, if the font has a lot of characters, FreeType won't load all of them at once. It'll stream the characters from disk. At first that sounds good, but remember that the Vita breaks its file handles after sleep mode. So new text wouldn't work after sleep mode. I could fix this by modding libvita2d and making it use my custom IO commands, but I just don't feel like doing that right now.
+		if (fontImage!=NULL){
+			vita2d_free_font(fontImage);
+		}
+		if (_loadedFontBuffer!=NULL){
+			free(_loadedFontBuffer);
+		}
+		FILE* fp = fopen(_filename, "rb");
+		// Get file size
+		fseek(fp, 0, SEEK_END);
+		long _foundFilesize = ftell(fp);
+		fseek(fp, 0, SEEK_SET);
+		// Read file into memory
+		_loadedFontBuffer = malloc(_foundFilesize);
+		fread(_loadedFontBuffer, _foundFilesize, 1, fp);
+		fclose(fp);
+		fontImage = vita2d_load_font_mem(_loadedFontBuffer,_foundFilesize);
+		//fontImage = vita2d_load_font_file(filename);
+	#endif
 	currentTextHeight = textHeight(fontSize);
 	singleSpaceWidth = textWidth(fontSize," ");
+
+
 }
 void ReloadFont(){
 	#if PLATFORM != PLAT_3DS
@@ -674,8 +705,7 @@ char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 		}
 		return 0;
 	}
-	luaL_dofile(passedState,passedPath);
-	return 1;
+	return lazyLuaError(luaL_dofile(passedState,passedPath));
 }
 void WriteToDebugFile(const char* stuff){
 	#if PLATFORM == PLAT_COMPUTER
@@ -1205,6 +1235,7 @@ void outputLineWait(){
 			endType=Line_ContinueAfterTyping;
 		}
 	}
+	u64 _toggledTextboxTime=0;
 	// 0 if we need to wait for sound to end.
 	u64 _inBetweenLinesMilisecondsStart;
 	int _chosenAutoWait;
@@ -1249,10 +1280,15 @@ void outputLineWait(){
 		}
 		if (wasJustPressed(SCE_CTRL_CIRCLE)){
 			if (_didPressCircle==1){
+				if (_toggledTextboxTime!=0){
+					_inBetweenLinesMilisecondsStart+=getTicks()-_toggledTextboxTime;
+					_toggledTextboxTime=0;
+				}
 				MessageBoxEnabled = !MessageBoxEnabled;
 			}else if (MessageBoxEnabled==1){
 				MessageBoxEnabled=0;
 				_didPressCircle=1;
+				_toggledTextboxTime=getTicks();
 			}
 		}
 		updateControlsGeneral();
@@ -1261,7 +1297,7 @@ void outputLineWait(){
 		}
 		controlsEnd();
 		fpsCapWait();
-		if (autoModeOn==1){
+		if (autoModeOn==1 && _toggledTextboxTime==0){
 			if (_inBetweenLinesMilisecondsStart!=0){ // If we're not waiting for audio to end
 				if (getTicks()>=(_inBetweenLinesMilisecondsStart+_chosenAutoWait)){
 					endType = Line_ContinueAfterTyping;
@@ -2430,6 +2466,8 @@ char* getSoundFilename(const char* _filename, char _preferedDirectory){
 				tempstringconcat = getSpecificPossibleSoundFilename(_filename,"BGM/");
 			}
 		}
+	}else if (_preferedDirectory==PREFER_DIR_NOMEIMPORTA){
+		return getSoundFilename(_filename,PREFER_DIR_SE);
 	}else{
 		printf("Invalid preference %d\n",_preferedDirectory);
 		return getSoundFilename(_filename,PREFER_DIR_VOICE);
@@ -3454,7 +3492,7 @@ void vndsNormalSave(char* _filename){
 	writeLengthStringToFile(fp,currentScriptFilename);
 
 	// Save the position in the current script
-	long int _currentFilePosition = ftell(nathanscriptCurrentOpenFile);
+	long int _currentFilePosition = crossftell(nathanscriptCurrentOpenFile);
 	fwrite(&_currentFilePosition,sizeof(long int),1,fp); //
 
 	// Save the max number of lines we can have on screen, this makes the saves safe even if I change this number
@@ -3719,6 +3757,38 @@ char isNumberString(char* _inputString){
 		_inputString++;
 	}
 	return 1;
+}
+char lazyLuaError(int _loadResult){
+	if (_loadResult!=0){
+		switch (_loadResult){
+			case LUA_ERRSYNTAX:
+				LazyMessage("LUA_ERRSYNTAX",NULL,NULL,NULL);
+			break;
+			case LUA_ERRMEM:
+				LazyMessage("LUA_ERRMEM",NULL,NULL,NULL);
+			break;
+			case LUA_ERRGCMM:
+				LazyMessage("LUA_ERRGCMM",NULL,NULL,NULL);
+			break;
+			case LUA_ERRFILE:
+				LazyMessage("LUA_ERRFILE",NULL,NULL,NULL);
+			break;
+			case LUA_ERRRUN:
+				LazyMessage("LUA_ERRRUN",NULL,NULL,NULL);
+			break;
+			case LUA_ERRERR:
+				LazyMessage("LUA_ERRERR",NULL,NULL,NULL);
+			break;
+			case 1:
+				LazyMessage("Lua error.",NULL,NULL,NULL);
+			break;
+			default:
+				LazyMessage("UNKNOWN ERROR!",NULL,NULL,NULL);
+			break;
+		}
+		return 1;
+	}
+	return 0;
 }
 /*
 =================================================
@@ -4925,14 +4995,14 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					#if PLATFORM == PLAT_VITA
 						scePowerSetArmClockFrequency(444);
 					#elif PLATFORM == PLAT_3DS
-						_settingsOptionsValueText[2] = "Bottom Screen";
+						_settingsOptionsValueText[1] = "Bottom Screen";
 					#endif
 				}else if (cpuOverclocked==1){
 					cpuOverclocked=0;
 					#if PLATFORM == PLAT_VITA
 						scePowerSetArmClockFrequency(333);
 					#elif PLATFORM == PLAT_3DS
-						_settingsOptionsValueText[2] = "Top Screen";
+						_settingsOptionsValueText[1] = "Top Screen";
 					#endif
 				}
 			}else if (_choice==2){
@@ -5918,7 +5988,7 @@ char initializeLua(){
 		fixPath("assets/happy.lua",globalTempConcat,TYPE_EMBEDDED);
 		_didLoadHappyLua = SafeLuaDoFile(L,globalTempConcat,0);
 		lua_sethook(L, incrementScriptLineVariable, LUA_MASKLINE, 5);
-		if (_didLoadHappyLua==0){
+		if (_didLoadHappyLua==1){
 			#if PLATFORM == PLAT_VITA
 				LazyMessage("happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
 			#else
