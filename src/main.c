@@ -460,6 +460,19 @@ void removeFileExtension(char* _passedFilename){
 		}
 	}
 }
+/*
+// This is what my brother made when I asked him to make a file extension chopper for me because he never helps me with code in return.
+void removeFileExtension(char* String){
+	int I=0, Size=strlen(String);
+	for(I=Size-1; I>=0; I--){
+	    if(String[I]=='.'){
+	        String[I]=0;
+	        break;
+	    }
+	    String[I]=0;
+	}
+}
+*/
 char* charToBoolString(char _boolValue){
 	if (_boolValue){
 		return "True";
@@ -1232,7 +1245,7 @@ void outputLineWait(){
 		updateControlsGeneral();
 		controlsEnd();
 		if (isSkipping==1){
-			endType=Line_ContinueAfterTyping;
+			endType=LINE_RESERVED;
 		}
 	}
 	u64 _toggledTextboxTime=0;
@@ -2384,6 +2397,7 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 		if (checkFileExist(tempstringconcat)==1){
 			return tempstringconcat;
 		}
+		removeFileExtension(tempstringconcat);
 	}
 	//
 	strcat(tempstringconcat,".ogg");
@@ -2392,7 +2406,7 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 	}
 	//
 	#if SOUNDPLAYER != SND_VITA
-		tempstringconcat[strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)]='\0';
+		removeFileExtension(tempstringconcat);
 		strcat(tempstringconcat,".wav");
 		if (checkFileExist(tempstringconcat)==1){
 			return tempstringconcat;
@@ -2400,7 +2414,7 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 	#endif
 	//
 	#if SOUNDPLAYER == SND_VITA
-		tempstringconcat[strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)]='\0';
+		removeFileExtension(tempstringconcat);
 		strcat(tempstringconcat,".mp3");
 		if (checkFileExist(tempstringconcat)==1){
 			return tempstringconcat;
@@ -2410,40 +2424,68 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 	free(tempstringconcat);
 	return NULL;
 }
-legArchiveFile soundArchiveGetFilename(const char* _filename){
+#if SOUNDPLAYER == SND_VITA
+	char getProbableSoundFormat(const char* _passedFilename){
+		if (strlen(_passedFilename)>=4){
+			if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".mp3")==0){
+				return FILE_FORMAT_MP3;
+			}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".wav")==0){
+				return FILE_FORMAT_WAV;
+			}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".ogg")==0){
+				return FILE_FORMAT_OGG;
+			}
+		}
+		LazyMessage("File format not found.",_passedFilename,NULL,NULL);
+		return FILE_FORMAT_NONE;
+	}
+#else
+	char getProbableSoundFormat(const char* _passedFilename){
+		LazyMessage("Error with getProbableSoundFormat being the wrong version. Contact MyLegGuy.",_passedFilename,NULL,NULL);
+		return 0;
+	}
+#endif
+legArchiveFile soundArchiveGetFilename(const char* _filename, char* _foundFormat){
 	legArchiveFile _possibleResult;
+	*_foundFormat=0;
 	_possibleResult.fp=NULL; // How we know if file not found
 	if (scriptUsesFileExtensions){
 		_possibleResult = getAdvancedFile(soundArchive,_filename);
 		if (_possibleResult.fp!=NULL){
+			*_foundFormat = getProbableSoundFormat(_filename);
 			return _possibleResult;
-		}
+		}	
 	}
 	//
 	char* tempstringconcat = malloc(strlen(_filename)+4+1);
 	strcpy(tempstringconcat,_filename);
+	if (scriptUsesFileExtensions){
+		removeFileExtension(tempstringconcat); // Remove the file extension we had on it before, we're adding new ones
+	}
 	strcat(tempstringconcat,".ogg");
 	_possibleResult = getAdvancedFile(soundArchive,tempstringconcat);
 	if (_possibleResult.fp!=NULL){
+		*_foundFormat = getProbableSoundFormat(tempstringconcat);
 		free(tempstringconcat);
 		return _possibleResult;
 	}
 	//
 	#if SOUNDPLAYER != SND_VITA
-		tempstringconcat[strlen(_filename)]='\0';
+		removeFileExtension(tempstringconcat);
 		strcat(tempstringconcat,".wav");
 		_possibleResult = getAdvancedFile(soundArchive,tempstringconcat);
 		if (_possibleResult.fp!=NULL){
+			*_foundFormat = getProbableSoundFormat(tempstringconcat);
 			free(tempstringconcat);
 			return _possibleResult;
 		}
 	#endif
 	//
 	#if SOUNDPLAYER == SND_VITA
-		tempstringconcat[strlen(_filename)]='\0';
+		removeFileExtension(tempstringconcat);
 		strcat(tempstringconcat,".mp3");
 		_possibleResult = getAdvancedFile(soundArchive,tempstringconcat);
 		if (_possibleResult.fp!=NULL){
+			*_foundFormat = getProbableSoundFormat(tempstringconcat);
 			free(tempstringconcat);
 			return _possibleResult;
 		}
@@ -2488,21 +2530,6 @@ char* getSoundFilename(const char* _filename, char _preferedDirectory){
 	}
 	return tempstringconcat;
 }
-#if SOUNDPLAYER == SND_VITA
-char getProbableSoundFormat(const char* _passedFilename){
-	if (strlen(_passedFilename)>=4){
-		if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".mp3")==0){
-			return FILE_FORMAT_MP3;
-		}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".wav")==0){
-			return FILE_FORMAT_WAV;
-		}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".ogg")==0){
-			return FILE_FORMAT_OGG;
-		}
-	}
-	LazyMessage("File format not found.",_passedFilename,NULL,NULL);
-	return FILE_FORMAT_NONE;
-}
-#endif
 // Cast returned pointer
 void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 	void* _tempHoldSlot=NULL;
@@ -2520,15 +2547,15 @@ void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 		//LazyMessage("[DEBUG MESSAGE] not found in SE folder.",_filename,tempstringconcat,"will fallback on archive.");
 	}
 	free(tempstringconcat);
-	
 	// If we didn't find the file in the folders and we can use the sound archive, try that
 	if (_tempHoldSlot==NULL && useSoundArchive){
 		#if SOUNDPLAYER == SND_VITA
-			legArchiveFile _foundArchiveFile = soundArchiveGetFilename(_filename);
+			char _foundFormat=0;
+			legArchiveFile _foundArchiveFile = soundArchiveGetFilename(_filename,&_foundFormat);
 			if (_foundArchiveFile.fp==NULL){
 				//LazyMessage(filename,"not found in archive",NULL,NULL);
 			}else{
-				_tempHoldSlot = _mlgsnd_loadAudioFILE(_foundArchiveFile, getProbableSoundFormat(_filename), !_isSE, 1);
+				_tempHoldSlot = _mlgsnd_loadAudioFILE(_foundArchiveFile, _foundFormat, !_isSE, 1);
 			}
 		#else
 			LazyMessage("sound archive not supported.",NULL,NULL,NULL);
