@@ -60,7 +60,7 @@ clean:
 		eboot.bin param.sfo
 
 stuffvpk:
-	@7z a VNDSCLONE.vpk ./VpkContents-Shared/Shared/*
-	@7z a VNDSCLONE.vpk ./VpkContents-Alternate/Shared/*
+	@-7z a VNDSCLONE.vpk ./VpkContents-Shared/Shared/*
+	@-7z a VNDSCLONE.vpk ./VpkContents-Alternate/Shared/*
 	@7z a VNDSCLONE.vpk ./VpkContents-Shared/Vita/*
 	@7z a VNDSCLONE.vpk ./VpkContents-Alternate/Vita/*
