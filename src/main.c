@@ -2427,11 +2427,23 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 #if SOUNDPLAYER == SND_VITA
 	char getProbableSoundFormat(const char* _passedFilename){
 		if (strlen(_passedFilename)>=4){
-			if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".mp3")==0){
+			// Copy file extension to another buffer so we can modify it
+			char _copiedExtension[5];
+			strcpy(_copiedExtension,&(_passedFilename[strlen(_passedFilename)-4]));
+
+			// Convert the extension to lower case
+			char i;
+			for (i=0;i<4;++i){
+				if (_copiedExtension[i]<='Z' && _copiedExtension[i]>='A'){
+					_copiedExtension[i]+=32;
+				}
+			}
+			// Do
+			if (strcmp(_copiedExtension,".mp3")==0){
 				return FILE_FORMAT_MP3;
-			}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".wav")==0){
+			}/*else if (strcmp(_copiedExtension,".wav")==0){
 				return FILE_FORMAT_WAV;
-			}else if (strcmp(&(_passedFilename[strlen(_passedFilename)-4]),".ogg")==0){
+			}*/else if (strcmp(_copiedExtension,".ogg")==0){
 				return FILE_FORMAT_OGG;
 			}
 		}
@@ -3294,6 +3306,7 @@ void startLoadPresetSpecifiedInFile(char* _presetFilenameFile){
 	FILE* fp;
 	char _tempReadPresetFilename[50];
 	fp = fopen (_presetFilenameFile, "r");
+	_tempReadPresetFilename[0]='\0';
 	fgets (_tempReadPresetFilename, 50, fp);
 	fclose (fp);
 
@@ -3783,7 +3796,10 @@ void addGamePresetToLegacyFolder(char* _streamingAssetsRoot, char* _presetFilena
 }
 char* readSpecificIniLine(FILE* fp, char* _prefix){
 	char _tempReadLine[256];
+	_tempReadLine[0]='\0';
 	fgets(_tempReadLine,256,fp);
+	printf("read:\n");
+	printf("%s\n",_tempReadLine);
 	removeNewline(_tempReadLine);
 	if (strlen(_tempReadLine)>strlen(_prefix)){ // If string is long enough to contain title string
 		if (strncmp(_tempReadLine,_prefix,strlen(_prefix))==0){ // If the line starts with what we want it to
@@ -5928,7 +5944,7 @@ void VNDSNavigationMenu(){
 		_LazyMessage("Loading img.ini",NULL,NULL,NULL,0);
 		FILE* fp = fopen(_possibleThunbnailPath,"r");
 		char* _widthString = readSpecificIniLine(fp,"width=");
-		char* _heightString = readSpecificIniLine(fp,"height=");\
+		char* _heightString = readSpecificIniLine(fp,"height=");
 		if (_widthString!=NULL && _heightString!=NULL && isNumberString(_widthString) && isNumberString(_heightString)){
 			actualBackgroundWidth = atoi(_widthString);
 			actualBackgroundHeight = atoi(_heightString);
@@ -6182,6 +6198,7 @@ signed char init(){
 				FILE* fp;
 				fp = fopen(_defaultGameSaveFilenameBuffer,"r");
 				char _readGameFolderName[256];
+				_readGameFolderName[0]='\0';
 				fgets(_readGameFolderName,256,fp);
 				fclose(fp);
 				if (strcmp(_readGameFolderName,"NONE")!=0){
