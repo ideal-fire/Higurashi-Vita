@@ -35,7 +35,8 @@
 
 	TODO - SetSpeedOfMessage
 */
-#define SINGLELINEARRAYSIZE 121
+// This is pretty long because foreign characters can take two bytes
+#define SINGLELINEARRAYSIZE 300
 #define PLAYTIPMUSIC 0
 #include "GeneralGoodConfig.h"
 
@@ -2752,7 +2753,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 							// If found the ending
 							if (message[_mSearchIndex]=='m'){
 								// TODO - Do stuff with the found color code
-
 								if (message[i]=='0'){ // If we're resetting the color
 
 								}else{
@@ -3798,8 +3798,6 @@ char* readSpecificIniLine(FILE* fp, char* _prefix){
 	char _tempReadLine[256];
 	_tempReadLine[0]='\0';
 	fgets(_tempReadLine,256,fp);
-	printf("read:\n");
-	printf("%s\n",_tempReadLine);
 	removeNewline(_tempReadLine);
 	if (strlen(_tempReadLine)>strlen(_prefix)){ // If string is long enough to contain title string
 		if (strncmp(_tempReadLine,_prefix,strlen(_prefix))==0){ // If the line starts with what we want it to
