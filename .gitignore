@@ -91,3 +91,7 @@ CMakeFiles/
 CMakeCache.txt
 HIGURASHI
 cmake_install.cmake
+
+# Others don't need these
+lib/libSDLFontCacheLinux.a
+lib/libGeneralGoodLinux.a

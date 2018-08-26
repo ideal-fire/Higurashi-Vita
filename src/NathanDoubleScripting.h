@@ -83,6 +83,7 @@ char* nathanFunctionPropertyList=NULL;
 
 CROSSFILE* nathanscriptCurrentOpenFile;
 int nathanscriptFoundFiIndex; // Array index of the fi command from the line parser
+int nathanscriptFoundIfIndex;
 int nathanscriptFoundLabelIndex;
 
 ////////////////////////////////////////////////
@@ -848,14 +849,20 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 		}
 	}
 	if (_ifStatementResult==0){
+		int _neededFi=1;
 		while (!crossfeof(nathanscriptCurrentOpenFile)){
 			int _foundCommandIndex;
 			nathanscriptVariable* _parsedArguments=NULL;
 			int _parsedArgumentsLength;
 			nathanscriptParseSingleLine(nathanscriptCurrentOpenFile,&_foundCommandIndex,&_parsedArguments,&_parsedArgumentsLength);
 			freeNathanscriptVariableArray(_parsedArguments,_parsedArgumentsLength);
-			if (_foundCommandIndex==nathanscriptFoundFiIndex){
-				break;
+			if (_foundCommandIndex==nathanscriptFoundIfIndex){
+				++_neededFi;
+			}else if (_foundCommandIndex==nathanscriptFoundFiIndex){
+				--_neededFi;
+				if (_neededFi==0){
+					break;
+				}
 			}
 		}
 	}
@@ -919,7 +926,9 @@ int fpeekchar(CROSSFILE* stream){
 
 void nathanscriptBackLine(){
 	// We're now on the previous line's newline character
-	crossfseek(nathanscriptCurrentOpenFile,-1,CROSSFILE_CUR);
+	if (crossfseek(nathanscriptCurrentOpenFile,-1,CROSSFILE_CUR)!=0){
+		printf("oh?\n");
+	}
 	while (1){
 		if (crossfseek(nathanscriptCurrentOpenFile,-1,CROSSFILE_CUR)!=0){
 			printf("Seek back error. At start of file?\n");
@@ -946,6 +955,7 @@ void nathanscriptInit(){
 
 	nathanscriptAddFunction(scriptSetVar,nathanscriptMakeConfigByte(0,1),"setvar");
 	nathanscriptAddFunction(scriptIfStatement,0,"if");
+		nathanscriptFoundIfIndex = nathanCurrentRegisteredFunctions-1;
 	nathanscriptAddFunction(NULL,0,"fi");
 		nathanscriptFoundFiIndex = nathanCurrentRegisteredFunctions-1;
 	nathanscriptAddFunction(NULL,0,"label");

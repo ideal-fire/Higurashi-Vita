@@ -302,7 +302,6 @@ void vndswrapper_bgload(nathanscriptVariable* _passedArguments, int _numArgument
 // setimg MGE_000099.png 75 0
 void vndswrapper_setimg(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* _passedFilename = nathanvariableToString(&_passedArguments[0]);
-	printf("%d\n",_numArguments);
 	if ((strlen(_passedFilename)==1 && _passedFilename[0]=='~') || _numArguments<3){ // I saw this in a game called YUME MIRU KUSURI.
 		return;
 	}
