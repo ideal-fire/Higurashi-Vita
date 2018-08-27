@@ -28,12 +28,17 @@
 		TODO - Expression changes look odd.
 
 	TODO - Allow VNDS sound command to stop all sounds
+	TODO - SetSpeedOfMessage
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
 		text x1b[0m
 
-	TODO - SetSpeedOfMessage
+	sizeof(unsigned char); //1
+	sizeof(long int); // 4 on Vita, 8 on my computer
+	sizeof(short); // 2
+	sizeof(int); // 4
+	sizeof(signed int); // 4
 */
 // This is pretty long because foreign characters can take two bytes
 #define SINGLELINEARRAYSIZE 300
@@ -182,6 +187,7 @@ char* gamesFolder;
 	#include <psp2/touch.h>
 	SceTouchData touch_old[SCE_TOUCH_PORT_MAX_NUM];
 	SceTouchData touch[SCE_TOUCH_PORT_MAX_NUM];
+	signed char vndsVitaTouch=1;
 #endif
 
 void invertImage(CrossTexture* _passedImage, signed char _doInvertAlpha);
@@ -440,11 +446,6 @@ legArchive soundArchive;
 signed char lastVoiceSlot=-1;
 int foundSetImgIndex = -1;
 signed char vndsSpritesFade=1;
-
-#if PLATFORM == PLAT_VITA
-	signed char vndsVitaTouch=1;
-#endif
-
 /*
 ====================================================
 */
@@ -1239,7 +1240,7 @@ void updateControlsGeneral(){
 		isSkipping=0;
 	}
 	if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && PLATFORM != PLAT_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame);
+		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && PLATFORM != PLAT_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame,(strcmp(VERSIONSTRING,"forgotversionnumber")==0));
 	}
 	if (wasJustPressed(SCE_CTRL_SELECT)){
 		PlayMenuSound();
@@ -2757,44 +2758,48 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			}else{
 				//http://jafrog.com/2013/11/23/colors-in-terminal.html
 				if (message[i]=='\\' || message[i]=='x'){ // I saw that Umineko VNDS doesn't use a backslash before
-					if (totalMessageLength-i>=strlen("x1b[0m")+(message[i]=='\\')){
-						if (strncmp(&(message[i+(message[i]=='\\')]),"x1b[",strlen("x1b["))==0){
-							int _oldIndex=i;
-							// Advance to the x character if we chose to use backslash
-							if (message[i]=='\\'){
-								i++;
-							}
-							i+=4; // We're now in the parameters
-							int _mSearchIndex;
-							for (_mSearchIndex=i;_mSearchIndex<totalMessageLength;++_mSearchIndex){
-								if (message[_mSearchIndex]=='m'){
-									break;
+					#if __GNUC__==8 && __GNUC_MINOR__==2
+						#warning Needed to disable color markup check because gcc bug
+					#else
+						if (totalMessageLength-i>=strlen("x1b[0m")+(message[i]=='\\')){
+							if (strncmp(&(message[i+(message[i]=='\\')]),"x1b[",strlen("x1b["))==0){
+								int _oldIndex=i;
+								// Advance to the x character if we chose to use backslash
+								if (message[i]=='\\'){
+									i++;
 								}
-							}
-							// If found the ending
-							if (message[_mSearchIndex]=='m'){
-								// TODO - Do stuff with the found color code
-								if (message[i]=='0'){ // If we're resetting the color
-
-								}else{
-									int _semiColonSearchIndex;
-									for (_semiColonSearchIndex=i;_semiColonSearchIndex<_mSearchIndex;++_semiColonSearchIndex){
-										if (message[_semiColonSearchIndex]==';'){
-											break;
-										}
+								i+=4; // We're now in the parameters
+								int _mSearchIndex;
+								for (_mSearchIndex=i;_mSearchIndex<totalMessageLength;++_mSearchIndex){
+									if (message[_mSearchIndex]=='m'){
+										break;
 									}
-									message[_semiColonSearchIndex]=0;
-									printf("the number is %s\n",&(message[i]));
-									message[_semiColonSearchIndex]=';';
 								}
-								i=_oldIndex;
-								memset(&(message[i]),1,_mSearchIndex-i+1);
-							}else{
-								printf("Failed to parse color markup");
-								i=_oldIndex; // Must be invalid otherwise
+								// If found the ending
+								if (message[_mSearchIndex]=='m'){
+									// TODO - Do stuff with the found color code
+									if (message[i]=='0'){ // If we're resetting the color
+	
+									}else{
+										int _semiColonSearchIndex;
+										for (_semiColonSearchIndex=i;_semiColonSearchIndex<_mSearchIndex;++_semiColonSearchIndex){
+											if (message[_semiColonSearchIndex]==';'){
+												break;
+											}
+										}
+										message[_semiColonSearchIndex]=0;
+										printf("the number is %s\n",&(message[i]));
+										message[_semiColonSearchIndex]=';';
+									}
+									i=_oldIndex;
+									memset(&(message[i]),1,_mSearchIndex-i+1);
+								}else{
+									printf("Failed to parse color markup");
+									i=_oldIndex; // Must be invalid otherwise
+								}
 							}
 						}
-					}
+					#endif
 				}
 			}
 		}
@@ -4772,6 +4777,9 @@ void FontSizeSetup(){
 	}
 	SaveFontSizeFile();
 }
+void debugMenuOption(){
+	//
+}
 // Will change the global variables for you
 void switchTextDisplayMode(signed char _newMode){
 	if (currentlyVNDSGame){
@@ -4797,11 +4805,11 @@ void _settingsChangeAuto(int* _storeValue, char* _storeString){
 	itoa(*_storeValue,_storeString,10);
 }
 #define ISTEXTSPEEDBAR 0
-#define MAXOPTIONSSETTINGS 20
+#define MAXOPTIONSSETTINGS 22
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
 	b = _maxOptionSlotUsed;
-void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption, signed char _showVNDSFadeOption){
+void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption, signed char _showVNDSFadeOption, signed char _showDebugButton){
 	controlsStart();
 	controlsEnd();
 	PlayMenuSound();
@@ -4836,10 +4844,12 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	signed char _autoModeSpeedSlot=-2;
 	signed char _autoModeSpeedVoiceSlot=-2;
 	signed char _vndsBustFadeEnableSlot=-2;
+	signed char _debugButtonSlot=-2;
+
 	#if PLATFORM == PLAT_VITA
 		signed char _vndsVitaTouchSlot=-2;
 	#endif
-
+	
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
 	// Init value slots
@@ -4901,6 +4911,10 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	if (_showVNDSFadeOption){
 		SETTINGSMENU_EASYADDOPTION("VNDS Image Fade:",_vndsBustFadeEnableSlot);
 	}
+	if (_showDebugButton){
+		SETTINGSMENU_EASYADDOPTION("Debug",_debugButtonSlot);
+	}
+
 	#if PLATFORM == PLAT_VITA
 		SETTINGSMENU_EASYADDOPTION("Vita Touch:",_vndsVitaTouchSlot);
 	#endif
@@ -4961,6 +4975,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			_settingsOptionsValueText[_vndsBustFadeEnableSlot]="Off";
 		}
 	}
+
 	#if PLATFORM == PLAT_VITA
 		if(vndsVitaTouch){
 			_settingsOptionsValueText[_vndsVitaTouchSlot] = "On";
@@ -5234,7 +5249,19 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 						_settingsOptionsValueText[_vndsBustFadeEnableSlot]="Off";
 					}
 				}
+			}else if (_choice==_debugButtonSlot){
+				debugMenuOption();
 			}
+			#if PLATFORM == PLAT_VITA
+			else if (_choice==_vndsVitaTouchSlot){
+				vndsVitaTouch=!vndsVitaTouch;
+				if (vndsVitaTouch){
+					_settingsOptionsValueText[_vndsVitaTouchSlot]="On";
+				}else{
+					_settingsOptionsValueText[_vndsVitaTouchSlot]="Off";
+				}
+			}
+			#endif
 			else if (_choice==_maxOptionSlotUsed){ // Quit
 				#if PLATFORM == PLAT_3DS
 					lockBGM();
@@ -5248,16 +5275,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				exit(0);
 				break;
 			}
-			#if PLATFORM == PLAT_VITA
-			else if (_choice==_vndsVitaTouchSlot){
-				vndsVitaTouch=!vndsVitaTouch;
-				if (vndsVitaTouch){
-					_settingsOptionsValueText[_vndsVitaTouchSlot]="On";
-				}else{
-					_settingsOptionsValueText[_vndsVitaTouchSlot]="Off";
-				}
-			}
-			#endif
 		}
 		controlsEnd();
 		startDrawing();
@@ -5450,7 +5467,7 @@ void TitleScreen(){
 				}
 			}else if (_choice==2){ // Go to setting menu
 				controlsEnd();
-				SettingsMenu(0,0,0,0,1,0,0,0);
+				SettingsMenu(0,0,0,0,1,0,0,0,0);
 				controlsEnd();
 				break;
 			}else if (_choice==3){ // Quit button
@@ -6047,7 +6064,7 @@ void VNDSNavigationMenu(){
 					LazyMessage("Main script file",_vndsMainScriptConcat,"not exist.",NULL);
 				}
 			}else if (_choice==2){
-				SettingsMenu(0,1,0,0,0,0,1,1);
+				SettingsMenu(0,1,0,0,0,0,1,1,0);
 			}else if (_choice==3){
 				currentGameStatus = GAMESTATUS_QUIT;
 			}
@@ -6341,14 +6358,18 @@ signed char init(){
 	return 0;
 }
 int main(int argc, char *argv[]){
-	sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
-	sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
-	sceTouchEnableTouchForce(SCE_TOUCH_PORT_FRONT);
-	sceTouchEnableTouchForce(SCE_TOUCH_PORT_BACK);
 	/* code */
 	if (init()==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
+
+	#if PLATFORM == PLAT_VITA
+		sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
+		sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
+		sceTouchEnableTouchForce(SCE_TOUCH_PORT_FRONT);
+		sceTouchEnableTouchForce(SCE_TOUCH_PORT_BACK);
+	#endif
+
 	// Put stupid test stuff here
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
