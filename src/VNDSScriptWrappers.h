@@ -340,14 +340,8 @@ void vndswrapper_ENDOF(nathanscriptVariable* _passedArguments, int _numArguments
 
 // Same as setvar
 void vndswrapper_gsetvar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	char* _passedVariableName = nathanvariableToString(&_argumentList[0]);
-	if (_passedVariableName[0]=='~'){
-		printf("Wait, I'm pretty sure that isn't/shouldn't be allowed.\nClearing global variables, I mean.");
-		return;
-	}
-	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
-	char* _passedNewValue = nathanvariableToString(&_argumentList[2]);
-	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
+	genericSetVarCommand(_argumentList, _totalArguments, _returnedReturnArray, _returnArraySize,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar,0);
+
 	// Resave the global variable file
 	char _globalsSaveFilePath[strlen(saveFolder)+strlen("vndsGlobals")+1];
 	strcpy(_globalsSaveFilePath,saveFolder);

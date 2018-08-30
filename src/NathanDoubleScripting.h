@@ -771,8 +771,7 @@ void genericSetVar(char* _passedVariableName, char* _passedModifier, char* _pass
 				break;
 			case '=':
 				free((*_variableList)[_foundVariableIndex].variable.value);
-				(*_variableList)[_foundVariableIndex].variable.value = malloc(strlen(_modifiedNewValue)+1);
-				strcpy((*_variableList)[_foundVariableIndex].variable.value,_modifiedNewValue);
+				(*_variableList)[_foundVariableIndex].variable.value = strdup((_modifiedNewValue));
 				break;
 			default:
 				printf("Bad operator %c on string value.\n",_passedModifier[0]);
@@ -781,6 +780,60 @@ void genericSetVar(char* _passedVariableName, char* _passedModifier, char* _pass
 	}
 	free(_modifiedNewValue);
 	return;
+}
+
+signed char humanFloatCompare(float v1, float v2, char* _passedOperator){
+	signed char _ifStatementResult=-1;
+	if (strlen(_passedOperator)>=2){
+		if (_passedOperator[0]=='=' && _passedOperator[1]=='=') {
+			_ifStatementResult = (v1==v2);
+		}else if (_passedOperator[0]=='!' && _passedOperator[1]=='='){
+			_ifStatementResult = (v1!=v2);
+		}else if (_passedOperator[0]=='>' && _passedOperator[1]=='='){
+			_ifStatementResult = (v1>=v2);
+		}else if (_passedOperator[0]=='<' && _passedOperator[1]=='='){
+			_ifStatementResult = (v1<=v2);
+		}
+	}
+	if (_ifStatementResult==-1){
+		if (_passedOperator[0]=='>'){
+			_ifStatementResult = (v1 > v2);
+		}else if (_passedOperator[0]=='<'){
+			_ifStatementResult = (v1 < v2);
+		}
+	}
+	if (_ifStatementResult==-1){
+		LazyMessage("bad operator",NULL,NULL,NULL);
+		_ifStatementResult=0;
+		printf("bad operator. %s\n",_passedOperator);
+	}
+	return _ifStatementResult;
+}
+
+void genericSetVarCommand(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize, nathanscriptGameVariable** _variableList, int* _variableListLength, char _allowClearing){
+	char* _passedVariableName = nathanvariableToString(&_argumentList[0]);
+	if (_passedVariableName[0]=='~' && _allowClearing){
+		freeNathanGamevariableArray(*_variableList,*_variableListLength);
+		*_variableList=NULL;
+		*_variableListLength=0;
+		return;
+	}
+	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
+	
+	// The new value argument will be all the arguments after the equals, even if there are spaces
+	int j;
+	int _totalBufferSize=1+strlen(nathanvariableToString(&_argumentList[2]));
+	for (j=3;j<_totalArguments;++j){
+		_totalBufferSize+=strlen(nathanvariableToString(&_argumentList[j]))+1;
+	}
+	char* _passedNewValue = malloc(_totalBufferSize);
+	strcpy(_passedNewValue,nathanvariableToString(&_argumentList[2]));
+	for (j=3;j<_totalArguments;++j){
+		strcat(_passedNewValue," ");
+		strcat(_passedNewValue,nathanvariableToString(&_argumentList[j]));
+	}
+
+	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,_variableList,_variableListLength);
 }
 
 /*
@@ -800,52 +853,43 @@ void scriptRandom(nathanscriptVariable* _passedArguments, int _numArguments, nat
 	genericSetVar(nathanvariableToString(&_passedArguments[0]),"=",_numberToStringBuffer,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
 }
 
+//
+
 // setvar varname modifier value
 // modifier: =, +. -
 // setvar v_d0 = 1
 void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	char* _passedVariableName = nathanvariableToString(&_argumentList[0]);
-	if (_passedVariableName[0]=='~'){
-		freeNathanGamevariableArray(nathanscriptGamevarList,nathanscriptTotalGamevar);
-		nathanscriptGamevarList=NULL;
-		nathanscriptTotalGamevar=0;
-		return;
-	}
-	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
-	char* _passedNewValue = nathanvariableToString(&_argumentList[2]);
-	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
+	genericSetVarCommand(_argumentList, _totalArguments, _returnedReturnArray, _returnArraySize,&nathanscriptGamevarList,&nathanscriptTotalGamevar,1);
 }
-// Uninitialized variables will result in true
+
+// Uninitialized variables will result in false
+// if some_variable == constant
 void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	nathanscriptGameVariable* _firstVariable = nathanscriptGetGameOrGlboalVariable(nathanvariableToString(&_argumentList[0]));
-	if (_firstVariable==NULL){
+	signed char _ifStatementResult=-1;
+	if (_totalArguments<3){ // Not enough args, assumes false because that's what real VNDS does
+		_ifStatementResult=0;
+	}else if (_firstVariable==NULL){
 		printf("Invalid variable for if statement\n");
-		return;
-	}
-	char* _passedOperator = nathanvariableToString(&_argumentList[1]);
-	char _ifStatementResult=0;
-	if (_firstVariable->variable.variableType==NATHAN_TYPE_FLOAT){
-		float v1 = *((float*)_firstVariable->variable.value);
-		float v2 = nathanvariableToFloat(&_argumentList[2]);
-		if (_passedOperator[0]=='=' && _passedOperator[1]=='=') {
-			_ifStatementResult = (v1==v2);
-		}else if (_passedOperator[0]=='!' && _passedOperator[1]=='='){
-			_ifStatementResult = (v1!=v2);
-		}else if (_passedOperator[0]=='>' && _passedOperator[1]=='='){
-			_ifStatementResult = (v1>=v2);
-		}else if (_passedOperator[0]=='<' && _passedOperator[1]=='='){
-			_ifStatementResult = (v1<=v2);
-		}else if (_passedOperator[0]=='>'){
-			_ifStatementResult = (v1 > v2);
-		}else if (_passedOperator[0]=='<'){
-			_ifStatementResult = (v1 < v2);
+		if (stringIsNumber(nathanvariableToString(&_argumentList[2]))){
+			// Compare using the default value for an undefined number variable
+			char* _passedOperator = nathanvariableToString(&_argumentList[1]);
+			_ifStatementResult = humanFloatCompare(0,nathanvariableToFloat(&_argumentList[2]),_passedOperator);
 		}else{
-			printf("bad operator. %s\n",_passedOperator);
+			// Apparently comparing undefined variable to a string is true
+			_ifStatementResult=1;
 		}
 	}else{
-		_ifStatementResult = !(strcmp((char*)_firstVariable->variable.value,nathanvariableToString(&_argumentList[2])));
-		if (_passedOperator[0]=='!'){
-			_ifStatementResult = !_ifStatementResult;
+		char* _passedOperator = nathanvariableToString(&_argumentList[1]);
+		if (_firstVariable->variable.variableType==NATHAN_TYPE_FLOAT){
+			float v1 = *((float*)_firstVariable->variable.value);
+			float v2 = nathanvariableToFloat(&_argumentList[2]);
+			_ifStatementResult = humanFloatCompare(v1,v2,_passedOperator);
+		}else{
+			_ifStatementResult = !(strcmp((char*)_firstVariable->variable.value,nathanvariableToString(&_argumentList[2])));
+			if (_passedOperator[0]=='!'){
+				_ifStatementResult = !_ifStatementResult;
+			}
 		}
 	}
 	if (_ifStatementResult==0){
@@ -865,6 +909,8 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 				}
 			}
 		}
+	}else if (_ifStatementResult==-1){
+		LazyMessage("For some reason if statement","result is still -1",NULL,"bad bug!");
 	}
 	return;
 }

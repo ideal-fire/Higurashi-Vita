@@ -30,6 +30,8 @@
 	TODO - Allow VNDS sound command to stop all sounds
 	TODO - SetSpeedOfMessage
 	TODO - Easy quicksave menu
+	TODO - If choices are too long, they get cut off. This problem is important enough for somebody to have noticed
+	TODO - Allow variable text replacement in choice command when it's like "choice $bla|$happy", see hima tips 09.
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
