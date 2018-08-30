@@ -836,6 +836,30 @@ void genericSetVarCommand(nathanscriptVariable* _argumentList, int _totalArgumen
 	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,_variableList,_variableListLength);
 }
 
+// Compare variables using all the wierd rules.
+// _nullToNullTrue should only be true if the second variable's name is not just a number and is not just something starting with a quotation mark
+char variableCompare(nathanscriptVariable* varOne, nathanscriptVariable* varTwo, char* comparisonSymbol, char _nullToNullTrue){
+	if (varOne==NULL){
+		if (varTwo==NULL){
+			if (_nullToNullTrue){
+				return 1;
+			}else{
+				return 0;
+			}
+		}
+
+	}
+	// The only way, regardless of both variable's types, to compare as numbers is for both variables to be numbers
+	if (stringIsNumber(nathanvariableToString(varOne)) && stringIsNumber(nathanvariableToString(varTwo))){
+		return humanFloatCompare(nathanvariableToFloat(varOne),nathanvariableToFloat(varTwo),comparisonSymbol);
+	}else{
+		_ifStatementResult = !(strcmp(nathanvariableToString(varOne),nathanvariableToString(varTwo)));
+		if (_passedOperator[0]=='!'){
+			_ifStatementResult = !_ifStatementResult;
+		}
+	}
+}
+
 /*
 ================================================================
 SCRIPT
@@ -862,8 +886,16 @@ void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nath
 	genericSetVarCommand(_argumentList, _totalArguments, _returnedReturnArray, _returnArraySize,&nathanscriptGamevarList,&nathanscriptTotalGamevar,1);
 }
 
-// Uninitialized variables will result in false
+// Uninitialized variable compared to another uninitialized variable is true
+// Uninitialized is treated as 0 if compared to a constant number
+// Uninitialized compared to a string is false
 // if some_variable == constant
+/*
+// Variables can actually start with quotation marks. 
+// Uninitialized variable compared to a string is false.
+// Uninitialized variable compared acts as 0 for a number comparison
+// Comparing an uninitialized variable to a number variable works
+*/
 void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	nathanscriptGameVariable* _firstVariable = nathanscriptGetGameOrGlboalVariable(nathanvariableToString(&_argumentList[0]));
 	signed char _ifStatementResult=-1;
@@ -876,8 +908,7 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 			char* _passedOperator = nathanvariableToString(&_argumentList[1]);
 			_ifStatementResult = humanFloatCompare(0,nathanvariableToFloat(&_argumentList[2]),_passedOperator);
 		}else{
-			// Apparently comparing undefined variable to a string is true
-			_ifStatementResult=1;
+			_ifStatementResult=0;
 		}
 	}else{
 		char* _passedOperator = nathanvariableToString(&_argumentList[1]);

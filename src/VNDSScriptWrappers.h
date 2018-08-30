@@ -141,8 +141,6 @@ int inBetweenVNDSLines(int _aboutToCommandIndex){
 	return 0;
 }
 
-
-
 //char nextVndsBustshotSlot=0;
 
 // Helper for two functions
@@ -236,6 +234,10 @@ void vndswrapper_choice(nathanscriptVariable* _passedArguments, int _numArgument
 					_thisSegmentStartIndex++;
 				}
 				strcpy(_newBuffer,&(_choiceSet[_thisSegmentStartIndex]));
+
+				// Hima tips 09 doesn't seperate the variables with spaces in the script so they're not replaced correctly. This fixes.
+				replaceIfIsVariable(&_newBuffer);
+
 				_argumentTable[i+1]=_newBuffer;
 				_currentMainStringIndex++;
 				break;
@@ -247,6 +249,7 @@ void vndswrapper_choice(nathanscriptVariable* _passedArguments, int _numArgument
 	char _numberToStringBuffer[20];
 	sprintf(_numberToStringBuffer,"%d",lastSelectionAnswer+1);
 	genericSetVar("selected","=",_numberToStringBuffer,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
+	nathanscriptConvertVariable(&(nathanscriptGetGameVariable("selected")->variable),NATHAN_TYPE_FLOAT);
 
 	freeNathanscriptVariableArray(_fakeArgumentArray,2);
 }
