@@ -819,7 +819,7 @@ void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nath
 void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	nathanscriptGameVariable* _firstVariable = nathanscriptGetGameOrGlboalVariable(nathanvariableToString(&_argumentList[0]));
 	if (_firstVariable==NULL){
-		printf("Invalid variable.\n");
+		printf("Invalid variable for if statement\n");
 		return;
 	}
 	char* _passedOperator = nathanvariableToString(&_argumentList[1]);

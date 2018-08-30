@@ -29,6 +29,7 @@
 
 	TODO - Allow VNDS sound command to stop all sounds
 	TODO - SetSpeedOfMessage
+	TODO - Easy quicksave menu
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -72,7 +73,7 @@
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
 #define VERSIONSTRING "forgotversionnumber" // This
-#define VERSIONNUMBER 7 // This
+#define VERSIONNUMBER 8 // This
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1
 // Specific constants
