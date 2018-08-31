@@ -31,7 +31,7 @@
 	TODO - SetSpeedOfMessage
 	TODO - Easy quicksave menu
 	TODO - If choices are too long, they get cut off. This problem is important enough for somebody to have noticed
-	TODO - Allow variable text replacement in choice command when it's like "choice $bla|$happy", see hima tips 09.
+	TODO - With my setvar and if statement changes, I broke hima tip 09. But VNDSx acts the same as my program does when I run the script... VNDS Android exclusive features? Never worked in the first place?
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -2393,7 +2393,7 @@ int strlenNO1(char* src){
 		_LagTestStart = getTicks();
 	}
 	void LagTestEnd(){
-		printf("lagometer: %d\n",getTicks()-_LagTestStart);
+		printf("lagometer: %ld\n",getTicks()-_LagTestStart);
 	}
 #endif
 char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName){

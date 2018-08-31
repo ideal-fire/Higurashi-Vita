@@ -730,8 +730,7 @@ void genericSetVar(char* _passedVariableName, char* _passedModifier, char* _pass
 				_targetString = nathanvariableToString(&(nathanscriptGlobalvarList[_foundSecondVariableIndex].variable));
 				_guessedVariableType = nathanscriptGlobalvarList[_foundSecondVariableIndex].variable.variableType;
 			}
-			_modifiedNewValue = malloc(strlen(_targetString)+1);
-			strcpy(_modifiedNewValue,_targetString);
+			_modifiedNewValue = strdup(_targetString);
 		}
 	}
 
@@ -834,29 +833,54 @@ void genericSetVarCommand(nathanscriptVariable* _argumentList, int _totalArgumen
 	}
 
 	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,_variableList,_variableListLength);
+	free(_passedNewValue);
 }
 
 // Compare variables using all the wierd rules.
 // _nullToNullTrue should only be true if the second variable's name is not just a number and is not just something starting with a quotation mark
 char variableCompare(nathanscriptVariable* varOne, nathanscriptVariable* varTwo, char* comparisonSymbol, char _nullToNullTrue){
 	if (varOne==NULL){
+		// An undefined variable can only be compared to two things. A number (with the undefined variable being 0) or another undefined variable
 		if (varTwo==NULL){
 			if (_nullToNullTrue){
 				return 1;
 			}else{
 				return 0;
 			}
+		}else{
+			if (stringIsNumber(nathanvariableToString(varTwo))){
+				return humanFloatCompare(0,nathanvariableToFloat(varTwo),comparisonSymbol);
+			}else{
+				// Undefined to string comparison is always false. If it's comparison to a variable then the value of that variable was passed to this function, not the name.
+				return 0;
+			}
 		}
-
 	}
 	// The only way, regardless of both variable's types, to compare as numbers is for both variables to be numbers
 	if (stringIsNumber(nathanvariableToString(varOne)) && stringIsNumber(nathanvariableToString(varTwo))){
 		return humanFloatCompare(nathanvariableToFloat(varOne),nathanvariableToFloat(varTwo),comparisonSymbol);
 	}else{
-		_ifStatementResult = !(strcmp(nathanvariableToString(varOne),nathanvariableToString(varTwo)));
-		if (_passedOperator[0]=='!'){
-			_ifStatementResult = !_ifStatementResult;
+		signed char _ifStatementResult;
+		if (comparisonSymbol[0]!='=' && comparisonSymbol[0]!='!'){
+			int _strcmpResult = strcmp(nathanvariableToString(varOne),nathanvariableToString(varTwo));
+			_ifStatementResult=0;
+			if (comparisonSymbol[0]=='<'){
+				_ifStatementResult = _strcmpResult < 0;
+			}
+			if (comparisonSymbol[0]=='>'){
+				_ifStatementResult = _strcmpResult > 0;
+			}
+			// idk what this does yet
+			if (strlen(comparisonSymbol)==2 && comparisonSymbol[1]=='='){
+				_ifStatementResult=!_ifStatementResult;
+			}
+		}else{
+			_ifStatementResult = !(strcmp(nathanvariableToString(varOne),nathanvariableToString(varTwo)));
+			if (comparisonSymbol[0]=='!'){
+				_ifStatementResult = !_ifStatementResult;
+			}
 		}
+		return _ifStatementResult;
 	}
 }
 
@@ -875,6 +899,8 @@ void scriptRandom(nathanscriptVariable* _passedArguments, int _numArguments, nat
 	char _numberToStringBuffer[256];
 	sprintf(_numberToStringBuffer,"%d",_variableResult);
 	genericSetVar(nathanvariableToString(&_passedArguments[0]),"=",_numberToStringBuffer,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
+	//
+	nathanscriptConvertVariable(&(nathanscriptGetGameVariable(nathanvariableToString(&_passedArguments[0]))->variable),NATHAN_TYPE_FLOAT);
 }
 
 //
@@ -897,32 +923,80 @@ void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nath
 // Comparing an uninitialized variable to a number variable works
 */
 void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	nathanscriptGameVariable* _firstVariable = nathanscriptGetGameOrGlboalVariable(nathanvariableToString(&_argumentList[0]));
 	signed char _ifStatementResult=-1;
-	if (_totalArguments<3){ // Not enough args, assumes false because that's what real VNDS does
-		_ifStatementResult=0;
-	}else if (_firstVariable==NULL){
-		printf("Invalid variable for if statement\n");
-		if (stringIsNumber(nathanvariableToString(&_argumentList[2]))){
-			// Compare using the default value for an undefined number variable
-			char* _passedOperator = nathanvariableToString(&_argumentList[1]);
-			_ifStatementResult = humanFloatCompare(0,nathanvariableToFloat(&_argumentList[2]),_passedOperator);
+	if (_totalArguments==3){
+		nathanscriptGameVariable* _firstVariable = nathanscriptGetGameOrGlboalVariable(nathanvariableToString(&_argumentList[0]));
+		
+		char* comparisonSymbol = nathanvariableToString(&_argumentList[1]);
+		signed char _secondIsNum;
+		signed char _secondIsString;
+		char* _secondAsString; // Has the quotation marks chopped for you already
+		signed char _secondIsVariable;
+		nathanscriptGameVariable* _secondAsVariable;
+	
+		// Init info about second variable
+		_secondIsNum = (stringIsNumber(nathanvariableToString(&_argumentList[2])));
+		// String comparison uses quotation marks
+		_secondAsString = nathanvariableToString(&_argumentList[2]);
+		if (strlen(_secondAsString)>=2 && _secondAsString[0]=='\"'){
+			if (_secondAsString[strlen(_secondAsString)-1]=='\"'){
+				char* _tempMallocHold = malloc(strlen(_secondAsString)); // Need extra one byte to hold second quotation mark temporarily
+				_tempMallocHold[0]='\0';
+				strcpy(_tempMallocHold,&(_secondAsString[1]));
+				_tempMallocHold[strlen(_tempMallocHold)-1]='\0'; // Delete other quotation mark
+				_secondAsString = _tempMallocHold; // Done
+			}else{
+				_secondAsString=NULL;
+			}
 		}else{
-			_ifStatementResult=0;
+			_secondAsString=NULL;
 		}
-	}else{
-		char* _passedOperator = nathanvariableToString(&_argumentList[1]);
-		if (_firstVariable->variable.variableType==NATHAN_TYPE_FLOAT){
-			float v1 = *((float*)_firstVariable->variable.value);
-			float v2 = nathanvariableToFloat(&_argumentList[2]);
-			_ifStatementResult = humanFloatCompare(v1,v2,_passedOperator);
+		_secondIsString = (_secondAsString!=NULL);
+		//
+		_secondAsVariable = nathanscriptGetGameVariable(nathanvariableToString(&_argumentList[2]));
+		_secondIsVariable = (_secondAsVariable!=NULL);
+
+		//printf("Isvar: %d, isnum: %d, isstr: %d\n",_secondIsVariable,_secondIsNum,_secondIsString);
+
+		if (_firstVariable==NULL){
+			if (_secondIsNum){
+				_ifStatementResult = humanFloatCompare(0,nathanvariableToFloat(&_argumentList[2]),comparisonSymbol);
+			}else if (!_secondIsString){
+				// If it's not a number or string, we can test for undefind to undefined comparison
+				if (_secondIsVariable==0){
+					_ifStatementResult=1;
+				}
+			}else{
+				_ifStatementResult=0;
+			}
 		}else{
-			_ifStatementResult = !(strcmp((char*)_firstVariable->variable.value,nathanvariableToString(&_argumentList[2])));
-			if (_passedOperator[0]=='!'){
-				_ifStatementResult = !_ifStatementResult;
+			if (_secondIsNum){
+				_ifStatementResult = variableCompare(&(_firstVariable->variable),&_argumentList[2],comparisonSymbol,0);
+			}
+			if (_ifStatementResult!=1 && _secondIsString){
+				nathanscriptVariable* _tempHoldVar = malloc(sizeof(nathanscriptVariable));
+				_tempHoldVar->variableType = NATHAN_TYPE_STRING;
+				_tempHoldVar->value = strdup(_secondAsString); // Duplicate this string because it's messed with
+				_ifStatementResult = variableCompare(&(_firstVariable->variable),_tempHoldVar,comparisonSymbol,0);
+				freeSingleNathanVariable(*_tempHoldVar);
+				free(_tempHoldVar);
+			}
+			if (_ifStatementResult!=1 && _secondIsVariable){
+				_ifStatementResult = variableCompare(&(_firstVariable->variable),&(_secondAsVariable->variable),comparisonSymbol,0);
+			}
+			if (_ifStatementResult==-1){ // This means that the second variable isn't a string, number, or defined variable. Because the first variable is defined, undefined to undefined is not possible. This if statement must be false.
+				_ifStatementResult=0;
 			}
 		}
+	
+	
+		free(_secondAsString);
+	}else{
+		printf("Broken if statement\n");
+		// Not enough args, assumes false because that's what real VNDS does
+		_ifStatementResult=1;
 	}
+
 	if (_ifStatementResult==0){
 		int _neededFi=1;
 		while (!crossfeof(nathanscriptCurrentOpenFile)){
