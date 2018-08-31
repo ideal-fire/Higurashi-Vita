@@ -1,0 +1,61 @@
+// step 1 - Test comparison of undefined variables
+if testundef1 == 0
+	text yay, right value for undefined variable compared to number
+fi
+if testundef1 == testundef2
+	text yay, undefined to undefined comparison works
+fi
+if testundef1 != 0
+	text error, wrong value for undefined variable compared to number
+fi
+if testundef1 == "whatever"
+	text error, undefined to string comparison should be false
+fi
+// Step 2 - Test number comparison
+setvar testnum = 3
+if testnum != 1
+	text yay, does not equals for numbers works
+fi
+if testnum > 0
+	text yay, greater than works
+fi
+if testnum < 5
+	text yay, less than works
+fi
+if testnum == 3
+	text yay, number equals number works
+fi
+setvar testnum2 = 3
+if testnum == testnum2
+	text yay, number var to number var equals works
+fi
+if testnum == "3"
+	text yay, number to equivalent string works
+fi
+if testnum < "5"
+	text yay, number less than equivalent string to higher number works
+fi
+// Step 3 - Test string comparison
+setvar teststr = "bla"
+if teststr == "bla"
+	text yay, string variable to string constant equals comparison works
+fi
+setvar teststr2 = "bla"
+if teststr == teststr2
+	text yay, string variable equals string variable works.
+fi
+setvar teststr = "3"
+if teststr == 3
+	text yay, string to equivalent number comparison works
+fi
+setvar teststr = "abcd"
+if teststr < "test"
+	text yay, string less comparison works
+fi
+setvar teststr = "uhui"
+if teststr > "test"
+	text yay, string greater than comparison works
+fi
+if teststr == 8
+	text error, word string to number comparison works
+fi
