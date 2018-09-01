@@ -4203,7 +4203,9 @@ void scriptFadeSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 	FadeBustshot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]),nathanvariableToBool(&_passedArguments[2]));	
 	return;
 }
-#define MENUSELECTIONHIGHLIGHTOFFSET 10
+
+#define CHOICESCROLLTIMEOFFSET 500 // How long you have to be on a choice before it starts scrolling
+#define CHOICESCROLLTIMEINTERVAL 100 // How often a new character
 // Select(numoptions, arrayofstring)
 //		Let's the user make a choice and have this not be a sound novel anymore. :/
 //		First arg is the number of options and the second arg is a string of the names of the options
@@ -4224,12 +4226,63 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		nathanscriptBackLine(); // Fix file position for saving so when we load it reloads the choice command
 	}
 
+	// Text that is too long to fit will scroll character by character
+	signed char _needScrolling=-1;
+	char _isScrollingText;
+	u64 _lastScrollTime;
+	int _scrollOffset; // In characters
+	signed char _scrollRight; // 0 if going left
 	// This is the actual loop for choosing the choice
 	signed char _choice=0;
 	while (1){
 		fpsCapStart();
 		controlsStart();
+		char _oldIndex = _choice;
 		_choice = MenuControls(_choice,0,_totalOptions-1);
+		// Init scrolling if we changed menu index or just started the loop
+		if (_needScrolling==-1 || _oldIndex!=_choice){
+			_scrollOffset=0;
+			if (textWidth(fontSize,noobOptions[_choice])>screenWidth-MENUOPTIONOFFSET-MENUCURSOROFFSET){
+				_needScrolling=1;
+				_lastScrollTime = getTicks();
+				_isScrollingText=0;
+				_scrollRight=1;
+			}else{
+				_needScrolling=0;
+			}
+		}
+
+		// Process scrolling
+		if (_needScrolling){
+			if (_isScrollingText){
+				if (getTicks()>_lastScrollTime+CHOICESCROLLTIMEINTERVAL){
+					char _oldDirection = _scrollRight;
+					if (_scrollRight){
+						if (textWidth(fontSize,&(noobOptions[_choice][_scrollOffset]))>screenWidth-MENUOPTIONOFFSET-MENUCURSOROFFSET){
+							++_scrollOffset;
+						}else{
+							_scrollRight=0;
+						}
+					}else{
+						if (_scrollOffset==0){
+							_scrollRight=1;
+						}else{
+							--_scrollOffset;
+						}
+					}
+					if (_oldDirection!=_scrollRight){
+						_lastScrollTime = getTicks()+CHOICESCROLLTIMEOFFSET-CHOICESCROLLTIMEINTERVAL; // Trick the program into waiting CHOICESCROLLTIMEOFFSET before it goes back the other way
+					}else{
+						_lastScrollTime = getTicks();
+					}
+				}
+			}else{
+				if (getTicks()>_lastScrollTime+CHOICESCROLLTIMEOFFSET){
+					_isScrollingText=1;
+					_lastScrollTime = 0; // So we'll scroll next frame
+				}
+			}
+		}
 		updateControlsGeneral();
 		if (wasJustPressed(SCE_CTRL_CROSS)){
 			lastSelectionAnswer = _choice;
@@ -4244,7 +4297,7 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 				goodDrawText(MENUOPTIONOFFSET,i*currentTextHeight,noobOptions[i],fontSize);
 			}
 		}
-		goodDrawText(MENUOPTIONOFFSET+MENUCURSOROFFSET,_choice*currentTextHeight,noobOptions[_choice],fontSize);
+		goodDrawText(MENUOPTIONOFFSET+MENUCURSOROFFSET,_choice*currentTextHeight,&(noobOptions[_choice][_scrollOffset]),fontSize);
 		goodDrawText(MENUCURSOROFFSET*2,_choice*currentTextHeight,MENUCURSOR,fontSize);
 
 		endDrawing();
