@@ -897,6 +897,7 @@ nathanscriptVariable* variableFromString(char* _passedString, char* _isTemporary
 		_returnVariable->value = malloc(strlen(_passedString)-1);
 		_returnVariable->variableType = NATHAN_TYPE_STRING;
 		strncpy(_returnVariable->value,&_passedString[1],strlen(_passedString)-2);
+		((char*)_returnVariable->value)[strlen(_passedString)-2]='\0'; // strncpy does not null terminate. Wait, then what's the point of it over memcpy?
 	}else{ // It's a number or undefined variable
 		_returnVariable->variableType = NATHAN_TYPE_FLOAT;
 		_returnVariable->value = malloc(sizeof(float));
@@ -958,6 +959,13 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 		nathanscriptVariable* _secondVariable = variableFromString(nathanvariableToString(&_argumentList[2]),&_secondTemporary);
 
 		_ifStatementResult = variableCompare(_firstVariable,_secondVariable, comparisonSymbol);
+
+		if (_firstTemporary){
+			freeSingleNathanVariable(*_firstVariable);
+		}
+		if (_secondTemporary){
+			freeSingleNathanVariable(*_secondVariable);
+		}
 	}else{
 		printf("Broken if statement\n");
 		// Not enough args, assumes false because that's what real VNDS does
