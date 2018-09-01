@@ -4230,7 +4230,7 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 	signed char _needScrolling=-1;
 	char _isScrollingText;
 	u64 _lastScrollTime;
-	int _scrollOffset; // In characters
+	int _scrollOffset=0; // In characters. Initialize this to get rid of gcc warning
 	signed char _scrollRight; // 0 if going left
 	// This is the actual loop for choosing the choice
 	signed char _choice=0;
