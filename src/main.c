@@ -129,7 +129,7 @@
 
 // System string
 #if __UNIX__ || __linux__ || __gnu_linux__
-	#define SYSTEMSTRING "GNULINUX"
+	#define SYSTEMSTRING "LINUX"
 #elif __WIN32__
 	#define SYSTEMSTRING "WINDOWS"
 #elif __vita__
