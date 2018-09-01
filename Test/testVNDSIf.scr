@@ -59,3 +59,19 @@ fi
 if teststr == 8
 	text error, word string to number comparison works
 fi
+// Step 4 - Test constant comparison
+if 4 == 4
+	text yay, constant int comparison works
+fi
+if -5 == -5
+	text yay, negative constant int comparison works
+fi
+if "bla" == "bla"
+	text yay, constant string comparison works
+fi
+if 5 == 3
+	text error, bad constant int comparison
+fi
+if "bla" == "ok"
+	text error, bad constant string comparison
+fi

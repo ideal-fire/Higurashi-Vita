@@ -962,9 +962,11 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 
 		if (_firstTemporary){
 			freeSingleNathanVariable(*_firstVariable);
+			free(_firstVariable);
 		}
 		if (_secondTemporary){
 			freeSingleNathanVariable(*_secondVariable);
+			free(_secondVariable);
 		}
 	}else{
 		printf("Broken if statement\n");
