@@ -26,10 +26,8 @@
 			How does this work in ADV mode?
 				Actually, the command is removed in ADV mode.
 		TODO - Expression changes look odd.
-
 	TODO - Allow VNDS sound command to stop all sounds
 	TODO - SetSpeedOfMessage
-	TODO - Easy quicksave menu
 	TODO - With my setvar and if statement changes, I broke hima tip 09. But VNDSx acts the same as my program does when I run the script... VNDS Android exclusive features? Never worked in the first place?
 
 	Colored text example:
@@ -1324,16 +1322,41 @@ void outputLineWait(){
 		Update();
 		startDrawing();
 		Draw(MessageBoxEnabled);
+		// Easy save menu
+		if (currentlyVNDSGame && isDown(SCE_CTRL_RTRIGGER)){
+			drawRectangle(0,0,screenWidth,currentTextHeight*4,0,0,0,255);
+			goodDrawText(0,currentTextHeight*0,"UP: Save slot 1",fontSize);
+			goodDrawText(0,currentTextHeight*1,"DOWN: Save slot 2",fontSize);
+			goodDrawText(0,currentTextHeight*2,"LEFT: Save slot 3",fontSize);
+			goodDrawText(0,currentTextHeight*3,"RIGHT: Save slot 4",fontSize);
+			if (wasJustPressed(SCE_CTRL_UP) || wasJustPressed(SCE_CTRL_DOWN) || wasJustPressed(SCE_CTRL_LEFT) || wasJustPressed(SCE_CTRL_RIGHT)){
+				unsigned char _selectedSlot=1;
+				if (wasJustPressed(SCE_CTRL_UP)){
+					_selectedSlot=1;
+				}else if (wasJustPressed(SCE_CTRL_DOWN)){
+					_selectedSlot=2;
+				}else if (wasJustPressed(SCE_CTRL_LEFT)){
+					_selectedSlot=3;
+				}else if (wasJustPressed(SCE_CTRL_RIGHT)){
+					_selectedSlot=4;
+				}
+				easyVNDSSaveSlot(_selectedSlot);
+				PlayMenuSound();
+				drawRectangle(0,0,screenWidth,screenHeight,0,255,0,255);
+			}
+		}
 		endDrawing();
 
 		int touch_bool = 0;
 		#if PLATFORM == PLAT_VITA
 			memcpy(touch_old, touch, sizeof(touch_old));
-			int port,i;
-			for (port = 0; port < SCE_TOUCH_PORT_MAX_NUM; port++){
-				sceTouchPeek(port, &touch[port], 1);
+			if (vndsVitaTouch){
+				int port;
+				for (port = 0; port < SCE_TOUCH_PORT_MAX_NUM; port++){
+					sceTouchPeek(port, &touch[port], 1);
+				}
+				touch_bool = vndsVitaTouch && ((touch[SCE_TOUCH_PORT_FRONT].reportNum == 1) && (touch_old[SCE_TOUCH_PORT_FRONT].reportNum == 0));
 			}
-			touch_bool = vndsVitaTouch && ((touch[SCE_TOUCH_PORT_FRONT].reportNum == 1) && (touch_old[SCE_TOUCH_PORT_FRONT].reportNum == 0));
 		#endif
 
 		if (wasJustPressed(SCE_CTRL_CROSS) || touch_bool ){
@@ -3745,6 +3768,12 @@ void vndsNormalLoad(char* _filename){
 
 	nathanscriptDoScript(_tempLoadedFilename,_readFilePosition,inBetweenVNDSLines);
 }
+char* easyVNDSSaveSlot(signed char _slot){
+	char* _tempSavefilePath = malloc(strlen(streamingAssets)+strlen("sav")+3+1);
+	sprintf(_tempSavefilePath,"%ssav%d",streamingAssets,_slot);
+	vndsNormalSave(_tempSavefilePath);
+	return _tempSavefilePath;
+}
 void _textboxTransition(char _isOn, int _totalTime){
 	if (MessageBoxEnabled!=_isOn && !isSkipping){
 		signed short _fadeoutPerUpdate = ceil(MessageBoxAlpha/(double)TEXTBOXFADEOUTUPDATES(_totalTime));
@@ -5350,10 +5379,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			}else if (_choice==_vndsSaveOptionsSlot){ // VNDS Save
 				if (!wasJustPressed(SCE_CTRL_RIGHT)){
 					PlayMenuSound();
-					char _tempSavefilePath[strlen(streamingAssets)+strlen("sav")+3+1];
-					sprintf(_tempSavefilePath,"%ssav%d",streamingAssets,_chosenSaveSlot);
-					vndsNormalSave(_tempSavefilePath);
-					LazyMessage("Saved to",_tempSavefilePath,NULL,NULL);
+					char* _savedPath = easyVNDSSaveSlot(_chosenSaveSlot);
+					LazyMessage("Saved to",_savedPath,NULL,NULL);
+					free(_savedPath);
 				}else{
 					_chosenSaveSlot++;
 					sprintf(_tempHoldSaveSlotSelection,"%d=",_chosenSaveSlot);
