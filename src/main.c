@@ -167,6 +167,15 @@
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
 	lua_setglobal(L,y);
 
+// Make a lua function and all it does is set a number variable to what you give to it
+#define EASYLUAINTSETFUNCTION(scriptFunctionName,varname) \
+	int L_##scriptFunctionName(lua_State* passedState){ \
+		varname = lua_tonumber(passedState,1); \
+		return 0; \
+	}
+// Easily push stuff made with EASYLUAINTSETFUNCTION
+#define PUSHEASYLUAINTSETFUNCTION(scriptFunctionName) \
+	LUAREGISTER(L_##scriptFunctionName,#scriptFunctionName)
 ////////////////////////////////////////
 // PLatform specific variables
 ///////////////////////////////////////
@@ -185,6 +194,13 @@ char* gamesFolder;
 #define BUST_STATUS_FADEOUT_MOVE 3 // var 1 is alpha per frame. var 2 is x per frame. var 3 is y per frame
 #define BUST_STATUS_SPRITE_MOVE 4 // var 1 is x per frame, var 2 is y per frame
 #define BUST_STATUS_TRANSFORM_FADEIN 5 // The bust is fading into an already used slot. image is what the new texture is going to be thats fading in, transformTexture is the old texture that is fading out. var 1 is alpha per frame. added to image, subtracted from transformTexture.
+
+#if PLATFORM == PLAT_VITA
+	#include <psp2/touch.h>
+	SceTouchData touch_old[SCE_TOUCH_PORT_MAX_NUM];
+	SceTouchData touch[SCE_TOUCH_PORT_MAX_NUM];
+	signed char vndsVitaTouch=1;
+#endif
 
 void invertImage(CrossTexture* _passedImage, signed char _doInvertAlpha);
 typedef struct{
@@ -391,7 +407,7 @@ int messageInBoxXOffset=10;
 int messageInBoxYOffset=0;
 // 1 by default to retain compatibility with games converted before game specific Lua 
 char gameHasTips=1;
-char textOnlyOverBackground=0;
+char textOnlyOverBackground=1;
 // This is a constant value between 0 and 127 that means that the text should be instantly displayed
 #define TEXTSPEED_INSTANT 100
 signed char textSpeed=1;
@@ -442,6 +458,7 @@ legArchive soundArchive;
 signed char lastVoiceSlot=-1;
 int foundSetImgIndex = -1;
 signed char vndsSpritesFade=1;
+char textDisplayModeOverriden=0; // If the text display mode has been changed manually by the script
 
 //
 signed char forceShowQuit=-1;
@@ -453,6 +470,9 @@ signed char forceScalingOption=-1;
 signed char forceTextBoxModeOption=-1;
 signed char forceVNDSFadeOption=-1;
 signed char forceDebugButton=-1;
+signed char forceResettingsButton = 1;
+signed char forceTextOverBGOption = 1;
+signed char forceFontSizeOption = 1;
 
 /*
 ====================================================
@@ -1306,7 +1326,17 @@ void outputLineWait(){
 		Draw(MessageBoxEnabled);
 		endDrawing();
 
-		if (wasJustPressed(SCE_CTRL_CROSS)){
+		int touch_bool = 0;
+		#if PLATFORM == PLAT_VITA
+			memcpy(touch_old, touch, sizeof(touch_old));
+			int port,i;
+			for (port = 0; port < SCE_TOUCH_PORT_MAX_NUM; port++){
+				sceTouchPeek(port, &touch[port], 1);
+			}
+			touch_bool = vndsVitaTouch && ((touch[SCE_TOUCH_PORT_FRONT].reportNum == 1) && (touch_old[SCE_TOUCH_PORT_FRONT].reportNum == 0));
+		#endif
+
+		if (wasJustPressed(SCE_CTRL_CROSS) || touch_bool ){
 			if (_didPressCircle==1){
 				showTextbox();
 			}
@@ -3209,9 +3239,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 
 		Draw(0);
 
-
-
-		drawRectangle(textboxXOffset,0,outputLineScreenWidth-textboxXOffset,screenHeight,0,230,255,200);
+		drawRectangle(textboxXOffset,0,outputLineScreenWidth-textboxXOffset,screenHeight,230,255,200,150);
 		for (i = 0; i < HISTORYONONESCREEN; i++){
 			goodDrawTextColored(textboxXOffset,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
 		}
@@ -3288,9 +3316,12 @@ void RunGameSpecificLua(){
 	if (checkFileExist(_completedSpecificLuaPath)){
 		printf("Game specific LUA found.\n");
 		if(luaL_dofile(L,_completedSpecificLuaPath)==1){
-			LazyMessage("Error in Lua file",_completedSpecificLuaPath,NULL,NULL);
+			LazyMessage("Error in Lua file",_completedSpecificLuaPath,NULL,lua_tostring(L,-1));
+			printf("%s\n",lua_tostring(L,-1));
 		}
 	}
+	// Just in case
+	applyTextboxChanges();
 }
 void generateADVBoxPath(char* _passedStringBuffer, char* _passedSystemString){
 	strcpy(_passedStringBuffer,streamingAssets);
@@ -4449,6 +4480,7 @@ void scriptOptionsEnableVoiceSetting(nathanscriptVariable* _passedArguments, int
 	return;
 }
 void scriptOptionsSetTextMode(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	textDisplayModeOverriden=1;
 	gameTextDisplayMode = nathanvariableToInt(&_passedArguments[0]);
 	applyTextboxChanges();
 	return;
@@ -4465,6 +4497,23 @@ void scriptOptionsCanChangeBoxAlpha(nathanscriptVariable* _passedArguments, int 
 	canChangeBoxAlpha = nathanvariableToBool(&_passedArguments[0]);
 	return;
 }
+
+// Srttings menu override
+EASYLUAINTSETFUNCTION(oMenuQuit,forceShowQuit)
+EASYLUAINTSETFUNCTION(oMenuVNDSSettings,forceShowVNDSSettings)
+EASYLUAINTSETFUNCTION(oMenuVNDSSave,forceShowVNDSSave)
+EASYLUAINTSETFUNCTION(oMenuRestartBGM,forceShowRestartBGM)
+EASYLUAINTSETFUNCTION(oMenuArtLocations,forceArtLocationSlot)
+EASYLUAINTSETFUNCTION(oMenuScalingOption,forceScalingOption)
+EASYLUAINTSETFUNCTION(oMenuVNDSBustFade,forceVNDSFadeOption)
+EASYLUAINTSETFUNCTION(oMenuDebugButton,forceDebugButton)
+EASYLUAINTSETFUNCTION(oMenuTextboxMode,forceTextBoxModeOption) // ADV or NVL
+EASYLUAINTSETFUNCTION(oMenuTextOverBG,forceTextOverBGOption) // text only over background
+// Manually set the options if you've chosen to disable the menu option
+EASYLUAINTSETFUNCTION(textOnlyOverBackground,textOnlyOverBackground);
+EASYLUAINTSETFUNCTION(dynamicAdvBoxHeight,dynamicAdvBoxHeight);
+EASYLUAINTSETFUNCTION(advboxHeight,advboxHeight) 
+
 // normal image 1, hover image 1, select image 1, normal image 2, hover image 2, select image 2
 void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	int i;
@@ -4874,12 +4923,30 @@ void _settingsChangeAuto(int* _storeValue, char* _storeString){
 	}
 	itoa(*_storeValue,_storeString,10);
 }
+
+void overrideIfSet(signed char* _possibleTarget, signed char _possibleOverride){
+	if (_possibleOverride!=-1){
+		*_possibleTarget = _possibleOverride;
+	}
+}
+
 #define ISTEXTSPEEDBAR 0
-#define MAXOPTIONSSETTINGS 21
+#define MAXOPTIONSSETTINGS 22
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
 	b = _maxOptionSlotUsed;
 void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption, signed char _showVNDSFadeOption, signed char _showDebugButton){
+	// Allow global overide for settings
+	overrideIfSet(&_shouldShowQuit,forceShowQuit);
+	overrideIfSet(&_shouldShowVNDSSettings,forceShowVNDSSettings);
+	overrideIfSet(&_shouldShowVNDSSave,forceShowVNDSSave);
+	overrideIfSet(&_shouldShowRestartBGM,forceShowRestartBGM);
+	overrideIfSet(&_showArtLocationSlot,forceArtLocationSlot);
+	overrideIfSet(&_showScalingOption,forceScalingOption);
+	overrideIfSet(&_showTextBoxModeOption,forceTextBoxModeOption);
+	overrideIfSet(&_showVNDSFadeOption,forceVNDSFadeOption);
+	overrideIfSet(&_showDebugButton,forceDebugButton);
+
 	controlsStart();
 	controlsEnd();
 	PlayMenuSound();
@@ -4902,6 +4969,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	char _maxOptionSlotUsed=0;
 
 	// Dynamic slots
+	signed char _resettingsSlot=-2;
+	signed char _textOverBGSlot=-2;
+	signed char _fontSizeSlot=-2;
 	signed char _vndsSaveOptionsSlot=-2;
 	signed char _vndsHitBottomActionSlot=-2;
 	signed char _restartBgmActionSlot=-2;
@@ -4915,6 +4985,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	signed char _autoModeSpeedVoiceSlot=-2;
 	signed char _vndsBustFadeEnableSlot=-2;
 	signed char _debugButtonSlot=-2;
+	#if PLATFORM == PLAT_VITA
+		signed char _vndsVitaTouchSlot=-2;
+	#endif
 	
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
@@ -4941,12 +5014,15 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	#endif
 	_settingsOptionsMainText[2] = "BGM Volume:";
 	_settingsOptionsMainText[3] = "SE Volume:";
-	_settingsOptionsMainText[4] = "Font Size";
-	_settingsOptionsMainText[5] = "Defaults";
-	_settingsOptionsMainText[6] = "Textbox:";
-	_settingsOptionsMainText[7] = "Text Speed:";
-	_maxOptionSlotUsed=7;
+	//_settingsOptionsMainText[4] = "Font Size";
+	//_settingsOptionsMainText[5] = "Defaults";
+	//_settingsOptionsMainText[6] = "Textbox:";
+	_settingsOptionsMainText[4] = "Text Speed:";
+	_maxOptionSlotUsed=4;
 	// Add new, optional settings here
+	if (forceTextOverBGOption){
+		SETTINGSMENU_EASYADDOPTION("Textbox:",_textOverBGSlot);
+	}
 	SETTINGSMENU_EASYADDOPTION("Auto Speed:",_autoModeSpeedSlot);
 	SETTINGSMENU_EASYADDOPTION("Auto Voiced Speed:",_autoModeSpeedVoiceSlot);
 	if (canChangeBoxAlpha){
@@ -4980,6 +5056,15 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	if (_showDebugButton){
 		SETTINGSMENU_EASYADDOPTION("Debug",_debugButtonSlot);
 	}
+	if (forceResettingsButton){
+		SETTINGSMENU_EASYADDOPTION("Defaults",_resettingsSlot);
+	}
+	if (forceFontSizeOption){
+		SETTINGSMENU_EASYADDOPTION("Font Size",_fontSizeSlot);
+	}
+	#if PLATFORM == PLAT_VITA
+		SETTINGSMENU_EASYADDOPTION("Vita Touch:",_vndsVitaTouchSlot);
+	#endif
 	// Quit button is always last
 	if (currentGameStatus!=GAMESTATUS_TITLE){
 		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Quit";
@@ -4989,6 +5074,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	// Set values here
 	//////////////////
 	// Set pointers to menu option value text
+	if (forceTextOverBGOption){
+		_settingsOptionsValueText[_textOverBGSlot] = textOnlyOverBackground ? "Small" : "Full";
+	}
 	_settingsOptionsValueText[_autoModeSpeedSlot]=&(_tempAutoModeString[0]);
 	_settingsOptionsValueText[_autoModeSpeedVoiceSlot]=&(_tempAutoModeVoiceString[0]);
 	if (hasOwnVoiceSetting){
@@ -5006,12 +5094,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	if (canChangeBoxAlpha){
 		_settingsOptionsValueText[_messageBoxAlphaSlot] = &(_tempItoaHoldBoxAlpha[0]);
 	}
-	if (textOnlyOverBackground){
-		_settingsOptionsValueText[6] = "Small";
-	}else{
-		_settingsOptionsValueText[6] = "Full";
-	}
-	_settingsOptionsValueText[7] = &(_tempItoaHoldTextSpeed[0]);
+	_settingsOptionsValueText[4] = &(_tempItoaHoldTextSpeed[0]);
 	if (_shouldShowVNDSSave){
 		_settingsOptionsValueText[_vndsSaveOptionsSlot]=&(_tempHoldSaveSlotSelection[0]);
 	}
@@ -5036,6 +5119,14 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			_settingsOptionsValueText[_vndsBustFadeEnableSlot]="Off";
 		}
 	}
+
+	#if PLATFORM == PLAT_VITA
+		if(vndsVitaTouch){
+			_settingsOptionsValueText[_vndsVitaTouchSlot] = "On";
+		}else{
+			_settingsOptionsValueText[_vndsVitaTouchSlot] = "Off";
+		}
+	#endif
 
 	// Make strings
 	itoa(autoModeWait,_tempAutoModeString,10);
@@ -5104,7 +5195,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
-			}else if (_choice==7){
+			}else if (_choice==4){
 				textSpeed--;
 				if (textSpeed==-11){
 					textSpeed=-10;
@@ -5190,23 +5281,23 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
-			}else if (_choice==4){
+			}else if (_choice==_fontSizeSlot){
 				FontSizeSetup();
 				currentTextHeight = textHeight(fontSize);
-			}else if (_choice==5){
+			}else if (_choice==_resettingsSlot){
 				PlayMenuSound();
 				if (LazyChoice("This will reset your settings.","Is this okay?",NULL,NULL)==1){
 					resetSettings();
 					LazyMessage("Restart for the changes to","take effect.",NULL,NULL);
 				}
-			}else if (_choice==6){
+			}else if (_choice==_textOverBGSlot){
 				setTextOnlyOverBackground(!textOnlyOverBackground);
 				if (textOnlyOverBackground){
-					_settingsOptionsValueText[6] = "Small";
+					_settingsOptionsValueText[_textOverBGSlot] = "Small";
 				}else{
-					_settingsOptionsValueText[6] = "Full";
+					_settingsOptionsValueText[_textOverBGSlot] = "Full";
 				}
-			}else if (_choice==7){
+			}else if (_choice==4){
 				textSpeed++;
 				if (textSpeed==11){
 					textSpeed=TEXTSPEED_INSTANT;
@@ -5304,7 +5395,18 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				}
 			}else if (_choice==_debugButtonSlot){
 				debugMenuOption();
-			}else if (_choice==_maxOptionSlotUsed){ // Quit
+			}
+			#if PLATFORM == PLAT_VITA
+				else if (_choice==_vndsVitaTouchSlot){
+					vndsVitaTouch=!vndsVitaTouch;
+					if (vndsVitaTouch){
+						_settingsOptionsValueText[_vndsVitaTouchSlot]="On";
+					}else{
+						_settingsOptionsValueText[_vndsVitaTouchSlot]="Off";
+					}
+				}
+			#endif
+			else if (_choice==_maxOptionSlotUsed){ // Quit
 				#if PLATFORM == PLAT_3DS
 					lockBGM();
 				#endif
@@ -5994,7 +6096,9 @@ void NewGameMenu(){
 // Hold L to disable font loading
 // Hold R to disable all optional loading
 void VNDSNavigationMenu(){
-	switchTextDisplayMode(preferredTextDisplayMode);
+	if (!textDisplayModeOverriden){
+		switchTextDisplayMode(preferredTextDisplayMode);
+	}
 	controlsStart();
 	signed char _choice=0;
 	unsigned char _chosenSaveSlot=0;
@@ -6085,25 +6189,30 @@ void VNDSNavigationMenu(){
 
 		_choice = MenuControls(_choice,0,3);
 		if (wasJustPressed(SCE_CTRL_CROSS)){
-			if (_choice==0){
-				char _vndsSaveFileConcat[strlen(streamingAssets)+strlen("sav255")+1];
-				sprintf(_vndsSaveFileConcat,"%s%s%d",streamingAssets,"sav",_chosenSaveSlot);
-				if (checkFileExist(_vndsSaveFileConcat)){
-					vndsNormalLoad(_vndsSaveFileConcat);
-				}else{
-					LazyMessage("Save file",_vndsSaveFileConcat,"not exist.",NULL);
-				}
-			}else if (_choice==1){
-				char _vndsMainScriptConcat[strlen(streamingAssets)+strlen("/Scripts/main.scr")+1];
-				strcpy(_vndsMainScriptConcat,streamingAssets);
-				strcat(_vndsMainScriptConcat,"/Scripts/main.scr");
-				if (checkFileExist(_vndsMainScriptConcat)){
-					currentGameStatus = GAMESTATUS_MAINGAME;
-					changeMallocString(&currentScriptFilename,"main.scr");
-					nathanscriptDoScript(_vndsMainScriptConcat,0,inBetweenVNDSLines);
-					currentGameStatus = GAMESTATUS_NAVIGATIONMENU;
-				}else{
-					LazyMessage("Main script file",_vndsMainScriptConcat,"not exist.",NULL);
+
+			if (_choice<=1){
+				forceResettingsButton=0;
+				forceFontSizeOption=0;
+				if (_choice==0){
+					char _vndsSaveFileConcat[strlen(streamingAssets)+strlen("sav255")+1];
+					sprintf(_vndsSaveFileConcat,"%s%s%d",streamingAssets,"sav",_chosenSaveSlot);
+					if (checkFileExist(_vndsSaveFileConcat)){
+						vndsNormalLoad(_vndsSaveFileConcat);
+					}else{
+						LazyMessage("Save file",_vndsSaveFileConcat,"not exist.",NULL);
+					}
+				}else if (_choice==1){
+					char _vndsMainScriptConcat[strlen(streamingAssets)+strlen("/Scripts/main.scr")+1];
+					strcpy(_vndsMainScriptConcat,streamingAssets);
+					strcat(_vndsMainScriptConcat,"/Scripts/main.scr");
+					if (checkFileExist(_vndsMainScriptConcat)){
+						currentGameStatus = GAMESTATUS_MAINGAME;
+						changeMallocString(&currentScriptFilename,"main.scr");
+						nathanscriptDoScript(_vndsMainScriptConcat,0,inBetweenVNDSLines);
+						currentGameStatus = GAMESTATUS_NAVIGATIONMENU;
+					}else{
+						LazyMessage("Main script file",_vndsMainScriptConcat,"not exist.",NULL);
+					}
 				}
 			}else if (_choice==2){
 				SettingsMenu(0,1,0,0,0,0,1,1,0);
@@ -6272,27 +6381,14 @@ signed char init(){
 	// Check if the application came with a game embedded. If so, load it.
 	fixPath("isEmbedded.txt",globalTempConcat,TYPE_EMBEDDED);
 	if (checkFileExist(globalTempConcat)){
-		FILE* fp = fopen(globalTempConcat,"r");
-		if (fp==NULL){
-			LazyMessage("wut",NULL,NULL,NULL);
-		}else{
-			char _lastRead=0;
-			char _vndsEmbedded=0;
-			if (fread(&_lastRead,1,1,fp)==1 && _lastRead=='1'){
-				_vndsEmbedded=1;
-			}
-			fclose(fp);
-			isEmbedMode=1;
+		isEmbedMode=1;
 
+		free(gamesFolder);
+		fixPath("",globalTempConcat,TYPE_EMBEDDED);
+		gamesFolder = strdup(globalTempConcat);
 
-			free(gamesFolder);
-			fixPath("",globalTempConcat,TYPE_EMBEDDED);
-			gamesFolder = strdup(globalTempConcat);
-
-			currentGameFolderName = strdup("game");
-
-			currentGameStatus = GAMESTATUS_LOADGAMEFOLDER;
-		}
+		currentGameFolderName = strdup("game");
+		currentGameStatus = GAMESTATUS_LOADGAMEFOLDER;
 	}else{
 		controlsStart();
 		if (!isDown(SCE_CTRL_RTRIGGER)){ // Hold R to skip default game check
@@ -6406,6 +6502,14 @@ int main(int argc, char *argv[]){
 	if (init()==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
+
+	#if PLATFORM == PLAT_VITA
+		sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
+		sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
+		sceTouchEnableTouchForce(SCE_TOUCH_PORT_FRONT);
+		sceTouchEnableTouchForce(SCE_TOUCH_PORT_BACK);
+	#endif
+
 	// Put stupid test stuff here
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
