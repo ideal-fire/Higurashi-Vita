@@ -30,7 +30,6 @@
 	TODO - Allow VNDS sound command to stop all sounds
 	TODO - SetSpeedOfMessage
 	TODO - Easy quicksave menu
-	TODO - If choices are too long, they get cut off. This problem is important enough for somebody to have noticed
 	TODO - With my setvar and if statement changes, I broke hima tip 09. But VNDSx acts the same as my program does when I run the script... VNDS Android exclusive features? Never worked in the first place?
 
 	Colored text example:
@@ -58,6 +57,7 @@
 #include <unistd.h>
 #include <pthread.h>
 #include <ctype.h> // toupper
+#include <stdarg.h>
 //
 #include <Lua/lua.h>
 #include <Lua/lualib.h>
@@ -232,7 +232,7 @@ lua_State* L = NULL;
 	Line_ContinueAfterTyping=0; (No wait after text display, go right to next script line)
 	Line_WaitForInput=1; (Wait for the player to click. Displays an arrow.)
 	Line_Normal=2; (Wait for the player to click. DIsplays a page icon and almost 100% of the time has the screen cleared with the next command)
-	LINE_RESERVED=3; (=This is a value that is guaranteed not to represent an actual line end type.)
+	LINE_RESERVED=3; (This is a value that is guaranteed not to represent an actual line end type.)
 */
 #define Line_ContinueAfterTyping 0
 #define Line_WaitForInput 1
@@ -442,6 +442,18 @@ legArchive soundArchive;
 signed char lastVoiceSlot=-1;
 int foundSetImgIndex = -1;
 signed char vndsSpritesFade=1;
+
+//
+signed char forceShowQuit=-1;
+signed char forceShowVNDSSettings=-1;
+signed char forceShowVNDSSave=-1;
+signed char forceShowRestartBGM=-1;
+signed char forceArtLocationSlot=-1;
+signed char forceScalingOption=-1;
+signed char forceTextBoxModeOption=-1;
+signed char forceVNDSFadeOption=-1;
+signed char forceDebugButton=-1;
+
 /*
 ====================================================
 */
@@ -1667,6 +1679,25 @@ void _LazyMessage(const char* stra, const char* strb, const char* strc, const ch
 		exitIfForceQuit();
 	}while (currentGameStatus!=GAMESTATUS_QUIT && _doWait);
 }
+/*
+void error( const char* _stringFormat, ... ) {
+	va_list _getLengthArgs;
+	va_list _doWriteArgs;
+	char* _completeString;
+
+	va_start( _getLengthArgs, _stringFormat );
+	va_copy(_doWriteArgs,_getLengthArgs); // vsnprintf modifies the state of _getLengthArgs so that we can't use it anymore, copy it so we can use it twice in total
+	_completeString = malloc(vsnprintf(NULL,0,_stringFormat,_getLengthArgs)+1); // Get the size it would've written
+	va_end( _getLengthArgs );
+	vsprintf(_completeString,_stringFormat,_doWriteArgs); // This should not overflow because we already got the exact size we'll need
+	va_end( _doWriteArgs ); // Even though it's a copy we still need to va_end it.
+
+	printf("%s\n",_completeString);
+	free(_completeString);
+}
+
+-- make a method called like wrapText, returns array of strings and int with length of aray
+*/
 void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd){
 	_LazyMessage(stra,strb,strc,strd,1);
 }
@@ -5984,7 +6015,7 @@ void VNDSNavigationMenu(){
 		fclose(fp);
 		imagesAreJpg=0;
 	}else{
-		if (!defaultGameIsSet){
+		if (!defaultGameIsSet && !isEmbedMode){
 			LazyMessage("VNDSVita Game Converter < v1.1",NULL,"Game may crash.",NULL);
 		}
 		printf("Is old game converter.\n");
@@ -6241,25 +6272,27 @@ signed char init(){
 	// Check if the application came with a game embedded. If so, load it.
 	fixPath("isEmbedded.txt",globalTempConcat,TYPE_EMBEDDED);
 	if (checkFileExist(globalTempConcat)){
-		isEmbedMode=1;
-		startLoadPresetSpecifiedInFile(globalTempConcat);
+		FILE* fp = fopen(globalTempConcat,"r");
+		if (fp==NULL){
+			LazyMessage("wut",NULL,NULL,NULL);
+		}else{
+			char _lastRead=0;
+			char _vndsEmbedded=0;
+			if (fread(&_lastRead,1,1,fp)==1 && _lastRead=='1'){
+				_vndsEmbedded=1;
+			}
+			fclose(fp);
+			isEmbedMode=1;
 
-		free(streamingAssets);
-		fixPath("game/",globalTempConcat,TYPE_EMBEDDED);
-		streamingAssets = malloc(strlen(globalTempConcat)+1);
-		strcpy(streamingAssets,globalTempConcat);
 
-		free(scriptFolder);
-		fixPath("game/Scripts/",globalTempConcat,TYPE_EMBEDDED);
-		scriptFolder = malloc(strlen(globalTempConcat)+1);
-		strcpy(scriptFolder,globalTempConcat);
+			free(gamesFolder);
+			fixPath("",globalTempConcat,TYPE_EMBEDDED);
+			gamesFolder = strdup(globalTempConcat);
 
-		free(presetFolder);
-		fixPath("",globalTempConcat,TYPE_EMBEDDED);
-		presetFolder = malloc(strlen(globalTempConcat)+1);
-		strcpy(presetFolder,globalTempConcat);
+			currentGameFolderName = strdup("game");
 
-		currentGameStatus = GAMESTATUS_LOADPRESET;
+			currentGameStatus = GAMESTATUS_LOADGAMEFOLDER;
+		}
 	}else{
 		controlsStart();
 		if (!isDown(SCE_CTRL_RTRIGGER)){ // Hold R to skip default game check
