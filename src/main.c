@@ -186,6 +186,13 @@ char* gamesFolder;
 #define BUST_STATUS_SPRITE_MOVE 4 // var 1 is x per frame, var 2 is y per frame
 #define BUST_STATUS_TRANSFORM_FADEIN 5 // The bust is fading into an already used slot. image is what the new texture is going to be thats fading in, transformTexture is the old texture that is fading out. var 1 is alpha per frame. added to image, subtracted from transformTexture.
 
+#if PLATFORM == PLAT_VITA
+	#include <psp2/touch.h>
+	SceTouchData touch_old[SCE_TOUCH_PORT_MAX_NUM];
+	SceTouchData touch[SCE_TOUCH_PORT_MAX_NUM];
+	signed char vndsVitaTouch=1;
+#endif
+
 void invertImage(CrossTexture* _passedImage, signed char _doInvertAlpha);
 typedef struct{
 	CrossTexture* image;
@@ -1294,7 +1301,17 @@ void outputLineWait(){
 		Draw(MessageBoxEnabled);
 		endDrawing();
 
-		if (wasJustPressed(SCE_CTRL_CROSS)){
+		int touch_bool = 0;
+		#if PLATFORM == PLAT_VITA
+			memcpy(touch_old, touch, sizeof(touch_old));
+			int port,i;
+			for (port = 0; port < SCE_TOUCH_PORT_MAX_NUM; port++){
+				sceTouchPeek(port, &touch[port], 1);
+			}
+			touch_bool = vndsVitaTouch && ((touch[SCE_TOUCH_PORT_FRONT].reportNum == 1) && (touch_old[SCE_TOUCH_PORT_FRONT].reportNum == 0));
+		#endif
+
+		if (wasJustPressed(SCE_CTRL_CROSS) || touch_bool ){
 			if (_didPressCircle==1){
 				showTextbox();
 			}
@@ -3180,7 +3197,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 
 
 
-		drawRectangle(textboxXOffset,0,outputLineScreenWidth-textboxXOffset,screenHeight,0,230,255,200);
+		drawRectangle(textboxXOffset,0,outputLineScreenWidth-textboxXOffset,screenHeight,230,255,200,150);
 		for (i = 0; i < HISTORYONONESCREEN; i++){
 			goodDrawTextColored(textboxXOffset,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],fontSize,0,0,0);
 		}
@@ -4844,7 +4861,7 @@ void _settingsChangeAuto(int* _storeValue, char* _storeString){
 	itoa(*_storeValue,_storeString,10);
 }
 #define ISTEXTSPEEDBAR 0
-#define MAXOPTIONSSETTINGS 21
+#define MAXOPTIONSSETTINGS 22
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
 	b = _maxOptionSlotUsed;
@@ -4884,6 +4901,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	signed char _autoModeSpeedVoiceSlot=-2;
 	signed char _vndsBustFadeEnableSlot=-2;
 	signed char _debugButtonSlot=-2;
+	#if PLATFORM == PLAT_VITA
+		signed char _vndsVitaTouchSlot=-2;
+	#endif
 	
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
@@ -4949,6 +4969,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	if (_showDebugButton){
 		SETTINGSMENU_EASYADDOPTION("Debug",_debugButtonSlot);
 	}
+	#if PLATFORM == PLAT_VITA
+		SETTINGSMENU_EASYADDOPTION("Vita Touch:",_vndsVitaTouchSlot);
+	#endif
 	// Quit button is always last
 	if (currentGameStatus!=GAMESTATUS_TITLE){
 		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Quit";
@@ -5005,6 +5028,14 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			_settingsOptionsValueText[_vndsBustFadeEnableSlot]="Off";
 		}
 	}
+
+	#if PLATFORM == PLAT_VITA
+		if(vndsVitaTouch){
+			_settingsOptionsValueText[_vndsVitaTouchSlot] = "On";
+		}else{
+			_settingsOptionsValueText[_vndsVitaTouchSlot] = "Off";
+		}
+	#endif
 
 	// Make strings
 	itoa(autoModeWait,_tempAutoModeString,10);
@@ -5273,7 +5304,18 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				}
 			}else if (_choice==_debugButtonSlot){
 				debugMenuOption();
-			}else if (_choice==_maxOptionSlotUsed){ // Quit
+			}
+				#if PLATFORM == PLAT_VITA
+				else if (_choice==_vndsVitaTouchSlot){
+					vndsVitaTouch=!vndsVitaTouch;
+					if (vndsVitaTouch){
+						_settingsOptionsValueText[_vndsVitaTouchSlot]="On";
+					}else{
+						_settingsOptionsValueText[_vndsVitaTouchSlot]="Off";
+					}
+				}
+				#endif
+			else if (_choice==_maxOptionSlotUsed){ // Quit
 				#if PLATFORM == PLAT_3DS
 					lockBGM();
 				#endif
@@ -6373,6 +6415,14 @@ int main(int argc, char *argv[]){
 	if (init()==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
+
+	#if PLATFORM == PLAT_VITA
+		sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
+		sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
+		sceTouchEnableTouchForce(SCE_TOUCH_PORT_FRONT);
+		sceTouchEnableTouchForce(SCE_TOUCH_PORT_BACK);
+	#endif
+
 	// Put stupid test stuff here
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
