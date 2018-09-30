@@ -6127,6 +6127,10 @@ void VNDSNavigationMenu(){
 	if (!textDisplayModeOverriden){
 		switchTextDisplayMode(preferredTextDisplayMode);
 	}
+	// If the ADV box height won't change make sure the user doesn't make the font size huge
+	if (dynamicAdvBoxHeight==0){
+		forceFontSizeOption=0;
+	}
 	controlsStart();
 	signed char _choice=0;
 	unsigned char _chosenSaveSlot=0;
