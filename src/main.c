@@ -155,7 +155,8 @@
 // 9 adds preferredTextDisplayMode
 // 10 adds autoModeVoicedWait
 // 11 adds vndsSpritesFade
-#define OPTIONSFILEFORMAT 11
+// 12 adds vndsVitaTouch
+#define OPTIONSFILEFORMAT 12
 
 #define VNDSSAVEFORMAT 1
 
@@ -3149,6 +3150,7 @@ void SaveSettings(){
 	fwrite(&preferredTextDisplayMode,sizeof(signed char),1,fp);
 	fwrite(&autoModeVoicedWait,sizeof(int),1,fp);
 	fwrite(&vndsSpritesFade,sizeof(signed char),1,fp);
+	fwrite(&vndsVitaTouch,sizeof(signed char),1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -3210,6 +3212,9 @@ void LoadSettings(){
 		}
 		if (_tempOptionsFormat>=11){
 			fread(&vndsSpritesFade,sizeof(signed char),1,fp);
+		}
+		if (_tempOptionsFormat>=12){
+			fread(&vndsVitaTouch,sizeof(signed char),1,fp);
 		}
 		fclose(fp);
 
@@ -3768,7 +3773,7 @@ void vndsNormalLoad(char* _filename){
 
 	nathanscriptDoScript(_tempLoadedFilename,_readFilePosition,inBetweenVNDSLines);
 }
-char* easyVNDSSaveSlot(signed char _slot){
+char* easyVNDSSaveSlot(int _slot){
 	char* _tempSavefilePath = malloc(strlen(streamingAssets)+strlen("sav")+3+1);
 	sprintf(_tempSavefilePath,"%ssav%d",streamingAssets,_slot);
 	vndsNormalSave(_tempSavefilePath);
@@ -5001,6 +5006,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	signed char _resettingsSlot=-2;
 	signed char _textOverBGSlot=-2;
 	signed char _fontSizeSlot=-2;
+	signed char _textSpeedSlot=-2;
 	signed char _vndsSaveOptionsSlot=-2;
 	signed char _vndsHitBottomActionSlot=-2;
 	signed char _restartBgmActionSlot=-2;
@@ -5043,12 +5049,13 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	#endif
 	_settingsOptionsMainText[2] = "BGM Volume:";
 	_settingsOptionsMainText[3] = "SE Volume:";
-	//_settingsOptionsMainText[4] = "Font Size";
-	//_settingsOptionsMainText[5] = "Defaults";
-	//_settingsOptionsMainText[6] = "Textbox:";
-	_settingsOptionsMainText[4] = "Text Speed:";
-	_maxOptionSlotUsed=4;
+	_maxOptionSlotUsed=3;
+
 	// Add new, optional settings here
+	if (hasOwnVoiceSetting){
+		SETTINGSMENU_EASYADDOPTION("Voice Volume:",_voiceVolumeSlot);
+	}
+	SETTINGSMENU_EASYADDOPTION("Text Speed:",_textSpeedSlot);
 	if (forceTextOverBGOption){
 		SETTINGSMENU_EASYADDOPTION("Textbox:",_textOverBGSlot);
 	}
@@ -5059,9 +5066,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}
 	if (_showArtLocationSlot){
 		SETTINGSMENU_EASYADDOPTION("Bust Location:",_bustLocationSlot);
-	}
-	if (hasOwnVoiceSetting){
-		SETTINGSMENU_EASYADDOPTION("Voice Volume:",_voiceVolumeSlot);
 	}
 	if (_shouldShowRestartBGM==1){
 		SETTINGSMENU_EASYADDOPTION("Restart BGM",_restartBgmActionSlot);
@@ -5123,7 +5127,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	if (canChangeBoxAlpha){
 		_settingsOptionsValueText[_messageBoxAlphaSlot] = &(_tempItoaHoldBoxAlpha[0]);
 	}
-	_settingsOptionsValueText[4] = &(_tempItoaHoldTextSpeed[0]);
+	_settingsOptionsValueText[_textSpeedSlot] = &(_tempItoaHoldTextSpeed[0]);
 	if (_shouldShowVNDSSave){
 		_settingsOptionsValueText[_vndsSaveOptionsSlot]=&(_tempHoldSaveSlotSelection[0]);
 	}
@@ -5224,7 +5228,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
-			}else if (_choice==4){
+			}else if (_choice==_textSpeedSlot){
 				textSpeed--;
 				if (textSpeed==-11){
 					textSpeed=-10;
@@ -5326,7 +5330,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				}else{
 					_settingsOptionsValueText[_textOverBGSlot] = "Full";
 				}
-			}else if (_choice==4){
+			}else if (_choice==_textSpeedSlot){
 				textSpeed++;
 				if (textSpeed==11){
 					textSpeed=TEXTSPEED_INSTANT;

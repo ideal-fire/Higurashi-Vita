@@ -23,7 +23,7 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 void loadADVBox();
 int inBetweenVNDSLines(int _aboutToCommandIndex);
 char lazyLuaError(int _loadResult);
-char* easyVNDSSaveSlot(signed char _slot);
+char* easyVNDSSaveSlot(int _slot);
 typedef struct{
 	char** theArray;
 	unsigned char length;
