@@ -9,7 +9,7 @@ LIBS = -lGeneralGoodVita \
 	-lsamplerate \
 	-lpthread \
 	-lScePower_stub \
-	-lvita2d \
+	-lvita2dcustom \
 	-lSceDisplay_stub \
 	-lSceGxm_stub \
 	-lSceSysmodule_stub \
