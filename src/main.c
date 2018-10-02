@@ -3150,7 +3150,9 @@ void SaveSettings(){
 	fwrite(&preferredTextDisplayMode,sizeof(signed char),1,fp);
 	fwrite(&autoModeVoicedWait,sizeof(int),1,fp);
 	fwrite(&vndsSpritesFade,sizeof(signed char),1,fp);
-	fwrite(&vndsVitaTouch,sizeof(signed char),1,fp);
+	#if PLATFORM == PLAT_VITA
+		fwrite(&vndsVitaTouch,sizeof(signed char),1,fp);
+	#endif
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -3214,7 +3216,9 @@ void LoadSettings(){
 			fread(&vndsSpritesFade,sizeof(signed char),1,fp);
 		}
 		if (_tempOptionsFormat>=12){
-			fread(&vndsVitaTouch,sizeof(signed char),1,fp);
+			#if PLATFORM == PLAT_VITA
+				fread(&vndsVitaTouch,sizef(signed char),1,fp);
+			#endif
 		}
 		fclose(fp);
 
