@@ -1341,7 +1341,9 @@ void outputLineWait(){
 				}else if (wasJustPressed(SCE_CTRL_RIGHT)){
 					_selectedSlot=4;
 				}
-				easyVNDSSaveSlot(_selectedSlot);
+				char* _foundPath = easyVNDSSaveName(_selectedSlot);
+				vndsNormalSave(_foundPath);
+				free(_foundPath);
 				PlayMenuSound();
 				drawRectangle(0,0,screenWidth,screenHeight,0,255,0,255);
 			}
@@ -3636,6 +3638,16 @@ void loadVariableList(FILE* fp, nathanscriptGameVariable** _listToLoad, int* _to
 		nathanscriptConvertVariable(&((*_listToLoad)[_newVariableIndex].variable),_readCorrectVariableType);
 	}
 }
+char* easyVNDSSaveName(int _slot){
+	// Enough spaces for all valid paths
+	char* _tempSavefilePath = malloc(strlen(streamingAssets)+strlen(saveFolder)+strlen("embeddedGameSave")+10+1);
+	if (isEmbedMode){
+		sprintf(_tempSavefilePath,"%s%s%d",saveFolder,"embeddedGameSave",_slot);
+	}else{
+		sprintf(_tempSavefilePath,"%s%s%d",streamingAssets,"sav",_slot);
+	}
+	return _tempSavefilePath;
+}
 // unsigned char - format version
 // script filename relative to script folder
 // long int - position in the file
@@ -3776,12 +3788,6 @@ void vndsNormalLoad(char* _filename){
 	outputLineWait();
 
 	nathanscriptDoScript(_tempLoadedFilename,_readFilePosition,inBetweenVNDSLines);
-}
-char* easyVNDSSaveSlot(int _slot){
-	char* _tempSavefilePath = malloc(strlen(streamingAssets)+strlen("sav")+3+1);
-	sprintf(_tempSavefilePath,"%ssav%d",streamingAssets,_slot);
-	vndsNormalSave(_tempSavefilePath);
-	return _tempSavefilePath;
 }
 void _textboxTransition(char _isOn, int _totalTime){
 	if (MessageBoxEnabled!=_isOn && !isSkipping){
@@ -5387,7 +5393,8 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			}else if (_choice==_vndsSaveOptionsSlot){ // VNDS Save
 				if (!wasJustPressed(SCE_CTRL_RIGHT)){
 					PlayMenuSound();
-					char* _savedPath = easyVNDSSaveSlot(_chosenSaveSlot);
+					char* _savedPath = easyVNDSSaveName(_chosenSaveSlot);
+					vndsNormalSave(_savedPath);
 					LazyMessage("Saved to",_savedPath,NULL,NULL);
 					free(_savedPath);
 				}else{
@@ -6234,13 +6241,13 @@ void VNDSNavigationMenu(){
 				forceResettingsButton=0;
 				forceFontSizeOption=0;
 				if (_choice==0){
-					char _vndsSaveFileConcat[strlen(streamingAssets)+strlen("sav255")+1];
-					sprintf(_vndsSaveFileConcat,"%s%s%d",streamingAssets,"sav",_chosenSaveSlot);
-					if (checkFileExist(_vndsSaveFileConcat)){
-						vndsNormalLoad(_vndsSaveFileConcat);
+					char* _loadPath = easyVNDSSaveName(_chosenSaveSlot);
+					if (checkFileExist(_loadPath)){
+						vndsNormalLoad(_loadPath);
 					}else{
-						LazyMessage("Save file",_vndsSaveFileConcat,"not exist.",NULL);
+						LazyMessage("Save file",_loadPath,"not exist.",NULL);
 					}
+					free(_loadPath);
 				}else if (_choice==1){
 					char _vndsMainScriptConcat[strlen(streamingAssets)+strlen("/Scripts/main.scr")+1];
 					strcpy(_vndsMainScriptConcat,streamingAssets);
