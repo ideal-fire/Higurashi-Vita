@@ -874,6 +874,9 @@ signed int getChangePerFrame(signed int _totalRequiredChange, signed int _totalT
 	return atLeastOne(floor(((_totalRequiredChange)/(60*((double)_totalTime/1000)))));
 }
 void ClearMessageArray(char _doFadeTransition){
+	if (textSpeed==TEXTSPEED_INSTANT){
+		_doFadeTransition=0;
+	}
 	currentLine=0;
 	int i;
 	int _totalAddedToHistory=0;
