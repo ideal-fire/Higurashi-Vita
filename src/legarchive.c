@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdlib.h>
+#include <ctype.h>
 
 typedef struct{
 	char* filename;
@@ -69,11 +70,22 @@ signed char searchForString(FILE* fp, char* _searchTerm){
 }
 
 legArchiveFile getAdvancedFile(legArchive _passedArchive, const char* _passedFilename){
+	int32_t i;
+
+	// Make the passed string lowercase because the file list is stored lowercase
+	int _cachedStrlen = strlen(_passedFilename);
+	char _lowerString[_cachedStrlen+1];
+	_lowerString[_cachedStrlen]='\0';
+	for (i=0;i<_cachedStrlen;++i){
+		_lowerString[i]=tolower(_passedFilename[i]);
+	}
+
 	legArchiveFile _returnFile;
 	_returnFile.fp=NULL;
-	int32_t i;
 	for (i=0;i<_passedArchive.totalFiles;++i){
-		if (strcmp(_passedArchive.fileList[i].filename,_passedFilename)==0){
+		printf("%s;%s\n",_passedArchive.fileList[i].filename,_lowerString);
+		if (strcmp(_passedArchive.fileList[i].filename,_lowerString)==0){
+
 			_returnFile.fp = fopen(_passedArchive.filename,"r");
 			fseek(_returnFile.fp,_passedArchive.fileList[i].position,SEEK_SET);
 			_returnFile.internalPosition=0;
@@ -91,7 +103,7 @@ legArchiveFile getAdvancedFile(legArchive _passedArchive, const char* _passedFil
 FILE* openArchiveFile(legArchive _passedArchive, const char* _passedFilename){
 	return getAdvancedFile(_passedArchive,_passedFilename).fp;
 }
-char* readNullString(FILE* fp){
+char* readLowerNullString(FILE* fp){
 	char _currentRead[261];
 	int i;
 	for (i=0;;++i){
@@ -100,7 +112,7 @@ char* readNullString(FILE* fp){
 			_currentRead[i]='\0';
 			break;
 		}
-		_currentRead[i] = _lastReadChar;
+		_currentRead[i] = tolower(_lastReadChar);
 	}
 	char* _returnString = malloc(strlen(_currentRead)+1);
 	strcpy(_returnString,_currentRead);
@@ -133,7 +145,7 @@ legArchive loadLegArchive(const char* _filename){
 
 		int i;
 		for (i=0;i<_readTotalFiles;++i){
-			_returnArchive.fileList[i].filename = readNullString(fp);
+			_returnArchive.fileList[i].filename = readLowerNullString(fp);
 			fread(&(_returnArchive.fileList[i].position),8,1,fp);
 			fread(&(_returnArchive.fileList[i].length),4,1,fp);
 		}
