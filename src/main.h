@@ -24,7 +24,7 @@ void loadADVBox();
 int inBetweenVNDSLines(int _aboutToCommandIndex);
 char lazyLuaError(int _loadResult);
 char* easyVNDSSaveName(int _slot);
-void vndsNormalSave(char* _filename);
+char vndsNormalSave(char* _filename);
 typedef struct{
 	char** theArray;
 	unsigned char length;

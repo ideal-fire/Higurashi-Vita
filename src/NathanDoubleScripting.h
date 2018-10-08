@@ -81,7 +81,7 @@ nathanscriptFunction* nathanFunctionList=NULL;
 char** nathanFunctionNameList=NULL;
 char* nathanFunctionPropertyList=NULL;
 
-CROSSFILE* nathanscriptCurrentOpenFile;
+CROSSFILE* nathanscriptCurrentOpenFile=NULL;
 int nathanscriptFoundFiIndex; // Array index of the fi command from the line parser
 int nathanscriptFoundIfIndex;
 int nathanscriptFoundLabelIndex;

@@ -30,8 +30,6 @@
 	TODO - SetSpeedOfMessage
 	TODO - With my setvar and if statement changes, I broke hima tip 09. But VNDSx acts the same as my program does when I run the script... VNDS Android exclusive features? Never worked in the first place?
 	TODO - Store last used VNDS load slot, set default save slot to the one you loaded.
-	TODO - Load a VNDS save and then try to save right after
-		using quicksave?
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -1348,10 +1346,11 @@ void outputLineWait(){
 					_selectedSlot=4;
 				}
 				char* _foundPath = easyVNDSSaveName(_selectedSlot);
-				vndsNormalSave(_foundPath);
+				if (!vndsNormalSave(_foundPath)){
+					PlayMenuSound();
+					drawRectangle(0,0,screenWidth,screenHeight,0,255,0,255);
+				}
 				free(_foundPath);
-				PlayMenuSound();
-				drawRectangle(0,0,screenWidth,screenHeight,0,255,0,255);
 			}
 		}
 		endDrawing();
@@ -3666,7 +3665,11 @@ char* easyVNDSSaveName(int _slot){
 // string - lastBGMFilename
 // int - lastBGMVolume
 // game variables
-void vndsNormalSave(char* _filename){
+char vndsNormalSave(char* _filename){
+	if (nathanscriptCurrentOpenFile==NULL){
+		return 1;
+	}
+
 	FILE* fp = fopen(_filename,"wb");
 	
 	// Save options file format
@@ -3715,6 +3718,7 @@ void vndsNormalSave(char* _filename){
 	// Write game specific var list
 	saveVariableList(fp,nathanscriptGamevarList,nathanscriptTotalGamevar); //
 	fclose(fp);
+	return 0;
 }
 void vndsNormalLoad(char* _filename){
 	FILE* fp = fopen(_filename,"rb");
@@ -5400,8 +5404,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				if (!wasJustPressed(SCE_CTRL_RIGHT)){
 					PlayMenuSound();
 					char* _savedPath = easyVNDSSaveName(_chosenSaveSlot);
-					vndsNormalSave(_savedPath);
-					LazyMessage("Saved to",_savedPath,NULL,NULL);
+					if (!vndsNormalSave(_savedPath)){
+						LazyMessage("Saved to",_savedPath,NULL,NULL);
+					}
 					free(_savedPath);
 				}else{
 					_chosenSaveSlot++;
