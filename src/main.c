@@ -29,6 +29,9 @@
 	TODO - Allow VNDS sound command to stop all sounds
 	TODO - SetSpeedOfMessage
 	TODO - With my setvar and if statement changes, I broke hima tip 09. But VNDSx acts the same as my program does when I run the script... VNDS Android exclusive features? Never worked in the first place?
+	TODO - Store last used VNDS load slot, set default save slot to the one you loaded.
+	TODO - Load a VNDS save and then try to save right after
+		using quicksave?
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -6170,7 +6173,7 @@ void VNDSNavigationMenu(){
 		imagesAreJpg=0;
 	}else{
 		if (!defaultGameIsSet && !isEmbedMode){
-			LazyMessage("VNDSVita Game Converter < v1.1",NULL,"Game may crash.",NULL);
+			//LazyMessage("VNDSVita Game Converter < v1.1",NULL,"Game may crash.",NULL);
 		}
 		printf("Is old game converter.\n");
 	}
