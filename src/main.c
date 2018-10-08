@@ -30,6 +30,7 @@
 	TODO - SetSpeedOfMessage
 	TODO - With my setvar and if statement changes, I broke hima tip 09. But VNDSx acts the same as my program does when I run the script... VNDS Android exclusive features? Never worked in the first place?
 	TODO - Store last used VNDS load slot, set default save slot to the one you loaded.
+	TODO - Account for image chars in text width
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -111,6 +112,9 @@
 #define MAXSOUNDEFFECTARRAY 10
 #define IMAGECHARSPACESTRING "   "
 #define MESSAGEEDGEOFFSET 10
+
+#define DROPSHADOWOFFX 1
+#define DROPSHADOWOFFY 1
 
 #define PREFER_DIR_BGM 0
 #define PREFER_DIR_SE 1
@@ -608,6 +612,17 @@ CrossTexture* LoadEmbeddedPNG(const char* path){
 	}
 	return _tempTex;
 }
+void drawDropshadowTextSpecific(int _x, int _y, char* _message, double _passedSize, int _r, int _g, int _b, int _dropshadowR, int _dropshadowG, int _dropshadowB, int _a){
+	//#if PLATFORM == PLAT_VITA
+	//	vita2d_font_draw_text_dropshadow(fontImage,fixX(textboxXOffset+messageInBoxXOffset),fixY(messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight)),RGBA8(_r,_g,_b,_a),fontSize,(char*)currentMessages[i],DROPSHADOWOFFX,DROPSHADOWOFFY,RGBA8(_dropshadowR,_dropshadowG,_dropshadowB,_a));
+	//#else
+		goodDrawTextColoredAlpha(_x+DROPSHADOWOFFX,_y+DROPSHADOWOFFY,_message,_passedSize,_dropshadowR,_dropshadowG,_dropshadowB,_a);
+		goodDrawTextColoredAlpha(_x,_y,_message,_passedSize,_r,_g,_b,_a);
+	//#endif
+}
+void drawDropshadowText(int _x, int _y, char* _message, double _passedSize, int _a){
+	drawDropshadowTextSpecific(_x,_y,_message,_passedSize,255,255,255,0,0,0,_a);
+}
 // Number of lines to draw is not zero based
 void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
 	if (_maxDrawLine==-1){
@@ -631,19 +646,13 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
 			return;
 		}
 	#endif
-	if (_alpha==255){
-		for (i = 0; i < _maxDrawLine; i++){
-			goodDrawText(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
-		}
-	}else{
-		for (i = 0; i < _maxDrawLine; i++){
-			goodDrawTextColoredAlpha(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize,255,255,255,_alpha);
-		}
+	for (i = 0; i < _maxDrawLine; i++){
+		drawDropshadowText(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize,_alpha);
 	}
 	
 	for (i=0;i<MAXIMAGECHAR;i++){
 		if (imageCharType[i]!=-1){
-			drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(fontSize,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
+			drawTextureScaleAlpha(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(fontSize,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])),_alpha);
 		}
 	}
 }
@@ -2991,7 +3000,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			char _tempCharCache = currentMessages[_currentDrawLine][_currentDrawChar+1];
 			currentMessages[_currentDrawLine][_currentDrawChar+1]='\0';
 			for (i = 0; i <= _currentDrawLine; i++){
-				goodDrawText(textboxXOffset+messageInBoxXOffset,12+messageInBoxYOffset+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize);
+				drawDropshadowText(textboxXOffset+messageInBoxXOffset,12+messageInBoxYOffset+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize,255);
 			}
 			currentMessages[_currentDrawLine][_currentDrawChar+1]=_tempCharCache;
 			for (i=0;i<MAXIMAGECHAR;i++){
@@ -3224,7 +3233,7 @@ void LoadSettings(){
 		}
 		if (_tempOptionsFormat>=12){
 			#if PLATFORM == PLAT_VITA
-				fread(&vndsVitaTouch,sizef(signed char),1,fp);
+				fread(&vndsVitaTouch,sizeof(signed char),1,fp);
 			#endif
 		}
 		fclose(fp);
