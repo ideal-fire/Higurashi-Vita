@@ -161,7 +161,8 @@
 // 10 adds autoModeVoicedWait
 // 11 adds vndsSpritesFade
 // 12 adds vndsVitaTouch
-#define OPTIONSFILEFORMAT 12
+// 13 adds dropshadowOn
+#define OPTIONSFILEFORMAT 13
 
 #define VNDSSAVEFORMAT 1
 
@@ -367,6 +368,7 @@ signed char cpuOverclocked=0;
 #define TEXTMODE_AVD 1 // Wrong spelling
 #define TEXTMODE_ADV 1
 char gameTextDisplayMode=TEXTMODE_NVL;
+signed char dropshadowOn=1;
 char hasOwnVoiceSetting=0;
 
 unsigned char graphicsLocation = LOCATION_CGALT;
@@ -477,6 +479,7 @@ signed char forceDebugButton=-1;
 signed char forceResettingsButton = 1;
 signed char forceTextOverBGOption = 1;
 signed char forceFontSizeOption = 1;
+signed char forceDropshadowOption=1;
 
 /*
 ====================================================
@@ -623,6 +626,15 @@ void drawDropshadowTextSpecific(int _x, int _y, char* _message, double _passedSi
 void drawDropshadowText(int _x, int _y, char* _message, double _passedSize, int _a){
 	drawDropshadowTextSpecific(_x,_y,_message,_passedSize,255,255,255,0,0,0,_a);
 }
+// Draw text intended to be used for the game, respects dropshadow setting
+void drawTextGame(int _x, int _y, char* _message, double _passedSize, int _a){
+	if (dropshadowOn){
+		drawDropshadowTextSpecific(_x,_y,_message,_passedSize,255,255,255,0,0,0,_a);
+	}else{
+		goodDrawTextColoredAlpha(_x,_y,_message,_passedSize,255,255,255,_a);
+	}
+}
+
 // Number of lines to draw is not zero based
 void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
 	if (_maxDrawLine==-1){
@@ -647,7 +659,7 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
 		}
 	#endif
 	for (i = 0; i < _maxDrawLine; i++){
-		drawDropshadowText(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize,_alpha);
+		drawTextGame(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize,_alpha);
 	}
 	
 	for (i=0;i<MAXIMAGECHAR;i++){
@@ -3000,7 +3012,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			char _tempCharCache = currentMessages[_currentDrawLine][_currentDrawChar+1];
 			currentMessages[_currentDrawLine][_currentDrawChar+1]='\0';
 			for (i = 0; i <= _currentDrawLine; i++){
-				drawDropshadowText(textboxXOffset+messageInBoxXOffset,12+messageInBoxYOffset+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize,255);
+				drawTextGame(textboxXOffset+messageInBoxXOffset,12+messageInBoxYOffset+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],fontSize,255);
 			}
 			currentMessages[_currentDrawLine][_currentDrawChar+1]=_tempCharCache;
 			for (i=0;i<MAXIMAGECHAR;i++){
@@ -3169,6 +3181,7 @@ void SaveSettings(){
 	#if PLATFORM == PLAT_VITA
 		fwrite(&vndsVitaTouch,sizeof(signed char),1,fp);
 	#endif
+	fwrite(&dropshadowOn,sizeof(signed char),1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -3235,6 +3248,9 @@ void LoadSettings(){
 			#if PLATFORM == PLAT_VITA
 				fread(&vndsVitaTouch,sizeof(signed char),1,fp);
 			#endif
+		}
+		if (_tempOptionsFormat>=13){
+			fread(&dropshadowOn,sizeof(signed char),1,fp);
 		}
 		fclose(fp);
 
@@ -4994,7 +5010,7 @@ void overrideIfSet(signed char* _possibleTarget, signed char _possibleOverride){
 }
 
 #define ISTEXTSPEEDBAR 0
-#define MAXOPTIONSSETTINGS 22
+#define MAXOPTIONSSETTINGS 23
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
 	b = _maxOptionSlotUsed;
@@ -5049,6 +5065,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	signed char _autoModeSpeedVoiceSlot=-2;
 	signed char _vndsBustFadeEnableSlot=-2;
 	signed char _debugButtonSlot=-2;
+	signed char _dropshadowSlot=-2;
 	#if PLATFORM == PLAT_VITA
 		signed char _vndsVitaTouchSlot=-2;
 	#endif
@@ -5123,6 +5140,10 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}
 	if (forceFontSizeOption){
 		SETTINGSMENU_EASYADDOPTION("Font Size",_fontSizeSlot);
+	}
+	if (forceDropshadowOption){
+		SETTINGSMENU_EASYADDOPTION("Drop Shadow:",_dropshadowSlot);
+		_settingsOptionsValueText[_dropshadowSlot] = charToSwitch(dropshadowOn);
 	}
 	#if PLATFORM == PLAT_VITA
 		SETTINGSMENU_EASYADDOPTION("Vita Touch:",_vndsVitaTouchSlot);
@@ -5469,7 +5490,10 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					}
 				}
 			#endif
-			else if (_choice==_maxOptionSlotUsed){ // Quit
+			else if (_choice==_dropshadowSlot){
+				dropshadowOn = !dropshadowOn;
+				_settingsOptionsValueText[_dropshadowSlot] = charToSwitch(dropshadowOn);
+			}else if (_choice==_maxOptionSlotUsed){ // Quit
 				#if PLATFORM == PLAT_3DS
 					lockBGM();
 				#endif
