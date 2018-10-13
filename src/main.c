@@ -3437,8 +3437,8 @@ void createRequiredDirectories(){
 		createDirectory("/3ds/data/");
 		createDirectory("/3ds/data/HIGURASHI/");
 	#endif
-	createDirectory(saveFolder);
 	createDirectory(DATAFOLDER);
+	createDirectory(saveFolder);
 }
 void startLoadPresetSpecifiedInFile(char* _presetFilenameFile){
 	FILE* fp;
