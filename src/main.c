@@ -2857,48 +2857,44 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			}else{
 				//http://jafrog.com/2013/11/23/colors-in-terminal.html
 				if (message[i]=='\\' || message[i]=='x'){ // I saw that Umineko VNDS doesn't use a backslash before
-					#if __GNUC__==8 && __GNUC_MINOR__==2
-						#warning Needed to disable color markup check because gcc bug
-					#else
-						if (totalMessageLength-i>=strlen("x1b[0m")+(message[i]=='\\')){
-							if (strncmp(&(message[i+(message[i]=='\\')]),"x1b[",strlen("x1b["))==0){
-								int _oldIndex=i;
-								// Advance to the x character if we chose to use backslash
-								if (message[i]=='\\'){
-									i++;
-								}
-								i+=4; // We're now in the parameters
-								int _mSearchIndex;
-								for (_mSearchIndex=i;_mSearchIndex<totalMessageLength;++_mSearchIndex){
-									if (message[_mSearchIndex]=='m'){
-										break;
-									}
-								}
-								// If found the ending
+					if (totalMessageLength-i>=strlen("x1b[0m")+(message[i]=='\\')){
+						if (strncmp(&(message[i+(message[i]=='\\')]),"x1b[",strlen("x1b["))==0){
+							int _oldIndex=i;
+							// Advance to the x character if we chose to use backslash
+							if (message[i]=='\\'){
+								i++;
+							}
+							i+=4; // We're now in the parameters
+							int _mSearchIndex;
+							for (_mSearchIndex=i;_mSearchIndex<totalMessageLength;++_mSearchIndex){
 								if (message[_mSearchIndex]=='m'){
-									// TODO - Do stuff with the found color code
-									if (message[i]=='0'){ // If we're resetting the color
-	
-									}else{
-										int _semiColonSearchIndex;
-										for (_semiColonSearchIndex=i;_semiColonSearchIndex<_mSearchIndex;++_semiColonSearchIndex){
-											if (message[_semiColonSearchIndex]==';'){
-												break;
-											}
-										}
-										message[_semiColonSearchIndex]=0;
-										printf("the number is %s\n",&(message[i]));
-										message[_semiColonSearchIndex]=';';
-									}
-									i=_oldIndex;
-									memset(&(message[i]),1,_mSearchIndex-i+1);
-								}else{
-									printf("Failed to parse color markup");
-									i=_oldIndex; // Must be invalid otherwise
+									break;
 								}
 							}
+							// If found the ending
+							if (message[_mSearchIndex]=='m'){
+								// TODO - Do stuff with the found color code
+								if (message[i]=='0'){ // If we're resetting the color
+	
+								}else{
+									int _semiColonSearchIndex;
+									for (_semiColonSearchIndex=i;_semiColonSearchIndex<_mSearchIndex;++_semiColonSearchIndex){
+										if (message[_semiColonSearchIndex]==';'){
+											break;
+										}
+									}
+									message[_semiColonSearchIndex]=0;
+									printf("the number is %s\n",&(message[i]));
+									message[_semiColonSearchIndex]=';';
+								}
+								i=_oldIndex;
+								memset(&(message[i]),1,_mSearchIndex-i+1);
+							}else{
+								printf("Failed to parse color markup");
+								i=_oldIndex; // Must be invalid otherwise
+							}
 						}
-					#endif
+					}
 				}
 			}
 		}
