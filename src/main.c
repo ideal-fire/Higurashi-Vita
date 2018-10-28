@@ -31,6 +31,8 @@
 	TODO - With my setvar and if statement changes, I broke hima tip 09. But VNDSx acts the same as my program does when I run the script... VNDS Android exclusive features? Never worked in the first place?
 	TODO - Store last used VNDS load slot, set default save slot to the one you loaded.
 	TODO - Account for image chars in text width
+	TODO - In vndsSaveSelector wrap the text.
+		Make that shared text wrapping function I always dreamed of
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -64,6 +66,7 @@
 #include <Lua/lauxlib.h>
 //
 #include "legarchive.h"
+#include "utils.h"
 
 #define LOCATION_UNDEFINED 0
 #define LOCATION_CG 1
@@ -1475,6 +1478,12 @@ double GetYOffsetScale(CrossTexture* _tempImg){
 		}
 		return ( getTextureHeight(_tempImg)/(float)scriptScreenHeight);
 	}
+}
+void drawHallowRect(int _x, int _y, int _w, int _h, int _thick, int _r, int _g, int _b, int _a){
+	drawRectangle(_x,_y,_thick,_h,_r,_g,_b,_a);
+	drawRectangle(_x+_w-_thick,_y,_thick,_h,_r,_g,_b,_a);
+	drawRectangle(_x,_y,_w,_thick,_r,_g,_b,_a);
+	drawRectangle(_x,_y+_h-_thick,_w,_thick,_r,_g,_b,_a);
 }
 void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlpha){
 	if (passedBackground!=NULL){
@@ -3633,6 +3642,11 @@ void saveVariableList(FILE* fp, nathanscriptGameVariable* _listToSave, int _tota
 		nathanscriptConvertVariable(&(_listToSave[i].variable),_correctVariableType);
 	}
 }
+void skipLengthStringInFile(FILE* fp){
+	short _tempFoundStrlen;
+	fread(&_tempFoundStrlen,sizeof(short),1,fp);
+	fseek(fp,_tempFoundStrlen,SEEK_CUR);
+}
 char* readLengthStringFromFile(FILE* fp){
 	short _tempFoundStrlen;
 	fread(&_tempFoundStrlen,sizeof(short),1,fp);
@@ -4757,10 +4771,7 @@ char upgradeToGameFolder(){
 		ClearMessageArray(0);
 		controlsStart();
 		controlsEnd();
-
-		char _bigMessageBuffer[strlen("Now that you've upgraded one or more of your StreamingAssets folders to include the preset file, you need to move all your StreamingAssets folder(s) using VitaShell or MolecularShell to\n\nYou will need to create that games folder first. After you create that game folder, you won't be able to use preset mode anymore, so make sure you've upgraded all of your StreamingAssets folders before.")+strlen(gamesFolder)+1];
-		sprintf(_bigMessageBuffer,"Now that you've upgraded one or more of your StreamingAssets folders to include the preset file, you need to move all your StreamingAssets folder(s) using VitaShell or MolecularShell to\n%s\nYou will need to create that games folder first. After you create that game folder, you won't be able to use preset mode anymore, so make sure you've upgraded all of your StreamingAssets folders before.",gamesFolder);
-
+		char* _bigMessageBuffer = easySprintf("Now that you've upgraded one or more of your StreamingAssets folders to include the preset file, you need to move all your StreamingAssets folder(s) using VitaShell or MolecularShell to\n%s\nYou will need to create that games folder first. After you create that game folder, you won't be able to use preset mode anymore, so make sure you've upgraded all of your StreamingAssets folders before.",gamesFolder);
 		OutputLine(_bigMessageBuffer,Line_WaitForInput,0);
 		while (!wasJustPressed(SCE_CTRL_CROSS)){
 			fpsCapStart();
@@ -4771,6 +4782,7 @@ char upgradeToGameFolder(){
 			controlsStart();
 			fpsCapWait();
 		}
+		free(_bigMessageBuffer);
 	}else{
 		LazyMessage("You did not upgrade any folders.",NULL,NULL,NULL);
 	}
@@ -6176,9 +6188,149 @@ void NewGameMenu(){
 		fpsCapWait();
 	}
 }
+#define SAVESELECTORRECTTHICK 5
+#define MAXSAVESLOT 258 // Divisible by 6
+// Returns selected slot or -1
+int vndsSaveSelector(){
+	controlsStart();
+	controlsEnd();
+	// screenWidth/3/2 free space for each text
+	int _slotWidth = screenWidth/2;
+	int _slotHeight = screenHeight/3;
+
+	CrossTexture* _loadedThumbnail[6]={NULL};
+	char* _loadedTextThumb[6]={NULL};
+
+	char _reloadThumbs=1;
+
+	// Preserve these between calls for easy slot selection
+	static int _selected=0;
+	static int _slotOffset=0;
+	while(1){
+		int i;
+		controlsStart();
+		if (wasJustPressed(SCE_CTRL_RIGHT)){
+			if (isDown(SCE_CTRL_RTRIGGER)){
+				_slotOffset+=6*5;
+				_reloadThumbs=1;
+			}else{
+				if ((_selected&1)==1){
+					_slotOffset+=6;
+					--_selected;
+					_reloadThumbs=1;
+				}else{
+					++_selected;
+				}
+			}
+		}if (wasJustPressed(SCE_CTRL_LEFT)){
+			if (isDown(SCE_CTRL_RTRIGGER)){
+				_slotOffset-=6*5;
+				_reloadThumbs=1;
+			}else{
+				if ((_selected&1)==0){
+					_slotOffset-=6;
+					++_selected;
+					_reloadThumbs=1;
+				}else{
+					--_selected;
+				}
+			}
+		}if (wasJustPressed(SCE_CTRL_UP)){
+			if (_selected>1){
+				_selected-=2;
+			}
+		}if (wasJustPressed(SCE_CTRL_DOWN)){
+			if (_selected<4){
+				_selected+=2;
+			}
+		}if (wasJustPressed(SCE_CTRL_CROSS)){
+			return _selected+_slotOffset;
+		}if (wasJustPressed(SCE_CTRL_CIRCLE)){
+			return -1;
+		}
+		controlsEnd();
+		if (_reloadThumbs){
+			if (_slotOffset<0){
+				_slotOffset=MAXSAVESLOT-6;
+			}else if (_slotOffset>MAXSAVESLOT-6){
+				_slotOffset=0;
+			}
+
+			_reloadThumbs=0;
+			for (i=0;i<3;++i){
+				int j;
+				for (j=0;j<2;++j){
+					int _trueIndex = j+i*2+_slotOffset;
+					char* _tempFilename = easyVNDSSaveName(_trueIndex);
+					if (checkFileExist(_tempFilename)){
+						FILE* fp = fopen(_tempFilename,"rb");
+						unsigned char _readFileFormat;
+						fread(&_readFileFormat,sizeof(unsigned char),1,fp);
+						if (_readFileFormat==1){
+							skipLengthStringInFile(fp); // Skip script filename
+							fseek(fp,sizeof(long int)+sizeof(int),SEEK_CUR); // Seek past position and MAXLINES
+							int _displayLine;
+							fread(&_displayLine,sizeof(int),1,fp);
+							if (_displayLine!=0){ // If the currentLine is 0 then it was a blank screen when saving
+								--_displayLine; // We'll show the last complete line
+								int k;
+								for (k=0;k<_displayLine;++k){
+									skipLengthStringInFile(fp);
+								}
+								_loadedTextThumb[j+i*2] = readLengthStringFromFile(fp);
+							}else{
+								_loadedTextThumb[j+i*2]=strdup(""); // Not NULL
+							}
+						}else{
+							_loadedTextThumb[j+i*2]=NULL;
+						}
+						fclose(fp);
+					}else{
+						_loadedTextThumb[j+i*2]=NULL;
+					}
+				}
+			}
+		}
+		startDrawing();
+		char _labelBuffer[17];
+		strcpy(_labelBuffer,"Slot ");
+		for (i=0;i<3;++i){
+			int j;
+			for (j=0;j<2;++j){
+				unsigned char _r;
+				unsigned char _g;
+				unsigned char _b;
+				if (_selected==j+i*2){
+					_r=0;
+					_g=255;
+					_b=0;
+				}else{
+					_r=255;
+					_g=255;
+					_b=255;
+				}
+				drawHallowRect(j*_slotWidth,i*_slotHeight,_slotWidth,_slotHeight,SAVESELECTORRECTTHICK,_r,_g,_b,255);
+
+				int _trueIndex = j+i*2+_slotOffset;
+				itoa(_trueIndex,&(_labelBuffer[5]),10);
+				if (_loadedTextThumb[j+i*2]==NULL){
+					strcat(_labelBuffer," (Empty)");
+				}else{
+					goodDrawText(j*_slotWidth+5,i*_slotHeight+5+currentTextHeight,_loadedTextThumb[j+i*2],fontSize);
+				}
+				goodDrawText(j*_slotWidth+5,i*_slotHeight+5,_labelBuffer,fontSize);
+			}
+		}
+		
+		endDrawing();
+	}
+	return -1;
+}
 // Hold L to disable font loading
 // Hold R to disable all optional loading
 void VNDSNavigationMenu(){
+	vndsSaveSelector();
+
 	if (!textDisplayModeOverriden){
 		switchTextDisplayMode(preferredTextDisplayMode);
 	}
@@ -6276,7 +6428,6 @@ void VNDSNavigationMenu(){
 
 		_choice = MenuControls(_choice,0,3);
 		if (wasJustPressed(SCE_CTRL_CROSS)){
-
 			if (_choice<=1){
 				forceResettingsButton=0;
 				forceFontSizeOption=0;
