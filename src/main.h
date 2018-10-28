@@ -25,6 +25,7 @@ int inBetweenVNDSLines(int _aboutToCommandIndex);
 char lazyLuaError(int _loadResult);
 char* easyVNDSSaveName(int _slot);
 char vndsNormalSave(char* _filename);
+int vndsSaveSelector();
 typedef struct{
 	char** theArray;
 	unsigned char length;

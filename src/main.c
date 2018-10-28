@@ -33,16 +33,14 @@
 	TODO - Account for image chars in text width
 	TODO - In vndsSaveSelector wrap the text.
 		Make that shared text wrapping function I always dreamed of
+	TODO - Make it easier to access the save menu, perhaps the ability to bind it to start button?
+		In this case, text log could be up on dpad
+	TODO - Can't save right after loading, the problem with this is that save files can't be moved.
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
 		text x1b[0m
 
-	sizeof(unsigned char); //1
-	sizeof(long int); // 4 on Vita, 8 on my computer
-	sizeof(short); // 2
-	sizeof(int); // 4
-	sizeof(signed int); // 4
 */
 // This is pretty long because foreign characters can take two bytes
 #define SINGLELINEARRAYSIZE 300
@@ -5041,7 +5039,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	signed char _scrollOffset=0;
 	signed char _optionsOnScreen;
 	signed char _needToScroll=0;
-	static unsigned char _chosenSaveSlot=0;
 	int i;
 	char _artBefore=graphicsLocation; // This variable is used to check if the player changed the bust location after exiting
 	CrossTexture* _renaImage=NULL;
@@ -5052,7 +5049,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	char _tempItoaHoldTextSpeed[8] = {'\0'}; // Needs to be big enough to hold "instant"
 	char _tempAutoModeString[10] = {'\0'};
 	char _tempAutoModeVoiceString[10] = {'\0'};
-	char _tempHoldSaveSlotSelection[5] = {'\0'};
 	char _maxOptionSlotUsed=0;
 
 	// Dynamic slots
@@ -5125,7 +5121,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		SETTINGSMENU_EASYADDOPTION("Restart BGM",_restartBgmActionSlot);
 	}
 	if (_shouldShowVNDSSave){
-		SETTINGSMENU_EASYADDOPTION("=Save Game ",_vndsSaveOptionsSlot);
+		SETTINGSMENU_EASYADDOPTION("=Save Game=",_vndsSaveOptionsSlot);
 	}
 	if (_shouldShowVNDSSettings){
 		SETTINGSMENU_EASYADDOPTION("Clear at bottom:",_vndsHitBottomActionSlot);
@@ -5186,9 +5182,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		_settingsOptionsValueText[_messageBoxAlphaSlot] = &(_tempItoaHoldBoxAlpha[0]);
 	}
 	_settingsOptionsValueText[_textSpeedSlot] = &(_tempItoaHoldTextSpeed[0]);
-	if (_shouldShowVNDSSave){
-		_settingsOptionsValueText[_vndsSaveOptionsSlot]=&(_tempHoldSaveSlotSelection[0]);
-	}
 	if (_shouldShowVNDSSettings){
 		_settingsOptionsValueText[_vndsHitBottomActionSlot] = charToBoolString(vndsClearAtBottom);
 		if (showVNDSWarnings){
@@ -5227,7 +5220,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
 	itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
 	makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
-	sprintf(_tempHoldSaveSlotSelection,"%d=",_chosenSaveSlot);
 
 	// This checks if we have Rena busts in CG AND CGAlt also loads Rena, if possible
 	char* _tempRenaPath = CombineStringsPLEASEFREE(streamingAssets,"CG/","re_se_de_a1.png","");
@@ -5262,11 +5254,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			break;
 		}
 		if (wasJustPressed(SCE_CTRL_TRIANGLE)){
-			if (_choice==_vndsSaveOptionsSlot){
-				_chosenSaveSlot=0;
-			}else{
-				break;
-			}
+			break;
 		}
 		if (wasJustPressed(SCE_CTRL_LEFT)){
 			if (_choice==2){
@@ -5319,9 +5307,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				}
 				voiceVolume-=.25;
 				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
-			}else if (_choice==_vndsSaveOptionsSlot){
-				_chosenSaveSlot--;
-				sprintf(_tempHoldSaveSlotSelection,"%d=",_chosenSaveSlot);
 			}
 		}
 		if (wasJustPressed(SCE_CTRL_CROSS) || wasJustPressed(SCE_CTRL_RIGHT)){
@@ -5439,16 +5424,14 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			}else if (_choice==_restartBgmActionSlot){
 				PlayBGM(lastBGMFilename,lastBGMVolume,1);
 			}else if (_choice==_vndsSaveOptionsSlot){ // VNDS Save
-				if (!wasJustPressed(SCE_CTRL_RIGHT)){
-					PlayMenuSound();
-					char* _savedPath = easyVNDSSaveName(_chosenSaveSlot);
-					if (!vndsNormalSave(_savedPath)){
-						LazyMessage("Saved to",_savedPath,NULL,NULL);
+				PlayMenuSound();
+				int _chosenSlot = vndsSaveSelector();
+				if (_chosenSlot!=-1){
+					char* _savedPath = easyVNDSSaveName(_chosenSlot);
+					if (vndsNormalSave(_savedPath)){
+						LazyMessage("Failed to save to",_savedPath,NULL,NULL);
 					}
 					free(_savedPath);
-				}else{
-					_chosenSaveSlot++;
-					sprintf(_tempHoldSaveSlotSelection,"%d=",_chosenSaveSlot);
 				}
 			}else if (_choice==_vndsHitBottomActionSlot){
 				vndsClearAtBottom = !vndsClearAtBottom;
@@ -6329,8 +6312,6 @@ int vndsSaveSelector(){
 // Hold L to disable font loading
 // Hold R to disable all optional loading
 void VNDSNavigationMenu(){
-	vndsSaveSelector();
-
 	if (!textDisplayModeOverriden){
 		switchTextDisplayMode(preferredTextDisplayMode);
 	}
@@ -6340,11 +6321,9 @@ void VNDSNavigationMenu(){
 	}
 	controlsStart();
 	signed char _choice=0;
-	unsigned char _chosenSaveSlot=0;
 	char* _loadedNovelName=NULL;
 
 	CrossTexture* _loadedThumbnail=NULL;
-	char _chosenSlotAsString[4] = "0";
 
 	//
 	char _possibleThunbnailPath[strlen(streamingAssets)+strlen("/SEArchive.legArchive.legList")+1];
@@ -6432,13 +6411,16 @@ void VNDSNavigationMenu(){
 				forceResettingsButton=0;
 				forceFontSizeOption=0;
 				if (_choice==0){
-					char* _loadPath = easyVNDSSaveName(_chosenSaveSlot);
-					if (checkFileExist(_loadPath)){
-						vndsNormalLoad(_loadPath);
-					}else{
-						LazyMessage("Save file",_loadPath,"not exist.",NULL);
+					int _chosenSlot = vndsSaveSelector();
+					if (_chosenSlot!=-1){
+						char* _loadPath = easyVNDSSaveName(_chosenSlot);
+						if (checkFileExist(_loadPath)){
+							vndsNormalLoad(_loadPath);
+						}else{
+							LazyMessage("Save file",_loadPath,"not exist.",NULL);
+						}
+						free(_loadPath);
 					}
-					free(_loadPath);
 				}else if (_choice==1){
 					char _vndsMainScriptConcat[strlen(streamingAssets)+strlen("/Scripts/main.scr")+1];
 					strcpy(_vndsMainScriptConcat,streamingAssets);
@@ -6458,13 +6440,6 @@ void VNDSNavigationMenu(){
 				currentGameStatus = GAMESTATUS_QUIT;
 			}
 		}
-		if (wasJustPressed(SCE_CTRL_RIGHT)){
-			_chosenSaveSlot++;
-			itoa(_chosenSaveSlot,_chosenSlotAsString,10);
-		}else if (wasJustPressed(SCE_CTRL_LEFT)){
-			_chosenSaveSlot--;
-			itoa(_chosenSaveSlot,_chosenSlotAsString,10);
-		}
 		controls_setDefaultGame();
 		controlsEnd();
 		startDrawing();
@@ -6476,7 +6451,6 @@ void VNDSNavigationMenu(){
 		goodDrawText(MENUOPTIONOFFSET,0,_loadedNovelName,fontSize);
 
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load Save",fontSize);
-			goodDrawText(MENUOPTIONOFFSET+textWidth(fontSize,"Load Save")+singleSpaceWidth,5+currentTextHeight*(0+2),_chosenSlotAsString,fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"New Game",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"VNDS Settings",fontSize);
 		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit",fontSize);
