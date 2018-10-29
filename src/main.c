@@ -17,7 +17,6 @@
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 		TODO - Remove scriptFolder variable
-		TODO - Fix LazyMessage system. Let it take a variable number of arguments to put together. Maybe even make it printf style.
 		TODO - Inspect SetDrawingPointOfMessage
 			It appears to just set the line to draw on, or that's at least what it's usually used for.
 			Inspect what the max line I can use in it is.
@@ -599,7 +598,7 @@ CrossTexture* SafeLoadPNG(const char* path){
 	CrossTexture* _tempTex = loadPNG((char*)path);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
-		LazyMessage("Failed to load image",path,"What will happen now?!",NULL);
+		easyMessagef(1,"Failed to load image %s, what will happen now?!",path);
 	}
 	return _tempTex;
 }
@@ -608,11 +607,7 @@ CrossTexture* LoadEmbeddedPNG(const char* path){
 	CrossTexture* _tempTex = loadPNG((char*)globalTempConcat);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
-		#if PLATFORM != PLAT_3DS
-			LazyMessage("Failed to load image",path,"What will happen now?!","THIS IS SUPPOSED TO BE EMBEDDED!");
-		#else
-			LazyMessage("Failed to load image",path,"What will happen now?!","Check you set up everything correctly.");
-		#endif
+		easyMessagef(1,"Failed to load image %s.\n%s",path,PLATFORM != PLAT_3DS ? "This is supposed to be embedded..." : "Check you set up everything correctly.");
 	}
 	return _tempTex;
 }
@@ -777,7 +772,7 @@ char altMenuControls(char* _choice, int _menuMin, int _menuMax){
 char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 	if (checkFileExist(passedPath)==0){
 		if (showMessage==1){
-			LazyMessage("The LUA file",passedPath,"does not exist!","What will happen now?!");
+			easyMessagef(1,"The LUA file %s does not exist!",passedPath);
 		}
 		return 0;
 	}
@@ -793,7 +788,7 @@ void WriteToDebugFile(const char* stuff){
 	FILE *fp;
 	fp = fopen(_tempDebugFileLocationBuffer, "a");
 	if (!fp){
-		LazyMessage("Failed to open debug file.",_tempDebugFileLocationBuffer,NULL,NULL);
+		easyMessagef(1,"Failed to open debug file, %s",_tempDebugFileLocationBuffer);
 	}else{
 		fprintf(fp,"%s\n",stuff);
 		fclose(fp);
@@ -963,7 +958,7 @@ void ClearDebugFile(){
 	FILE *fp;
 	fp = fopen(_tempDebugFileLocationBuffer, "w");
 	if (!fp){
-		LazyMessage("Failed to open debug file.",_tempDebugFileLocationBuffer,NULL,NULL);
+		easyMessagef(1,"Failed to open debug file, %s",_tempDebugFileLocationBuffer);
 		return;
 	}
 	fclose(fp);
@@ -1005,7 +1000,7 @@ char StringStartWith(const char *a, const char *b){
 // Give it a full script file path and it will return 1 if the file was converted beforehand
 int DidActuallyConvert(char* filepath){
 	if (checkFileExist(filepath)==0){
-		LazyMessage("I was going to check if you converted this file,","but I can't find it!",filepath,"How strange.");
+		easyMessagef(1,"I was going to check if you converted this file, but I can't find it! %s",filepath);
 		return 1;
 	}
 	FILE* file = fopen(filepath, "r");
@@ -1047,23 +1042,25 @@ void LoadFontSizeFile(){
 	fclose(fp);
 }
 void DisplaypcallError(int val, const char* fourthMessage){
+	char* _specificError;
 	switch (val){
 		case LUA_ERRRUN:
-			LazyMessage("lua_pcall failed with error","LUA_ERRSYNTAX, a runtime error.","Please report the bug on the thread.",fourthMessage);
+			_specificError="LUA_ERRRUN, a runtime error";
 		break;
 		case LUA_ERRMEM:
-			LazyMessage("lua_pcall failed with error","LUA_ERRMEM, an out of memory error","Please report the bug on the thread.",fourthMessage);
+			_specificError="LUA_ERRMEM, an out of memory error";
 		break;
 		case LUA_ERRERR:
-			LazyMessage("lua_pcall failed with error","LUA_ERRMEM, a message handler error","Please report the bug on the thread.",fourthMessage);
+			_specificError="ERRERR, a message handler error";
 		break;
 		case LUA_ERRGCMM:
-			LazyMessage("lua_pcall failed with error","LUA_ERRGCMM, an __gc metamethod error","Please report the bug on the thread.",fourthMessage);
+			_specificError="LUA_ERRGCMM, an __gc metamethod error";
 		break;
 		default:
-			LazyMessage("lua_pcall failed with error","UNKNOWN ERROR, something that shouldn't happen.","Please report the bug on the thread.",fourthMessage);
+			_specificError="UNKNOWN ERROR, something that shouldn't happen";
 		break;
 	}
+	easyMessagef(1,"lua_pcall failed with error %s, please report the bug on the thread.\n%s",_specificError,fourthMessage);
 }
 int _debugCount=0;
 void PrintDebugCounter(){
@@ -1089,22 +1086,22 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 		switch (_loadFileResult){
 			case LUA_ERRSYNTAX:
 				if (DidActuallyConvert(tempstringconcat)==1){
-					LazyMessage("luaL_loadfile failed with error","LUA_ERRSYNTAX","You seem to have converted the files correctly...","Please report the bug on the thread.");
+					easyMessagef(1,"luaL_loadfile failed with error LUA_ERRSYNTAX You seem to have converted the files correctly... Please report the bug on the thread.");
 				}else{
-					LazyMessage("luaL_loadfile failed with error","LUA_ERRSYNTAX","You probably forgot to convert the files with the","converter. Please make sure you did.");
+					easyMessagef(1,"luaL_loadfile failed with error LUA_ERRSYNTAX You probably forgot to convert the files with the converter. Please make sure you did.");
 				}
 			break;
 			case LUA_ERRMEM:
-				LazyMessage("luaL_loadfile failed with error","LUA_ERRMEM","This is an out of memory error.","Please report the bug on the thread.");
+				easyMessagef(1,"luaL_loadfile failed with error LUA_ERRMEM This is an out of memory error. Please report the bug on the thread.");
 			break;
 			case LUA_ERRGCMM:
-				LazyMessage("luaL_loadfile failed with error","LUA_ERRGCMM","This is a __gc metamethod error.","Please report the bug on the thread.");
+				easyMessagef(1,"luaL_loadfile failed with error LUA_ERRGCMM This is a __gc metamethod error. Please report the bug on the thread.");
 			break;
 			case LUA_ERRFILE:
-				LazyMessage("luaL_loadfile failed with error","LUA_ERRFILE, this means the file failed to load.","Make sure the file exists.",tempstringconcat);
+				easyMessagef(1,"luaL_loadfile failed with error LUA_ERRFILE, this means the file failed to load. Make sure the file exists. %s",tempstringconcat);
 			break;
 			default:
-				LazyMessage("luaL_loadfile failed with error","UNKNOWN ERROR!","This is weird and should NEVER HAPPEN!","Please report the bug on the thread.");
+				easyMessagef(1,"luaL_loadfile failed with error UNKNOWN ERROR! This is weird and should NEVER HAPPEN! Please report the bug on the thread.");
 			break;
 		}
 		currentGameStatus=GAMESTATUS_TITLE;
@@ -1735,7 +1732,104 @@ void ResetDataDirectory(){
 		generateDefaultDataDirectory(&DATAFOLDER,0);
 	#endif
 }
-void _LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd, char _doWait){
+
+void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, int _maxWidth){
+	*_numLines=-1;
+	char* _workable = strdup(_passedMessage);
+
+	int _cachedStrlen = strlen(_workable);
+	if (_cachedStrlen==0){
+		*_numLines=0;
+		*_realLines=NULL;
+		return;
+	}
+	int _lastNewline = -1; // Index
+	int i;
+	for (i=0;i<_cachedStrlen;++i){
+		if (_workable[i]=='\n'){
+			_workable[i]='\0';
+			_lastNewline=i;
+		}else if (_workable[i]==' ' || i==_cachedStrlen-1){
+			if (_workable[i]==' '){ // Because alt condition
+				_workable[i]='\0'; // Chop the string for textWidth function
+			}
+			if (textWidth(fontSize,&(_workable[_lastNewline+1]))>_maxWidth){ // If at this spot the string is too long for the screen
+				// Find last word before we went off screen
+				int j;
+				for (j=i-1;j>_lastNewline;--j){
+					if (_workable[j]==' '){
+						break;
+					}
+				}
+				if (j==_lastNewline){ // Didn't find a stopping point, the line is likely one giant word
+					// Force a stopping point
+					for (j=i-1;j>_lastNewline;--j){
+						char _cacheChar = _workable[j];
+						_workable[j]='\0';
+						
+						char _canSplit = (textWidth(fontSize,&(_workable[_lastNewline+1]))<=_maxWidth);
+						_workable[j]=_cacheChar;
+						if (_canSplit){
+							// The character we're at right now, that's where the split needs to be because it's acting as the null terminator right now
+							// In this code, j will represent the last real character from the string
+							j-=2; // Minus one to make room for the dash, minus another because we're making the break at original j value minus one
+							char* _newBuffer = malloc(_cachedStrlen+2+1);
+							memcpy(_newBuffer,_workable,j+1);
+							_newBuffer[j+1]='-';
+							_newBuffer[j+2]='\0';
+							_lastNewline=j+2;
+							memcpy(&(_newBuffer[j+3]),&(_workable[j+1]),_cachedStrlen-(j)); // Should also copy null
+							free(_workable);
+							_workable = _newBuffer;
+
+							// Account for new 2 bytes
+							_cachedStrlen+=2;
+							i+=2;
+							if (_workable[i]=='\0'){ // Fix chop if happened
+								_workable[i]=' ';
+							}
+							break;
+						}
+					}
+					// Odd, no part between last new line and here less than _maxWidth. This should not happen, but just in case, put some code to at least do something.
+					if (j==_lastNewline){
+						_workable[i]='\0';
+					}
+				}else{ // Normal, found what we're looking for, just chop at the end of the last word
+					_workable[j]='\0';
+					if (_workable[i]=='\0'){ // Fix chop if happened
+						_workable[i]=' ';
+					}
+					_lastNewline=j;
+				}
+				// No matter what we did, we'll still need to start our check from the last new line
+				i=_lastNewline;
+			}else{
+				if (_workable[i]=='\0'){ // Fix chop if happened
+					_workable[i]=' ';
+				}
+			}
+		}
+	}
+
+	// fheuwfhuew (\0) ffhuehfu (\0) fheuhfueiwf (\0)
+	*_numLines=1;
+	for (i=0;i<_cachedStrlen;++i){
+		if (_workable[i]=='\0'){
+			*_numLines=(*_numLines)+1;
+		}
+	}
+	*_realLines = malloc(sizeof(char*)*(*_numLines));
+	int _nextCopyIndex=0;
+	for (i=0;i<*_numLines;++i){
+		(*_realLines)[i] = strdup(&(_workable[_nextCopyIndex]));
+		_nextCopyIndex += 1+strlen(&(_workable[_nextCopyIndex]));
+	}
+
+	free(_workable);
+}
+
+void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
 	controlsStart();
 	controlsEnd();
 	do{
@@ -1748,18 +1842,12 @@ void _LazyMessage(const char* stra, const char* strb, const char* strc, const ch
 		}
 		controlsEnd();
 		startDrawing();
-		if (stra!=NULL){
-			goodDrawText(32,5+currentTextHeight*(0+2),stra,fontSize);
+
+		int i;
+		for (i=0;i<_numLines;++i){
+			goodDrawText(32,5+currentTextHeight*(i+2),_passedMessage[i],fontSize);
 		}
-		if (strb!=NULL){
-			goodDrawText(32,5+currentTextHeight*(1+2),strb,fontSize);
-		}
-		if (strc!=NULL){
-			goodDrawText(32,5+currentTextHeight*(2+2),strc,fontSize);
-		}
-		if (strd!=NULL){
-			goodDrawText(32,5+currentTextHeight*(3+2),strd,fontSize);
-		}
+
 		if (_doWait){
 			goodDrawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.",fontSize);
 		}
@@ -1768,27 +1856,23 @@ void _LazyMessage(const char* stra, const char* strb, const char* strc, const ch
 		exitIfForceQuit();
 	}while (currentGameStatus!=GAMESTATUS_QUIT && _doWait);
 }
-/*
-void error( const char* _stringFormat, ... ) {
-	va_list _getLengthArgs;
-	va_list _doWriteArgs;
-	char* _completeString;
 
-	va_start( _getLengthArgs, _stringFormat );
-	va_copy(_doWriteArgs,_getLengthArgs); // vsnprintf modifies the state of _getLengthArgs so that we can't use it anymore, copy it so we can use it twice in total
-	_completeString = malloc(vsnprintf(NULL,0,_stringFormat,_getLengthArgs)+1); // Get the size it would've written
-	va_end( _getLengthArgs );
-	vsprintf(_completeString,_stringFormat,_doWriteArgs); // This should not overflow because we already got the exact size we'll need
-	va_end( _doWriteArgs ); // Even though it's a copy we still need to va_end it.
+void easyMessagef(char _doWait, const char* _formatString, ...){
+	va_list _tempArgs;
+	va_start(_tempArgs, _formatString);
+	char* _completeString = formatf(_tempArgs,_formatString);
+	
+	char** _wrappedLines;
+	int _numLines;
+	wrapText(_completeString,&_numLines,&_wrappedLines,screenWidth-32);
+	easyMessage((const char**)_wrappedLines,_numLines,_doWait);
 
-	printf("%s\n",_completeString);
+	int i;
+	for (i=0;i<_numLines;++i){
+		free(_wrappedLines[i]);
+	}
+	free(_wrappedLines);
 	free(_completeString);
-}
-
--- make a method called like wrapText, returns array of strings and int with length of aray
-*/
-void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd){
-	_LazyMessage(stra,strb,strc,strd,1);
 }
 void LoadGame(){
 	strcpy((char*)globalTempConcat,saveFolder);
@@ -1979,7 +2063,7 @@ CrossTexture* safeLoadGameImage(const char* filename, char _folderPreference, ch
 	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extensionIncluded,scriptForceResourceUppercase);
 	if (_tempFoundFilename==NULL){
 		if (shouldShowWarnings()){
-			LazyMessage("Image not found.",filename,"What will happen now?!",NULL);
+			easyMessagef(1,"Image not found, %s",filename);
 		}
 		return NULL;
 	}
@@ -2576,12 +2660,12 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 				return FILE_FORMAT_OGG;
 			}
 		}
-		LazyMessage("File format not found.",_passedFilename,NULL,NULL);
+		easyMessagef(1,"File format not found, %s",_passedFilename);
 		return FILE_FORMAT_NONE;
 	}
 #else
 	char getProbableSoundFormat(const char* _passedFilename){
-		LazyMessage("Error with getProbableSoundFormat being the wrong version. Contact MyLegGuy.",_passedFilename,NULL,NULL);
+		easyMessagef(1,"Error with getProbableSoundFormat being the wrong version. Contact MyLegGuy.\n%s",_passedFilename);
 		return 0;
 	}
 #endif
@@ -2699,12 +2783,12 @@ void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 				_tempHoldSlot = _mlgsnd_loadAudioFILE(_foundArchiveFile, _foundFormat, !_isSE, 1);
 			}
 		#else
-			LazyMessage("sound archive not supported.",NULL,NULL,NULL);
+			easyMessagef(1,"sound archive not supported.");
 		#endif
 	}
 	if (_tempHoldSlot==NULL){
 		if (shouldShowWarnings()){
-			LazyMessage(_filename,"Sound not found in folders.",useSoundArchive ? "Not found in archive either." : NULL,NULL);
+			easyMessagef(1,"Sound file %s not found in folders. %s",_filename,useSoundArchive ? "Not found in archive either." : "");
 		}
 	}
 	return _tempHoldSlot;
@@ -2715,7 +2799,7 @@ void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 // DO NOT FIX THE SE VOLUME BEFORE PASSING ARGUMENT
 void GenericPlayGameSound(int passedSlot, const char* filename, int unfixedVolume, char _preferedDirectory, float _passedVolumeFixScale){
 	if (passedSlot>=MAXSOUNDEFFECTARRAY){
-		LazyMessage("Sound effect slot too high.","No action will be taken.",NULL,NULL);
+		easyMessagef(1,"Sound effect slot too high. No action will be taken.");
 		return;
 	}
 	if (strlen(filename)==0){
@@ -3115,7 +3199,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 	if (bgmVolume==0){
 		printf("BGM volume is 0, ignore music change.\n");
 	}else if (_slot>=MAXMUSICARRAY){
-		LazyMessage("Music slot too high.","No action will be taken.",NULL,NULL);
+		easyMessagef(1,"Music slot too high. No action will be taken.");
 	}else{
 		CROSSMUSIC* _tempHoldSlot=loadGameAudio(filename,PREFER_DIR_BGM,0);
 		if (_tempHoldSlot==NULL){
@@ -3383,7 +3467,7 @@ void RunGameSpecificLua(){
 	if (checkFileExist(_completedSpecificLuaPath)){
 		printf("Game specific LUA found.\n");
 		if(luaL_dofile(L,_completedSpecificLuaPath)==1){
-			LazyMessage("Error in Lua file",_completedSpecificLuaPath,NULL,lua_tostring(L,-1));
+			easyMessagef(1,"Error in Lua file, %s, %s",_completedSpecificLuaPath,lua_tostring(L,-1));
 			printf("%s\n",lua_tostring(L,-1));
 		}
 	}
@@ -3466,7 +3550,7 @@ char startLoadingGameFolder(char* _chosenGameFolder){
 	strcat(_fileWithPresetFilenamePath,"/includedPreset.txt");
 
 	if (!checkFileExist(_fileWithPresetFilenamePath)){
-		LazyMessage("Invalid game folder.","I know this because the includedPreset.txt","does not exist.","Did you remember to convert this folder before moving it?");
+		easyMessagef(1,"Invalid game folder. I know this because the includedPreset.txt does not exist. Did you remember to convert this folder before moving it?");
 		return 0;
 	}
 	startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
@@ -3495,7 +3579,7 @@ void setDefaultGame(char* _defaultGameFolderName){
 	FILE* fp;
 	fp = fopen(_defaultGameSaveFilenameBuffer, "w");
 	if (!fp){
-		LazyMessage("Failed to open default game save file.",_defaultGameSaveFilenameBuffer,NULL,NULL);
+		easyMessagef(1,"Failed to open default game save file, %s",_defaultGameSaveFilenameBuffer);
 		return;
 	}
 	fwrite(_defaultGameFolderName,strlen(_defaultGameFolderName),1,fp);
@@ -3758,7 +3842,7 @@ void vndsNormalLoad(char* _filename){
 	unsigned char _readFileFormat;
 	fread(&_readFileFormat,sizeof(unsigned char),1,fp); //
 	if (_readFileFormat!=1){
-		LazyMessage("Bad file format version.",NULL,NULL,NULL);
+		easyMessagef(1,"Bad file format version. %d",_readFileFormat);
 		fclose(fp);
 	}
 	char* _foundScriptFilename = readLengthStringFromFile(fp); //
@@ -3921,7 +4005,7 @@ void removeNegative(int _actionTime, signed char _waitforcompletion){
 }
 void addGamePresetToLegacyFolder(char* _streamingAssetsRoot, char* _presetFilenameRelative){
 	if (!directoryExists(_streamingAssetsRoot)){
-		LazyMessage(_streamingAssetsRoot,"does not exist. This means","you probably don't have to worry about",_presetFilenameRelative);
+		easyMessagef(1,"%s does not exist. This means you probably don't have to worry about %s",_streamingAssetsRoot,_presetFilenameRelative);
 		return;
 	}
 
@@ -3985,28 +4069,28 @@ char lazyLuaError(int _loadResult){
 	if (_loadResult!=0){
 		switch (_loadResult){
 			case LUA_ERRSYNTAX:
-				LazyMessage("LUA_ERRSYNTAX",NULL,NULL,NULL);
+				easyMessagef(1,"LUA_ERRSYNTAX");
 			break;
 			case LUA_ERRMEM:
-				LazyMessage("LUA_ERRMEM",NULL,NULL,NULL);
+				easyMessagef(1,"LUA_ERRMEM");
 			break;
 			case LUA_ERRGCMM:
-				LazyMessage("LUA_ERRGCMM",NULL,NULL,NULL);
+				easyMessagef(1,"LUA_ERRGCMM");
 			break;
 			case LUA_ERRFILE:
-				LazyMessage("LUA_ERRFILE",NULL,NULL,NULL);
+				easyMessagef(1,"LUA_ERRFILE");
 			break;
 			case LUA_ERRRUN:
-				LazyMessage("LUA_ERRRUN",NULL,NULL,NULL);
+				easyMessagef(1,"LUA_ERRRUN");
 			break;
 			case LUA_ERRERR:
-				LazyMessage("LUA_ERRERR",NULL,NULL,NULL);
+				easyMessagef(1,"LUA_ERRERR");
 			break;
 			case 1:
-				LazyMessage("Lua error.",NULL,NULL,NULL);
+				easyMessagef(1,"Lua error.");
 			break;
 			default:
-				LazyMessage("UNKNOWN ERROR!",NULL,NULL,NULL);
+				easyMessagef(1,"UNKNOWN ERROR!");
 			break;
 		}
 		return 1;
@@ -4474,7 +4558,7 @@ void scriptLoadValueFromLocalWork(nathanscriptVariable* _passedArguments, int _n
 		nathanvariableArraySetFloat(*_returnedReturnArray,0,lastSelectionAnswer);
 		return;
 	}else{
-		LazyMessage("Unknown LoadValueFromLocalWork!",_wordWant,"Please report to MyLegGuy!","thx");
+		easyMessagef(1,"Unknown LoadValueFromLocalWork, %s, please report.",_wordWant);
 	}
 	return;
 }
@@ -4747,7 +4831,7 @@ char upgradeToGameFolder(){
 	char _didUpgradeOne=0;
 	while (1){
 		if (FileSelector(presetFolder,&_tempChosenFile,(char*)"Select the preset to use or press circle to be done.")==2){
-			LazyMessage("What? No preset files?",presetFolder,"is empty.",NULL);
+			easyMessagef(1,"What? No preset files? %s is empty.",presetFolder);
 			return 0;
 		}else{
 			if (_tempChosenFile==NULL){
@@ -4782,7 +4866,7 @@ char upgradeToGameFolder(){
 		}
 		free(_bigMessageBuffer);
 	}else{
-		LazyMessage("You did not upgrade any folders.",NULL,NULL,NULL);
+		easyMessagef(1,"You did not upgrade any folders.");
 	}
 	return _didUpgradeOne;
 }
@@ -4809,7 +4893,7 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 	dir = openDirectory (directorylocation);
 
 	if (dirOpenWorked(dir)==0){
-		LazyMessage("Failed to open directory",directorylocation,NULL,NULL);
+		easyMessagef(1,"Failed to open directory %s",directorylocation);
 		// Free memori
 		for (i=0;i<MAXFILES;i++){
 			free(filenameholder[i]);
@@ -4830,7 +4914,7 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 	totalFiles = i;
 
 	if (totalFiles==0){
-		LazyMessage("No files found.",NULL,NULL,NULL);
+		easyMessagef(1,"No files found.");
 		*_chosenfile=NULL;
 		_returnVal=2;
 	}else{
@@ -4993,7 +5077,7 @@ void switchTextDisplayMode(signed char _newMode){
 			disableVNDSADVMode();
 		}
 	}else{
-		LazyMessage("TODO",NULL,NULL,NULL);
+		easyMessagef(1,"TODO");
 	}
 }
 void _settingsChangeAuto(int* _storeValue, char* _storeString){
@@ -5364,7 +5448,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				PlayMenuSound();
 				if (LazyChoice("This will reset your settings.","Is this okay?",NULL,NULL)==1){
 					resetSettings();
-					LazyMessage("Restart for the changes to","take effect.",NULL,NULL);
+					easyMessagef(1,"Restart for the changes to take effect.");
 				}
 			}else if (_choice==_textOverBGSlot){
 				setTextOnlyOverBackground(!textOnlyOverBackground);
@@ -5429,7 +5513,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				if (_chosenSlot!=-1){
 					char* _savedPath = easyVNDSSaveName(_chosenSlot);
 					if (vndsNormalSave(_savedPath)){
-						LazyMessage("Failed to save to",_savedPath,NULL,NULL);
+						easyMessagef(1,"Failed to save to %s",_savedPath);
 					}
 					free(_savedPath);
 				}
@@ -5646,7 +5730,7 @@ void TitleScreen(){
 					controlsEnd();
 					char* _tempChosenFile;
 					if (FileSelector(presetFolder,&_tempChosenFile,(char*)"Select a preset to choose StreamingAssets folder")==2){
-						LazyMessage(scriptFolder,"does not exist and no files in",presetFolder,"Do you have any files?");
+						easyMessagef(1,"%s does not exist and no files in %s. Do you have any files?",scriptFolder,presetFolder);
 						continue;
 					}else{
 						if (_tempChosenFile==NULL){
@@ -5697,7 +5781,7 @@ void TitleScreen(){
 				break;
 			}else if (_choice==4){
 				if (isGameFolderMode){
-					LazyMessage("You really shouldn't be here.","You haven't escaped, you know?","You're not even going the right way.",NULL);
+					easyMessagef(1,"You really shouldn't be here. You haven't escaped, you know? You're not even going the right way.");
 				}else{
 					ClearMessageArray(0);
 					controlsStart();
@@ -5767,7 +5851,7 @@ void tipMenuChangeDisplay(char* _passedCurrentName, char* _passedCurrentSlot, ch
 void TipMenu(){
 	ClearMessageArray(0);
 	if (currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
-		LazyMessage("No tips unlocked.",NULL,NULL,NULL);
+		easyMessagef(1,"No tips unlocked.");
 		currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 		controlsEnd();
 		return;
@@ -6085,7 +6169,7 @@ void NavigationMenu(){
 			if (_choice==_nextButtonSlot){
 				printf("Go to next chapter\n");
 				if (currentPresetChapter+1==currentPresetFileList.length){
-					LazyMessage("There is no next chapter.", NULL, NULL, NULL);
+					easyMessagef(1,"There is no next chapter.");
 				}else{
 					easyTouchControlMode = TOUCHMODE_MAINGAME;
 					ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
@@ -6330,7 +6414,7 @@ void VNDSNavigationMenu(){
 	strcpy(_possibleThunbnailPath,streamingAssets);
 	strcat(_possibleThunbnailPath,"/vndsvitaproperties");
 	if (checkFileExist(_possibleThunbnailPath)){
-		_LazyMessage("Loading properties",NULL,NULL,NULL,0);
+		easyMessagef(0,"Loading properties");
 		FILE* fp = fopen(_possibleThunbnailPath,"rb");
 		char _loadedVersionNumber;
 		fread(&_loadedVersionNumber,1,1,fp);
@@ -6346,14 +6430,14 @@ void VNDSNavigationMenu(){
 	strcpy(_possibleThunbnailPath,streamingAssets);
 	strcat(_possibleThunbnailPath,"/thumbnail.png");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
-		_LazyMessage("Loading thumbnail",NULL,NULL,NULL,0);
+		easyMessagef(0,"Loading thumbnail");
 		_loadedThumbnail = _loadGameImage(_possibleThunbnailPath);
 	}
 	//
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
 	strcat(_possibleThunbnailPath,"/info.txt");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
-		_LazyMessage("Loading info.txt",NULL,NULL,NULL,0);
+		easyMessagef(0,"Loading info.txt");
 		FILE* fp = fopen(_possibleThunbnailPath,"r");
 		_loadedNovelName = readSpecificIniLine(fp,"title=");
 		fclose(fp);
@@ -6366,7 +6450,7 @@ void VNDSNavigationMenu(){
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
 	strcat(_possibleThunbnailPath,"/img.ini");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(SCE_CTRL_RTRIGGER)){
-		_LazyMessage("Loading img.ini",NULL,NULL,NULL,0);
+		easyMessagef(0,"Loading img.ini");
 		FILE* fp = fopen(_possibleThunbnailPath,"r");
 		char* _widthString = readSpecificIniLine(fp,"width=");
 		char* _heightString = readSpecificIniLine(fp,"height=");
@@ -6383,7 +6467,7 @@ void VNDSNavigationMenu(){
 	}
 	//
 	if (!isDown(SCE_CTRL_LTRIGGER) && !isDown(SCE_CTRL_RTRIGGER)){
-		_LazyMessage("Loading font",NULL,NULL,NULL,0);
+		easyMessagef(0,"Loading font");
 		_possibleThunbnailPath[strlen(streamingAssets)]=0;
 		strcat(_possibleThunbnailPath,"/default.ttf");
 		if (checkFileExist(_possibleThunbnailPath)){
@@ -6394,11 +6478,11 @@ void VNDSNavigationMenu(){
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
 	strcat(_possibleThunbnailPath,"/SEArchive.legArchive");
 	if (checkFileExist(_possibleThunbnailPath)){
-		_LazyMessage("Loading sound archive",NULL,NULL,NULL,0);
+		easyMessagef(0,"Loading sound archive");
 		soundArchive = loadLegArchive(_possibleThunbnailPath);
 		useSoundArchive=1;
 	}
-	_LazyMessage("Body is ready.",NULL,NULL,NULL,0);
+	easyMessagef(0,"Body is ready.");
 	
 	controlsEnd();
 	while (currentGameStatus!=GAMESTATUS_QUIT){
@@ -6417,7 +6501,7 @@ void VNDSNavigationMenu(){
 						if (checkFileExist(_loadPath)){
 							vndsNormalLoad(_loadPath);
 						}else{
-							LazyMessage("Save file",_loadPath,"not exist.",NULL);
+							easyMessagef(1,"Save file %s does not exist",_loadPath);
 						}
 						free(_loadPath);
 					}
@@ -6431,7 +6515,7 @@ void VNDSNavigationMenu(){
 						nathanscriptDoScript(_vndsMainScriptConcat,0,inBetweenVNDSLines);
 						currentGameStatus = GAMESTATUS_NAVIGATIONMENU;
 					}else{
-						LazyMessage("Main script file",_vndsMainScriptConcat,"not exist.",NULL);
+						easyMessagef(1,"Main script file %s does not exist.",_vndsMainScriptConcat);
 					}
 				}
 			}else if (_choice==2){
@@ -6478,9 +6562,9 @@ char initializeLua(){
 		lua_sethook(L, incrementScriptLineVariable, LUA_MASKLINE, 5);
 		if (_didLoadHappyLua==1){
 			#if PLATFORM == PLAT_VITA
-				LazyMessage("happy.lua is missing for some reason.","Redownload the VPK.","If that doesn't fix it,","report the problem to MyLegGuy.");
+				easyMessagef(1,"happy.lua is missing for some reason. Redownload the VPK. If that doesn't fix it, report the problem to MyLegGuy.");
 			#else
-				LazyMessage("happy.lua missing.",NULL,NULL,NULL);
+				easyMessagef(1,"happy.lua missing.");
 			#endif
 			return 2;
 		}
@@ -6658,9 +6742,9 @@ signed char init(){
 	ReloadFont();
 	if (initAudio()==0){
 		#if PLATFORM == PLAT_3DS
-			LazyMessage("dsp init failed. Do you have dsp","firm dumped and in","/3ds/dspfirm.cdc","?");
+			easyMessagef(1,"dsp init failed. Do you have dsp firm dumped and in /3ds/dspfirm.cdc ?");
 		#else
-			LazyMessage("...but it not worked?",NULL,NULL,NULL);
+			easyMessagef(1,"...but it not worked?");
 		#endif
 	}
 
@@ -6758,7 +6842,7 @@ int main(int argc, char *argv[]){
 				break;
 			case GAMESTATUS_PRESETSELECTION:
 				if (FileSelector(presetFolder,&currentPresetFilename,(char*)"Select a preset")==2){
-					LazyMessage("No presets found.","If you ran the converter, you should've gotten some.","You can manually put presets in:",presetFolder);
+					easyMessagef(1,"No presets found. If you ran the converter, you should've gotten some. You can manually put presets in: %s",presetFolder);
 					break;
 				}
 				controlsEnd();
@@ -6775,7 +6859,7 @@ int main(int argc, char *argv[]){
 					if (_didWork==0){ // If the script didn't run, don't advance the game
 						currentPresetChapter--; // Go back a script
 						if (currentPresetChapter<0 || currentPresetChapter==255){ // o, no, we've gone back too far!
-							LazyMessage("So... the first script failed to launch.","You now have the info on why, so go","try and fix it.","Pressing "SELECTBUTTONNAME" will close the application.");
+							easyMessagef(1,"So... the first script failed to launch. You now have the info on why, so go try and fix it. Pressing "SELECTBUTTONNAME" will close the application.");
 							currentGameStatus=GAMESTATUS_QUIT;
 						}else{
 							currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
@@ -6802,7 +6886,7 @@ int main(int argc, char *argv[]){
 				;
 				char* _chosenGameFolder;
 				if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a game")==2){
-					LazyMessage("No folders found.","After running the script converter","you should've put the converted files in",gamesFolder);
+					easyMessagef(1,"No folders found. After running the script converter you should've put the converted files in %s",gamesFolder);
 					currentGameStatus = GAMESTATUS_TITLE;
 					break;
 				}
@@ -6844,7 +6928,7 @@ int main(int argc, char *argv[]){
 						currentGameStatus=GAMESTATUS_TITLE;
 						if (defaultGameIsSet){
 							setDefaultGame("NONE"); // Prevent this message every time on startup if it's because of default game setting
-							LazyMessage("Reset default game","setting.",NULL,NULL);
+							easyMessagef(1,"Reset default game setting.");
 						}
 					}
 				}

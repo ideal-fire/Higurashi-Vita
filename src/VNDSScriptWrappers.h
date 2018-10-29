@@ -152,7 +152,7 @@ void _vndsChangeScriptFiles(const char* _newFilename){
 	strcpy(_tempstringconcat,scriptFolder);
 	strcat(_tempstringconcat,_newFilename);
 	if (checkFileExist(_tempstringconcat)==0){
-		LazyMessage("Script file not found,",_tempstringconcat,NULL,NULL);
+		easyMessagef(1,"Script file not found, %s",_tempstringconcat);
 		return;
 	}
 	crossfclose(nathanscriptCurrentOpenFile);
@@ -318,7 +318,7 @@ void vndswrapper_setimg(nathanscriptVariable* _passedArguments, int _numArgument
 		nextVndsBustshotSlot++; // Prepare for next bust
 	}else{
 		if (nextBustQueueSlot==MAXBUSTQUEUE){
-			LazyMessage("Too many busts in queue.","No action will be taken.",NULL,"Report to MyLegGuy.");
+			easyMessagef(1,"Too many busts in queue. No action will be taken. Report to MyLegGuy.");
 		}else{
 			currentBustQueue[nextBustQueueSlot].x = nathanvariableToInt(&_passedArguments[1]);
 			currentBustQueue[nextBustQueueSlot].y = nathanvariableToInt(&_passedArguments[2]);

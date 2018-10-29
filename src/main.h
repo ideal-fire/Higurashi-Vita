@@ -5,7 +5,7 @@ void startDrawing();
 void Draw(char _shouldDrawMessageBox);
 void RecalculateBustOrder();
 void PlayBGM(const char* filename, int _volume, int _slot);
-void LazyMessage(const char* stra, const char* strb, const char* strc, const char* strd);
+void easyMessagef(char _doWait, const char* _formatString, ...);
 void SaveSettings();
 void XOutFunction();
 void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]);

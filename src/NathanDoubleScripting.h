@@ -802,7 +802,7 @@ signed char humanFloatCompare(float v1, float v2, char* _passedOperator){
 		}
 	}
 	if (_ifStatementResult==-1){
-		LazyMessage("bad operator",NULL,NULL,NULL);
+		easyMessagef(1,"bad operator");
 		_ifStatementResult=0;
 		printf("bad operator. %s\n",_passedOperator);
 	}
@@ -992,7 +992,7 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 			}
 		}
 	}else if (_ifStatementResult==-1){
-		LazyMessage("For some reason if statement","result is still -1",NULL,"bad bug!");
+		easyMessagef(1,"For some reason if statement result is still -1\nbad bug!");
 	}
 	return;
 }
