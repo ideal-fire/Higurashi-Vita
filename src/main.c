@@ -30,11 +30,10 @@
 	TODO - With my setvar and if statement changes, I broke hima tip 09. But VNDSx acts the same as my program does when I run the script... VNDS Android exclusive features? Never worked in the first place?
 	TODO - Store last used VNDS load slot, set default save slot to the one you loaded.
 	TODO - Account for image chars in text width
-	TODO - In vndsSaveSelector wrap the text.
-		Make that shared text wrapping function I always dreamed of
 	TODO - Make it easier to access the save menu, perhaps the ability to bind it to start button?
 		In this case, text log could be up on dpad
 	TODO - Can't save right after loading, the problem with this is that save files can't be moved.
+	TODO - text thumbs may not work well for games using OutputLine
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -630,7 +629,6 @@ void drawTextGame(int _x, int _y, char* _message, double _passedSize, int _a){
 		goodDrawTextColoredAlpha(_x,_y,_message,_passedSize,255,255,255,_a);
 	}
 }
-
 // Number of lines to draw is not zero based
 void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
 	if (_maxDrawLine==-1){
@@ -6383,7 +6381,14 @@ int vndsSaveSelector(){
 				if (_loadedTextThumb[j+i*2]==NULL){
 					strcat(_labelBuffer," (Empty)");
 				}else{
-					goodDrawText(j*_slotWidth+5,i*_slotHeight+5+currentTextHeight,_loadedTextThumb[j+i*2],fontSize);
+					char** _wrappedLines;
+					int _numLines;
+					wrapText(_loadedTextThumb[j+i*2],&_numLines,&_wrappedLines,_slotWidth-5);
+
+					int k;
+					for (k=0;k<_numLines;++k){
+						goodDrawText(j*_slotWidth+5,i*_slotHeight+5+currentTextHeight*(k+1),_wrappedLines[k],fontSize);
+					}
 				}
 				goodDrawText(j*_slotWidth+5,i*_slotHeight+5,_labelBuffer,fontSize);
 			}
