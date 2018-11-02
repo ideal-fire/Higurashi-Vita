@@ -34,6 +34,7 @@
 		In this case, text log could be up on dpad
 	TODO - Can't save right after loading, the problem with this is that save files can't be moved.
 	TODO - text thumbs may not work well for games using OutputLine
+	TODO - Upgrade to libgoodbrew and use button mask
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -146,6 +147,10 @@
 // TODO - Proper libGeneralGood support for this
 #if SOUNDPLAYER == SND_VITA
 	char mlgsndIsPlaying(NathanAudio* _passedAudio);
+#endif
+
+#if PLATFORM == PLAT_VITA
+	#include "../stolenCode/qdbmp.h"
 #endif
 
 // 1 is start
@@ -3786,6 +3791,9 @@ char vndsNormalSave(char* _filename){
 	}
 
 	FILE* fp = fopen(_filename,"wb");
+	if (fp==NULL){
+		return 1;
+	}
 	
 	// Save options file format
 	unsigned char _tempOptionsFormat = VNDSSAVEFORMAT;
@@ -3833,6 +3841,47 @@ char vndsNormalSave(char* _filename){
 	// Write game specific var list
 	saveVariableList(fp,nathanscriptGamevarList,nathanscriptTotalGamevar); //
 	fclose(fp);
+
+
+	#if PLATFORM == PLAT_VITA
+	
+		char _thumbFilename[strlen(_filename)+7];
+		strcpy(_thumbFilename,_filename);
+		strcat(_thumbFilename,".thumb");
+
+		int _destWidth = screenWidth/3;
+		int _destHeight = screenHeight/3;
+		vita2d_texture* _bigTexture = vita2d_create_empty_texture_rendertarget(960,544,SCE_GXM_TEXTURE_FORMAT_A8B8G8R8);
+		vita2d_texture* _smallTexture = vita2d_create_empty_texture_rendertarget(_destWidth,_destHeight,SCE_GXM_TEXTURE_FORMAT_A8B8G8R8);
+
+		vita2d_pool_reset();
+		vita2d_start_drawing_advanced(_bigTexture,SCE_GXM_SCENE_FRAGMENT_SET_DEPENDENCY);
+		Draw(0);
+		vita2d_end_drawing();
+
+		vita2d_start_drawing_advanced(_smallTexture,SCE_GXM_SCENE_VERTEX_WAIT_FOR_DEPENDENCY);
+		vita2d_draw_texture(_bigTexture,0,0);
+		vita2d_end_drawing();
+		
+		// 
+		BMP* testimg = BMP_Create(_destWidth,_destHeight,24);
+		// Pixels stored in uint32_t
+		void* _currentImageData = vita2d_texture_get_datap(_smallTexture);
+		uint32_t y;
+		for (y=0;y<_destHeight;++y) {
+			uint32_t x;
+			for (x=0;x< _destWidth;++x) {
+				int _baseIndex = (x + _destWidth * y)*4;
+				BMP_SetPixelRGB(testimg,x,y,((uint8_t*)_currentImageData)[_baseIndex],((uint8_t*)_currentImageData)[_baseIndex+1],((uint8_t*)_currentImageData)[_baseIndex+2]);
+			}
+		}
+		BMP_WriteFile(testimg,_thumbFilename);
+		BMP_Free(testimg);
+		
+		freeTexture(_bigTexture);
+		freeTexture(_smallTexture);
+	#endif
+
 	return 0;
 }
 void vndsNormalLoad(char* _filename){
@@ -6320,7 +6369,6 @@ int vndsSaveSelector(){
 			}else if (_slotOffset>MAXSAVESLOT-6){
 				_slotOffset=0;
 			}
-
 			_reloadThumbs=0;
 			for (i=0;i<3;++i){
 				int j;
@@ -6346,6 +6394,19 @@ int vndsSaveSelector(){
 							}else{
 								_loadedTextThumb[j+i*2]=strdup(""); // Not NULL
 							}
+
+							char _thumbFilename[strlen(_tempFilename)+7];
+							strcpy(_thumbFilename,_tempFilename);
+							strcat(_thumbFilename,".thumb");
+
+							if (checkFileExist(_thumbFilename)){
+								#if PLATFORM == PLAT_VITA
+									// temp for load BMP
+									_loadedThumbnail[j+i*2]=vita2d_load_BMP_file(_thumbFilename);
+								#else
+									_loadedThumbnail[j+i*2]=loadPNG(_thumbFilename);
+								#endif
+							}
 						}else{
 							_loadedTextThumb[j+i*2]=NULL;
 						}
@@ -6353,6 +6414,7 @@ int vndsSaveSelector(){
 					}else{
 						_loadedTextThumb[j+i*2]=NULL;
 					}
+					free(_tempFilename);
 				}
 			}
 		}
@@ -6374,7 +6436,11 @@ int vndsSaveSelector(){
 					_g=255;
 					_b=255;
 				}
-				drawHallowRect(j*_slotWidth,i*_slotHeight,_slotWidth,_slotHeight,SAVESELECTORRECTTHICK,_r,_g,_b,255);
+				
+				// Thumb goes behind everything else
+				if (_loadedThumbnail[j+i*2]!=NULL){
+					drawTexture(_loadedThumbnail[j+i*2],(j+1)*_slotWidth-getTextureWidth(_loadedThumbnail[j+i*2]),i*_slotHeight);
+				}
 
 				int _trueIndex = j+i*2+_slotOffset;
 				itoa(_trueIndex,&(_labelBuffer[5]),10);
@@ -6391,6 +6457,7 @@ int vndsSaveSelector(){
 					}
 				}
 				goodDrawText(j*_slotWidth+5,i*_slotHeight+5,_labelBuffer,fontSize);
+				drawHallowRect(j*_slotWidth,i*_slotHeight,_slotWidth,_slotHeight,SAVESELECTORRECTTHICK,_r,_g,_b,255);
 			}
 		}
 		
