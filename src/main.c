@@ -31,10 +31,7 @@
 	TODO - With my setvar and if statement changes, I broke hima tip 09. But VNDSx acts the same as my program does when I run the script... VNDS Android exclusive features? Never worked in the first place?
 	TODO - Store last used VNDS load slot, set default save slot to the one you loaded.
 	TODO - Account for image chars in text width
-	TODO - Make it easier to access the save menu, perhaps the ability to bind it to start button?
-		In this case, text log could be up on dpad
-	TODO - text thumbs may not work well for games using OutputLine
-	TODO - Upgrade to libgoodbrew and use button mask
+	TODO - Upgrade to libgoodbrew
 	TODO - Milestone commit num (or date?) - LiveArea?
 	TODO - Gen thumbs from old saves
 		- Just call loadfile over and over
@@ -6410,16 +6407,28 @@ int vndsSaveSelector(){
 							fseek(fp,sizeof(long int)+sizeof(int),SEEK_CUR); // Seek past position and MAXLINES
 							int _displayLine;
 							fread(&_displayLine,sizeof(int),1,fp);
-							if (_displayLine!=0){ // If the currentLine is 0 then it was a blank screen when saving
-								--_displayLine; // We'll show the last complete line
-								int k;
-								for (k=0;k<_displayLine;++k){
-									skipLengthStringInFile(fp);
-								}
-								_loadedTextThumb[j+i*SAVEMENUPAGEW] = readLengthStringFromFile(fp);
-							}else{
-								_loadedTextThumb[j+i*SAVEMENUPAGEW]=strdup(""); // Not NULL
+
+							// This next block of code loads the text thumbnail. Extra code is used to support both VNDS games (which have their currentLine variable set to the next line they'll use, which is empty) and OutputLine games (which have their currentLine variable anywhere, including on a line that has text). This loading code checks if the text on the currentLine line has text on it. If it does, it'll show that one. Otherwise it will go back a line and show that one.
+							//
+							// Skip all but two lines before where we are
+							int k;
+							for (k=0;k<_displayLine-1;++k){
+								skipLengthStringInFile(fp);
 							}
+							// Read string right before where we are. If our primary line doesn't look good, this one will be used.
+							char* _backupString = readLengthStringFromFile(fp);
+							// If the display line is 0 then no lines were skipped and our backup string is actually our primary string
+							if (_displayLine!=0){
+								// If our current line isn't empty, we'll use that. Otherwise we'll use the backup line.
+								char* _possiblePrimary = readLengthStringFromFile(fp);
+								if (strlen(_possiblePrimary)!=0){
+									free(_backupString);
+									_backupString = _possiblePrimary;
+								}else{
+									free(_possiblePrimary);
+								}
+							}
+							_loadedTextThumb[j+i*SAVEMENUPAGEW] = _backupString;
 
 							char _thumbFilename[strlen(_tempFilename)+7];
 							strcpy(_thumbFilename,_tempFilename);
