@@ -1,10 +1,5 @@
 /*
 	(OPTIONAL TODO)
-		TODO - (optional) Garbage collector won't collect functions made in script files??? i.e: function hima_tips_09_b()
-			Maybe I can make a system similar to the one I made in MrDude that tracks all the global variables made between two points of time.
-				If I could do that, I could dispose of the variables properly.
-					Or I could just not do this and ignore the small problem. That's always an option.
-			(I think this problem isn't worth the effort. So few files have multiple functions that it won't be a problem. If the user runs the same file with multiple functions over and over then the old functions will become garbage anyway, so they can't run out of memory that way. They need a lot of files with lots of functions of different names)
 		TODO - (Optional) Italics
 			OutputLine(NULL, "　……知レバ、…巻キ込マレテシマウ…。",
 			   NULL, "...<i>If she found out... she would become involved</i>...", Line_Normal);
@@ -16,7 +11,6 @@
 				// Can I combine color with this?
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
-		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 		TODO - Remove scriptFolder variable
 		TODO - Inspect SetDrawingPointOfMessage
 			It appears to just set the line to draw on, or that's at least what it's usually used for.
@@ -26,19 +20,13 @@
 			How does this work in ADV mode?
 				Actually, the command is removed in ADV mode.
 		TODO - Expression changes look odd.
-	TODO - Allow VNDS sound command to stop all sounds
-	TODO - SetSpeedOfMessage
+		TODO - Allow VNDS sound command to stop all sounds
+		TODO - SetSpeedOfMessage
 	TODO - With my setvar and if statement changes, I broke hima tip 09. But VNDSx acts the same as my program does when I run the script... VNDS Android exclusive features? Never worked in the first place?
-	TODO - Store last used VNDS load slot, set default save slot to the one you loaded.
 	TODO - Account for image chars in text width
 	TODO - Upgrade to libgoodbrew
+		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 	TODO - Milestone commit num (or date?) - LiveArea?
-	TODO - Gen thumbs from old saves
-		- Just call loadfile over and over
-			- actuallty wouldn't work because it uses outputlinewait in it.
-				- Move outputlinewait to caller's responsibility or make it an argument?
-		- Then call normalsave with an argument to only save thumbnail
-	
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -73,7 +61,7 @@
 #define LOCATION_CG 1
 #define LOCATION_CGALT 2
 /////////////////////////////////////
-#define MAXBUSTCACHE 6
+#define MAXBUSTCACHE 8
 #define MAXIMAGECHAR 20
 #define MAXFILES 50
 #define MAXFILELENGTH 51
@@ -1373,7 +1361,7 @@ void outputLineWait(){
 					_selectedSlot=4;
 				}
 				char* _foundPath = easyVNDSSaveName(_selectedSlot);
-				if (!vndsNormalSave(_foundPath)){
+				if (!vndsNormalSave(_foundPath,1,1)){
 					PlayMenuSound();
 					drawRectangle(0,0,screenWidth,screenHeight,0,255,0,255);
 				}
@@ -3805,102 +3793,104 @@ char* easyVNDSSaveName(int _slot){
 // string - lastBGMFilename
 // int - lastBGMVolume
 // game variables
-char vndsNormalSave(char* _filename){
+char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 	if (nathanscriptCurrentOpenFile==NULL){
 		return 1;
 	}
 
-	FILE* fp = fopen(_filename,"wb");
-	if (fp==NULL){
-		return 1;
-	}
-	
-	// Save options file format
-	unsigned char _tempOptionsFormat = VNDSSAVEFORMAT;
-	fwrite(&_tempOptionsFormat,sizeof(unsigned char),1,fp); //
-
-	// Save the current script
-	writeLengthStringToFile(fp,currentScriptFilename);
-
-	// Save the position in the current script
-	long int _currentFilePosition = crossftell(nathanscriptCurrentOpenFile);
-	fwrite(&_currentFilePosition,sizeof(long int),1,fp); //
-
-	// Save the max number of lines we can have on screen, this makes the saves safe even if I change this number
-	int i;
-	i=MAXLINES;
-	fwrite(&i,sizeof(int),1,fp); //
-	// Save our current line
-	fwrite(&currentLine,sizeof(int),1,fp); //
-
-	// Save the current messages
-	for (i=0;i<MAXLINES;i++){
-		writeLengthStringToFile(fp, currentMessages[i]); //
-	}
-
-	// Save the background filename
-	writeLengthStringToFile(fp,lastBackgroundFilename); //
-
-	// Write the number of busts we're saving
-	fwrite(&maxBusts,sizeof(int),1,fp); //
-
-	// Write the bust data
-	for (i=0;i<maxBusts;i++){
-		fwrite(&(Busts[i].xOffset),sizeof(signed int),1,fp); //
-		fwrite(&(Busts[i].yOffset),sizeof(signed int),1,fp); //
-		if (Busts[i].relativeFilename==NULL){
-			writeLengthStringToFile(fp,""); //
-		}else{
-			writeLengthStringToFile(fp,Busts[i].relativeFilename); //
+	if (_saveSpot){
+		FILE* fp = fopen(_filename,"wb");
+		if (fp==NULL){
+			return 1;
 		}
-	}
-
-	writeLengthStringToFile(fp,lastBGMFilename);
-	fwrite(&lastBGMVolume,sizeof(int),1,fp);
-
-	// Write game specific var list
-	saveVariableList(fp,nathanscriptGamevarList,nathanscriptTotalGamevar); //
-	fclose(fp);
-
-
-	// Renderer specific code for saving thumbnails
-	#if PLATFORM == PLAT_VITA	
-		char _thumbFilename[strlen(_filename)+7];
-		strcpy(_thumbFilename,_filename);
-		strcat(_thumbFilename,".thumb");
-
-		int _destWidth = screenWidth/3;
-		int _destHeight = screenHeight/3;
-		vita2d_texture* _smallTexture = vita2d_create_empty_texture_rendertarget(_destWidth,_destHeight,SCE_GXM_TEXTURE_FORMAT_A8B8G8R8);
-
-		vita2d_pool_reset();
-		vita2d_start_drawing_advanced(_smallTexture,0);
-		Draw(0);
-		vita2d_end_drawing();
-
-		vita2d_wait_rendering_done();
-		sceDisplayWaitVblankStart();
-
-		// 
-		BMP* testimg = BMP_Create(_destWidth,_destHeight,24);
-		// Pixels stored in uint32_t
-		void* _currentImageData = vita2d_texture_get_datap(_smallTexture);
-		uint32_t y;
-		for (y=0;y<_destHeight;++y) {
-			uint32_t x;
-			for (x=0;x< _destWidth;++x) {
-				int _baseIndex = (x + _destWidth * y)*4;
-				BMP_SetPixelRGB(testimg,x,y,((uint8_t*)_currentImageData)[_baseIndex],((uint8_t*)_currentImageData)[_baseIndex+1],((uint8_t*)_currentImageData)[_baseIndex+2]);
+		
+		// Save options file format
+		unsigned char _tempOptionsFormat = VNDSSAVEFORMAT;
+		fwrite(&_tempOptionsFormat,sizeof(unsigned char),1,fp); //
+	
+		// Save the current script
+		writeLengthStringToFile(fp,currentScriptFilename);
+	
+		// Save the position in the current script
+		long int _currentFilePosition = crossftell(nathanscriptCurrentOpenFile);
+		fwrite(&_currentFilePosition,sizeof(long int),1,fp); //
+	
+		// Save the max number of lines we can have on screen, this makes the saves safe even if I change this number
+		int i;
+		i=MAXLINES;
+		fwrite(&i,sizeof(int),1,fp); //
+		// Save our current line
+		fwrite(&currentLine,sizeof(int),1,fp); //
+	
+		// Save the current messages
+		for (i=0;i<MAXLINES;i++){
+			writeLengthStringToFile(fp, currentMessages[i]); //
+		}
+	
+		// Save the background filename
+		writeLengthStringToFile(fp,lastBackgroundFilename); //
+	
+		// Write the number of busts we're saving
+		fwrite(&maxBusts,sizeof(int),1,fp); //
+	
+		// Write the bust data
+		for (i=0;i<maxBusts;i++){
+			fwrite(&(Busts[i].xOffset),sizeof(signed int),1,fp); //
+			fwrite(&(Busts[i].yOffset),sizeof(signed int),1,fp); //
+			if (Busts[i].relativeFilename==NULL){
+				writeLengthStringToFile(fp,""); //
+			}else{
+				writeLengthStringToFile(fp,Busts[i].relativeFilename); //
 			}
 		}
-		BMP_WriteFile(testimg,_thumbFilename);
-		BMP_Free(testimg);
-		
-		freeTexture(_smallTexture);
-	#endif
+	
+		writeLengthStringToFile(fp,lastBGMFilename);
+		fwrite(&lastBGMVolume,sizeof(int),1,fp);
+	
+		// Write game specific var list
+		saveVariableList(fp,nathanscriptGamevarList,nathanscriptTotalGamevar); //
+		fclose(fp);
+	}
+	if (_saveThumb){
+		// Renderer specific code for saving thumbnails
+		#if PLATFORM == PLAT_VITA	
+			char _thumbFilename[strlen(_filename)+7];
+			strcpy(_thumbFilename,_filename);
+			strcat(_thumbFilename,".thumb");
+	
+			int _destWidth = screenWidth/3;
+			int _destHeight = screenHeight/3;
+			vita2d_texture* _smallTexture = vita2d_create_empty_texture_rendertarget(_destWidth,_destHeight,SCE_GXM_TEXTURE_FORMAT_A8B8G8R8);
+	
+			vita2d_pool_reset();
+			vita2d_start_drawing_advanced(_smallTexture,0);
+			Draw(0);
+			vita2d_end_drawing();
+	
+			vita2d_wait_rendering_done();
+			sceDisplayWaitVblankStart();
+	
+			// 
+			BMP* testimg = BMP_Create(_destWidth,_destHeight,24);
+			// Pixels stored in uint32_t
+			void* _currentImageData = vita2d_texture_get_datap(_smallTexture);
+			uint32_t y;
+			for (y=0;y<_destHeight;++y) {
+				uint32_t x;
+				for (x=0;x< _destWidth;++x) {
+					int _baseIndex = (x + _destWidth * y)*4;
+					BMP_SetPixelRGB(testimg,x,y,((uint8_t*)_currentImageData)[_baseIndex],((uint8_t*)_currentImageData)[_baseIndex+1],((uint8_t*)_currentImageData)[_baseIndex+2]);
+				}
+			}
+			BMP_WriteFile(testimg,_thumbFilename);
+			BMP_Free(testimg);
+			
+			freeTexture(_smallTexture);
+		#endif
+	}
 	return 0;
 }
-void vndsNormalLoad(char* _filename){
+void vndsNormalLoad(char* _filename, char _startLoadedGame){
 	FILE* fp = fopen(_filename,"rb");
 	unsigned char _readFileFormat;
 	fread(&_readFileFormat,sizeof(unsigned char),1,fp); //
@@ -3976,13 +3966,15 @@ void vndsNormalLoad(char* _filename){
 	// Open
 	nathanscriptCurrentOpenFile = crossfopen(_tempLoadedFilename,"rb");
 	crossfseek(nathanscriptCurrentOpenFile,_readFilePosition,CROSSFILE_START);
-	// Don't instantly proceed
-	endType=Line_Normal;
-	outputLineWait();
-	// Now we can
-	nathanscriptLowDoFile(nathanscriptCurrentOpenFile,inBetweenVNDSLines);
-	// Must be done manually because low do file. We must use the global variable here because the script may have changed
-	crossfclose(nathanscriptCurrentOpenFile);
+	if (_startLoadedGame){
+		// Don't instantly proceed
+		endType=Line_Normal;
+		outputLineWait();
+		// Now we can
+		nathanscriptLowDoFile(nathanscriptCurrentOpenFile,inBetweenVNDSLines);
+		// Must be done manually because low do file. We must use the global variable here because the script may have changed
+		crossfclose(nathanscriptCurrentOpenFile);
+	}
 }
 void _textboxTransition(char _isOn, int _totalTime){
 	if (MessageBoxEnabled!=_isOn && !isSkipping){
@@ -4169,7 +4161,7 @@ void safeVNDSSaveMenu(){
 	int _chosenSlot = vndsSaveSelector();
 	if (_chosenSlot!=-1){
 		char* _savedPath = easyVNDSSaveName(_chosenSlot);
-		if (vndsNormalSave(_savedPath)){
+		if (vndsNormalSave(_savedPath,1,1)){
 			easyMessagef(1,"Failed to save to %s",_savedPath);
 		}
 		free(_savedPath);
@@ -6387,6 +6379,7 @@ int vndsSaveSelector(){
 		}
 		controlsEnd();
 		if (_reloadThumbs){
+			easyMessagef(0,"Loading thumbnails...");
 			if (_slotOffset<0){
 				_slotOffset=MAXSAVESLOT-SAVEMENUPAGESIZE;
 			}else if (_slotOffset>MAXSAVESLOT-SAVEMENUPAGESIZE){
@@ -6396,7 +6389,12 @@ int vndsSaveSelector(){
 			for (i=0;i<SAVEMENUPAGEH;++i){
 				int j;
 				for (j=0;j<SAVEMENUPAGEW;++j){
-					int _trueIndex = j+i*SAVEMENUPAGEW+_slotOffset;
+					int _tempIndex = j+i*SAVEMENUPAGEW;
+					int _trueIndex = _tempIndex+_slotOffset;
+					if (_loadedThumbnail[_tempIndex]!=NULL){
+						free(_loadedThumbnail[_tempIndex]);
+						_loadedThumbnail[_tempIndex]=NULL;
+					}
 					char* _tempFilename = easyVNDSSaveName(_trueIndex);
 					if (checkFileExist(_tempFilename)){
 						FILE* fp = fopen(_tempFilename,"rb");
@@ -6428,26 +6426,25 @@ int vndsSaveSelector(){
 									free(_possiblePrimary);
 								}
 							}
-							_loadedTextThumb[j+i*SAVEMENUPAGEW] = _backupString;
+							_loadedTextThumb[_tempIndex] = _backupString;
 
 							char _thumbFilename[strlen(_tempFilename)+7];
 							strcpy(_thumbFilename,_tempFilename);
 							strcat(_thumbFilename,".thumb");
-
 							if (checkFileExist(_thumbFilename)){
 								#if PLATFORM == PLAT_VITA
 									// temp for load BMP
-									_loadedThumbnail[j+i*SAVEMENUPAGEW]=vita2d_load_BMP_file(_thumbFilename);
+									_loadedThumbnail[_tempIndex]=vita2d_load_BMP_file(_thumbFilename);
 								#else
-									_loadedThumbnail[j+i*SAVEMENUPAGEW]=loadPNG(_thumbFilename);
+									_loadedThumbnail[_tempIndex]=loadPNG(_thumbFilename);
 								#endif
 							}
 						}else{
-							_loadedTextThumb[j+i*SAVEMENUPAGEW]=NULL;
+							_loadedTextThumb[_tempIndex]=NULL;
 						}
 						fclose(fp);
 					}else{
-						_loadedTextThumb[j+i*SAVEMENUPAGEW]=NULL;
+						_loadedTextThumb[_tempIndex]=NULL;
 					}
 					free(_tempFilename);
 				}
@@ -6459,10 +6456,11 @@ int vndsSaveSelector(){
 		for (i=0;i<SAVEMENUPAGEH;++i){
 			int j;
 			for (j=0;j<SAVEMENUPAGEW;++j){
+				int _tempIndex = j+i*SAVEMENUPAGEW;
 				unsigned char _r;
 				unsigned char _g;
 				unsigned char _b;
-				if (_selected==j+i*SAVEMENUPAGEW){
+				if (_selected==_tempIndex){
 					_r=0;
 					_g=255;
 					_b=0;
@@ -6473,18 +6471,18 @@ int vndsSaveSelector(){
 				}
 				
 				// Thumb goes behind everything else
-				if (_loadedThumbnail[j+i*SAVEMENUPAGEW]!=NULL){
-					drawTexture(_loadedThumbnail[j+i*SAVEMENUPAGEW],(j+1)*_slotWidth-getTextureWidth(_loadedThumbnail[j+i*SAVEMENUPAGEW]),i*_slotHeight);
+				if (_loadedThumbnail[_tempIndex]!=NULL){
+					drawTexture(_loadedThumbnail[_tempIndex],(j+1)*_slotWidth-getTextureWidth(_loadedThumbnail[_tempIndex]),i*_slotHeight);
 				}
 
-				int _trueIndex = j+i*SAVEMENUPAGEW+_slotOffset;
+				int _trueIndex = _tempIndex+_slotOffset;
 				itoa(_trueIndex,&(_labelBuffer[5]),10);
-				if (_loadedTextThumb[j+i*SAVEMENUPAGEW]==NULL){
+				if (_loadedTextThumb[_tempIndex]==NULL){
 					strcat(_labelBuffer," (Empty)");
 				}else{
 					char** _wrappedLines;
 					int _numLines;
-					wrapText(_loadedTextThumb[j+i*SAVEMENUPAGEW],&_numLines,&_wrappedLines,_slotWidth-5);
+					wrapText(_loadedTextThumb[_tempIndex],&_numLines,&_wrappedLines,_slotWidth-5);
 
 					int k;
 					for (k=0;k<_numLines;++k){
@@ -6606,7 +6604,7 @@ void VNDSNavigationMenu(){
 					if (_chosenSlot!=-1){
 						char* _loadPath = easyVNDSSaveName(_chosenSlot);
 						if (checkFileExist(_loadPath)){
-							vndsNormalLoad(_loadPath);
+							vndsNormalLoad(_loadPath,1);
 						}else{
 							easyMessagef(1,"Save file %s does not exist",_loadPath);
 						}
@@ -6631,6 +6629,25 @@ void VNDSNavigationMenu(){
 				currentGameStatus = GAMESTATUS_QUIT;
 			}
 		}
+
+		if (wasJustPressed(SCE_CTRL_SELECT) && isDown(SCE_CTRL_LTRIGGER) && isDown(SCE_CTRL_RTRIGGER)){
+			if (LazyChoice("Make thumbnails from old saves?",NULL,NULL,NULL)){
+				// Before thumbnails, 255 was the max slot
+				int i;
+				for (i=0;i<=255;++i){
+					easyMessagef(0,"%d/255",i);
+					char* _nextFilename = easyVNDSSaveName(i);
+					if (checkFileExist(_nextFilename)){
+						vndsNormalLoad(_nextFilename,0);
+						vndsNormalSave(_nextFilename,0,1);
+						crossfclose(nathanscriptCurrentOpenFile);
+						nathanscriptCurrentOpenFile=NULL;
+					}
+					free(_nextFilename);
+				}
+			}
+		}
+
 		controls_setDefaultGame();
 		controlsEnd();
 		startDrawing();
@@ -6896,6 +6913,12 @@ signed char init(){
 		svcGetThreadPriority(&_foundMainThreadPriority, CUR_THREAD_HANDLE);
 		_3dsSoundUpdateThread = threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
 	#endif
+	#if PLATFORM == PLAT_VITA
+		sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
+		sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
+		sceTouchEnableTouchForce(SCE_TOUCH_PORT_FRONT);
+		sceTouchEnableTouchForce(SCE_TOUCH_PORT_BACK);
+	#endif
 
 	testCode();
 	return 0;
@@ -6905,13 +6928,6 @@ int main(int argc, char *argv[]){
 	if (init()==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
-
-	#if PLATFORM == PLAT_VITA
-		sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
-		sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
-		sceTouchEnableTouchForce(SCE_TOUCH_PORT_FRONT);
-		sceTouchEnableTouchForce(SCE_TOUCH_PORT_BACK);
-	#endif
 
 	// Put stupid test stuff here
 	while (currentGameStatus!=GAMESTATUS_QUIT){
