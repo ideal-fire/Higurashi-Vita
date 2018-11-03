@@ -32,10 +32,9 @@
 	TODO - Account for image chars in text width
 	TODO - Make it easier to access the save menu, perhaps the ability to bind it to start button?
 		In this case, text log could be up on dpad
-	TODO - Can't save right after loading, the problem with this is that save files can't be moved.
 	TODO - text thumbs may not work well for games using OutputLine
 	TODO - Upgrade to libgoodbrew and use button mask
-	TODO - Milestone commit - LiveArea?
+	TODO - Milestone commit num (or date?) - LiveArea?
 	TODO - Gen thumbs from old saves
 		- Just call loadfile over and over
 			- actuallty wouldn't work because it uses outputlinewait in it.
@@ -3961,10 +3960,16 @@ void vndsNormalLoad(char* _filename){
 		updateDynamicADVBox(-1,-1);
 	}
 
-	endType=Line_Normal;	
+	// Open
+	nathanscriptCurrentOpenFile = crossfopen(_tempLoadedFilename,"rb");
+	crossfseek(nathanscriptCurrentOpenFile,_readFilePosition,CROSSFILE_START);
+	// Don't instantly proceed
+	endType=Line_Normal;
 	outputLineWait();
-
-	nathanscriptDoScript(_tempLoadedFilename,_readFilePosition,inBetweenVNDSLines);
+	// Now we can
+	nathanscriptLowDoFile(nathanscriptCurrentOpenFile,inBetweenVNDSLines);
+	// Must be done manually because low do file. We must use the global variable here because the script may have changed
+	crossfclose(nathanscriptCurrentOpenFile);
 }
 void _textboxTransition(char _isOn, int _totalTime){
 	if (MessageBoxEnabled!=_isOn && !isSkipping){

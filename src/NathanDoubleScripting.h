@@ -1006,12 +1006,8 @@ void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nat
 	return;
 }
 
-void nathanscriptDoScript(char* _filename, long int _startingOffset, intFunction _beforeExecuteFunction){
-	nathanscriptCurrentOpenFile = crossfopen(_filename,"rb");
-	if (_startingOffset>0){
-		crossfseek(nathanscriptCurrentOpenFile,_startingOffset,CROSSFILE_START);
-		//printf("Wanted to be at: %d\nActually at %d\n",_startingOffset,ftell(nathanscriptCurrentOpenFile));
-	}
+void nathanscriptLowDoFile(CROSSFILE* _passedFile, intFunction _beforeExecuteFunction){
+	nathanscriptCurrentOpenFile = _passedFile;
 	while (!crossfeof(nathanscriptCurrentOpenFile)){
 		int _foundCommandIndex;
 		nathanscriptVariable* _parsedCommandArgument;
@@ -1040,6 +1036,14 @@ void nathanscriptDoScript(char* _filename, long int _startingOffset, intFunction
 		}
 		nathanscriptCurrentLine++;
 	}
+}
+
+void nathanscriptDoScript(char* _filename, long int _startingOffset, intFunction _beforeExecuteFunction){
+	nathanscriptCurrentOpenFile = crossfopen(_filename,"rb");
+	if (_startingOffset>0){
+		crossfseek(nathanscriptCurrentOpenFile,_startingOffset,CROSSFILE_START);
+	}
+	nathanscriptLowDoFile(nathanscriptCurrentOpenFile,_beforeExecuteFunction);
 	crossfclose(nathanscriptCurrentOpenFile);
 }
 
