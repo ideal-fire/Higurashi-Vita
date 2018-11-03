@@ -35,6 +35,13 @@
 	TODO - Can't save right after loading, the problem with this is that save files can't be moved.
 	TODO - text thumbs may not work well for games using OutputLine
 	TODO - Upgrade to libgoodbrew and use button mask
+	TODO - Milestone commit - LiveArea?
+	TODO - Gen thumbs from old saves
+		- Just call loadfile over and over
+			- actuallty wouldn't work because it uses outputlinewait in it.
+				- Move outputlinewait to caller's responsibility or make it an argument?
+		- Then call normalsave with an argument to only save thumbnail
+	
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -3843,26 +3850,24 @@ char vndsNormalSave(char* _filename){
 	fclose(fp);
 
 
-	#if PLATFORM == PLAT_VITA
-	
+	// Renderer specific code for saving thumbnails
+	#if PLATFORM == PLAT_VITA	
 		char _thumbFilename[strlen(_filename)+7];
 		strcpy(_thumbFilename,_filename);
 		strcat(_thumbFilename,".thumb");
 
 		int _destWidth = screenWidth/3;
 		int _destHeight = screenHeight/3;
-		vita2d_texture* _bigTexture = vita2d_create_empty_texture_rendertarget(960,544,SCE_GXM_TEXTURE_FORMAT_A8B8G8R8);
 		vita2d_texture* _smallTexture = vita2d_create_empty_texture_rendertarget(_destWidth,_destHeight,SCE_GXM_TEXTURE_FORMAT_A8B8G8R8);
 
 		vita2d_pool_reset();
-		vita2d_start_drawing_advanced(_bigTexture,SCE_GXM_SCENE_FRAGMENT_SET_DEPENDENCY);
+		vita2d_start_drawing_advanced(_smallTexture,0);
 		Draw(0);
 		vita2d_end_drawing();
 
-		vita2d_start_drawing_advanced(_smallTexture,SCE_GXM_SCENE_VERTEX_WAIT_FOR_DEPENDENCY);
-		vita2d_draw_texture(_bigTexture,0,0);
-		vita2d_end_drawing();
-		
+		vita2d_wait_rendering_done();
+		sceDisplayWaitVblankStart();
+
 		// 
 		BMP* testimg = BMP_Create(_destWidth,_destHeight,24);
 		// Pixels stored in uint32_t
@@ -3878,10 +3883,8 @@ char vndsNormalSave(char* _filename){
 		BMP_WriteFile(testimg,_thumbFilename);
 		BMP_Free(testimg);
 		
-		freeTexture(_bigTexture);
 		freeTexture(_smallTexture);
 	#endif
-
 	return 0;
 }
 void vndsNormalLoad(char* _filename){
