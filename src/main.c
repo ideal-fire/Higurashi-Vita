@@ -13,6 +13,7 @@
 			(A possible solution is to store x cordinates to start italics text)
 				// Here's the plan.
 				// Make another message array, but store text that is in italics in it
+				// Can I combine color with this?
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
@@ -1357,11 +1358,12 @@ void outputLineWait(){
 		Draw(MessageBoxEnabled);
 		// Easy save menu
 		if (currentlyVNDSGame && isDown(SCE_CTRL_RTRIGGER)){
-			drawRectangle(0,0,screenWidth,currentTextHeight*4,0,0,0,255);
-			goodDrawText(0,currentTextHeight*0,"UP: Save slot 1",fontSize);
-			goodDrawText(0,currentTextHeight*1,"DOWN: Save slot 2",fontSize);
-			goodDrawText(0,currentTextHeight*2,"LEFT: Save slot 3",fontSize);
-			goodDrawText(0,currentTextHeight*3,"RIGHT: Save slot 4",fontSize);
+			drawRectangle(0,0,screenWidth,currentTextHeight*5,0,0,0,255);
+			goodDrawText(6,currentTextHeight*0+6,"UP: Save slot 1",fontSize);
+			goodDrawText(6,currentTextHeight*1+6,"DOWN: Save slot 2",fontSize);
+			goodDrawText(6,currentTextHeight*2+6,"LEFT: Save slot 3",fontSize);
+			goodDrawText(6,currentTextHeight*3+6,"RIGHT: Save slot 4",fontSize);
+			drawHallowRect(0,0,screenWidth,currentTextHeight*5,5,255,255,255,255);
 			if (wasJustPressed(SCE_CTRL_UP) || wasJustPressed(SCE_CTRL_DOWN) || wasJustPressed(SCE_CTRL_LEFT) || wasJustPressed(SCE_CTRL_RIGHT)){
 				unsigned char _selectedSlot=1;
 				if (wasJustPressed(SCE_CTRL_UP)){
@@ -1416,6 +1418,13 @@ void outputLineWait(){
 		}
 		updateControlsGeneral();
 		if (wasJustPressed(SCE_CTRL_START)){
+			if (currentlyVNDSGame){
+				safeVNDSSaveMenu();
+			}else{
+				DrawHistory(messageHistory);
+			}
+		}
+		if (wasJustPressed(SCE_CTRL_UP)){
 			DrawHistory(messageHistory);
 		}
 		controlsEnd();
@@ -1741,7 +1750,15 @@ void ResetDataDirectory(){
 		generateDefaultDataDirectory(&DATAFOLDER,0);
 	#endif
 }
-
+int wrapNum(int _passed, int _min, int _max){
+	if (_passed<_min){
+		return _max-(_min-_passed-1);
+	}
+	if (_passed>_max){
+		return _min+(_passed-_max-1);
+	}
+	return _passed;
+}
 void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, int _maxWidth){
 	*_numLines=-1;
 	char* _workable = strdup(_passedMessage);
@@ -3378,7 +3395,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 
 		controlsStart();
 		if (wasJustPressed(SCE_CTRL_UP) || wasJustPressed(SCE_CTRL_LEFT)){
-			_scrollOffset-=wasJustPressed(SCE_CTRL_LEFT) ? HISTORYSCROLLRATE*2 : HISTORYSCROLLRATE;;
+			_scrollOffset-=wasJustPressed(SCE_CTRL_LEFT) ? HISTORYSCROLLRATE*2 : HISTORYSCROLLRATE;
 			if (_scrollOffset<0){
 				_scrollOffset=0;
 			}
@@ -3918,7 +3935,6 @@ void vndsNormalLoad(char* _filename){
 	nextVndsBustshotSlot=0;
 	fread(&_maxReadBusts,sizeof(int),1,fp); //
 	for (i=0;i<_maxReadBusts;i++){
-		printf("Read %d/%d\n",i,_maxReadBusts);
 		signed int _tempReadX;
 		signed int _tempReadY;
 		char* _tempReadFilename;
@@ -4151,6 +4167,16 @@ char lazyLuaError(int _loadResult){
 		return 1;
 	}
 	return 0;
+}
+void safeVNDSSaveMenu(){
+	int _chosenSlot = vndsSaveSelector();
+	if (_chosenSlot!=-1){
+		char* _savedPath = easyVNDSSaveName(_chosenSlot);
+		if (vndsNormalSave(_savedPath)){
+			easyMessagef(1,"Failed to save to %s",_savedPath);
+		}
+		free(_savedPath);
+	}
 }
 /*
 =================================================
@@ -5564,14 +5590,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				PlayBGM(lastBGMFilename,lastBGMVolume,1);
 			}else if (_choice==_vndsSaveOptionsSlot){ // VNDS Save
 				PlayMenuSound();
-				int _chosenSlot = vndsSaveSelector();
-				if (_chosenSlot!=-1){
-					char* _savedPath = easyVNDSSaveName(_chosenSlot);
-					if (vndsNormalSave(_savedPath)){
-						easyMessagef(1,"Failed to save to %s",_savedPath);
-					}
-					free(_savedPath);
-				}
+				safeVNDSSaveMenu();
 			}else if (_choice==_vndsHitBottomActionSlot){
 				vndsClearAtBottom = !vndsClearAtBottom;
 				_settingsOptionsValueText[_vndsHitBottomActionSlot] = charToBoolString(vndsClearAtBottom);
@@ -6311,6 +6330,9 @@ void NewGameMenu(){
 	}
 }
 #define SAVESELECTORRECTTHICK 5
+#define SAVEMENUPAGEW 2
+#define SAVEMENUPAGEH 3
+#define SAVEMENUPAGESIZE (SAVEMENUPAGEW*SAVEMENUPAGEH)
 #define MAXSAVESLOT 258 // Divisible by 6
 // Returns selected slot or -1
 int vndsSaveSelector(){
@@ -6320,8 +6342,8 @@ int vndsSaveSelector(){
 	int _slotWidth = screenWidth/2;
 	int _slotHeight = screenHeight/3;
 
-	CrossTexture* _loadedThumbnail[6]={NULL};
-	char* _loadedTextThumb[6]={NULL};
+	CrossTexture* _loadedThumbnail[SAVEMENUPAGESIZE]={NULL};
+	char* _loadedTextThumb[SAVEMENUPAGESIZE]={NULL};
 
 	char _reloadThumbs=1;
 
@@ -6333,11 +6355,11 @@ int vndsSaveSelector(){
 		controlsStart();
 		if (wasJustPressed(SCE_CTRL_RIGHT)){
 			if (isDown(SCE_CTRL_RTRIGGER)){
-				_slotOffset+=6*5;
+				_slotOffset+=SAVEMENUPAGESIZE*5;
 				_reloadThumbs=1;
 			}else{
 				if ((_selected&1)==1){
-					_slotOffset+=6;
+					_slotOffset+=SAVEMENUPAGESIZE;
 					--_selected;
 					_reloadThumbs=1;
 				}else{
@@ -6346,11 +6368,11 @@ int vndsSaveSelector(){
 			}
 		}if (wasJustPressed(SCE_CTRL_LEFT)){
 			if (isDown(SCE_CTRL_RTRIGGER)){
-				_slotOffset-=6*5;
+				_slotOffset-=SAVEMENUPAGESIZE*5;
 				_reloadThumbs=1;
 			}else{
 				if ((_selected&1)==0){
-					_slotOffset-=6;
+					_slotOffset-=SAVEMENUPAGESIZE;
 					++_selected;
 					_reloadThumbs=1;
 				}else{
@@ -6358,13 +6380,9 @@ int vndsSaveSelector(){
 				}
 			}
 		}if (wasJustPressed(SCE_CTRL_UP)){
-			if (_selected>1){
-				_selected-=2;
-			}
+			_selected = wrapNum(_selected-SAVEMENUPAGEW,0,SAVEMENUPAGESIZE-1);
 		}if (wasJustPressed(SCE_CTRL_DOWN)){
-			if (_selected<4){
-				_selected+=2;
-			}
+			_selected = wrapNum(_selected+SAVEMENUPAGEW,0,SAVEMENUPAGESIZE-1);
 		}if (wasJustPressed(SCE_CTRL_CROSS)){
 			return _selected+_slotOffset;
 		}if (wasJustPressed(SCE_CTRL_CIRCLE)){
@@ -6373,15 +6391,15 @@ int vndsSaveSelector(){
 		controlsEnd();
 		if (_reloadThumbs){
 			if (_slotOffset<0){
-				_slotOffset=MAXSAVESLOT-6;
-			}else if (_slotOffset>MAXSAVESLOT-6){
+				_slotOffset=MAXSAVESLOT-SAVEMENUPAGESIZE;
+			}else if (_slotOffset>MAXSAVESLOT-SAVEMENUPAGESIZE){
 				_slotOffset=0;
 			}
 			_reloadThumbs=0;
-			for (i=0;i<3;++i){
+			for (i=0;i<SAVEMENUPAGEH;++i){
 				int j;
-				for (j=0;j<2;++j){
-					int _trueIndex = j+i*2+_slotOffset;
+				for (j=0;j<SAVEMENUPAGEW;++j){
+					int _trueIndex = j+i*SAVEMENUPAGEW+_slotOffset;
 					char* _tempFilename = easyVNDSSaveName(_trueIndex);
 					if (checkFileExist(_tempFilename)){
 						FILE* fp = fopen(_tempFilename,"rb");
@@ -6398,9 +6416,9 @@ int vndsSaveSelector(){
 								for (k=0;k<_displayLine;++k){
 									skipLengthStringInFile(fp);
 								}
-								_loadedTextThumb[j+i*2] = readLengthStringFromFile(fp);
+								_loadedTextThumb[j+i*SAVEMENUPAGEW] = readLengthStringFromFile(fp);
 							}else{
-								_loadedTextThumb[j+i*2]=strdup(""); // Not NULL
+								_loadedTextThumb[j+i*SAVEMENUPAGEW]=strdup(""); // Not NULL
 							}
 
 							char _thumbFilename[strlen(_tempFilename)+7];
@@ -6410,17 +6428,17 @@ int vndsSaveSelector(){
 							if (checkFileExist(_thumbFilename)){
 								#if PLATFORM == PLAT_VITA
 									// temp for load BMP
-									_loadedThumbnail[j+i*2]=vita2d_load_BMP_file(_thumbFilename);
+									_loadedThumbnail[j+i*SAVEMENUPAGEW]=vita2d_load_BMP_file(_thumbFilename);
 								#else
-									_loadedThumbnail[j+i*2]=loadPNG(_thumbFilename);
+									_loadedThumbnail[j+i*SAVEMENUPAGEW]=loadPNG(_thumbFilename);
 								#endif
 							}
 						}else{
-							_loadedTextThumb[j+i*2]=NULL;
+							_loadedTextThumb[j+i*SAVEMENUPAGEW]=NULL;
 						}
 						fclose(fp);
 					}else{
-						_loadedTextThumb[j+i*2]=NULL;
+						_loadedTextThumb[j+i*SAVEMENUPAGEW]=NULL;
 					}
 					free(_tempFilename);
 				}
@@ -6429,13 +6447,13 @@ int vndsSaveSelector(){
 		startDrawing();
 		char _labelBuffer[17];
 		strcpy(_labelBuffer,"Slot ");
-		for (i=0;i<3;++i){
+		for (i=0;i<SAVEMENUPAGEH;++i){
 			int j;
-			for (j=0;j<2;++j){
+			for (j=0;j<SAVEMENUPAGEW;++j){
 				unsigned char _r;
 				unsigned char _g;
 				unsigned char _b;
-				if (_selected==j+i*2){
+				if (_selected==j+i*SAVEMENUPAGEW){
 					_r=0;
 					_g=255;
 					_b=0;
@@ -6446,18 +6464,18 @@ int vndsSaveSelector(){
 				}
 				
 				// Thumb goes behind everything else
-				if (_loadedThumbnail[j+i*2]!=NULL){
-					drawTexture(_loadedThumbnail[j+i*2],(j+1)*_slotWidth-getTextureWidth(_loadedThumbnail[j+i*2]),i*_slotHeight);
+				if (_loadedThumbnail[j+i*SAVEMENUPAGEW]!=NULL){
+					drawTexture(_loadedThumbnail[j+i*SAVEMENUPAGEW],(j+1)*_slotWidth-getTextureWidth(_loadedThumbnail[j+i*SAVEMENUPAGEW]),i*_slotHeight);
 				}
 
-				int _trueIndex = j+i*2+_slotOffset;
+				int _trueIndex = j+i*SAVEMENUPAGEW+_slotOffset;
 				itoa(_trueIndex,&(_labelBuffer[5]),10);
-				if (_loadedTextThumb[j+i*2]==NULL){
+				if (_loadedTextThumb[j+i*SAVEMENUPAGEW]==NULL){
 					strcat(_labelBuffer," (Empty)");
 				}else{
 					char** _wrappedLines;
 					int _numLines;
-					wrapText(_loadedTextThumb[j+i*2],&_numLines,&_wrappedLines,_slotWidth-5);
+					wrapText(_loadedTextThumb[j+i*SAVEMENUPAGEW],&_numLines,&_wrappedLines,_slotWidth-5);
 
 					int k;
 					for (k=0;k<_numLines;++k){

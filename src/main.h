@@ -26,6 +26,8 @@ char lazyLuaError(int _loadResult);
 char* easyVNDSSaveName(int _slot);
 char vndsNormalSave(char* _filename);
 int vndsSaveSelector();
+void drawHallowRect(int _x, int _y, int _w, int _h, int _thick, int _r, int _g, int _b, int _a);
+void safeVNDSSaveMenu();
 typedef struct{
 	char** theArray;
 	unsigned char length;
