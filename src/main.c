@@ -5400,9 +5400,12 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		fpsCapStart();
 		controlsStart();
 		if (altMenuControls(&_choice,0,_maxOptionSlotUsed)){
-			if (_choice>=_optionsOnScreen){
-				_scrollOffset = _choice-(_optionsOnScreen-1);
-			}else if (_choice<_optionsOnScreen){
+			if (_choice>=_optionsOnScreen/2){
+				_scrollOffset = _choice-_optionsOnScreen/2;
+				if (_scrollOffset+_optionsOnScreen>_maxOptionSlotUsed){
+					_scrollOffset=_maxOptionSlotUsed-(_optionsOnScreen-1);
+				}
+			}else{
 				_scrollOffset=0;
 			}
 		}
@@ -5659,7 +5662,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				goodDrawText(MENUOPTIONOFFSET+textWidth(fontSize,_settingsOptionsMainText[i+_scrollOffset])+singleSpaceWidth,5+currentTextHeight*i,_settingsOptionsValueText[i+_scrollOffset],fontSize);
 			}
 		}
-		if (_needToScroll && _choice!=_maxOptionSlotUsed){
+		if (_needToScroll && _scrollOffset!=_maxOptionSlotUsed-(_optionsOnScreen-1)){
 			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*_optionsOnScreen,"\\/\\/\\/\\/",fontSize); // First option is at 0, so don't subtract one from _optionsOnScreen
 		}
 		
