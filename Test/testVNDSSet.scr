@@ -1,0 +1,52 @@
+// Note that tests further in the file may rely on tests earlier in the file working. Meaning that if step 2 doesn't work, step 3 may not work either as a direct result. 
+
+// Step 1 - Test setting variables to constants
+	setvar mytestint = 5
+	setvar myteststring = "happy"
+	
+	if mytestint != 5
+		text oh no, setting to constant int doesn't work
+	fi
+	if myteststring != "happy"
+		text oh no, setting to constant string doesn't work
+	fi
+
+
+// Step 2 - Test setting NEW variables to other variables. Because they are new variables, they should take the type of the variable they're set to
+	setvar secondtestint = mytestint
+	setvar secondteststring = myteststring
+	// do operations that work differently depending on type
+	setvar secondtestint - 1
+	setvar secondteststring + 4
+	if secondtestint != 4
+		text oh no, setting new int to an int doesn't work
+	fi
+	if secondteststring != "happy4"
+		text oh no, setting new string to existing string doesn't work
+	fi
+
+// Step 3 - Test implicit variable type changing
+	setvar step3str = myteststring
+	setvar step3int = mytestint
+
+	// Test the int
+	setvar step3int - 1
+	if step3int != 4
+		text somehow step3int isn't an int even though we haven't broken it yet
+	fi
+	// These lines will convert it to a string
+	setvar step3int = "bla"
+	setvar step3int = mytestint
+	setvar step3int - 1
+	if step3int != 5
+		text NO! step3int should be a string forever now!
+	fi
+
+	// Test the string
+	setvar step3str = mytestint
+	setvar step3str - 1
+	if step3str == 4
+		text NO! step3str can't be changed into an int like that. It's an int FOREVER
+	fi
+
+text end

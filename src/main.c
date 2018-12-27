@@ -27,6 +27,7 @@
 	TODO - Upgrade to libgoodbrew
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 	TODO - Milestone commit num (or date?) - LiveArea?
+	TODO - Fix that ugly menu. Make it start to scroll when cursor is halfway
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -3729,10 +3730,11 @@ void saveVariableList(FILE* fp, nathanscriptGameVariable* _listToSave, int _tota
 	fwrite(&_totalListLength,sizeof(int),1,fp);
 	for (i=0;i<_totalListLength;i++){
 		char _correctVariableType = _listToSave[i].variable.variableType;
+		char* _tempAsString = nathanscriptVariableAsString(&(_listToSave[i].variable));
 		fwrite(&(_correctVariableType),sizeof(char),1,fp);
 		writeLengthStringToFile(fp,_listToSave[i].name);
-		writeLengthStringToFile(fp,nathanvariableToString(&(_listToSave[i].variable)));
-		nathanscriptConvertVariable(&(_listToSave[i].variable),_correctVariableType);
+		writeLengthStringToFile(fp,_tempAsString);
+		free(_tempAsString);
 	}
 }
 void skipLengthStringInFile(FILE* fp){
@@ -5806,6 +5808,8 @@ void TitleScreen(){
 				controlsEnd();
 				char* _tempManualFileSelectionResult;
 				FileSelector(scriptFolder,&_tempManualFileSelectionResult,(char*)"Select a script");
+				controlsStart();
+				controlsEnd();
 				if (_tempManualFileSelectionResult!=NULL){
 					if (strlen(_tempManualFileSelectionResult)>4 && strcmp(&(_tempManualFileSelectionResult[strlen(_tempManualFileSelectionResult)-4]),".scr")==0){
 						currentGameStatus=GAMESTATUS_MAINGAME;

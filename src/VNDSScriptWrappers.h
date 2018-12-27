@@ -211,13 +211,14 @@ void vndswrapper_choice(nathanscriptVariable* _passedArguments, int _numArgument
 		}
 	}
 
-	// New array
+	// New array of arguments to pass to the scriptSelect function
 	nathanscriptVariable* _fakeArgumentArray = malloc(sizeof(nathanscriptVariable)*2);
 
 	_fakeArgumentArray[0].variableType = NATHAN_TYPE_FLOAT;
 	_fakeArgumentArray[0].value = malloc(sizeof(float));
 	POINTER_TOFLOAT(_fakeArgumentArray[0].value)=_totalChoices;
 
+	// This array is the second argument of the _fakeArgumentArray
 	char** _argumentTable = malloc(sizeof(char*)*(_totalChoices+1));
 	_fakeArgumentArray[1].variableType = NATHAN_TYPE_ARRAY;
 	_fakeArgumentArray[1].value = _argumentTable;

@@ -161,7 +161,7 @@ nathanscriptVariable* makeScriptArgumentsFromLua(lua_State* passedState){
 					char** _newStringArray = malloc(sizeof(char*)*(_arrayLength+1));
 					memcpy(&(_newStringArray[0]),&(_arrayLength),sizeof(short));
 					for (j=1;j<=_arrayLength;j++){
-						if (lua_rawgeti(passedState,i+1,j)!=LUA_TSTRING){ // TODO - Proper array support  using nathanscriptvariable
+						if (lua_rawgeti(passedState,i+1,j)!=LUA_TSTRING){ // TODO - Proper array support  using nathanscriptVariable
 							printf("Error, value in table isn't a string.\n");
 						}
 						_newStringArray[j] = malloc(strlen(lua_tostring(passedState,-1))+1);
@@ -331,58 +331,69 @@ int nathanscriptAddNewVariableToList(nathanscriptGameVariable** _passedVariableL
 	return *_storeMaxVariables-1; // Index of new variable
 }
 
+// Free the returned result
+// Takes the value in a nathanscriptVariable and returns what it would be if it were a string
+char* nathanscriptVariableAsString(const nathanscriptVariable* _passedVariable){
+	if (_passedVariable->variableType==NATHAN_TYPE_STRING){
+		return strdup(POINTER_TOSTRING(_passedVariable->value));
+	}
+	char _resultingStringBuffer[256];
+	if (_passedVariable->variableType==NATHAN_TYPE_FLOAT){
+		sprintf(_resultingStringBuffer, "%.0f", floor(POINTER_TOFLOAT(_passedVariable->value))); // is okay because original vnds only supported int
+	}else if (_passedVariable->variableType==NATHAN_TYPE_BOOL){
+		_resultingStringBuffer[0]='0'+(POINTER_TOCHAR(_passedVariable->value)==1);
+		_resultingStringBuffer[1]='\0';
+	}else{ // includes NATHAN_TYPE_NULL
+		_resultingStringBuffer[0]='\0';
+	}
+	return strdup(_resultingStringBuffer);
+}
+
+float nathanscriptVariableAsFloat(const nathanscriptVariable* _passedVariable){
+	if (_passedVariable->variableType==NATHAN_TYPE_FLOAT){
+		return POINTER_TOFLOAT(_passedVariable->value);
+	}else if (_passedVariable->variableType==NATHAN_TYPE_STRING){
+		return atof(_passedVariable->value);
+	}else if (_passedVariable->variableType==NATHAN_TYPE_BOOL){
+		return (POINTER_TOCHAR(_passedVariable->value)==1 ? 1 : 0);
+	}
+	return 0;
+}
+
+char nathanscriptVariableAsBool(const nathanscriptVariable* _passedVariable){
+	if (_passedVariable->variableType==NATHAN_TYPE_BOOL){
+		return POINTER_TOBOOL(_passedVariable->value);
+	}else if (_passedVariable->variableType==NATHAN_TYPE_FLOAT){
+		return (POINTER_TOFLOAT(_passedVariable->value)==1);
+	}else if (_passedVariable->variableType==NATHAN_TYPE_STRING){
+		return (POINTER_TOSTRING(_passedVariable->value)[0]=='1');
+	}else{
+		return 0;
+	}
+}
+
+int nathanvariableToInt(const nathanscriptVariable* _passedVariable){
+	return nathanscriptVariableAsFloat(_passedVariable);
+}
+
 void nathanscriptConvertVariable(nathanscriptVariable* _variableToConvert, char _newType){
 	if (_variableToConvert->variableType==_newType || _variableToConvert->variableType==NATHAN_TYPE_POINTER){
 		return;
 	}
-	if (_variableToConvert->variableType==NATHAN_TYPE_NULL){
-		if (_newType==NATHAN_TYPE_FLOAT){
-			_variableToConvert->value = calloc(1,sizeof(float));
-		}else if (_newType == NATHAN_TYPE_STRING){
-			_variableToConvert->value = calloc(1,1);
-		}
-		_variableToConvert->variableType = _newType;
-		return; // Do not remove. 
+	void* _newValue;
+	if (_newType==NATHAN_TYPE_STRING){
+		_newValue = nathanscriptVariableAsString(_variableToConvert);
 	}else if (_newType==NATHAN_TYPE_BOOL){
-		char _boolValue=0; // To suppress warning
-		if (_variableToConvert->variableType==NATHAN_TYPE_FLOAT){
-			_boolValue = (int)POINTER_TOFLOAT(_variableToConvert->value);
-		}else if (_variableToConvert->variableType==NATHAN_TYPE_STRING){
-			if (POINTER_TOSTRING(_variableToConvert->value)[0]=='1'){
-				_boolValue=1;
-			}else{
-				_boolValue=0;
-			}
-		}
-		free(_variableToConvert->value);
-		_variableToConvert->value = malloc(sizeof(char));
-		POINTER_TOCHAR(_variableToConvert->value)=_boolValue;
-	}else if (_newType==NATHAN_TYPE_STRING){
-		char _resultingStringBuffer[256];
-		if (_variableToConvert->variableType==NATHAN_TYPE_FLOAT){
-			sprintf(_resultingStringBuffer, "%.0f", floor(POINTER_TOFLOAT(_variableToConvert->value))); // is okay because original vnds only supported int
-		}else if (_variableToConvert->variableType==NATHAN_TYPE_BOOL){
-			if (POINTER_TOCHAR(_variableToConvert->value)==1){
-				_resultingStringBuffer[0]='1';
-			}else{
-				_resultingStringBuffer[0]='0';
-			}
-			_resultingStringBuffer[1]=0;
-		}
-		free(_variableToConvert->value);
-		_variableToConvert->value = malloc(strlen(_resultingStringBuffer)+1);
-		strcpy(_variableToConvert->value,_resultingStringBuffer);
+		_newValue = malloc(sizeof(char));
+		POINTER_TOBOOL(_newValue) = nathanscriptVariableAsBool(_variableToConvert);
 	}else if (_newType==NATHAN_TYPE_FLOAT){
-		float* _newConverterValue = malloc(sizeof(float));
-		if (_variableToConvert->variableType==NATHAN_TYPE_STRING){
-			*(_newConverterValue) = atof(_variableToConvert->value);
-		}else if (_variableToConvert->variableType==NATHAN_TYPE_BOOL){
-			*(_newConverterValue) = (float)(POINTER_TOCHAR(_variableToConvert->value)==1 ? 1 : 0);
-		}
-		free(_variableToConvert->value);
-		_variableToConvert->value=_newConverterValue;
+		_newValue = malloc(sizeof(float));
+		POINTER_TOFLOAT(_newValue) = nathanscriptVariableAsFloat(_variableToConvert);
+	}else{
+		_newValue=NULL;
 	}
-
+	free(_variableToConvert->value);
+	_variableToConvert->value = _newValue;
 	_variableToConvert->variableType = _newType;
 }
 
@@ -439,15 +450,7 @@ void replaceIfIsVariable(char** _possibleVariableString){
 						char* _newStringBuffer;
 
 						// The variable's value as a string
-						char* _varaibleStringToReplace =  NULL;
-						if (_targetVariableArray[_foundVariableIndex].variable.variableType==NATHAN_TYPE_STRING){
-							_varaibleStringToReplace = _targetVariableArray[_foundVariableIndex].variable.value;
-						}else if (_targetVariableArray[_foundVariableIndex].variable.variableType==NATHAN_TYPE_FLOAT){
-							_varaibleStringToReplace = malloc(256);
-							sprintf(_varaibleStringToReplace, "%.0f", *((float*)_targetVariableArray[_foundVariableIndex].variable.value));
-						}else{
-							printf("Invalid variable type %d when doing replace stupidity. %s\n",_targetVariableArray[_foundVariableIndex].variable.variableType,&((*_possibleVariableString)[i+1]));
-						}
+						char* _varaibleStringToReplace =  nathanscriptVariableAsString(&(_targetVariableArray[_foundVariableIndex].variable));
 
 						// If there should be spaces on these sides of the varaible. Changes depending on stuff.
 						signed char _shouldLeftSpace=1;
@@ -482,9 +485,7 @@ void replaceIfIsVariable(char** _possibleVariableString){
 						free((*_possibleVariableString));
 						(*_possibleVariableString)=_newStringBuffer;
 						_cachedStrlen = strlen(*_possibleVariableString);
-						if (_targetVariableArray[_foundVariableIndex].variable.variableType==NATHAN_TYPE_FLOAT){
-							free(_varaibleStringToReplace);
-						}
+						free(_varaibleStringToReplace);
 					}else{
 						(*_possibleVariableString)[i+j]=_endCharacterCache; // Restore after trim
 						printf("Variable not found, %s\n",&((*_possibleVariableString)[i+1]));
@@ -639,10 +640,6 @@ float nathanvariableToFloat(nathanscriptVariable* _passedVariable){
 	return POINTER_TOFLOAT(_passedVariable->value);
 }
 
-int nathanvariableToInt(nathanscriptVariable* _passedVariable){
-	return (int)nathanvariableToFloat(_passedVariable);
-}
-
 void makeNewReturnArray(nathanscriptVariable** _returnedReturnArray, int* _returnArraySize, int _newArraySize){
 	*_returnedReturnArray = calloc(1,sizeof(nathanscriptVariable)*_newArraySize);
 	*_returnArraySize = _newArraySize;
@@ -685,8 +682,7 @@ void genericSetVar(char* _passedVariableName, char* _passedModifier, char* _pass
 	// Make a new variable if the one we're using doesn't exist
 	if (_foundVariableIndex==-1){
 		_foundVariableIndex = nathanscriptAddNewVariableToList(_variableList,_variableListLength);
-		(*_variableList)[_foundVariableIndex].name = malloc(strlen(_passedVariableName)+1);
-		strcpy((*_variableList)[_foundVariableIndex].name,_passedVariableName);
+		(*_variableList)[_foundVariableIndex].name = strdup(_passedVariableName);
 	}
 
 	// There's no sure way to tell if the user passed a string or number
@@ -719,28 +715,26 @@ void genericSetVar(char* _passedVariableName, char* _passedModifier, char* _pass
 		if (_foundSecondVariableIndex==-1){
 			printf("Variable not found, %s\n",_passedNewValue);
 			_modifiedNewValue = calloc(2,1);
-			_modifiedNewValue[0] = '0';
 			_guessedVariableType = NATHAN_TYPE_FLOAT;
 		}else{
-			char* _targetString;
 			if (_foundSecondVariableList==0){ // normal list
-				_targetString = nathanvariableToString(&(nathanscriptGamevarList[_foundSecondVariableIndex].variable));
+				_modifiedNewValue = nathanscriptVariableAsString(&(nathanscriptGamevarList[_foundSecondVariableIndex].variable));
 				_guessedVariableType = nathanscriptGamevarList[_foundSecondVariableIndex].variable.variableType;
 			}else if (_foundSecondVariableList==1){ // global list
-				_targetString = nathanvariableToString(&(nathanscriptGlobalvarList[_foundSecondVariableIndex].variable));
+				_modifiedNewValue = nathanscriptVariableAsString(&(nathanscriptGlobalvarList[_foundSecondVariableIndex].variable));
 				_guessedVariableType = nathanscriptGlobalvarList[_foundSecondVariableIndex].variable.variableType;
 			}
-			_modifiedNewValue = strdup(_targetString);
 		}
 	}
 
+	// If our first variable is a string variable, we compare them as strings. No exceptions.
 	if (_guessedVariableType == NATHAN_TYPE_FLOAT){
 		if ((*_variableList)[_foundVariableIndex].variable.variableType == NATHAN_TYPE_STRING){
 			_guessedVariableType = NATHAN_TYPE_STRING;
 		}
 	}
 
-	// Convert the variable we're setting to the type we need it to be.
+	// Convert the variable we're setting to the type we need it to be. This line is usually useless, but if we're making a new variable then this initializes it from being NATHAN_TYPE_NULL
 	nathanscriptConvertVariable(&((*_variableList)[_foundVariableIndex].variable),_guessedVariableType);
 	if (_guessedVariableType==NATHAN_TYPE_FLOAT){
 		float _convertedNewValue = atof(_modifiedNewValue);
@@ -831,37 +825,21 @@ void genericSetVarCommand(nathanscriptVariable* _argumentList, int _totalArgumen
 		strcat(_passedNewValue," ");
 		strcat(_passedNewValue,nathanvariableToString(&_argumentList[j]));
 	}
-
 	genericSetVar(_passedVariableName,_passedModifier,_passedNewValue,_variableList,_variableListLength);
 	free(_passedNewValue);
 }
 
 // Compare variables using all the wierd rules.
 char variableCompare(nathanscriptVariable* varOne, nathanscriptVariable* varTwo, char* comparisonSymbol/*, char _nullToNullTrue*/){
-	/*if (varOne==NULL){
-		// An undefined variable can only be compared to two things. A number (with the undefined variable being 0) or another undefined variable
-		if (varTwo==NULL){
-			if (_nullToNullTrue){
-				return 1;
-			}else{
-				return 0;
-			}
-		}else{
-			if (stringIsNumber(nathanvariableToString(varTwo))){
-				return humanFloatCompare(0,nathanvariableToFloat(varTwo),comparisonSymbol);
-			}else{
-				// Undefined to string comparison is always false. If it's comparison to a variable then the value of that variable was passed to this function, not the name.
-				return 0;
-			}
-		}
-	}*/
-	// The only way, regardless of both variable's types, to compare as numbers is for both variables to be numbers
-	if (stringIsNumber(nathanvariableToString(varOne)) && stringIsNumber(nathanvariableToString(varTwo))){
-		return humanFloatCompare(nathanvariableToFloat(varOne),nathanvariableToFloat(varTwo),comparisonSymbol);
+	if (varOne->variableType==NATHAN_TYPE_FLOAT && varTwo->variableType==NATHAN_TYPE_FLOAT){
+		return humanFloatCompare(nathanscriptVariableAsFloat(varOne),nathanscriptVariableAsFloat(varTwo),comparisonSymbol);	
 	}else{
+		char* _firstAsString = nathanscriptVariableAsString(varOne);
+		char* _secondAsString = nathanscriptVariableAsString(varTwo);
+
 		signed char _ifStatementResult;
-		if (comparisonSymbol[0]!='=' && comparisonSymbol[0]!='!'){
-			int _strcmpResult = strcmp(nathanvariableToString(varOne),nathanvariableToString(varTwo));
+		if (comparisonSymbol[0]!='=' && comparisonSymbol[0]!='!'){ // If it's not equals then we look for greater than operators
+			int _strcmpResult = strcmp(_firstAsString,_secondAsString);
 			_ifStatementResult=0;
 			if (comparisonSymbol[0]=='<'){
 				_ifStatementResult = _strcmpResult < 0;
@@ -873,11 +851,13 @@ char variableCompare(nathanscriptVariable* varOne, nathanscriptVariable* varTwo,
 				_ifStatementResult=!_ifStatementResult;
 			}
 		}else{
-			_ifStatementResult = !(strcmp(nathanvariableToString(varOne),nathanvariableToString(varTwo)));
+			_ifStatementResult = !(strcmp(_firstAsString,_secondAsString));
 			if (comparisonSymbol[0]=='!'){
 				_ifStatementResult = !_ifStatementResult;
 			}
 		}
+		free(_firstAsString);
+		free(_secondAsString);
 		return _ifStatementResult;
 	}
 }
