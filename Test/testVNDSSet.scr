@@ -46,7 +46,30 @@
 	setvar step3str = mytestint
 	setvar step3str - 1
 	if step3str == 4
-		text NO! step3str can't be changed into an int like that. It's an int FOREVER
+		text NO! step3str can't be changed into an int like that. It's a string FOREVER
+	fi
+
+// Misc
+	setvar testsettoundefined = somenonexistantvariable
+	if testsettoundefined != 0
+		text No! Setting something to an undefined variable should set it to (int) 0
+	fi
+
+	setvar var_name_stored_in_a_var = "mytestint"
+	setvar testfancyset = $var_name_stored_in_a_var
+	if testfancyset == 5
+		text do not do the usual variable replacements in setvar command
+	fi
+
+	setvar brandnewvariable + 1
+	if brandnewvariable != 1
+		text NO! new int variables should start at 0!
+	fi
+
+	setvar "a" = 4
+	setvar brandnewvariable = "a"
+	if brandnewvariable != 4
+		text NO! You should check if it's a variable first before assuming it's a string or number
 	fi
 
 text end
