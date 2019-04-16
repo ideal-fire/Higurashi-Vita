@@ -22,12 +22,9 @@
 		TODO - Expression changes look odd.
 		TODO - Allow VNDS sound command to stop all sounds
 		TODO - SetSpeedOfMessage
-	TODO - With my setvar and if statement changes, I broke hima tip 09. But VNDSx acts the same as my program does when I run the script... VNDS Android exclusive features? Never worked in the first place?
 	TODO - Account for image chars in text width
 	TODO - Upgrade to libgoodbrew
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
-	TODO - Milestone commit num (or date?) - LiveArea?
-	TODO - Fix that ugly menu. Make it start to scroll when cursor is halfway
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -69,6 +66,7 @@
 #define MAXMESSAGEHISTORY 40
 #define VERSIONSTRING "forgotversionnumber" // This
 #define VERSIONNUMBER 8 // This
+#define VERSIONSTRINGSUFFIX ""
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 #define USEUMA0 1
 // Specific constants
@@ -76,13 +74,11 @@
 	#define SELECTBUTTONNAME "X"
 	#define BACKBUTTONNAME "O"
 	int advboxHeight = 181;
-	#define VERSIONSTRINGSUFFIX ""
 #else
 	#define SELECTBUTTONNAME "A"
 	#define BACKBUTTONNAME "B"
 	int advboxHeight = 75;
 	#define cpuOverclocked textIsBottomScreen
-	#define VERSIONSTRINGSUFFIX ""
 #endif
 #if PLATFORM == PLAT_VITA
 	#define CANINVERT 1
@@ -105,6 +101,15 @@
 #define MAXSOUNDEFFECTARRAY 10
 #define IMAGECHARSPACESTRING "   "
 #define MESSAGEEDGEOFFSET 10
+#define MENUSFXON 1
+
+#define THUMBWIDTH screenWidth/3
+#define THUMBHEIGHT screenHeight/3
+#define SAVESELECTORRECTTHICK 5
+#define SAVEMENUPAGEW 2
+#define SAVEMENUPAGEH 3
+#define SAVEMENUPAGESIZE (SAVEMENUPAGEW*SAVEMENUPAGEH)
+#define MAXSAVESLOT 258 // Divisible by 6
 
 #define DROPSHADOWOFFX 1
 #define DROPSHADOWOFFY 1
@@ -478,6 +483,10 @@ signed char forceTextOverBGOption = 1;
 signed char forceFontSizeOption = 1;
 signed char forceDropshadowOption=1;
 
+#ifdef SPECIALEDITION
+	#include "specialEditionHeader.h"
+#endif
+
 /*
 ====================================================
 */
@@ -547,6 +556,9 @@ void changeMallocString(char** _stringToChange, const char* _newValue){
 	}else{
 		*_stringToChange=NULL;
 	}
+}
+int specificCenter(int _part, int _total){
+	return (_total-_part)/2;
 }
 #if SUBPLATFORM == SUB_UNIX
 char* itoa(int value, char* _buffer, int _uselessBase){
@@ -723,7 +735,6 @@ void _loadSpecificFont(char* _filename){
 		fread(_loadedFontBuffer, _foundFilesize, 1, fp);
 		fclose(fp);
 		fontImage = vita2d_load_font_mem(_loadedFontBuffer,_foundFilesize);
-		//fontImage = vita2d_load_font_file(filename);
 	#endif
 	currentTextHeight = textHeight(fontSize);
 	singleSpaceWidth = textWidth(fontSize," ");
@@ -1905,29 +1916,33 @@ void SaveGame(){
 	fwrite(&currentPresetChapter,2,1,fp);
 	fclose(fp);
 }
-void TryLoadMenuSoundEffect(char* _passedPathIdea){
-	if (menuSound!=NULL){
-		return;
-	}
-	char* tempstringconcat;
-	if (_passedPathIdea==NULL){
-		tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/","wa_038",".ogg");
-	}else{
-		tempstringconcat = _passedPathIdea;
-	}
-	if (checkFileExist(tempstringconcat)){
-		menuSoundLoaded=1;
-		menuSound = loadSound(tempstringconcat);
+void TryLoadMenuSoundEffect(const char* _passedPathIdea){
+	#if MENUSFXON == 1
 		if (menuSound!=NULL){
-			showErrorIfNull(menuSound);
-			setSFXVolumeBefore(menuSound,FixSEVolume(256));
+			return;
 		}
-	}else{
-		menuSoundLoaded=0;
-	}
-	if (_passedPathIdea==NULL){
-		free(tempstringconcat);
-	}
+		char* tempstringconcat;
+		if (_passedPathIdea==NULL){
+			tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/","wa_038",".ogg");
+		}else{
+			tempstringconcat = (char*)_passedPathIdea;
+		}
+		if (checkFileExist(tempstringconcat)){
+			menuSoundLoaded=1;
+			menuSound = loadSound(tempstringconcat);
+			if (menuSound!=NULL){
+				showErrorIfNull(menuSound);
+				setSFXVolumeBefore(menuSound,FixSEVolume(256));
+			}
+		}else{
+			menuSoundLoaded=0;
+		}
+		if (_passedPathIdea==NULL){
+			free(tempstringconcat);
+		}
+	#else
+		menuSound=NULL;
+	#endif
 }
 // realloc, but new memory is zeroed out
 void* recalloc(void* _oldBuffer, int _newSize, int _oldSize){
@@ -2795,7 +2810,9 @@ void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 				_tempHoldSlot = _mlgsnd_loadAudioFILE(_foundArchiveFile, _foundFormat, !_isSE, 1);
 			}
 		#else
-			easyMessagef(1,"sound archive not supported.");
+			#if PLATFORM != PLAT_COMPUTER
+				easyMessagef(1,"sound archive not supported.");
+			#endif
 		#endif
 	}
 	if (_tempHoldSlot==NULL){
@@ -3860,8 +3877,8 @@ char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 			strcpy(_thumbFilename,_filename);
 			strcat(_thumbFilename,".thumb");
 	
-			int _destWidth = screenWidth/3;
-			int _destHeight = screenHeight/3;
+			int _destWidth = THUMBWIDTH;
+			int _destHeight = THUMBHEIGHT;
 			vita2d_texture* _smallTexture = vita2d_create_empty_texture_rendertarget(_destWidth,_destHeight,SCE_GXM_TEXTURE_FORMAT_A8B8G8R8);
 	
 			vita2d_pool_reset();
@@ -5177,6 +5194,11 @@ void overrideIfSet(signed char* _possibleTarget, signed char _possibleOverride){
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
 	b = _maxOptionSlotUsed;
 void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption, signed char _showVNDSFadeOption, signed char _showDebugButton){
+	#ifdef OVERRIDE_SETTINGSMENU
+		customSettingsMenu(_shouldShowQuit,_shouldShowVNDSSettings,_shouldShowVNDSSave,_shouldShowRestartBGM,_showArtLocationSlot,_showScalingOption,_showTextBoxModeOption,_showVNDSFadeOption,_showDebugButton);
+		return;
+	#endif
+
 	// Allow global overide for settings
 	overrideIfSet(&_shouldShowQuit,forceShowQuit);
 	overrideIfSet(&_shouldShowVNDSSettings,forceShowVNDSSettings);
@@ -6325,18 +6347,17 @@ void NewGameMenu(){
 		fpsCapWait();
 	}
 }
-#define SAVESELECTORRECTTHICK 5
-#define SAVEMENUPAGEW 2
-#define SAVEMENUPAGEH 3
-#define SAVEMENUPAGESIZE (SAVEMENUPAGEW*SAVEMENUPAGEH)
-#define MAXSAVESLOT 258 // Divisible by 6
 // Returns selected slot or -1
 int vndsSaveSelector(){
+	#ifdef OVERRIDE_VNDSSAVEMENU
+		return customVNDSSaveSelector();
+	#endif
+
 	controlsStart();
 	controlsEnd();
 	// screenWidth/3/2 free space for each text
-	int _slotWidth = screenWidth/2;
-	int _slotHeight = screenHeight/3;
+	int _slotWidth = screenWidth/SAVEMENUPAGEW;
+	int _slotHeight = screenHeight/SAVEMENUPAGEH;
 
 	CrossTexture* _loadedThumbnail[SAVEMENUPAGESIZE]={NULL};
 	char* _loadedTextThumb[SAVEMENUPAGESIZE]={NULL};
@@ -6508,6 +6529,10 @@ int vndsSaveSelector(){
 // Hold L to disable font loading
 // Hold R to disable all optional loading
 void VNDSNavigationMenu(){
+	#ifdef OVERRIDE_VNDSNAVIGATION
+		customVNDSNavigationMenu();
+		return;
+	#endif
 	if (!textDisplayModeOverriden){
 		switchTextDisplayMode(preferredTextDisplayMode);
 	}
@@ -6744,9 +6769,11 @@ void initializeNathanScript(){
 void testCode(){
 	//#warning TEST CODE INCLUDED!
 }
-// Please exit if this function returns 2
-// Go ahead as normal if it returns 0
+
 signed char init(){
+	#ifdef OVERRIDE_INIT
+		return customInit();
+	#endif
 	srand (time(NULL));
 	int i;
 	for (i=0;i<3;i++){
@@ -6756,18 +6783,18 @@ signed char init(){
 	generalGoodInit();
 	initGraphics(960,544,&screenWidth,&screenHeight);
 	setClearColor(0,0,0,255);
-
+	
 	outputLineScreenWidth = screenWidth;
 	outputLineScreenHeight = screenHeight;
-
+	
 	// Guess the graphic sizes
 	actualBackgroundWidth = screenWidth;
 	actualBackgroundHeight = screenHeight;
 	actualBackgroundSizesConfirmedForSmashFive=0;
-
+	
 	// Make buffers for busts
 	increaseBustArraysSize(0,maxBusts);
-
+	
 	// Reset bust cache
 	// I could memset everything to 0, but apparently NULL is not guaranteed to be represented by all 0.
 	// https://stackoverflow.com/questions/9894013/is-null-always-zero-in-c
@@ -6775,45 +6802,45 @@ signed char init(){
 		bustCache[i].filename=NULL;
 		bustCache[i].image=NULL;
 	}
-
+	
 	// Setup DATAFOLDER variable. Defaults to uma0 if it exists and it's unsafe build
 	ResetDataDirectory();
-
+	
 	// These will soon be freed
 	streamingAssets = malloc(1);
 	presetFolder = malloc(1);
 	scriptFolder = malloc(1);
-
+	
 	saveFolder = malloc(strlen(DATAFOLDER)+strlen("Saves/")+1);
 	strcpy(saveFolder,DATAFOLDER);
 	strcat(saveFolder,"Saves/");
-
+	
 	gamesFolder = malloc(strlen(DATAFOLDER)+strlen("Games/")+1);
 	strcpy(gamesFolder,DATAFOLDER);
 	strcat(gamesFolder,"Games/");
-
+	
 	// Make file paths with default StreamingAssets folder
 	GenerateStreamingAssetsPaths("StreamingAssets",1);
-
+	
 	// Save folder, data folder, and others
 	createRequiredDirectories();
-
+	
 	//
 	ClearDebugFile();
-
+	
 	// This will also load the font size file and therefor must come before font loading
 	// Will not crash if no settings found
 	LoadSettings();
-
+	
 	// Check if the application came with a game embedded. If so, load it.
 	fixPath("isEmbedded.txt",globalTempConcat,TYPE_EMBEDDED);
 	if (checkFileExist(globalTempConcat)){
 		isEmbedMode=1;
-
+	
 		free(gamesFolder);
 		fixPath("",globalTempConcat,TYPE_EMBEDDED);
 		gamesFolder = strdup(globalTempConcat);
-
+	
 		currentGameFolderName = strdup("game");
 		currentGameStatus = GAMESTATUS_LOADGAMEFOLDER;
 	}else{
@@ -6853,7 +6880,7 @@ signed char init(){
 			isGameFolderMode=1;
 		}
 	}
-
+	
 	// Check for star picture in 3ds data directory to verify that they put the required files there.
 	#if PLATFORM == PLAT_3DS
 		osSetSpeedupEnable(1);
@@ -6869,7 +6896,7 @@ signed char init(){
 			}
 		}
 	#endif
-
+	
 	ReloadFont();
 	if (initAudio()==0){
 		#if PLATFORM == PLAT_3DS
@@ -6878,36 +6905,36 @@ signed char init(){
 			easyMessagef(1,"...but it not worked?");
 		#endif
 	}
-
+	
 	menuCursorSpaceWidth = textWidth(fontSize,MENUCURSOR" ");
-
+	
 	// Load the menu sound effect if it's present
 	fixPath("assets/wa_038.ogg",globalTempConcat,TYPE_EMBEDDED);
 	TryLoadMenuSoundEffect(globalTempConcat);
 	if (menuSound==NULL){
 		TryLoadMenuSoundEffect(NULL);
 	}
-
+	
 	// Needed for any advanced message display
 	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("assets/unknown.png");
 	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
 	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("assets/star.png");
-
+	
 	// Zero the image char arrray
 	for (i=0;i<MAXIMAGECHAR;i++){
 		imageCharType[i]=-1;
 	}
-
+	
 	// Fill with null char
 	ClearMessageArray(0);
 	if (initializeLua()==2){
 		return 2;
 	}
-
+	
 	for (i=0;i<maxBusts;i++){
 		ResetBustStruct(&(Busts[i]),0);
 	}
-
+	
 	#if PLATFORM == PLAT_VITA && SOUNDPLAYER != SND_VITA
 		// Create the protection thread.
 		if (pthread_create(&soundProtectThreadId, NULL, &soundProtectThread, NULL) != 0){
@@ -6926,10 +6953,13 @@ signed char init(){
 		sceTouchEnableTouchForce(SCE_TOUCH_PORT_FRONT);
 		sceTouchEnableTouchForce(SCE_TOUCH_PORT_BACK);
 	#endif
-
+	
 	testCode();
 	return 0;
 }
+#ifdef SPECIALEDITION
+	#include "specialEditionFooter.h"
+#endif
 int main(int argc, char *argv[]){
 	/* code */
 	if (init()==2){

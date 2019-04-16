@@ -1,4 +1,6 @@
 // See libvita2d-License.txt for the license of just this file
+// libvita2d with scale factors as doubles
+
 
 // The header file has functions. Same as the ones from libvita2d, but uses doubles so it can be better
 #ifndef VITA2DDRAWGOODHEADER
@@ -25,6 +27,10 @@
 
 void ____drawTextureScaleGood(const CrossTexture* texture, float x, float y, double x_scale, double y_scale){
 	#if PLATFORM == PLAT_VITA
+		#if DOFIXCOORDS == 1
+			x = fixX(x);
+			y = fixY(y);
+		#endif
 		vita2d_texture_vertex *vertices = (vita2d_texture_vertex *)vita2d_pool_memalign(4 * sizeof(vita2d_texture_vertex), sizeof(vita2d_texture_vertex));
 	
 		const float w = x_scale * vita2d_texture_get_width(texture);
