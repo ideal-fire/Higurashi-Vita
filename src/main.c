@@ -68,7 +68,6 @@
 #define VERSIONNUMBER 8 // This
 #define VERSIONSTRINGSUFFIX ""
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
-#define USEUMA0 1
 // Specific constants
 #if PLATFORM != PLAT_3DS
 	#define SELECTBUTTONNAME "X"
@@ -792,8 +791,8 @@ void WriteToDebugFile(const char* stuff){
 	#if PLATFORM == PLAT_COMPUTER
 		printf("%s\n",stuff);
 	#endif
-	char* _tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt")+1);
-	strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
+	char* _tempDebugFileLocationBuffer = malloc(strlen(gbDataFolder)+strlen("log.txt")+1);
+	strcpy(_tempDebugFileLocationBuffer,gbDataFolder);
 	strcat(_tempDebugFileLocationBuffer,"log.txt");
 	FILE *fp;
 	fp = fopen(_tempDebugFileLocationBuffer, "a");
@@ -962,8 +961,8 @@ void WriteIntToDebugFile(int a){
 }
 // Does not clear the debug file at ux0:data/HIGURASHI/log.txt  , I promise.
 void ClearDebugFile(){
-	char* _tempDebugFileLocationBuffer = malloc(strlen(DATAFOLDER)+strlen("log.txt")+1);
-	strcpy(_tempDebugFileLocationBuffer,DATAFOLDER);
+	char* _tempDebugFileLocationBuffer = malloc(strlen(gbDataFolder)+strlen("log.txt")+1);
+	strcpy(_tempDebugFileLocationBuffer,gbDataFolder);
 	strcat(_tempDebugFileLocationBuffer,"log.txt");
 	FILE *fp;
 	fp = fopen(_tempDebugFileLocationBuffer, "w");
@@ -1734,21 +1733,6 @@ void LoadPreset(char* filename){
 void SetNextScriptName(){
 	memset((char*)(nextScriptToLoad),'\0',sizeof(nextScriptToLoad));
 	strcpy((char*)nextScriptToLoad,currentPresetFileList.theArray[currentPresetChapter]);
-}
-// Generates the default data paths for script, presets, etc
-// Will use uma0 if possible
-void ResetDataDirectory(){
-	#if USEUMA0==1
-		generateDefaultDataDirectory(&DATAFOLDER,1);
-		if (!directoryExists(DATAFOLDER)){
-			free(DATAFOLDER);
-			generateDefaultDataDirectory(&DATAFOLDER,0);
-		}else{
-			isActuallyUsingUma0=1;
-		}
-	#else
-		generateDefaultDataDirectory(&DATAFOLDER,0);
-	#endif
 }
 int wrapNum(int _passed, int _min, int _max){
 	if (_passed<_min){
@@ -3450,13 +3434,13 @@ void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName, char _isRela
 	free(scriptFolder);
 	free(presetFolder);
 
-	streamingAssets = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+2);
-	scriptFolder = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+strlen("/Scripts/")+1);
+	streamingAssets = malloc(strlen(gbDataFolder)+strlen(_streamingAssetsFolderName)+2);
+	scriptFolder = malloc(strlen(gbDataFolder)+strlen(_streamingAssetsFolderName)+strlen("/Scripts/")+1);
 	streamingAssets[0]='\0';
 	scriptFolder[0]='\0';
 	if (_isRelativeToData){
-		strcat(streamingAssets,DATAFOLDER); 
-		strcat(scriptFolder,DATAFOLDER); 
+		strcat(streamingAssets,gbDataFolder); 
+		strcat(scriptFolder,gbDataFolder); 
 	}
 	//
 	strcat(streamingAssets,_streamingAssetsFolderName);
@@ -3465,13 +3449,13 @@ void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName, char _isRela
 	strcat(scriptFolder,_streamingAssetsFolderName);
 	strcat(scriptFolder,"/Scripts/");
 
-	presetFolder = malloc(strlen(DATAFOLDER)+strlen(_streamingAssetsFolderName)+strlen("/Presets/")+1);
-	strcpy(presetFolder,DATAFOLDER);
+	presetFolder = malloc(strlen(gbDataFolder)+strlen(_streamingAssetsFolderName)+strlen("/Presets/")+1);
+	strcpy(presetFolder,gbDataFolder);
 	strcat(presetFolder,"Presets/");
 	if (!directoryExists(presetFolder)){ // If the normal preset folder doesn't exist
 		presetFolder[0]='\0';
 		if (_isRelativeToData){
-			strcat(presetFolder,DATAFOLDER);
+			strcat(presetFolder,gbDataFolder);
 		}
 		strcat(presetFolder,_streamingAssetsFolderName); // Look 4 lines above for why this is okay
 		strcat(presetFolder,"/Presets/");
@@ -3481,8 +3465,8 @@ void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName, char _isRela
 	}
 }
 void UpdatePresetStreamingAssetsDir(char* filename){
-	char _tempNewStreamingAssetsPathbuffer[strlen(DATAFOLDER)+strlen("StreamingAssets_")+strlen(filename)+1];
-	strcpy(_tempNewStreamingAssetsPathbuffer,DATAFOLDER);
+	char _tempNewStreamingAssetsPathbuffer[strlen(gbDataFolder)+strlen("StreamingAssets_")+strlen(filename)+1];
+	strcpy(_tempNewStreamingAssetsPathbuffer,gbDataFolder);
 	strcat(_tempNewStreamingAssetsPathbuffer,"StreamingAssets_");
 	strcat(_tempNewStreamingAssetsPathbuffer,filename);
 	if (directoryExists(_tempNewStreamingAssetsPathbuffer)){
@@ -3556,7 +3540,7 @@ void createRequiredDirectories(){
 		createDirectory("/3ds/data/");
 		createDirectory("/3ds/data/HIGURASHI/");
 	#endif
-	createDirectory(DATAFOLDER);
+	createDirectory(gbDataFolder);
 	createDirectory(saveFolder);
 }
 void startLoadPresetSpecifiedInFile(char* _presetFilenameFile){
@@ -6785,7 +6769,7 @@ signed char init(){
 	
 	generalGoodInit();
 	initGraphics(960,544,&screenWidth,&screenHeight);
-	setClearColor(0,0,0,255);
+	setClearColor(0,0,0);
 	
 	outputLineScreenWidth = screenWidth;
 	outputLineScreenHeight = screenHeight;
@@ -6806,20 +6790,22 @@ signed char init(){
 		bustCache[i].image=NULL;
 	}
 	
-	// Setup DATAFOLDER variable. Defaults to uma0 if it exists and it's unsafe build
-	ResetDataDirectory();
+	// Setup gbDataFolder variable. Defaults to uma0 if it exists and it's unsafe build
+	if (generateDefaultDataDirectory(&gbDataFolder,-1)==1){
+		isActuallyUsingUma0=1;
+	}
 	
 	// These will soon be freed
 	streamingAssets = malloc(1);
 	presetFolder = malloc(1);
 	scriptFolder = malloc(1);
 	
-	saveFolder = malloc(strlen(DATAFOLDER)+strlen("Saves/")+1);
-	strcpy(saveFolder,DATAFOLDER);
+	saveFolder = malloc(strlen(gbDataFolder)+strlen("Saves/")+1);
+	strcpy(saveFolder,gbDataFolder);
 	strcat(saveFolder,"Saves/");
 	
-	gamesFolder = malloc(strlen(DATAFOLDER)+strlen("Games/")+1);
-	strcpy(gamesFolder,DATAFOLDER);
+	gamesFolder = malloc(strlen(gbDataFolder)+strlen("Games/")+1);
+	strcpy(gamesFolder,gbDataFolder);
 	strcat(gamesFolder,"Games/");
 	
 	// Make file paths with default StreamingAssets folder
@@ -6905,7 +6891,7 @@ signed char init(){
 		#if PLATFORM == PLAT_3DS
 			easyMessagef(1,"dsp init failed. Do you have dsp firm dumped and in /3ds/dspfirm.cdc ?");
 		#else
-			easyMessagef(1,"...but it not worked?");
+			easyMessagef(1,"...but it not worked audio init?");
 		#endif
 	}
 	
