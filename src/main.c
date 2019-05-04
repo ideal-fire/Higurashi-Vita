@@ -119,13 +119,12 @@
 #define PREFER_DIR_VOICE 2
 #define PREFER_DIR_NOMEIMPORTA 3
 
-#include "GeneralGoodExtended.h"
-#include "GeneralGood.h"
-#include "GeneralGoodGraphics.h"
-#include "GeneralGoodText.h"
-#include "GeneralGoodImages.h"
-#include "GeneralGoodSound.h"
-#include "GeneralGood.h"
+#include <goodbrew/config.h>
+#include <goodbrew/base.h>
+#include <goodbrew/graphics.h>
+#include <goodbrew/controls.h>
+#include <goodbrew/images.h>
+#include <goodbrew/sound.h>
 #include "FpsCapper.h"
 
 // System string
@@ -183,6 +182,10 @@
 // Easily push stuff made with EASYLUAINTSETFUNCTION
 #define PUSHEASYLUAINTSETFUNCTION(scriptFunctionName) \
 	LUAREGISTER(L_##scriptFunctionName,#scriptFunctionName)
+
+//goodDrawText(0,0,".",fontSize); // Hotfix to fix crash when no text on bottom screen.
+#define drawText(_x,_y,_text,_fontSize) gbDrawText(normalFont,_x,_y,_text,255,255,255);
+
 ////////////////////////////////////////
 // PLatform specific variables
 ///////////////////////////////////////
@@ -390,13 +393,11 @@ float bgmVolume = 0.75;
 float seVolume = 1.0;
 float voiceVolume = 1.0;
 
+crossFont normalFont;
 int currentTextHeight;
 int singleSpaceWidth;
 #if PLATFORM == PLAT_VITA
 	pthread_t soundProtectThreadId;
-
-	// For Vita specific font workaround
-	extern CrossFont* fontImage;
 	void* _loadedFontBuffer=NULL;
 #endif
 #if PLATFORM == PLAT_3DS
@@ -718,9 +719,10 @@ void _loadSpecificFont(char* _filename){
 	#if PLATFORM != PLAT_VITA
 		loadFont(_filename);
 	#else
+		vita2d_font** _realFontLocation = &(((struct goodbrewfont*)normalFont)->data);
 		// Here I put custom code for loading fonts on the Vita. I need this for fonts with a lot of characters. Why? Well, if the font has a lot of characters, FreeType won't load all of them at once. It'll stream the characters from disk. At first that sounds good, but remember that the Vita breaks its file handles after sleep mode. So new text wouldn't work after sleep mode. I could fix this by modding libvita2d and making it use my custom IO commands, but I just don't feel like doing that right now.
-		if (fontImage!=NULL){
-			vita2d_free_font(fontImage);
+		if (*_realFontLocation!=NULL){
+			vita2d_free_font(*_realFontLocation);
 		}
 		if (_loadedFontBuffer!=NULL){
 			free(_loadedFontBuffer);
@@ -734,7 +736,7 @@ void _loadSpecificFont(char* _filename){
 		_loadedFontBuffer = malloc(_foundFilesize);
 		fread(_loadedFontBuffer, _foundFilesize, 1, fp);
 		fclose(fp);
-		fontImage = vita2d_load_font_mem(_loadedFontBuffer,_foundFilesize);
+		*_realFontLocation = vita2d_load_font_mem(_loadedFontBuffer,_foundFilesize);
 	#endif
 	currentTextHeight = textHeight(fontSize);
 	singleSpaceWidth = textWidth(fontSize," ");
