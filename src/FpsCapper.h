@@ -14,7 +14,7 @@ signed char capEnabled = 1;
 void fpsCapStart(){
 	#if PLATFORM == PLAT_VITA
 	#else
-		frameStartMiliseconds = getTicks();
+		frameStartMiliseconds = getMilli();
 	#endif
 }
 
@@ -24,7 +24,7 @@ void fpsCapWait(){
 	#else
 		if (capEnabled==1){
 			unsigned int tempHold;
-			tempHold = getTicks();
+			tempHold = getMilli();
 			//printf("%llu;%llu\n",frameStartMiliseconds,tempHold);
 			// LIMIT FPS
 			if (tempHold-frameStartMiliseconds<MILISECONDSPERFRAME){

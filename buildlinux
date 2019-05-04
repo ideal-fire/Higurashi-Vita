@@ -1,3 +1,3 @@
 #!/bin/bash
 # for linux build
-gcc -g -Wall -Wno-pointer-sign -Wno-char-subscripts -IInclude -Llib src/utils.c src/main.c src/legarchive.c -lgoodbrew -lSDLFontCacheLinux -lm -lpthread -lSDL2_image -lSDL2_ttf -lSDL2_mixer `sdl2-config --cflags --libs` -Llib -lluaLinux -ldl -o build/a.exe
+gcc -g -Wall -Wno-pointer-sign -Wno-char-subscripts -IInclude -Llib src/main.c src/legarchive.c -lgoodbrewLinux -lSDLFontCacheLinux -lm -lpthread -lSDL2_image -lSDL2_ttf -lSDL2_mixer `sdl2-config --cflags --libs` -Llib -lluaLinux -ldl -o build/a.exe

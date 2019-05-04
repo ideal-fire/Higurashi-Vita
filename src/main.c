@@ -1,3 +1,10 @@
+// temp variabkes
+int fontSize=0;
+int isSkipping=0;
+int InputValidity=1;
+// NTOE - FIX FONT SIZE
+//void _loadSpecificFont(char* _filename){
+
 /*
 	(OPTIONAL TODO)
 		TODO - (Optional) Italics
@@ -125,6 +132,8 @@
 #include <goodbrew/images.h>
 #include <goodbrew/sound.h>
 #include <goodbrew/paths.h>
+#include <goodbrew/text.h>
+#include <goodbrew/useful.h>
 #include "FpsCapper.h"
 
 // System string
@@ -183,8 +192,7 @@
 #define PUSHEASYLUAINTSETFUNCTION(scriptFunctionName) \
 	LUAREGISTER(L_##scriptFunctionName,#scriptFunctionName)
 
-//goodDrawText(0,0,"."); // Hotfix to fix crash when no text on bottom screen.
-#define drawText(_x,_y,_text,_fontSize) gbDrawText(normalFont,_x,_y,_text,255,255,255);
+#define drawText(_x,_y,_text) gbDrawText(normalFont,_x,_y,_text,255,255,255);
 
 ////////////////////////////////////////
 // PLatform specific variables
@@ -212,9 +220,9 @@ char* gamesFolder;
 	signed char vndsVitaTouch=1;
 #endif
 
-void invertImage(CrossTexture* _passedImage, signed char _doInvertAlpha);
+void invertImage(crossTexture _passedImage, signed char _doInvertAlpha);
 typedef struct{
-	CrossTexture* image;
+	crossTexture image;
 	signed int xOffset;
 	signed int yOffset;
 	char isActive;
@@ -226,14 +234,14 @@ typedef struct{
 	int statusVariable2;
 	int statusVariable3;
 	int statusVariable4;
-	CrossTexture* transformTexture; // See BUST_STATUS_TRANSFORM_FADEIN. This is the texture that is transforming
+	crossTexture transformTexture; // See BUST_STATUS_TRANSFORM_FADEIN. This is the texture that is transforming
 	unsigned int lineCreatedOn;
 	double cacheXOffsetScale;
 	double cacheYOffsetScale;
 	char* relativeFilename; // Filename passed by the script
 }bust;
 typedef struct{
-	CrossTexture* image;
+	crossTexture image;
 	char* filename;
 }cachedImage;
 
@@ -272,15 +280,15 @@ int place=0;
 
 int lastBGMVolume = 128;
 
-CrossTexture* currentBackground = NULL;
-CROSSMUSIC* currentMusic[MAXMUSICARRAY] = {NULL};
-CROSSPLAYHANDLE currentMusicHandle[MAXMUSICARRAY] = {0};
+crossTexture currentBackground = NULL;
+crossMusic currentMusic[MAXMUSICARRAY] = {NULL};
+crossPlayHandle currentMusicHandle[MAXMUSICARRAY] = {0};
 char* currentMusicFilepath[MAXMUSICARRAY]={NULL};
 short currentMusicUnfixedVolume[MAXMUSICARRAY] = {0};
-//CROSSMUSIC* currentMusic = NULL;
-CROSSSFX* soundEffects[MAXSOUNDEFFECTARRAY] = {NULL};
+//crossMusic currentMusic = NULL;
+crossSE soundEffects[MAXSOUNDEFFECTARRAY] = {NULL};
 
-CROSSSFX* menuSound=NULL;
+crossSE menuSound=NULL;
 signed char menuSoundLoaded=0;
 
 // Alpha of black rectangle over screen
@@ -347,7 +355,7 @@ unsigned short imageCharCharPositions[MAXIMAGECHAR] = {0};
 #define IMAGECHARSTAR 1
 #define IMAGECHARNOTE 2
 #define IMAGECHARUNKNOWN 0
-CrossTexture* imageCharImages[3]; // PLEASE DON'T FORGET TO CHANGE THIS IF ANOTHER IMAGE CHAR IS ADDED
+crossTexture imageCharImages[3]; // PLEASE DON'T FORGET TO CHANGE THIS IF ANOTHER IMAGE CHAR IS ADDED
 
 #define FILTERTYPE_INACTIVE 0 // This one is different from Higurashi, in Higurashi it defaults to FILTERTYPE_EFFECTCOLORMIX
 #define FILTERTYPE_EFFECTCOLORMIX 1
@@ -409,7 +417,7 @@ char isActuallyUsingUma0=0;
 int maxBusts = 9;
 short textboxYOffset=0;
 short textboxXOffset=0;
-CrossTexture* currentCustomTextbox=NULL;
+crossTexture currentCustomTextbox=NULL;
 int outputLineScreenWidth;
 int outputLineScreenHeight;
 int messageInBoxXOffset=10;
@@ -491,8 +499,15 @@ signed char forceDropshadowOption=1;
 /*
 ====================================================
 */
-#include "../stolenCode/goodvita2ddraw.h"
-CrossTexture* _loadGameImage(const char* path){
+void showErrorIfNull(void* _passedImage){
+	if (!_passedImage){
+		printf("Error, showErrorIfNull.\n");
+	}
+}
+void drawTextureScaleAlphaGood(const crossTexture texture, float x, float y, double x_scale, double y_scale, unsigned char alpha){
+	drawTextureSizedAlpha(texture,x,y,getTextureWidth(texture)*x_scale,getTextureHeight(texture)*y_scale,alpha);
+}
+crossTexture _loadGameImage(const char* path){
 	if (imagesAreJpg){
 		return loadJPG((char*)path);
 	}else{
@@ -529,16 +544,10 @@ void removeFileExtension(char* String){
 }
 */
 char* charToBoolString(char _boolValue){
-	if (_boolValue){
-		return "True";
-	}
-	return "False";
+	return _boolValue ? "True" : "False";
 }
 char* charToSwitch(char _boolValue){
-	if (_boolValue){
-		return "On";
-	}
-	return "Off";
+	return _boolValue ? "On" : "Off";
 }
 double applyGraphicsScale(double _valueToScale){
 	return _valueToScale*graphicsScale;
@@ -601,43 +610,51 @@ void DebugLuaReg(char* name){
 }
 void PlayMenuSound(){
 	if (menuSoundLoaded==1 && seVolume>0){
-		playSound(menuSound,1,10);
+		playSound(menuSound,10);
 	}
 }
-CrossTexture* SafeLoadPNG(const char* path){
-	CrossTexture* _tempTex = loadPNG((char*)path);
+crossTexture SafeLoadPNG(const char* path){
+	crossTexture _tempTex = loadPNG((char*)path);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
 		easyMessagef(1,"Failed to load image %s, what will happen now?!",path);
 	}
 	return _tempTex;
 }
-CrossTexture* LoadEmbeddedPNG(const char* path){
+crossTexture LoadEmbeddedPNG(const char* path){
 	fixPath((char*)path,globalTempConcat,TYPE_EMBEDDED);
-	CrossTexture* _tempTex = loadPNG((char*)globalTempConcat);
+	crossTexture _tempTex = loadPNG((char*)globalTempConcat);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
 		easyMessagef(1,"Failed to load image %s.\n%s",path,PLATFORM != PLAT_3DS ? "This is supposed to be embedded..." : "Check you set up everything correctly.");
 	}
 	return _tempTex;
 }
-void drawDropshadowTextSpecific(int _x, int _y, char* _message, double _passedSize, int _r, int _g, int _b, int _dropshadowR, int _dropshadowG, int _dropshadowB, int _a){
+void drawDropshadowTextSpecific(int _x, int _y, char* _message, int _r, int _g, int _b, int _dropshadowR, int _dropshadowG, int _dropshadowB, int _a){
 	//#if PLATFORM == PLAT_VITA
 	//	vita2d_font_draw_text_dropshadow(fontImage,fixX(textboxXOffset+messageInBoxXOffset),fixY(messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight)),RGBA8(_r,_g,_b,_a),(char*)currentMessages[i],DROPSHADOWOFFX,DROPSHADOWOFFY,RGBA8(_dropshadowR,_dropshadowG,_dropshadowB,_a));
 	//#else
-		goodDrawTextColoredAlpha(_x+DROPSHADOWOFFX,_y+DROPSHADOWOFFY,_message,_passedSize,_dropshadowR,_dropshadowG,_dropshadowB,_a);
-		goodDrawTextColoredAlpha(_x,_y,_message,_passedSize,_r,_g,_b,_a);
+		gbDrawTextAlpha(normalFont,_x+DROPSHADOWOFFX,_y+DROPSHADOWOFFY,_message,_dropshadowR,_dropshadowG,_dropshadowB,_a);
+		gbDrawTextAlpha(normalFont,_x,_y,_message,_r,_g,_b,_a);
 	//#endif
 }
-void drawDropshadowText(int _x, int _y, char* _message, double _passedSize, int _a){
-	drawDropshadowTextSpecific(_x,_y,_message,_passedSize,255,255,255,0,0,0,_a);
+void drawDropshadowText(int _x, int _y, char* _message, int _a){
+	drawDropshadowTextSpecific(_x,_y,_message,255,255,255,0,0,0,_a);
 }
 // Draw text intended to be used for the game, respects dropshadow setting
-void drawTextGame(int _x, int _y, char* _message, double _passedSize){
+void drawTextGame(int _x, int _y, char* _message, unsigned char _alpha){
 	if (dropshadowOn){
-		drawDropshadowTextSpecific(_x,_y,_message,_passedSize,255,255,255,0,0,0);
+		drawDropshadowTextSpecific(_x,_y,_message,255,255,255,0,0,0,_alpha);
 	}else{
-		goodDrawTextColoredAlpha(_x,_y,_message,_passedSize,255,255,255);
+		gbDrawTextAlpha(normalFont,_x,_y,_message,255,255,255,_alpha);
+	}
+}
+void drawImageChars(unsigned char _alpha){
+	int i;
+	for (i=0;i<MAXIMAGECHAR;i++){
+		if (imageCharType[i]!=-1){
+			drawTextureSizedAlpha(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],textWidth(normalFont,IMAGECHARSPACESTRING),textHeight(normalFont),_alpha);
+		}
 	}
 }
 // Number of lines to draw is not zero based
@@ -650,28 +667,19 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
 		if (textIsBottomScreen==1){
 			startDrawingBottom();
 			if (strlen(currentMessages[i])==0){
-				goodDrawText(0,0,"."); // Hotfix to fix crash when no text on bottom screen.
+				drawText(0,0,"."); // Hotfix to fix crash when no text on bottom screen.
 			}
 			for (i = 0; i < _maxDrawLine; i++){
-				goodDrawText(0,12+i*(currentTextHeight),(char*)currentMessages[i]);
+				drawText(0,12+i*(currentTextHeight),(char*)currentMessages[i]);
 			}
-			for (i=0;i<MAXIMAGECHAR;i++){
-				if (imageCharType[i]!=-1){
-					drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i]-textboxXOffset-messageInBoxXOffset,imageCharY[i]-messageInBoxYOffset-textboxYOffset,((double)textWidth(normalFont,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
-				}
-			}
+			drawImageChars(_alpha);
 			return;
 		}
 	#endif
 	for (i = 0; i < _maxDrawLine; i++){
 		drawTextGame(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],_alpha);
 	}
-	
-	for (i=0;i<MAXIMAGECHAR;i++){
-		if (imageCharType[i]!=-1){
-			drawTextureScaleAlpha(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(normalFont,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])),_alpha);
-		}
-	}
+	drawImageChars(_alpha);
 }
 void DrawMessageBox(char _textmodeToDraw){
 	#if PLATFORM == PLAT_3DS
@@ -683,9 +691,9 @@ void DrawMessageBox(char _textmodeToDraw){
 		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,MessageBoxAlpha);
 	}else{
 		if (canChangeBoxAlpha){
-			drawTextureScaleAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset, (double)(outputLineScreenWidth-textboxXOffset)/(double)getTextureWidth(currentCustomTextbox), (double)(advboxHeight)/(double)getTextureHeight(currentCustomTextbox),MessageBoxAlpha);
+			drawTextureSizedAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset,outputLineScreenWidth-textboxXOffset,advboxHeight,MessageBoxAlpha);
 		}else{
-			drawTextureScale(currentCustomTextbox,textboxXOffset,textboxYOffset, (double)(outputLineScreenWidth-textboxXOffset)/(double)getTextureWidth(currentCustomTextbox), (double)(advboxHeight)/(double)getTextureHeight(currentCustomTextbox));
+			drawTextureSized(currentCustomTextbox,textboxXOffset,textboxYOffset,outputLineScreenWidth-textboxXOffset,advboxHeight);
 		}
 	}
 }
@@ -697,11 +705,11 @@ void DrawCurrentFilter(){
 }
 u64 waitwithCodeTarget;
 void WaitWithCodeStart(int amount){
-	waitwithCodeTarget = getTicks()+amount;
+	waitwithCodeTarget = getMilli()+amount;
 }
 void WaitWithCodeEnd(int amount){
-	if (getTicks()<waitwithCodeTarget){
-		wait(waitwithCodeTarget-getTicks());
+	if (getMilli()<waitwithCodeTarget){
+		wait(waitwithCodeTarget-getMilli());
 	}
 }
 void SetDefaultFontSize(){
@@ -717,7 +725,7 @@ void SetDefaultFontSize(){
 }
 void _loadSpecificFont(char* _filename){
 	#if PLATFORM != PLAT_VITA
-		loadFont(_filename);
+		normalFont = loadFont(_filename,24);
 	#else
 		vita2d_font** _realFontLocation = &(((struct goodbrewfont*)normalFont)->data);
 		// Here I put custom code for loading fonts on the Vita. I need this for fonts with a lot of characters. Why? Well, if the font has a lot of characters, FreeType won't load all of them at once. It'll stream the characters from disk. At first that sounds good, but remember that the Vita breaks its file handles after sleep mode. So new text wouldn't work after sleep mode. I could fix this by modding libvita2d and making it use my custom IO commands, but I just don't feel like doing that right now.
@@ -738,7 +746,7 @@ void _loadSpecificFont(char* _filename){
 		fclose(fp);
 		*_realFontLocation = vita2d_load_font_mem(_loadedFontBuffer,_foundFilesize);
 	#endif
-	currentTextHeight = textHeight(fontSize);
+	currentTextHeight = textHeight(normalFont);
 	singleSpaceWidth = textWidth(normalFont," ");
 }
 void ReloadFont(){
@@ -844,20 +852,20 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 		controlsEnd();
 		startDrawing();
 		if (stra!=NULL){
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),stra);
+			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),stra);
 		}
 		if (strb!=NULL){
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),strb);
+			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),strb);
 		}
 		if (strc!=NULL){
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),strc);
+			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),strc);
 		}
 		if (strd!=NULL){
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),strd);
+			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),strd);
 		}
-		goodDrawText(0,screenHeight-32-currentTextHeight*(_choice+1),MENUCURSOR);
-		goodDrawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight*2,"Yes");
-		goodDrawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight,"No");
+		drawText(0,screenHeight-32-currentTextHeight*(_choice+1),MENUCURSOR);
+		drawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight*2,"Yes");
+		drawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight,"No");
 		endDrawing();
 		fpsCapWait();
 	}
@@ -1018,8 +1026,8 @@ int DidActuallyConvert(char* filepath){
 	int _isConverted=0;
 
 	startDrawing();
-	goodDrawText(32,50,"Checking if you actually converted the script...");
-	goodDrawText(32,200,filepath);
+	drawText(32,50,"Checking if you actually converted the script...");
+	drawText(32,200,filepath);
 	endDrawing();
 
 	while (fgets(line, sizeof(line), file)) {
@@ -1329,14 +1337,14 @@ void outputLineWait(){
 			_inBetweenLinesMilisecondsStart=0;
 			_chosenAutoWait = autoModeVoicedWait;
 		}else{
-			_inBetweenLinesMilisecondsStart = getTicks();
+			_inBetweenLinesMilisecondsStart = getMilli();
 			if (_inBetweenLinesMilisecondsStart==0){
 				_inBetweenLinesMilisecondsStart=1;
 			}
 			_chosenAutoWait = autoModeWait;
 		}
 	#else
-		_inBetweenLinesMilisecondsStart = getTicks();
+		_inBetweenLinesMilisecondsStart = getMilli();
 		_chosenAutoWait = autoModeWait;
 		if (_inBetweenLinesMilisecondsStart==0){
 			_inBetweenLinesMilisecondsStart=1;
@@ -1358,10 +1366,10 @@ void outputLineWait(){
 		// Easy save menu
 		if (currentlyVNDSGame && isDown(BUTTON_R)){
 			drawRectangle(0,0,screenWidth,currentTextHeight*5,0,0,0,255);
-			goodDrawText(6,currentTextHeight*0+6,"UP: Save slot 1");
-			goodDrawText(6,currentTextHeight*1+6,"DOWN: Save slot 2");
-			goodDrawText(6,currentTextHeight*2+6,"LEFT: Save slot 3");
-			goodDrawText(6,currentTextHeight*3+6,"RIGHT: Save slot 4");
+			drawText(6,currentTextHeight*0+6,"UP: Save slot 1");
+			drawText(6,currentTextHeight*1+6,"DOWN: Save slot 2");
+			drawText(6,currentTextHeight*2+6,"LEFT: Save slot 3");
+			drawText(6,currentTextHeight*3+6,"RIGHT: Save slot 4");
 			drawHallowRect(0,0,screenWidth,currentTextHeight*5,5,255,255,255,255);
 			if (wasJustPressed(BUTTON_UP) || wasJustPressed(BUTTON_DOWN) || wasJustPressed(BUTTON_LEFT) || wasJustPressed(BUTTON_RIGHT)){
 				unsigned char _selectedSlot=1;
@@ -1405,14 +1413,14 @@ void outputLineWait(){
 		if (wasJustPressed(BUTTON_B)){
 			if (_didPressCircle==1){
 				if (_toggledTextboxTime!=0){
-					_inBetweenLinesMilisecondsStart+=getTicks()-_toggledTextboxTime;
+					_inBetweenLinesMilisecondsStart+=getMilli()-_toggledTextboxTime;
 					_toggledTextboxTime=0;
 				}
 				MessageBoxEnabled = !MessageBoxEnabled;
 			}else if (MessageBoxEnabled==1){
 				MessageBoxEnabled=0;
 				_didPressCircle=1;
-				_toggledTextboxTime=getTicks();
+				_toggledTextboxTime=getMilli();
 			}
 		}
 		updateControlsGeneral();
@@ -1430,14 +1438,14 @@ void outputLineWait(){
 		fpsCapWait();
 		if (autoModeOn==1 && _toggledTextboxTime==0){
 			if (_inBetweenLinesMilisecondsStart!=0){ // If we're not waiting for audio to end
-				if (getTicks()>=(_inBetweenLinesMilisecondsStart+_chosenAutoWait)){
+				if (getMilli()>=(_inBetweenLinesMilisecondsStart+_chosenAutoWait)){
 					endType = LINE_RESERVED;
 				}
 			}else{
 				#if PLATFORM == PLAT_VITA
 					// Check if audio has ended yet.
 					if (mlgsndIsPlaying(soundEffects[lastVoiceSlot])==0){
-						_inBetweenLinesMilisecondsStart = getTicks();
+						_inBetweenLinesMilisecondsStart = getMilli();
 					}
 				#endif
 			}
@@ -1455,7 +1463,7 @@ void outputLineWait(){
 // This is used in background and bust drawing
 // For Higurashi, this is used to get the center of the screen for all images.
 // For VNDS, this is just used to get the position of the background.
-void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
+void GetXAndYOffset(crossTexture _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
 	if (dynamicScaleEnabled){
 		*_tempXOffset = floor((screenWidth-applyGraphicsScale(getTextureWidth(_tempImg)))/2);
 		*_tempYOffset = floor((screenHeight-applyGraphicsScale(getTextureHeight(_tempImg)))/2);
@@ -1471,7 +1479,7 @@ void GetXAndYOffset(CrossTexture* _tempImg, signed int* _tempXOffset, signed int
 		}
 	}
 }
-double GetXOffsetScale(CrossTexture* _tempImg){
+double GetXOffsetScale(crossTexture _tempImg){
 	if (dynamicScaleEnabled){
 		return applyGraphicsScale(actualBackgroundWidth)/(double)scriptScreenWidth;
 	}else{
@@ -1481,7 +1489,7 @@ double GetXOffsetScale(CrossTexture* _tempImg){
 		return (getTextureWidth(_tempImg)/(float)scriptScreenWidth);
 	}
 }
-double GetYOffsetScale(CrossTexture* _tempImg){
+double GetYOffsetScale(crossTexture _tempImg){
 	if (dynamicScaleEnabled){
 		return applyGraphicsScale(actualBackgroundHeight)/(double)scriptScreenHeight;
 	}else{
@@ -1497,16 +1505,15 @@ void drawHallowRect(int _x, int _y, int _w, int _h, int _thick, int _r, int _g, 
 	drawRectangle(_x,_y,_w,_thick,_r,_g,_b,_a);
 	drawRectangle(_x,_y+_h-_thick,_w,_thick,_r,_g,_b,_a);
 }
-void DrawBackgroundAlpha(CrossTexture* passedBackground, unsigned char passedAlpha){
+void DrawBackgroundAlpha(crossTexture passedBackground, unsigned char passedAlpha){
 	if (passedBackground!=NULL){
 		signed int _tempXOffset;
 		signed int _tempYOffset;
 		GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
-		//printf("%f;%d;%d;%d;%d\n",graphicsScale,_tempXOffset,_tempYOffset,(int)(getTextureWidth(passedBackground)*graphicsScale),(int)(getTextureHeight(passedBackground)*graphicsScale));
-		drawTextureScaleAlpha(passedBackground,_tempXOffset,_tempYOffset, graphicsScale, graphicsScale, passedAlpha);
+		drawTextureSizedAlpha(passedBackground,_tempXOffset,_tempYOffset, getTextureWidth(passedBackground)*graphicsScale, getTextureHeight(passedBackground)*graphicsScale, passedAlpha);
 	}
 }
-void DrawBackground(CrossTexture* passedBackground){
+void DrawBackground(crossTexture passedBackground){
 	DrawBackgroundAlpha(passedBackground,255);
 }
 void DrawBust(bust* passedBust){
@@ -1588,7 +1595,8 @@ void RecalculateBustOrder(){
 		}
 	}
 }
-void MoveFilePointerPastNewline(CROSSFILE* fp){
+// seek past a windows newline or a unix newline
+void moveFilePointerPastNewline(crossFile fp){
 	unsigned char _temp;
 	crossfread(&_temp,1,1,fp);
 	if (_temp==13){
@@ -1596,14 +1604,14 @@ void MoveFilePointerPastNewline(CROSSFILE* fp){
 	}
 }
 // LAST ARG IS WHERE THE LENGTH IS STORED
-unsigned char* ReadNumberStringList(CROSSFILE *fp, unsigned char* arraysize){
+unsigned char* ReadNumberStringList(crossFile fp, unsigned char* arraysize){
 	int numScripts;
 	char currentReadNumber[4];
 	// Add null for atoi
 	memset(&currentReadNumber[0], 0, 4);
 	crossfread(&currentReadNumber,3,1,fp);
 	numScripts = atoi(currentReadNumber);
-	MoveFilePointerPastNewline(fp);
+	moveFilePointerPastNewline(fp);
 
 	unsigned char* _thelist;
 	
@@ -1613,13 +1621,13 @@ unsigned char* ReadNumberStringList(CROSSFILE *fp, unsigned char* arraysize){
 	for (i=0;i<numScripts;i++){
 		crossfread(&currentReadNumber,3,1,fp);
 		_thelist[i]=atoi(currentReadNumber);
-		MoveFilePointerPastNewline(fp);
+		moveFilePointerPastNewline(fp);
 	}
 
 	(*arraysize) = numScripts;
 	return _thelist;
 }
-char** ReadFileStringList(CROSSFILE *fp, unsigned char* arraysize){
+char** ReadFileStringList(crossFile fp, unsigned char* arraysize){
 	char currentReadLine[200];
 	char currentReadNumber[4];
 	// Add null for atoi
@@ -1630,7 +1638,7 @@ char** ReadFileStringList(CROSSFILE *fp, unsigned char* arraysize){
 	currentReadNumber[3]='\0';
 	crossfread(&currentReadNumber,3,1,fp);
 	numScripts = atoi(currentReadNumber);
-	MoveFilePointerPastNewline(fp);
+	moveFilePointerPastNewline(fp);
 	
 
 	char** _thelist;
@@ -1667,16 +1675,14 @@ char** ReadFileStringList(CROSSFILE *fp, unsigned char* arraysize){
 }
 void LoadPreset(char* filename){
 	//currentPresetFileList
-	CROSSFILE *fp;
+	crossFile fp;
 	fp = crossfopen(filename, "r");
 	//fprintf(fp,"There are %d music deocoders available\n", Mix_GetNumMusicDecoders());
 	//int i;
-
 	currentPresetFileList.theArray = ReadFileStringList(fp,&currentPresetFileList.length);
 	//for (i=0;i<currentPresetFileList.length;i++){
 	//	printf("%s\n",currentPresetFileList.theArray[i]);
 	//}
-
 	if (gameHasTips==1){
 		currentPresetTipList.theArray = ReadFileStringList(fp,&currentPresetTipList.length);
 		//for (i=0;i<currentPresetTipList.length;i++){
@@ -1689,16 +1695,14 @@ void LoadPreset(char* filename){
 		//	printf("%d\n",currentPresetTipUnlockList.theArray[i]);
 		//}
 	}
-
 	char tempreadstring[15] = {'\0'};
-
 	if (gameHasTips==1){
 		// Check for the
 		// tipnames
 		// string
 		// If it exists, read the tip's names
 		if (crossfread(tempreadstring,8,1,fp)==1){
-			MoveFilePointerPastNewline(fp);
+			moveFilePointerPastNewline(fp);
 			if (strcmp(tempreadstring,"tipnames")==0){
 				currentPresetTipNameList.theArray = ReadFileStringList(fp,&currentPresetTipNameList.length);
 				tipNamesLoaded=1;
@@ -1706,13 +1710,12 @@ void LoadPreset(char* filename){
 				tipNamesLoaded=0;
 			}
 		}else{
-			MoveFilePointerPastNewline(fp);
+			moveFilePointerPastNewline(fp);
 			tipNamesLoaded=0;
 		}
 	}
-
 	if (crossfread(tempreadstring,12,1,fp)==1){
-		MoveFilePointerPastNewline(fp);
+		moveFilePointerPastNewline(fp);
 		if (strcmp(tempreadstring,"chapternames")==0){
 			currentPresetFileFriendlyList.theArray = ReadFileStringList(fp,&currentPresetFileFriendlyList.length);
 			chapterNamesLoaded=1;
@@ -1720,14 +1723,9 @@ void LoadPreset(char* filename){
 			chapterNamesLoaded=0;
 		}
 	}else{
-		MoveFilePointerPastNewline(fp);
+		moveFilePointerPastNewline(fp);
 		chapterNamesLoaded=0;
 	}
-
-	//chapterNamesLoaded
-	//currentPresetFileFriendlyList
-
-
 	crossfclose(fp);
 }
 void SetNextScriptName(){
@@ -1855,11 +1853,11 @@ void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
 
 		int i;
 		for (i=0;i<_numLines;++i){
-			goodDrawText(32,5+currentTextHeight*(i+2),_passedMessage[i]);
+			drawText(32,5+currentTextHeight*(i+2),_passedMessage[i]);
 		}
 
 		if (_doWait){
-			goodDrawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.");
+			drawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.");
 		}
 		endDrawing();
 		fpsCapWait();
@@ -2072,7 +2070,7 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 	return _returnFoundString;
 }
 // Will load a PNG from CG or CGAlt
-CrossTexture* safeLoadGameImage(const char* filename, char _folderPreference, char _extensionIncluded){
+crossTexture safeLoadGameImage(const char* filename, char _folderPreference, char _extensionIncluded){
 	char* _tempFoundFilename;
 	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extensionIncluded,scriptForceResourceUppercase);
 	if (_tempFoundFilename==NULL){
@@ -2081,7 +2079,7 @@ CrossTexture* safeLoadGameImage(const char* filename, char _folderPreference, ch
 		}
 		return NULL;
 	}
-	CrossTexture* _returnLoadedPNG = _loadGameImage(_tempFoundFilename);
+	crossTexture _returnLoadedPNG = _loadGameImage(_tempFoundFilename);
 	free(_tempFoundFilename);
 	#if PLATFORM == PLAT_VITA
 		// Smooth scaling
@@ -2353,7 +2351,7 @@ void DrawScene(const char* _filename, int time){
 	// If we're NOT doing the VNDS easy bust reset trick
 	if (!(lastBackgroundFilename!=NULL && strcmp(lastBackgroundFilename,_filename)==0)){
 		changeMallocString(&lastBackgroundFilename,_filename);
-		CrossTexture* newBackground = safeLoadGameImage(_filename,graphicsLocation,scriptUsesFileExtensions);
+		crossTexture newBackground = safeLoadGameImage(_filename,graphicsLocation,scriptUsesFileExtensions);
 		if (newBackground==NULL){
 			freeTexture(currentBackground);
 			currentBackground=NULL;
@@ -2474,7 +2472,7 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 	unsigned char skippedInitialWait=0;
 	if (Busts[passedSlot].isActive){ // Detect if we need to do a fadein transition
 		if (_fadeintime!=0){ // Only do all this fade stupidity if we're going to fade in the first place.
-			CrossTexture* _cachedOldTexture = Busts[passedSlot].image;
+			crossTexture _cachedOldTexture = Busts[passedSlot].image;
 			Busts[passedSlot].image=NULL;
 			ResetBustStruct(&(Busts[passedSlot]),1);
 			Busts[passedSlot].transformTexture = _cachedOldTexture;
@@ -2608,10 +2606,10 @@ int strlenNO1(char* src){
 #if PLATFORM == PLAT_COMPUTER
 	int _LagTestStart;
 	void LagTestStart(){
-		_LagTestStart = getTicks();
+		_LagTestStart = getMilli();
 	}
 	void LagTestEnd(){
-		printf("lagometer: %ld\n",getTicks()-_LagTestStart);
+		printf("lagometer: %ld\n",getMilli()-_LagTestStart);
 	}
 #endif
 char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName){
@@ -2838,7 +2836,7 @@ void GenericPlayGameSound(int passedSlot, const char* filename, int unfixedVolum
 		//WriteToDebugFile("SE file not found");
 		//WriteToDebugFile(filename);
 	}else{
-		CROSSPLAYHANDLE _tempHandle = playSound(soundEffects[passedSlot],1,passedSlot+10);
+		crossPlayHandle _tempHandle = playSound(soundEffects[passedSlot],passedSlot+10);
 		setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
 		// Used for auto mode
 		lastVoiceSlot=passedSlot;
@@ -3065,7 +3063,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			// Don't add 1 to this value. For VNDS games, this always represents the next line.
 			updateDynamicADVBox(_currentDrawLine,-1);
 		}else{
-			// TODO - Untested
 			// If not VNDS, there is a chance _currentDrawLine won't represent the next line, so we need to make sure we're actually drawing the _currentDrawLine and that it doesn't draw newly added text.
 			char _archivedCharacter = currentMessages[_currentDrawLine][_currentDrawChar];
 			currentMessages[_currentDrawLine][_currentDrawChar] = '\0';
@@ -3118,10 +3115,11 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				drawTextGame(textboxXOffset+messageInBoxXOffset,12+messageInBoxYOffset+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],255);
 			}
 			currentMessages[_currentDrawLine][_currentDrawChar+1]=_tempCharCache;
+			// TODO - Use function for this
 			for (i=0;i<MAXIMAGECHAR;i++){
 				if (imageCharType[i]!=-1){
 					if ((imageCharLines[i]<_currentDrawLine) || (imageCharLines[i]==_currentDrawLine && imageCharCharPositions[i]<=_currentDrawChar)){
-						drawTextureScale(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],((double)textWidth(normalFont,IMAGECHARSPACESTRING)/ getTextureWidth(imageCharImages[imageCharType[i]])),((double)textHeight(fontSize)/getTextureHeight(imageCharImages[imageCharType[i]])));
+						drawTextureSized(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],textWidth(normalFont,IMAGECHARSPACESTRING),textHeight(normalFont));
 					}
 				}
 			}
@@ -3217,7 +3215,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 	}else if (_slot>=MAXMUSICARRAY){
 		easyMessagef(1,"Music slot too high. No action will be taken.");
 	}else{
-		CROSSMUSIC* _tempHoldSlot=loadGameAudio(filename,PREFER_DIR_BGM,0);
+		crossMusic _tempHoldSlot=loadGameAudio(filename,PREFER_DIR_BGM,0);
 		if (_tempHoldSlot==NULL){
 			__freeBGMNoLock(_slot);
 		}else{
@@ -3375,7 +3373,7 @@ void LoadSettings(){
 #define HISTORYSCROLLRATE 1
 void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 	controlsEnd();
-	int _noobHeight = textHeight(fontSize);
+	int _noobHeight = textHeight(normalFont);
 	int _controlsStringWidth = textWidth(normalFont,"UP and DOWN to scroll, "BACKBUTTONNAME" to return");
 	int _scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
 
@@ -3408,11 +3406,11 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 
 		drawRectangle(textboxXOffset,0,outputLineScreenWidth-textboxXOffset,screenHeight,230,255,200,150);
 		for (i = 0; i < HISTORYONONESCREEN; i++){
-			goodDrawTextColored(textboxXOffset,textHeight(fontSize)+i*(textHeight(fontSize)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],0,0,0);
+			gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*(textHeight(normalFont)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],0,0,0);
 		}
 		if (outputLineScreenWidth == screenWidth){
-			goodDrawTextColored(3,screenHeight-_noobHeight-5,"TEXTLOG",0,0,0);
-			goodDrawTextColored(screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, "BACKBUTTONNAME" to return",0,0,0);
+			gbDrawText(normalFont,3,screenHeight-_noobHeight-5,"TEXTLOG",0,0,0);
+			gbDrawText(normalFont,screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, "BACKBUTTONNAME" to return",0,0,0);
 		}
 		drawRectangle((screenWidth-5),0,5,screenHeight,0,0,0,255);
 		drawRectangle((screenWidth-5),floor((screenHeight-HISTORYSCROLLBARHEIGHT)*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,HISTORYSCROLLBARHEIGHT,255,0,0,255);
@@ -4035,7 +4033,7 @@ void showTextbox(){
 		}
 	}
 #else
-	void invertImage(CrossTexture* _passedImage, signed char _doInvertAlpha){
+	void invertImage(crossTexture _passedImage, signed char _doInvertAlpha){
 		printf("Invert image at %p. Alpha change: %d\n",_passedImage,_doInvertAlpha);
 	}
 #endif
@@ -4553,7 +4551,7 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 			_scrollOffset=0;
 			if (textWidth(normalFont,noobOptions[_choice])>screenWidth-MENUOPTIONOFFSET-MENUCURSOROFFSET){
 				_needScrolling=1;
-				_lastScrollTime = getTicks();
+				_lastScrollTime = getMilli();
 				_isScrollingText=0;
 				_scrollRight=1;
 			}else{
@@ -4564,7 +4562,7 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		// Process scrolling
 		if (_needScrolling){
 			if (_isScrollingText){
-				if (getTicks()>_lastScrollTime+CHOICESCROLLTIMEINTERVAL){
+				if (getMilli()>_lastScrollTime+CHOICESCROLLTIMEINTERVAL){
 					char _oldDirection = _scrollRight;
 					if (_scrollRight){
 						if (textWidth(normalFont,&(noobOptions[_choice][_scrollOffset]))>screenWidth-MENUOPTIONOFFSET-MENUCURSOROFFSET){
@@ -4580,13 +4578,13 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 						}
 					}
 					if (_oldDirection!=_scrollRight){
-						_lastScrollTime = getTicks()+CHOICESCROLLTIMEOFFSET-CHOICESCROLLTIMEINTERVAL; // Trick the program into waiting CHOICESCROLLTIMEOFFSET before it goes back the other way
+						_lastScrollTime = getMilli()+CHOICESCROLLTIMEOFFSET-CHOICESCROLLTIMEINTERVAL; // Trick the program into waiting CHOICESCROLLTIMEOFFSET before it goes back the other way
 					}else{
-						_lastScrollTime = getTicks();
+						_lastScrollTime = getMilli();
 					}
 				}
 			}else{
-				if (getTicks()>_lastScrollTime+CHOICESCROLLTIMEOFFSET){
+				if (getMilli()>_lastScrollTime+CHOICESCROLLTIMEOFFSET){
 					_isScrollingText=1;
 					_lastScrollTime = 0; // So we'll scroll next frame
 				}
@@ -4603,11 +4601,11 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		DrawMessageBox(TEXTMODE_NVL);
 		for (i=0;i<_totalOptions;i++){
 			if (_choice!=i){
-				goodDrawText(MENUOPTIONOFFSET,i*currentTextHeight,noobOptions[i]);
+				drawText(MENUOPTIONOFFSET,i*currentTextHeight,noobOptions[i]);
 			}
 		}
-		goodDrawText(MENUOPTIONOFFSET+MENUCURSOROFFSET,_choice*currentTextHeight,&(noobOptions[_choice][_scrollOffset]));
-		goodDrawText(MENUCURSOROFFSET*2,_choice*currentTextHeight,MENUCURSOR);
+		drawText(MENUOPTIONOFFSET+MENUCURSOROFFSET,_choice*currentTextHeight,&(noobOptions[_choice][_scrollOffset]));
+		drawText(MENUCURSOROFFSET*2,_choice*currentTextHeight,MENUCURSOR);
 
 		endDrawing();
 		fpsCapWait();
@@ -4765,16 +4763,16 @@ EASYLUAINTSETFUNCTION(advboxHeight,advboxHeight)
 void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	int i;
 	// When you are not interacting with that choice
-	CrossTexture** _passedNormalImages;
+	crossTexture* _passedNormalImages;
 	// When your cursor is over that choice
-	CrossTexture** _passedHoverImages;
+	crossTexture* _passedHoverImages;
 	// When you've selected that choice
-	CrossTexture** _passedSelectImages;
+	crossTexture* _passedSelectImages;
 	int _numberOfChoices = _numArguments/3;
 	printf("Found %d choices\n",_numberOfChoices);
-	_passedNormalImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
-	_passedHoverImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
-	_passedSelectImages = malloc(sizeof(CrossTexture*)*_numberOfChoices);
+	_passedNormalImages = malloc(sizeof(crossTexture)*_numberOfChoices);
+	_passedHoverImages = malloc(sizeof(crossTexture)*_numberOfChoices);
+	_passedSelectImages = malloc(sizeof(crossTexture)*_numberOfChoices);
 
 	for (i=0;i<_numberOfChoices;i++){
 		_passedNormalImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+1-1]),graphicsLocation,scriptUsesFileExtensions);
@@ -4964,8 +4962,8 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 		filenameholder[i]=(char*)calloc(1,MAXFILELENGTH);
 	}
 
-	CROSSDIR dir;
-	CROSSDIRSTORAGE lastStorage;
+	crossDir dir;
+	crossDirStorage lastStorage;
 	dir = openDirectory (directorylocation);
 
 	if (dirOpenWorked(dir)==0){
@@ -5041,19 +5039,19 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 			}
 	
 			startDrawing();
-			//DrawText(20,20+textHeight(fontSize)+i*(textHeight(fontSize)),currentMessages[i]);
+			//DrawText(20,20+textHeight(normalFont)+i*(textHeight(normalFont)),currentMessages[i]);
 			if (promptMessage!=NULL){
-				goodDrawText(MENUOPTIONOFFSET,5,promptMessage);
+				drawText(MENUOPTIONOFFSET,5,promptMessage);
 			}
 			_tmpoffset=_choice+1-_maxPerNoScroll;
 			if (_tmpoffset<0){
 				_tmpoffset=0;
 			}
 			for (i=0;i<_maxPerNoScroll;i++){
-				goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(i+2),filenameholder[i+_tmpoffset]);
+				drawText(MENUOPTIONOFFSET,5+currentTextHeight*(i+2),filenameholder[i+_tmpoffset]);
 			}
-			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*((_choice-_tmpoffset)+2),filenameholder[_choice],0,255,0);
-			goodDrawText(5,5+currentTextHeight*((_choice-_tmpoffset)+2),MENUCURSOR);
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*((_choice-_tmpoffset)+2),filenameholder[_choice],0,255,0);
+			drawText(5,5+currentTextHeight*((_choice-_tmpoffset)+2),MENUCURSOR);
 			endDrawing();
 			controlsEnd();
 			fpsCapWait();
@@ -5086,7 +5084,7 @@ void FontSizeSetup(){
 				#endif
 				itoa(fontSize,_tempNumberString,10);
 				#if PLATFORM == PLAT_VITA || PLATFORM == PLAT_3DS
-					currentTextHeight = textHeight(fontSize);
+					currentTextHeight = textHeight(normalFont);
 				#endif
 			}else if (_choice==1){
 				ReloadFont();
@@ -5111,31 +5109,31 @@ void FontSizeSetup(){
 				#endif
 				itoa(fontSize,_tempNumberString,10);
 				#if PLATFORM == PLAT_VITA || PLATFORM == PLAT_3DS
-					currentTextHeight = textHeight(fontSize);
+					currentTextHeight = textHeight(normalFont);
 				#endif
 			}
 		}
 		controlsEnd();
 		startDrawing();
-		goodDrawText(MENUOPTIONOFFSET,currentTextHeight,"Font Size: ");
-			goodDrawText(MENUOPTIONOFFSET+textWidth(normalFont,"Font Size: "),currentTextHeight,_tempNumberString);
+		drawText(MENUOPTIONOFFSET,currentTextHeight,"Font Size: ");
+			drawText(MENUOPTIONOFFSET+textWidth(normalFont,"Font Size: "),currentTextHeight,_tempNumberString);
 		#if PLATFORM == PLAT_VITA
-			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*2,"Test");
-			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*5,"Press the \"Test\" button to ");
-			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*6,"make the text look good. 32 is default.");
+			drawText(MENUOPTIONOFFSET,currentTextHeight*2,"Test");
+			drawText(MENUOPTIONOFFSET,currentTextHeight*5,"Press the \"Test\" button to ");
+			drawText(MENUOPTIONOFFSET,currentTextHeight*6,"make the text look good. 32 is default.");
 		#endif
-		goodDrawText(MENUOPTIONOFFSET,currentTextHeight*3,"Done");
+		drawText(MENUOPTIONOFFSET,currentTextHeight*3,"Done");
 		#if PLATFORM != PLAT_VITA
-			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*5,"You should be able to see this entire line. It shouldn't cut off.");
+			drawText(MENUOPTIONOFFSET,currentTextHeight*5,"You should be able to see this entire line. It shouldn't cut off.");
 	
-			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*8,"Press the BACK button to see the controls. Green and red are used");
-			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*9,"to change the font size when you're on the first option.");
+			drawText(MENUOPTIONOFFSET,currentTextHeight*8,"Press the BACK button to see the controls. Green and red are used");
+			drawText(MENUOPTIONOFFSET,currentTextHeight*9,"to change the font size when you're on the first option.");
 	
-			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*11,"You have to select \"Test\" to see the new size.");
+			drawText(MENUOPTIONOFFSET,currentTextHeight*11,"You have to select \"Test\" to see the new size.");
 	
-			goodDrawText(MENUOPTIONOFFSET,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn");
+			drawText(MENUOPTIONOFFSET,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn");
 		#endif
-		goodDrawText(5,currentTextHeight*(_choice+1),MENUCURSOR);
+		drawText(5,currentTextHeight*(_choice+1),MENUCURSOR);
 		endDrawing();
 		fpsCapWait();
 	}
@@ -5206,7 +5204,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	signed char _needToScroll=0;
 	int i;
 	char _artBefore=graphicsLocation; // This variable is used to check if the player changed the bust location after exiting
-	CrossTexture* _renaImage=NULL;
+	crossTexture _renaImage=NULL;
 	char _tempItoaHoldBGM[5] = {'\0'};
 	char _tempItoaHoldSE[5] = {'\0'};
 	char _tempItoaHoldVoice[5] = {'\0'};
@@ -5527,7 +5525,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				PlayMenuSound();
 			}else if (_choice==_fontSizeSlot){
 				FontSizeSetup();
-				currentTextHeight = textHeight(fontSize);
+				currentTextHeight = textHeight(normalFont);
 			}else if (_choice==_resettingsSlot){
 				PlayMenuSound();
 				if (LazyChoice("This will reset your settings.","Is this okay?",NULL,NULL)==1){
@@ -5661,30 +5659,30 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		}
 		controlsEnd();
 		startDrawing();
-		goodDrawText(5,5+(_choice-_scrollOffset)*currentTextHeight,MENUCURSOR);
+		drawText(5,5+(_choice-_scrollOffset)*currentTextHeight,MENUCURSOR);
 		for (i=0;i<_optionsOnScreen;i++){
 			if (i>_maxOptionSlotUsed){
 				break;
 			}
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*i,_settingsOptionsMainText[i+_scrollOffset]);
+			drawText(MENUOPTIONOFFSET,5+currentTextHeight*i,_settingsOptionsMainText[i+_scrollOffset]);
 			if (_settingsOptionsValueText[i+_scrollOffset]!=NULL){
-				goodDrawText(MENUOPTIONOFFSET+textWidth(normalFont,_settingsOptionsMainText[i+_scrollOffset])+singleSpaceWidth,5+currentTextHeight*i,_settingsOptionsValueText[i+_scrollOffset]);
+				drawText(MENUOPTIONOFFSET+textWidth(normalFont,_settingsOptionsMainText[i+_scrollOffset])+singleSpaceWidth,5+currentTextHeight*i,_settingsOptionsValueText[i+_scrollOffset]);
 			}
 		}
 		if (_needToScroll && _scrollOffset!=_maxOptionSlotUsed-(_optionsOnScreen-1)){
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*_optionsOnScreen,"\\/\\/\\/\\/"); // First option is at 0, so don't subtract one from _optionsOnScreen
+			drawText(MENUOPTIONOFFSET,5+currentTextHeight*_optionsOnScreen,"\\/\\/\\/\\/"); // First option is at 0, so don't subtract one from _optionsOnScreen
 		}
 		
 		// Color CPU overclock text if enabled
 		if (cpuOverclocked && PLATFORM != PLAT_3DS){
-			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(1-_scrollOffset),_settingsOptionsMainText[1],0,255,0);
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(1-_scrollOffset),_settingsOptionsMainText[1],0,255,0);
 		}
 		// If message box alpha is very high or text is on the bottom screen then make the message box alpha text red
 		if ( (MessageBoxAlpha>=230 && canChangeBoxAlpha) || (PLATFORM == PLAT_3DS && cpuOverclocked)){
-			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(_messageBoxAlphaSlot-_scrollOffset),_settingsOptionsMainText[_messageBoxAlphaSlot],255,0,0);
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(_messageBoxAlphaSlot-_scrollOffset),_settingsOptionsMainText[_messageBoxAlphaSlot],255,0,0);
 		}
 		if (_shouldShowVNDSSettings && currentlyVNDSGame && gameTextDisplayMode == TEXTMODE_ADV){
-			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(_vndsHitBottomActionSlot-_scrollOffset),_settingsOptionsMainText[_vndsHitBottomActionSlot],255,0,0);
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(_vndsHitBottomActionSlot-_scrollOffset),_settingsOptionsMainText[_vndsHitBottomActionSlot],255,0,0);
 		}
 		// Display sample Rena if changing bust location
 		#if PLATFORM == PLAT_3DS
@@ -5891,23 +5889,23 @@ void TitleScreen(){
 
 		startDrawing();
 
-		goodDrawText(MENUOPTIONOFFSET,5,"Main Menu");
+		drawText(MENUOPTIONOFFSET,5,"Main Menu");
 
 		// Menu options
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load game");
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Manual mode");
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"Basic Settings");
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit");
+		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load game");
+		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Manual mode");
+		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"Basic Settings");
+		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit");
 		if (!isGameFolderMode){
-			goodDrawTextColored(MENUOPTIONOFFSET,5+currentTextHeight*(4+2),"Upgrade to game folder mode",0,255,0);
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(4+2),"Upgrade to game folder mode",0,255,0);
 		}
 
 		// Extra bottom data
-		goodDrawTextColored((screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING VERSIONSTRINGSUFFIX,VERSIONCOLOR);
-		goodDrawText(5,screenHeight-5-currentTextHeight,_bottomConfigurationString);
+		gbDrawText(normalFont,(screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING VERSIONSTRINGSUFFIX,VERSIONCOLOR);
+		drawText(5,screenHeight-5-currentTextHeight,_bottomConfigurationString);
 
 		// Cursor
-		goodDrawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
+		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
 
 		#if PLATFORM == PLAT_3DS
 			startDrawingBottom();
@@ -6004,11 +6002,11 @@ void TipMenu(){
 		controlsEnd();
 		startDrawing();
 		for (i = 0; i < 3; i++){
-			goodDrawText(MENUOPTIONOFFSET,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i]);
+			drawText(MENUOPTIONOFFSET,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i]);
 		}
-		goodDrawText(5,screenHeight-5-currentTextHeight*3,"Left and Right - Change TIP");
-		goodDrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back");
-		goodDrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select");
+		drawText(5,screenHeight-5-currentTextHeight*3,"Left and Right - Change TIP");
+		drawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back");
+		drawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select");
 
 		endDrawing();
 		fpsCapWait();
@@ -6099,18 +6097,18 @@ void ChapterJump(){
 		startDrawing();
 		
 		if (chapterNamesLoaded==0){
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),(const char*)globalTempConcat);
+			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),(const char*)globalTempConcat);
 		}else{
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice]);
+			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice]);
 		}
 
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Back");
-		goodDrawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
+		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Back");
+		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
 
-		goodDrawText(5,screenHeight-5-currentTextHeight*4,"Left and Right - Change chapter");
-		goodDrawText(5,screenHeight-5-currentTextHeight*3,"R and Left or Right - Change chapter quickly");
-		goodDrawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back");
-		goodDrawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select");
+		drawText(5,screenHeight-5-currentTextHeight*4,"Left and Right - Change chapter");
+		drawText(5,screenHeight-5-currentTextHeight*3,"R and Left or Right - Change chapter quickly");
+		drawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back");
+		drawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select");
 		endDrawing();
 		fpsCapWait();
 	}
@@ -6147,15 +6145,13 @@ void SaveGameEditor(){
 		controlsEnd();
 		startDrawing();
 		if (chapterNamesLoaded==0){
-			goodDrawText(MENUOPTIONOFFSET, currentTextHeight, _endOfChapterString, fontSize);
+			drawText(MENUOPTIONOFFSET, currentTextHeight, _endOfChapterString);
 		}else{
-			goodDrawText(MENUOPTIONOFFSET, currentTextHeight, currentPresetFileFriendlyList.theArray[currentPresetChapter], fontSize);
+			drawText(MENUOPTIONOFFSET, currentTextHeight, currentPresetFileFriendlyList.theArray[currentPresetChapter]);
 		}
-
-		
-		goodDrawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight*3, "Welcome to the save file editor!", fontSize);
-		goodDrawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight*2, SELECTBUTTONNAME" - Finish and save", fontSize);
-		goodDrawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight, "Left and Right - Change last completed chapter", fontSize);
+		drawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight*3, "Welcome to the save file editor!");
+		drawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight*2, SELECTBUTTONNAME" - Finish and save");
+		drawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight, "Left and Right - Change last completed chapter");
 		endDrawing();
 		fpsCapWait();
 	}
@@ -6278,26 +6274,26 @@ void NavigationMenu(){
 		controlsEnd();
 		startDrawing();
 
-		goodDrawText(MENUOPTIONOFFSET,0,"End of script: ");
+		drawText(MENUOPTIONOFFSET,0,"End of script: ");
 		if (chapterNamesLoaded==0){
-			goodDrawText(_endofscriptwidth+MENUOPTIONOFFSET,0,_endOfChapterString);
+			drawText(_endofscriptwidth+MENUOPTIONOFFSET,0,_endOfChapterString);
 		}else{
-			goodDrawText(_endofscriptwidth+MENUOPTIONOFFSET,0,currentPresetFileFriendlyList.theArray[currentPresetChapter]);
+			drawText(_endofscriptwidth+MENUOPTIONOFFSET,0,currentPresetFileFriendlyList.theArray[currentPresetChapter]);
 		}
 
 		char _currentListDrawPosition=0;
 		if (_nextChapterExist==1){
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Next");
+			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Next");
 			_currentListDrawPosition++;
 		}
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Chapter Jump");
+		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Chapter Jump");
 		_currentListDrawPosition++;
 		if (gameHasTips==1){	
-			goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"View Tips");
+			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"View Tips");
 			_currentListDrawPosition++;
 		}
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Exit");
-		goodDrawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
+		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Exit");
+		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
 		endDrawing();
 		fpsCapWait();
 		exitIfForceQuit();
@@ -6325,10 +6321,10 @@ void NewGameMenu(){
 		controlsEnd();
 
 		startDrawing();
-		goodDrawText(MENUOPTIONOFFSET,currentTextHeight,"NEW GAME");
-		goodDrawText(MENUOPTIONOFFSET,currentTextHeight*3,"Start from beginning");
-		goodDrawText(MENUOPTIONOFFSET,currentTextHeight*4,"Savegame Editor");
-		goodDrawText(5,currentTextHeight*(_choice+3),MENUCURSOR);
+		drawText(MENUOPTIONOFFSET,currentTextHeight,"NEW GAME");
+		drawText(MENUOPTIONOFFSET,currentTextHeight*3,"Start from beginning");
+		drawText(MENUOPTIONOFFSET,currentTextHeight*4,"Savegame Editor");
+		drawText(5,currentTextHeight*(_choice+3),MENUCURSOR);
 		endDrawing();
 
 		fpsCapWait();
@@ -6346,7 +6342,7 @@ int vndsSaveSelector(){
 	int _slotWidth = screenWidth/SAVEMENUPAGEW;
 	int _slotHeight = screenHeight/SAVEMENUPAGEH;
 
-	CrossTexture* _loadedThumbnail[SAVEMENUPAGESIZE]={NULL};
+	crossTexture _loadedThumbnail[SAVEMENUPAGESIZE]={NULL};
 	char* _loadedTextThumb[SAVEMENUPAGESIZE]={NULL};
 
 	char _reloadThumbs=1;
@@ -6501,10 +6497,10 @@ int vndsSaveSelector(){
 
 					int k;
 					for (k=0;k<_numLines;++k){
-						goodDrawText(j*_slotWidth+5,i*_slotHeight+5+currentTextHeight*(k+1),_wrappedLines[k]);
+						drawText(j*_slotWidth+5,i*_slotHeight+5+currentTextHeight*(k+1),_wrappedLines[k]);
 					}
 				}
-				goodDrawText(j*_slotWidth+5,i*_slotHeight+5,_labelBuffer);
+				drawText(j*_slotWidth+5,i*_slotHeight+5,_labelBuffer);
 				drawHallowRect(j*_slotWidth,i*_slotHeight,_slotWidth,_slotHeight,SAVESELECTORRECTTHICK,_r,_g,_b,255);
 			}
 		}
@@ -6531,7 +6527,7 @@ void VNDSNavigationMenu(){
 	signed char _choice=0;
 	char* _loadedNovelName=NULL;
 
-	CrossTexture* _loadedThumbnail=NULL;
+	crossTexture _loadedThumbnail=NULL;
 
 	//
 	char _possibleThunbnailPath[strlen(streamingAssets)+strlen("/SEArchive.legArchive.legList")+1];
@@ -6675,14 +6671,14 @@ void VNDSNavigationMenu(){
 			drawTexture(_loadedThumbnail,screenWidth-getTextureWidth(_loadedThumbnail),screenHeight-getTextureHeight(_loadedThumbnail));
 		}
 
-		goodDrawText(MENUOPTIONOFFSET,0,_loadedNovelName);
+		drawText(MENUOPTIONOFFSET,0,_loadedNovelName);
 
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load Save");
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"New Game");
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"VNDS Settings");
-		goodDrawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit");
+		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load Save");
+		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"New Game");
+		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"VNDS Settings");
+		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit");
 
-		goodDrawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
+		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
 
 		endDrawing();
 		fpsCapWait();
@@ -6887,11 +6883,11 @@ signed char init(){
 	#endif
 	
 	ReloadFont();
-	if (initAudio()==0){
+	if (initAudio()){
 		#if PLATFORM == PLAT_3DS
 			easyMessagef(1,"dsp init failed. Do you have dsp firm dumped and in /3ds/dspfirm.cdc ?");
 		#else
-			easyMessagef(1,"...but it not worked audio init?");
+			easyMessagef(1,"audio init failed. isn't supposed to be possible...");
 		#endif
 	}
 	
@@ -6909,19 +6905,16 @@ signed char init(){
 	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
 	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("assets/star.png");
 	
-	// Zero the image char arrray
 	for (i=0;i<MAXIMAGECHAR;i++){
 		imageCharType[i]=-1;
 	}
-	
-	// Fill with null char
 	ClearMessageArray(0);
-	if (initializeLua()==2){
-		return 2;
-	}
-	
 	for (i=0;i<maxBusts;i++){
 		ResetBustStruct(&(Busts[i]),0);
+	}
+	
+	if (initializeLua()==2){
+		return 2;
 	}
 	
 	#if PLATFORM == PLAT_VITA && SOUNDPLAYER != SND_VITA
