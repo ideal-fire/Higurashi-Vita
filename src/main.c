@@ -34,7 +34,6 @@ int InputValidity=1;
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 
 	TODO - Redo image chars to just have width=height
-	TODO - Update platform to make libgoodbrew platform constants
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -43,7 +42,6 @@ int InputValidity=1;
 // This is pretty long because foreign characters can take two bytes
 #define SINGLELINEARRAYSIZE 300
 #define PLAYTIPMUSIC 0
-#include "GeneralGoodConfig.h"
 
 #include "main.h"
 
@@ -95,7 +93,7 @@ int InputValidity=1;
 #define VERSIONSTRINGSUFFIX ""
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 // Specific constants
-#if PLATFORM != PLAT_3DS
+#if GBPLAT != GB_3DS
 	#define SELECTBUTTONNAME "X"
 	#define BACKBUTTONNAME "O"
 	int advboxHeight = 181;
@@ -106,11 +104,9 @@ int InputValidity=1;
 	#define cpuOverclocked textIsBottomScreen
 #endif
 char* vitaAppId="HIGURASHI";
-#if PLATFORM == PLAT_VITA
+#if GBPLAT == GB_VITA
 	#define CANINVERT 1
-#elif PLATFORM == PLAT_3DS
-	#define CANINVERT 0
-#elif PLATFORM == PLAT_COMPUTER
+#else
 	#define CANINVERT 0
 #endif
 #define HISTORYONONESCREEN ((int)((screenHeight-currentTextHeight*2-5)/currentTextHeight))
@@ -161,11 +157,11 @@ char* vitaAppId="HIGURASHI";
 #endif
 
 // TODO - Proper libGeneralGood support for this
-#if SOUNDPLAYER == SND_VITA
+#if GBSND == GBSND_VITA
 	char mlgsndIsPlaying(NathanAudio* _passedAudio);
 #endif
 
-#if PLATFORM == PLAT_VITA
+#if GBPLAT == GB_VITA
 	#include "../stolenCode/qdbmp.h"
 #endif
 
@@ -205,7 +201,7 @@ char* vitaAppId="HIGURASHI";
 #define drawText(_x,_y,_text) gbDrawText(normalFont,_x,_y,_text,DEFAULTFONTCOLOR);
 
 ////////////////////////////////////////
-// PLatform specific variables
+// GBPLAT specific variables
 ///////////////////////////////////////
 
 //////////////
@@ -223,7 +219,7 @@ char* gamesFolder;
 #define BUST_STATUS_SPRITE_MOVE 4 // var 1 is x per frame, var 2 is y per frame
 #define BUST_STATUS_TRANSFORM_FADEIN 5 // The bust is fading into an already used slot. image is what the new texture is going to be thats fading in, transformTexture is the old texture that is fading out. var 1 is alpha per frame. added to image, subtracted from transformTexture.
 
-#if PLATFORM == PLAT_VITA
+#if GBPLAT == GB_VITA
 	#include <psp2/touch.h>
 	SceTouchData touch_old[SCE_TOUCH_PORT_MAX_NUM];
 	SceTouchData touch[SCE_TOUCH_PORT_MAX_NUM];
@@ -406,11 +402,11 @@ float voiceVolume = 1.0;
 crossFont normalFont;
 int currentTextHeight;
 int singleSpaceWidth;
-#if PLATFORM == PLAT_VITA
+#if GBPLAT == GB_VITA
 	pthread_t soundProtectThreadId;
 	void* _loadedFontBuffer=NULL;
 #endif
-#if PLATFORM == PLAT_3DS
+#if GBPLAT == GB_3DS
 	char _3dsSoundProtectThreadIsAlive=1;
 	Thread _3dsSoundUpdateThread;
 	char _bgmIsLock=0;
@@ -501,6 +497,12 @@ signed char forceDropshadowOption=1;
 /*
 ====================================================
 */
+#if SUBPLATFORM == SUB_UNIX
+	char* itoa(int value, char* _buffer, int _uselessBase){
+		sprintf(_buffer,"%d",value);
+		return _buffer;
+	}
+#endif
 int fixX(int _passed){
 	return _passed;
 }
@@ -583,14 +585,8 @@ void changeMallocString(char** _stringToChange, const char* _newValue){
 	}
 	*_stringToChange = _newValue!=NULL ? strdup(_newValue) : NULL;
 }
-#if SUBPLATFORM == SUB_UNIX
-char* itoa(int value, char* _buffer, int _uselessBase){
-	sprintf(_buffer,"%d",value);
-	return _buffer;
-}
-#endif
 void XOutFunction(){
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		_3dsSoundProtectThreadIsAlive=0;
 		threadJoin(_3dsSoundUpdateThread,30000000000);
 	#endif
@@ -600,7 +596,7 @@ void XOutFunction(){
 	exit(0);
 }
 char isForceQuit(){
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		return !(aptMainLoop());
 	#else
 		return 0;
@@ -639,13 +635,13 @@ crossTexture LoadEmbeddedPNG(const char* path){
 	crossTexture _tempTex = loadPNG(_fixedPath);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
-		easyMessagef(1,"Failed to load image %s.\n%s",path,PLATFORM != PLAT_3DS ? "This is supposed to be embedded..." : "Check you set up everything correctly.");
+		easyMessagef(1,"Failed to load image %s.\n%s",path,GBPLAT != GB_3DS ? "This is supposed to be embedded..." : "Check you set up everything correctly.");
 	}
 	free(_fixedPath);
 	return _tempTex;
 }
 void drawDropshadowTextSpecific(int _x, int _y, const char* _message, int _r, int _g, int _b, int _dropshadowR, int _dropshadowG, int _dropshadowB, int _a){
-	#if PLATFORM == PLAT_VITA
+	#if GBPLAT == GB_VITA
 		struct goodbrewfont* _realFont = (struct goodbrewfont*)normalFont;
 		vita2d_font_draw_text_dropshadow(_realFont->data,_x,_y+textHeight(normalFont),RGBA8(_r,_g,_b,_a),_realFont->size,_message,DROPSHADOWOFFX,DROPSHADOWOFFY,RGBA8(_dropshadowR,_dropshadowG,_dropshadowB,_a));
 	#else
@@ -678,7 +674,7 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
 		_maxDrawLine=MAXLINES;
 	}
 	int i;
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		if (textIsBottomScreen==1){
 			startDrawingBottom();
 			if (strlen(currentMessages[i])==0){
@@ -697,7 +693,7 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
 	drawImageChars(_alpha);
 }
 void DrawMessageBox(char _textmodeToDraw){
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		if (textIsBottomScreen==1){
 			return;
 		}
@@ -739,8 +735,8 @@ void SetDefaultFontSize(){
 	#endif
 }
 void _loadSpecificFont(char* _filename){
-	#if PLATFORM != PLAT_VITA
-		normalFont = loadFont(_filename,24);
+	#if GBPLAT != GB_VITA
+		normalFont = loadFont(_filename,getResonableFontSize(GBTXT));
 	#else
 		// Here I put custom code for loading fonts on the Vita. I need this for fonts with a lot of characters. Why? Well, if the font has a lot of characters, FreeType won't load all of them at once. It'll stream the characters from disk. At first that sounds good, but remember that the Vita breaks its file handles after sleep mode. So new text wouldn't work after sleep mode. I could fix this by modding libvita2d and making it use my custom IO commands, but I just don't feel like doing that right now.
 		struct goodbrewfont* _realFont = normalFont;
@@ -771,9 +767,9 @@ void _loadSpecificFont(char* _filename){
 }
 void ReloadFont(){
 	char* _fixedPath;
-	#if PLATFORM != PLAT_3DS
+	#if GBPLAT != GB_3DS
 		_fixedPath = fixPathAlloc("assets/LiberationSans-Regular.ttf",TYPE_EMBEDDED);
-	#elif PLATFORM == PLAT_3DS
+	#elif GBPLAT == GB_3DS
 		_fixedPath = fixPathAlloc("assets/Bitmap-LiberationSans-Regular",TYPE_EMBEDDED);
 	#endif
 	//_loadSpecificFont("sa0:data/font/pvf/ltn4.pvf");
@@ -813,7 +809,7 @@ char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 	return lazyLuaError(luaL_dofile(passedState,passedPath));
 }
 void WriteToDebugFile(const char* stuff){
-	#if PLATFORM == PLAT_COMPUTER
+	#if GBPLAT == GB_LINUX
 		printf("%s\n",stuff);
 		return;
 	#endif
@@ -831,7 +827,7 @@ void WriteToDebugFile(const char* stuff){
 	free(_tempDebugFileLocationBuffer);
 }
 void WriteSDLError(){
-	#if RENDERER == REND_SDL || SOUNDPLAYER == SND_SDL
+	#if GBREND == GBREND_SDL || GBSND == GBSND_SDL
 		WriteToDebugFile(SDL_GetError());
 	#else
 		WriteToDebugFile("Can't write SDL error because not using SDL.");
@@ -1285,7 +1281,7 @@ void updateControlsGeneral(){
 		isSkipping=0;
 	}
 	if (wasJustPressed(BUTTON_X)){
-		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && PLATFORM != PLAT_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame,(strcmp(VERSIONSTRING,"forgotversionnumber")==0));
+		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && GBPLAT != GB_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame,(strcmp(VERSIONSTRING,"forgotversionnumber")==0));
 	}
 	if (wasJustPressed(BUTTON_SELECT)){
 		PlayMenuSound();
@@ -1310,7 +1306,7 @@ void outputLineWait(){
 	// 0 if we need to wait for sound to end.
 	u64 _inBetweenLinesMilisecondsStart;
 	int _chosenAutoWait;
-	#if SOUNDPLAYER == SND_VITA
+	#if GBSND == GBSND_VITA
 		if (lastVoiceSlot!=-1 && soundEffects[lastVoiceSlot]!=NULL && mlgsndIsPlaying(soundEffects[lastVoiceSlot])){
 			_inBetweenLinesMilisecondsStart=0;
 			_chosenAutoWait = autoModeVoicedWait;
@@ -1329,7 +1325,7 @@ void outputLineWait(){
 		}
 	#endif
 	// On PS Vita, prevent sleep mode if using auto mode
-	#if PLATFORM == PLAT_VITA
+	#if GBPLAT == GB_VITA
 		if (autoModeOn){
 			sceKernelPowerTick(0);
 		}
@@ -1371,7 +1367,7 @@ void outputLineWait(){
 		endDrawing();
 
 		int touch_bool = 0;
-		#if PLATFORM == PLAT_VITA
+		#if GBPLAT == GB_VITA
 			memcpy(touch_old, touch, sizeof(touch_old));
 			if (vndsVitaTouch){
 				int port;
@@ -1420,7 +1416,7 @@ void outputLineWait(){
 					endType = LINE_RESERVED;
 				}
 			}else{
-				#if PLATFORM == PLAT_VITA
+				#if GBPLAT == GB_VITA
 					// Check if audio has ended yet.
 					if (mlgsndIsPlaying(soundEffects[lastVoiceSlot])==0){
 						_inBetweenLinesMilisecondsStart = getMilli();
@@ -1845,7 +1841,7 @@ void updateTextPositions(){
 		textboxXOffset = floor((float)(screenWidth-applyGraphicsScale(actualBackgroundWidth))/2);
 		outputLineScreenWidth = screenWidth - textboxXOffset;
 	}
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		if (textIsBottomScreen==1){
 			outputLineScreenWidth=320;
 			outputLineScreenHeight=240;
@@ -1982,7 +1978,7 @@ crossTexture safeLoadGameImage(const char* filename, char _folderPreference, cha
 	}
 	crossTexture _returnLoadedPNG = _loadGameImage(_tempFoundFilename);
 	free(_tempFoundFilename);
-	#if PLATFORM == PLAT_VITA
+	#if GBPLAT == GB_VITA
 		// Smooth scaling
 		if (currentlyVNDSGame){
 			vita2d_texture_set_filters(_returnLoadedPNG,SCE_GXM_TEXTURE_FILTER_LINEAR,SCE_GXM_TEXTURE_FILTER_LINEAR);
@@ -2522,7 +2518,7 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 		return tempstringconcat;
 	}
 	//
-	#if SOUNDPLAYER != SND_VITA
+	#if GBSND != GBSND_VITA
 		removeFileExtension(tempstringconcat);
 		strcat(tempstringconcat,".wav");
 		if (checkFileExist(tempstringconcat)==1){
@@ -2530,7 +2526,7 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 		}
 	#endif
 	//
-	#if SOUNDPLAYER == SND_VITA
+	#if GBSND == GBSND_VITA
 		removeFileExtension(tempstringconcat);
 		strcat(tempstringconcat,".mp3");
 		if (checkFileExist(tempstringconcat)==1){
@@ -2541,7 +2537,7 @@ char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName)
 	free(tempstringconcat);
 	return NULL;
 }
-#if SOUNDPLAYER == SND_VITA
+#if GBSND == GBSND_VITA
 	char getProbableSoundFormat(const char* _passedFilename){
 		if (strlen(_passedFilename)>=4){
 			// Copy file extension to another buffer so we can modify it
@@ -2598,7 +2594,7 @@ legArchiveFile soundArchiveGetFilename(const char* _filename, char* _foundFormat
 		return _possibleResult;
 	}
 	//
-	#if SOUNDPLAYER != SND_VITA
+	#if GBSND != GBSND_VITA
 		removeFileExtension(tempstringconcat);
 		strcat(tempstringconcat,".wav");
 		_possibleResult = getAdvancedFile(soundArchive,tempstringconcat);
@@ -2609,7 +2605,7 @@ legArchiveFile soundArchiveGetFilename(const char* _filename, char* _foundFormat
 		}
 	#endif
 	//
-	#if SOUNDPLAYER == SND_VITA
+	#if GBSND == GBSND_VITA
 		removeFileExtension(tempstringconcat);
 		strcat(tempstringconcat,".mp3");
 		_possibleResult = getAdvancedFile(soundArchive,tempstringconcat);
@@ -2678,7 +2674,7 @@ void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 	free(tempstringconcat);
 	// If we didn't find the file in the folders and we can use the sound archive, try that
 	if (_tempHoldSlot==NULL && useSoundArchive){
-		#if SOUNDPLAYER == SND_VITA
+		#if GBSND == GBSND_VITA
 			char _foundFormat=0;
 			legArchiveFile _foundArchiveFile = soundArchiveGetFilename(_filename,&_foundFormat);
 			if (_foundArchiveFile.fp==NULL){
@@ -2687,7 +2683,7 @@ void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 				_tempHoldSlot = _mlgsnd_loadAudioFILE(_foundArchiveFile, _foundFormat, !_isSE, 1);
 			}
 		#else
-			#if PLATFORM != PLAT_COMPUTER
+			#if GBPLAT != GB_LINUX
 				easyMessagef(1,"sound archive not supported.");
 			#endif
 		#endif
@@ -2962,7 +2958,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			currentMessages[_currentDrawLine][_currentDrawChar] = _archivedCharacter;
 		}
 	}
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		int _oldMessageXOffset=textboxXOffset;
 		int _oldMessageInBoxXOffset=messageInBoxXOffset;
 		int _oldMessageYOffset=textboxYOffset;
@@ -2976,7 +2972,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	#endif
 	char _slowTextSpeed=0;
 	while(_isDone==0){
-		#if PLATFORM != PLAT_VITA
+		#if GBPLAT != GB_VITA
 			fpsCapStart();
 		#endif
 
@@ -2995,7 +2991,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		
 		startDrawing();
 		drawAdvanced(1,1,1,MessageBoxEnabled,1,0);
-		#if PLATFORM == PLAT_3DS
+		#if GBPLAT == GB_3DS
 			if (textIsBottomScreen==1){
 				startDrawingBottom();
 			}
@@ -3036,11 +3032,11 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				}
 			}
 		}
-		#if PLATFORM != PLAT_VITA
+		#if GBPLAT != GB_VITA
 			fpsCapWait();
 		#endif
 	}
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		if (textIsBottomScreen==1){
 			textboxXOffset=_oldMessageXOffset;
 			messageInBoxXOffset=_oldMessageInBoxXOffset;
@@ -3051,7 +3047,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	// End of function
 	endType = _endtypetemp;
 }
-#if PLATFORM == PLAT_3DS
+#if GBPLAT == GB_3DS
 	// Wait for BGM to be unlocked and then lock it
 	void lockBGM(){
 		while (_bgmIsLock){
@@ -3074,29 +3070,29 @@ void __freeBGMNoLock(int _slot){
 	}
 }
 void FreeBGM(int _slot){
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		lockBGM();
 	#endif
 	__freeBGMNoLock(_slot);
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		_bgmIsLock = 0;
 	#endif
 }
 void StopBGM(int _slot){
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		lockBGM();
 	#endif
 	changeMallocString(&lastBGMFilename,NULL);
 	if (currentMusic[_slot]!=NULL){
 		stopMusic(currentMusicHandle[_slot]);
 	}
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		_bgmIsLock = 0;
 	#endif
 }
 // Unfixed bgm
 void PlayBGM(const char* filename, int _volume, int _slot){
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		lockBGM();
 	#endif
 	if (filename!=lastBGMFilename){ // HACK
@@ -3123,7 +3119,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 			lastBGMVolume=_volume;
 		}
 	}
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		_bgmIsLock = 0;
 	#endif
 	return;
@@ -3171,7 +3167,7 @@ void SaveSettings(){
 	fwrite(&preferredTextDisplayMode,sizeof(signed char),1,fp);
 	fwrite(&autoModeVoicedWait,sizeof(int),1,fp);
 	fwrite(&vndsSpritesFade,sizeof(signed char),1,fp);
-	#if PLATFORM == PLAT_VITA
+	#if GBPLAT == GB_VITA
 		fwrite(&vndsVitaTouch,sizeof(signed char),1,fp);
 	#endif
 	fwrite(&dropshadowOn,sizeof(signed char),1,fp);
@@ -3240,7 +3236,7 @@ void LoadSettings(){
 			fread(&vndsSpritesFade,sizeof(signed char),1,fp);
 		}
 		if (_tempOptionsFormat>=12){
-			#if PLATFORM == PLAT_VITA
+			#if GBPLAT == GB_VITA
 				fread(&vndsVitaTouch,sizeof(signed char),1,fp);
 			#endif
 		}
@@ -3250,10 +3246,10 @@ void LoadSettings(){
 		fclose(fp);
 
 		if (cpuOverclocked==1){
-			#if PLATFORM == PLAT_VITA
+			#if GBPLAT == GB_VITA
 				scePowerSetArmClockFrequency(444);
 			#endif
-			#if PLATFORM == PLAT_3DS
+			#if GBPLAT == GB_3DS
 				outputLineScreenWidth = 320;
 				outputLineScreenHeight = 240;
 			#endif
@@ -3376,7 +3372,7 @@ void loadADVBox(){
 	if (checkFileExist(_tempFilepathBuffer)){
 		currentCustomTextbox = loadPNG(_tempFilepathBuffer);
 	}else{
-		#if PLATFORM != PLAT_3DS
+		#if GBPLAT != GB_3DS
 			currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBox.png");
 		#else
 			currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBoxLowRes.png");
@@ -3405,7 +3401,7 @@ void resetSettings(){
 // Must call this function after paths are set up.
 void createRequiredDirectories(){
 	// These directories need to be made if it's CIA version
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		createDirectory("/3ds/");
 		createDirectory("/3ds/data/");
 		createDirectory("/3ds/data/HIGURASHI/");
@@ -3500,7 +3496,7 @@ void activateHigurashiSettings(){
 	dynamicScaleEnabled=higurashiUsesDynamicScale;
 	//shouldUseBustCache=0;
 }
-#if PLATFORM == PLAT_VITA
+#if GBPLAT == GB_VITA
 	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
 		if (_currentPad.buttons & _button){
 			if (!(_lastPad.buttons & _button)){
@@ -3509,7 +3505,7 @@ void activateHigurashiSettings(){
 		}
 		return 0;
 	}
-	#if SOUNDPLAYER != SND_VITA
+	#if GBSND != GBSND_VITA
 		// Wait for the user to suspend the game, save them, and be happy.
 		void* soundProtectThread(void *arg){
 			if (isActuallyUsingUma0==1){
@@ -3565,7 +3561,7 @@ void activateHigurashiSettings(){
 		}
 	#endif
 #endif
-#if PLATFORM == PLAT_3DS
+#if GBPLAT == GB_3DS
 	char getIsCiaBuild(){
 		if (checkFileExist("romfs:/assets/star.png")){
 			return 1;
@@ -3729,7 +3725,7 @@ char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 	}
 	if (_saveThumb){
 		// Renderer specific code for saving thumbnails
-		#if PLATFORM == PLAT_VITA	
+		#if GBPLAT == GB_VITA	
 			char _thumbFilename[strlen(_filename)+7];
 			strcpy(_thumbFilename,_filename);
 			strcat(_thumbFilename,".thumb");
@@ -3885,7 +3881,7 @@ void hideTextbox(){
 void showTextbox(){
 	_textboxTransition(1,TEXTBOXFADEINTIME);
 }
-#if PLATFORM == PLAT_VITA
+#if GBPLAT == GB_VITA
 	void invertImage(vita2d_texture* _passedImage, signed char _doInvertAlpha){
 		// Don't recalculate these every time
 		uint32_t _cachedImageWidth = vita2d_texture_get_width(_passedImage);
@@ -4125,7 +4121,7 @@ void scriptStopBGM(nathanscriptVariable* _passedArguments, int _numArguments, na
 	}
 	return;
 }
-#if SOUNDPLAYER == SND_3DS
+#if GBSND == GBSND_3DS
 	void nathanSetChannelVolume(unsigned char _a, float _b);
 	// slot, time, should wair
 	void scriptFadeoutBGM(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -4158,7 +4154,7 @@ void scriptStopBGM(nathanscriptVariable* _passedArguments, int _numArguments, na
 	// slot, time, (bool) should wait for finish
 	void scriptFadeoutBGM(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 		if (currentMusic[(int)nathanvariableToInt(&_passedArguments[0])]!=NULL){
-			#if SOUNDPLAYER == SND_SOLOUD
+			#if GBSND == GBSND_SOLOUD
 				if (currentMusicHandle[(int)nathanvariableToInt(&_passedArguments[0])]==0){
 					return;
 				}
@@ -4922,13 +4918,13 @@ void FontSizeSetup(){
 
 		if (wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_RIGHT)){
 			if (_choice==0){
-				#if PLATFORM != PLAT_3DS
+				#if GBPLAT != GB_3DS
 					fontSize++;
 				#else
 					fontSize+=.1;
 				#endif
 				itoa(fontSize,_tempNumberString,10);
-				#if PLATFORM == PLAT_VITA || PLATFORM == PLAT_3DS
+				#if GBPLAT == GB_VITA || GBPLAT == GB_3DS
 					currentTextHeight = textHeight(normalFont);
 				#endif
 			}else if (_choice==1){
@@ -4940,7 +4936,7 @@ void FontSizeSetup(){
 		}
 		if (wasJustPressed(BUTTON_B) || wasJustPressed(BUTTON_LEFT)){
 			if (_choice==0){
-				#if PLATFORM != PLAT_3DS
+				#if GBPLAT != GB_3DS
 					fontSize--;
 					if (fontSize<=5){
 						fontSize=6;
@@ -4952,7 +4948,7 @@ void FontSizeSetup(){
 					}
 				#endif
 				itoa(fontSize,_tempNumberString,10);
-				#if PLATFORM == PLAT_VITA || PLATFORM == PLAT_3DS
+				#if GBPLAT == GB_VITA || GBPLAT == GB_3DS
 					currentTextHeight = textHeight(normalFont);
 				#endif
 			}
@@ -4961,13 +4957,13 @@ void FontSizeSetup(){
 		startDrawing();
 		drawText(MENUOPTIONOFFSET,currentTextHeight,"Font Size: ");
 			drawText(MENUOPTIONOFFSET+textWidth(normalFont,"Font Size: "),currentTextHeight,_tempNumberString);
-		#if PLATFORM == PLAT_VITA
+		#if GBPLAT == GB_VITA
 			drawText(MENUOPTIONOFFSET,currentTextHeight*2,"Test");
 			drawText(MENUOPTIONOFFSET,currentTextHeight*5,"Press the \"Test\" button to ");
 			drawText(MENUOPTIONOFFSET,currentTextHeight*6,"make the text look good. 32 is default.");
 		#endif
 		drawText(MENUOPTIONOFFSET,currentTextHeight*3,"Done");
-		#if PLATFORM != PLAT_VITA
+		#if GBPLAT != GB_VITA
 			drawText(MENUOPTIONOFFSET,currentTextHeight*5,"You should be able to see this entire line. It shouldn't cut off.");
 	
 			drawText(MENUOPTIONOFFSET,currentTextHeight*8,"Press the BACK button to see the controls. Green and red are used");
@@ -5075,7 +5071,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	signed char _vndsBustFadeEnableSlot=-2;
 	signed char _debugButtonSlot=-2;
 	signed char _dropshadowSlot=-2;
-	#if PLATFORM == PLAT_VITA
+	#if GBPLAT == GB_VITA
 		signed char _vndsVitaTouchSlot=-2;
 	#endif
 	
@@ -5090,9 +5086,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}else{
 		_settingsOptionsMainText[0] = "Resume";
 	}
-	#if PLATFORM == PLAT_VITA
+	#if GBPLAT == GB_VITA
 		_settingsOptionsMainText[1] = "Overclock CPU";
-	#elif PLATFORM == PLAT_3DS
+	#elif GBPLAT == GB_3DS
 		_settingsOptionsMainText[1] = "Text:";
 		if (textIsBottomScreen==1){
 			_settingsOptionsValueText[1] = "Bottom Screen";
@@ -5154,7 +5150,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		SETTINGSMENU_EASYADDOPTION("Drop Shadow:",_dropshadowSlot);
 		_settingsOptionsValueText[_dropshadowSlot] = charToSwitch(dropshadowOn);
 	}
-	#if PLATFORM == PLAT_VITA
+	#if GBPLAT == GB_VITA
 		SETTINGSMENU_EASYADDOPTION("Vita Touch:",_vndsVitaTouchSlot);
 	#endif
 	// Quit button is always last
@@ -5209,7 +5205,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		}
 	}
 
-	#if PLATFORM == PLAT_VITA
+	#if GBPLAT == GB_VITA
 		if(vndsVitaTouch){
 			_settingsOptionsValueText[_vndsVitaTouchSlot] = "On";
 		}else{
@@ -5332,16 +5328,16 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				PlayMenuSound();
 				if (cpuOverclocked==0){
 					cpuOverclocked=1;
-					#if PLATFORM == PLAT_VITA
+					#if GBPLAT == GB_VITA
 						scePowerSetArmClockFrequency(444);
-					#elif PLATFORM == PLAT_3DS
+					#elif GBPLAT == GB_3DS
 						_settingsOptionsValueText[1] = "Bottom Screen";
 					#endif
 				}else if (cpuOverclocked==1){
 					cpuOverclocked=0;
-					#if PLATFORM == PLAT_VITA
+					#if GBPLAT == GB_VITA
 						scePowerSetArmClockFrequency(333);
-					#elif PLATFORM == PLAT_3DS
+					#elif GBPLAT == GB_3DS
 						_settingsOptionsValueText[1] = "Top Screen";
 					#endif
 				}
@@ -5472,7 +5468,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			}else if (_choice==_debugButtonSlot){
 				debugMenuOption();
 			}
-			#if PLATFORM == PLAT_VITA
+			#if GBPLAT == GB_VITA
 				else if (_choice==_vndsVitaTouchSlot){
 					vndsVitaTouch=!vndsVitaTouch;
 					if (vndsVitaTouch){
@@ -5486,7 +5482,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				dropshadowOn = !dropshadowOn;
 				_settingsOptionsValueText[_dropshadowSlot] = charToSwitch(dropshadowOn);
 			}else if (_choice==_maxOptionSlotUsed){ // Quit
-				#if PLATFORM == PLAT_3DS
+				#if GBPLAT == GB_3DS
 					lockBGM();
 				#endif
 				endType = Line_ContinueAfterTyping;
@@ -5516,18 +5512,18 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		}
 		
 		// Color CPU overclock text if enabled
-		if (cpuOverclocked && PLATFORM != PLAT_3DS){
+		if (cpuOverclocked && GBPLAT != GB_3DS){
 			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(1-_scrollOffset),_settingsOptionsMainText[1],0,255,0);
 		}
 		// If message box alpha is very high or text is on the bottom screen then make the message box alpha text red
-		if ( (MessageBoxAlpha>=230 && canChangeBoxAlpha) || (PLATFORM == PLAT_3DS && cpuOverclocked)){
+		if ( (MessageBoxAlpha>=230 && canChangeBoxAlpha) || (GBPLAT == GB_3DS && cpuOverclocked)){
 			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(_messageBoxAlphaSlot-_scrollOffset),_settingsOptionsMainText[_messageBoxAlphaSlot],255,0,0);
 		}
 		if (_shouldShowVNDSSettings && currentlyVNDSGame && gameTextDisplayMode == TEXTMODE_ADV){
 			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(_vndsHitBottomActionSlot-_scrollOffset),_settingsOptionsMainText[_vndsHitBottomActionSlot],255,0,0);
 		}
 		// Display sample Rena if changing bust location
-		#if PLATFORM == PLAT_3DS
+		#if GBPLAT == GB_3DS
 			startDrawingBottom();
 			if (_choice==_bustLocationSlot){
 				if (_renaImage!=NULL){
@@ -5562,7 +5558,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			}
 		}
 	}
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		if (textIsBottomScreen==1){
 			outputLineScreenWidth = 320;
 			outputLineScreenHeight = 240;
@@ -5585,7 +5581,7 @@ void TitleScreen(){
 	}else{
 		strcat(_bottomConfigurationString,";Presets");
 	}
-	#if PLATFORM != PLAT_3DS
+	#if GBPLAT != GB_3DS
 		if (isActuallyUsingUma0){
 			strcat(_bottomConfigurationString,";uma0");
 		}else{
@@ -5747,7 +5743,7 @@ void TitleScreen(){
 		// Cursor
 		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
 
-		#if PLATFORM == PLAT_3DS
+		#if GBPLAT == GB_3DS
 			startDrawingBottom();
 		#endif
 		endDrawing();
@@ -6185,7 +6181,7 @@ int vndsSaveSelector(){
 							strcpy(_thumbFilename,_tempFilename);
 							strcat(_thumbFilename,".thumb");
 							if (checkFileExist(_thumbFilename)){
-								#if PLATFORM == PLAT_VITA
+								#if GBPLAT == GB_VITA
 									// temp for load BMP
 									_loadedThumbnail[_tempIndex]=vita2d_load_BMP_file(_thumbFilename);
 								#else
@@ -6441,7 +6437,7 @@ char initializeLua(){
 		free(_fixedPath);
 		lua_sethook(L, incrementScriptLineVariable, LUA_MASKLINE, 5);
 		if (_didLoadHappyLua==1){
-			#if PLATFORM == PLAT_VITA
+			#if GBPLAT == GB_VITA
 				easyMessagef(1,"happy.lua is missing for some reason. Redownload the VPK. If that doesn't fix it, report the problem to MyLegGuy.");
 			#else
 				easyMessagef(1,"happy.lua missing.");
@@ -6602,7 +6598,7 @@ signed char init(){
 	}
 	free(_fixedPath);
 	
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		osSetSpeedupEnable(1);
 	#endif
 	char* _embeddedCheckPath = fixPathAlloc("assets/star.png",TYPE_EMBEDDED);
@@ -6621,7 +6617,7 @@ signed char init(){
 	
 	ReloadFont();
 	if (initAudio()){
-		#if PLATFORM == PLAT_3DS
+		#if GBPLAT == GB_3DS
 			easyMessagef(1,"dsp init failed. Do you have dsp firm dumped and in /3ds/dspfirm.cdc ?");
 		#else
 			easyMessagef(1,"audio init failed. isn't supposed to be possible...");
@@ -6648,19 +6644,19 @@ signed char init(){
 	if (initializeLua()==2){
 		return 2;
 	}
-	#if PLATFORM == PLAT_VITA && SOUNDPLAYER != SND_VITA
+	#if GBPLAT == GB_VITA && GBSND != GBSND_VITA
 		// Create the protection thread.
 		if (pthread_create(&soundProtectThreadId, NULL, &soundProtectThread, NULL) != 0){
 			return 2;
 		}
 	#endif
-	#if PLATFORM == PLAT_3DS
+	#if GBPLAT == GB_3DS
 		// Create the sound update thread
 		s32 _foundMainThreadPriority = 0;
 		svcGetThreadPriority(&_foundMainThreadPriority, CUR_THREAD_HANDLE);
 		_3dsSoundUpdateThread = threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
 	#endif
-	#if PLATFORM == PLAT_VITA
+	#if GBPLAT == GB_VITA
 		sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
 		sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
 		sceTouchEnableTouchForce(SCE_TOUCH_PORT_FRONT);

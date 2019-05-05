@@ -1,7 +1,7 @@
 #ifndef HAPPYFPSCAP
 #define HAPPYFPSCAP
 
-#if PLATFORM == PLAT_VITA
+#if GBPLAT == GB_VITA
 	#include <psp2/kernel/processmgr.h>
 #endif
 
@@ -18,7 +18,7 @@ void fpsCapStart(){
 }
 
 void fpsCapWait(){
-	#if PLATFORM == PLAT_VITA
+	#if GBPLAT == GB_VITA
 		sceKernelPowerTick(SCE_KERNEL_POWER_TICK_DISABLE_AUTO_SUSPEND);
 	#else
 		if (capEnabled==1){

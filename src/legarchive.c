@@ -83,7 +83,6 @@ legArchiveFile getAdvancedFile(legArchive _passedArchive, const char* _passedFil
 	legArchiveFile _returnFile;
 	_returnFile.fp=NULL;
 	for (i=0;i<_passedArchive.totalFiles;++i){
-		printf("%s;%s\n",_passedArchive.fileList[i].filename,_lowerString);
 		if (strcmp(_passedArchive.fileList[i].filename,_lowerString)==0){
 
 			_returnFile.fp = fopen(_passedArchive.filename,"r");
