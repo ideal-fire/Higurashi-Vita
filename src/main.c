@@ -29,6 +29,7 @@ int InputValidity=1;
 		TODO - Expression changes look odd.
 		TODO - Allow VNDS sound command to stop all sounds
 		TODO - SetSpeedOfMessage
+		TODO - Sort files in file browser
 	TODO - Account for image chars in text width
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 
@@ -506,6 +507,23 @@ int fixX(int _passed){
 int fixY(int _passed){
 	return _passed;
 }
+int limitNum(int _passed, int _min, int _max){
+	if (_passed<_min){
+		return _min;
+	}if (_passed>_max){
+		return _max;
+	}
+	return _passed;
+}
+int wrapNum(int _passed, int _min, int _max){
+	if (_passed<_min){
+		return _max-(_min-_passed-1);
+	}
+	if (_passed>_max){
+		return _min+(_passed-_max-1);
+	}
+	return _passed;
+}
 void showErrorIfNull(void* _passedImage){
 	if (!_passedImage){
 		printf("Error, showErrorIfNull.\n");
@@ -762,31 +780,28 @@ void ReloadFont(){
 	_loadSpecificFont(_fixedPath);
 	free(_fixedPath);
 }
-char MenuControls(char _choice,int _menuMin, int _menuMax){
-	if (wasJustPressed(BUTTON_UP)){
-		if (_choice!=_menuMin){
-			return (_choice-1);
-		}else{
-			return _menuMax;
+char menuControlsLow(int* _choice, char _canWrapUpDown, int _upDownChange, char _canWrapLeftRight, int _leftRightChange, int _menuMin, int _menuMax){
+	int _oldValue = *_choice;
+	if (_leftRightChange!=0){
+		if (wasJustPressed(BUTTON_LEFT)){
+			*_choice-=_leftRightChange;
+		}else if (wasJustPressed(BUTTON_RIGHT)){
+			*_choice+=_leftRightChange;
 		}
+		*_choice = _canWrapLeftRight ? wrapNum(*_choice,_menuMin,_menuMax) : limitNum(*_choice,_menuMin,_menuMax);
+	}
+	if (wasJustPressed(BUTTON_UP)){
+		*_choice-=_upDownChange;
 	}
 	if (wasJustPressed(BUTTON_DOWN)){
-		if (_choice!=_menuMax){
-			return (_choice+1);
-		}else{
-			return _menuMin;
-		}
+		*_choice+=_upDownChange;
 	}
-	return _choice;
+	*_choice = _canWrapUpDown ? wrapNum(*_choice,_menuMin,_menuMax) : limitNum(*_choice,_menuMin,_menuMax);
+	return _oldValue!=*_choice;
 }
-// Return 1 if value was changed
-char altMenuControls(char* _choice, int _menuMin, int _menuMax){
-	char _newValue = MenuControls(*_choice,_menuMin,_menuMax);
-	if (*_choice!=_newValue){
-		*_choice = _newValue;
-		return 1;
-	}
-	return 0;
+int menuControls(int _choice,int _menuMin,int _menuMax){
+	menuControlsLow(&_choice,1,1,0,0,_menuMin,_menuMax);
+	return _choice;
 }
 char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 	if (checkFileExist(passedPath)==0){
@@ -833,22 +848,10 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 		controlsStart();
 		if (wasJustPressed(BUTTON_A)){
 			PlayMenuSound();
-			controlsStart();
-			controlsEnd();
+			controlsReset();
 			return _choice;
 		}
-		if (wasJustPressed(BUTTON_DOWN)){
-			_choice++;
-			if (_choice>1){
-				_choice=0;
-			}
-		}
-		if (wasJustPressed(BUTTON_UP)){
-			_choice--;
-			if (_choice<0){
-				_choice=1;
-			}
-		}
+		_choice = menuControls(_choice,0,1);
 		controlsEnd();
 		startDrawing();
 		if (stra!=NULL){
@@ -1347,7 +1350,7 @@ void outputLineWait(){
 			drawText(6,currentTextHeight*3+6,"RIGHT: Save slot 4");
 			drawHallowRect(0,0,screenWidth,currentTextHeight*5,5,255,255,255,255);
 			if (wasJustPressed(BUTTON_UP) || wasJustPressed(BUTTON_DOWN) || wasJustPressed(BUTTON_LEFT) || wasJustPressed(BUTTON_RIGHT)){
-				unsigned char _selectedSlot=1;
+				unsigned char _selectedSlot;
 				if (wasJustPressed(BUTTON_UP)){
 					_selectedSlot=1;
 				}else if (wasJustPressed(BUTTON_DOWN)){
@@ -1636,14 +1639,12 @@ void LoadPreset(char* filename){
 	free(_lastReadLine);
 	crossfclose(fp);
 }
-int wrapNum(int _passed, int _min, int _max){
-	if (_passed<_min){
-		return _max-(_min-_passed-1);
+void freeWrappedText(int _numLines, char** _passedLines){
+	int i;
+	for (i=0;i<_numLines;++i){
+		free(_passedLines[i]);
 	}
-	if (_passed>_max){
-		return _min+(_passed-_max-1);
-	}
-	return _passed;
+	free(_passedLines);
 }
 void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, int _maxWidth){
 	*_numLines=-1;
@@ -1773,17 +1774,11 @@ void easyMessagef(char _doWait, const char* _formatString, ...){
 	va_list _tempArgs;
 	va_start(_tempArgs, _formatString);
 	char* _completeString = formatf(_tempArgs,_formatString);
-	
 	char** _wrappedLines;
 	int _numLines;
 	wrapText(_completeString,&_numLines,&_wrappedLines,screenWidth-32);
 	easyMessage((const char**)_wrappedLines,_numLines,_doWait);
-
-	int i;
-	for (i=0;i<_numLines;++i){
-		free(_wrappedLines[i]);
-	}
-	free(_wrappedLines);
+	freeWrappedText(_numLines,_wrappedLines);
 	free(_completeString);
 }
 char* getSavefileName(const char* _passedPreset){
@@ -3272,51 +3267,31 @@ void LoadSettings(){
 //#define HISTORYSCROLLRATE (floor((double)MAXMESSAGEHISTORY/15))
 #define HISTORYSCROLLRATE 1
 void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
-	controlsEnd();
-	int _noobHeight = textHeight(normalFont);
-	int _controlsStringWidth = textWidth(normalFont,"UP and DOWN to scroll, "BACKBUTTONNAME" to return");
-	int _scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
-
-	int i;
+	controlsReset();
+	int _maxScroll = MAXMESSAGEHISTORY-HISTORYONONESCREEN;
+	int _scrollOffset=_maxScroll;
 	while (1){
 		fpsCapStart();
-
 		controlsStart();
-		if (wasJustPressed(BUTTON_UP) || wasJustPressed(BUTTON_LEFT)){
-			_scrollOffset-=wasJustPressed(BUTTON_LEFT) ? HISTORYSCROLLRATE*2 : HISTORYSCROLLRATE;
-			if (_scrollOffset<0){
-				_scrollOffset=0;
-			}
-		}
-		if (wasJustPressed(BUTTON_DOWN) || wasJustPressed(BUTTON_RIGHT)){
-			_scrollOffset+=wasJustPressed(BUTTON_RIGHT) ? HISTORYSCROLLRATE*2 : HISTORYSCROLLRATE;
-			if (_scrollOffset>MAXMESSAGEHISTORY-HISTORYONONESCREEN){
-				_scrollOffset=MAXMESSAGEHISTORY-HISTORYONONESCREEN;
-			}
-		}
+		menuControlsLow(&_scrollOffset,0,HISTORYSCROLLRATE,0,HISTORYSCROLLRATE*2,0,_maxScroll);
 		if (wasJustPressed(BUTTON_B) || wasJustPressed(BUTTON_START)){
-			controlsEnd();
+			controlsReset();
 			break;
 		}
 		controlsEnd();
-
 		startDrawing();
-
 		Draw(0);
-
-		drawRectangle(textboxXOffset,0,outputLineScreenWidth-textboxXOffset,screenHeight,230,255,200,150);
+		drawRectangle(textboxXOffset,0,outputLineScreenWidth-textboxXOffset,screenHeight,0,0,0,150);
+		int i;
 		for (i = 0; i < HISTORYONONESCREEN; i++){
-			gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*(textHeight(normalFont)),(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],0,0,0);
+			gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*currentTextHeight,(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],255,255,255);
 		}
 		if (outputLineScreenWidth == screenWidth){
-			gbDrawText(normalFont,3,screenHeight-_noobHeight-5,"TEXTLOG",0,0,0);
-			gbDrawText(normalFont,screenWidth-10-_controlsStringWidth,screenHeight-_noobHeight-5,"UP and DOWN to scroll, "BACKBUTTONNAME" to return",0,0,0);
+			gbDrawText(normalFont,3,screenHeight-currentTextHeight-5,"TEXTLOG",0,0,0);
 		}
 		drawRectangle((screenWidth-5),0,5,screenHeight,0,0,0,255);
 		drawRectangle((screenWidth-5),floor((screenHeight-HISTORYSCROLLBARHEIGHT)*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,HISTORYSCROLLBARHEIGHT,255,0,0,255);
-
 		endDrawing();
-
 		fpsCapWait();
 	}
 }
@@ -4441,7 +4416,7 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		fpsCapStart();
 		controlsStart();
 		char _oldIndex = _choice;
-		_choice = MenuControls(_choice,0,_totalOptions-1);
+		_choice = menuControls(_choice,0,_totalOptions-1);
 		// Init scrolling if we changed menu index or just started the loop
 		if (_needScrolling==-1 || _oldIndex!=_choice){
 			_scrollOffset=0;
@@ -4694,7 +4669,7 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 		fpsCapStart();
 
 		controlsStart();
-		_userChoice = MenuControls(_userChoice,0,_numberOfChoices-1);
+		_userChoice = menuControls(_userChoice,0,_numberOfChoices-1);
 		if (wasJustPressed(BUTTON_A)){
 			_isHoldSelect=1;
 		}
@@ -4896,31 +4871,7 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 		while (currentGameStatus!=GAMESTATUS_QUIT){
 			fpsCapStart();
 			controlsStart();
-	
-			if (wasJustPressed(BUTTON_UP)){
-				_choice--;
-				if (_choice<0){
-					_choice=totalFiles-1;
-				}
-			}
-			if (wasJustPressed(BUTTON_DOWN)){
-				_choice++;
-				if (_choice>=totalFiles){
-					_choice=0;
-				}
-			}
-			if (wasJustPressed(BUTTON_RIGHT)){
-				_choice+=5;
-				if (_choice>=totalFiles){
-					_choice=totalFiles-1;
-				}
-			}
-			if (wasJustPressed(BUTTON_LEFT)){
-				_choice-=5;
-				if (_choice<0){
-					_choice=0;
-				}
-			}
+			menuControlsLow(&_choice,1,1,0,5,0,totalFiles-1);
 			if (wasJustPressed(BUTTON_A)){
 				(*_chosenfile) = (char*)calloc(1,strlen(filenameholder[_choice])+1);
 				memcpy(*_chosenfile,filenameholder[_choice],strlen(filenameholder[_choice])+1);
@@ -4967,7 +4918,7 @@ void FontSizeSetup(){
 	while (1){
 		fpsCapStart();
 		controlsStart();
-		_choice = MenuControls(_choice,0,2);
+		_choice = menuControls(_choice,0,2);
 
 		if (wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_RIGHT)){
 			if (_choice==0){
@@ -5059,13 +5010,11 @@ void _settingsChangeAuto(int* _storeValue, char* _storeString){
 	}
 	itoa(*_storeValue,_storeString,10);
 }
-
 void overrideIfSet(signed char* _possibleTarget, signed char _possibleOverride){
 	if (_possibleOverride!=-1){
 		*_possibleTarget = _possibleOverride;
 	}
 }
-
 #define ISTEXTSPEEDBAR 0
 #define MAXOPTIONSSETTINGS 23
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
@@ -5091,7 +5040,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	controlsStart();
 	controlsEnd();
 	PlayMenuSound();
-	signed char _choice=0;
+	int _choice=0;
 	signed char _scrollOffset=0;
 	signed char _optionsOnScreen;
 	signed char _needToScroll=0;
@@ -5299,7 +5248,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		fpsCapStart();
 		controlsStart();
-		if (altMenuControls(&_choice,0,_maxOptionSlotUsed)){
+		if (menuControlsLow(&_choice,1,1,0,0,0,_maxOptionSlotUsed)){
 			if (_choice>=_optionsOnScreen/2){
 				_scrollOffset = _choice-_optionsOnScreen/2;
 				if (_scrollOffset+_optionsOnScreen>_maxOptionSlotUsed){
@@ -5665,7 +5614,7 @@ void TitleScreen(){
 				}
 			}
 
-		_choice = MenuControls(_choice, 0, isGameFolderMode ? 3 : 4);
+		_choice = menuControls(_choice, 0, isGameFolderMode ? 3 : 4);
 
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice==0){
@@ -5807,17 +5756,7 @@ void TitleScreen(){
 		exitIfForceQuit();
 	}
 }
-void tipMenuChangeDisplay(char* _passedCurrentName, char* _passedCurrentSlot, char* _passedMaxSlot){
-	ClearMessageArray(0);
-	char _tempNameBuffer[strlen(_passedCurrentName)+1+1+3+1+3+1+1]; // main name + space + left parentheses + three digit number + slash + three digit number + right parentheses + null
-	if (tipNamesLoaded==0){
-		_passedCurrentName="???";
-	}
-	sprintf(_tempNameBuffer,"%s (%s/%s)",_passedCurrentName,_passedCurrentSlot,_passedMaxSlot);
-	OutputLine(_tempNameBuffer,Line_ContinueAfterTyping,1);
-}
 void TipMenu(){
-	ClearMessageArray(0);
 	if (currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
 		easyMessagef(1,"No tips unlocked.");
 		currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
@@ -5825,60 +5764,23 @@ void TipMenu(){
 		return;
 	}
 	// The number for the tip the user has selected. Starts at 1. Subtract 1 if using this for an array
-	unsigned char _chosenTip=1;
-	char _chosenTipString[4]={49,0,0,0};
-	char _chosenTipStringMax[4]={48,0,0,0};
-	itoa(currentPresetTipUnlockList.theArray[currentPresetChapter],&(_chosenTipStringMax[0]),10);
-	tipMenuChangeDisplay(currentPresetTipNameList.theArray[_chosenTip-1],_chosenTipString,_chosenTipStringMax);
-	int i;
-	signed char _choice=0;
-
+	int _chosenTip=1;
+	char _updateDispString=1;
+	int _numTipDispLines=0;
+	char** _tipDispLines=NULL;
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		fpsCapStart();
 		controlsStart();
-
-		if (wasJustPressed(BUTTON_DOWN)){
-			_choice++;
-			if (_choice>1){
-				_choice=0;
-			}
-		}
-		if (wasJustPressed(BUTTON_UP)){
-			_choice--;
-			if (_choice<0){
-				_choice=1;
-			}
-		}
-
-		if (wasJustPressed(BUTTON_RIGHT)){
-			_chosenTip++;
-			if (_chosenTip>currentPresetTipUnlockList.theArray[currentPresetChapter]){
-				_chosenTip=1;
-			}
-			itoa(_chosenTip,&(_chosenTipString[0]),10);
-			tipMenuChangeDisplay(currentPresetTipNameList.theArray[_chosenTip-1],_chosenTipString,_chosenTipStringMax);
-		}
-		if (wasJustPressed(BUTTON_LEFT) ){
-			_chosenTip--;
-			if (_chosenTip<1){
-				_chosenTip=currentPresetTipUnlockList.theArray[currentPresetChapter];
-			}
-			itoa(_chosenTip,&(_chosenTipString[0]),10);
-			tipMenuChangeDisplay(currentPresetTipNameList.theArray[_chosenTip-1],_chosenTipString,_chosenTipStringMax);
-		}
+		_updateDispString|=menuControlsLow(&_chosenTip,0,0,1,1,1,currentPresetTipUnlockList.theArray[currentPresetChapter]);
 		if (wasJustPressed(BUTTON_A)){
-			controlsEnd();
+			controlsReset();
 			// This will trick the in between lines functions into thinking that we're in normal script execution mode and not quit
 			currentGameStatus=GAMESTATUS_MAINGAME;
 			RunScript(scriptFolder, currentPresetTipList.theArray[_chosenTip-1],1);
-			controlsEnd();
 			currentGameStatus=GAMESTATUS_TIPMENU;
-			// Fix display after it's been cleared by the TIP
-			itoa(_chosenTip,&(_chosenTipString[0]),10);
-			tipMenuChangeDisplay(currentPresetTipNameList.theArray[_chosenTip-1],_chosenTipString,_chosenTipStringMax);
+			controlsReset();
 		}
 		if (wasJustPressed(BUTTON_B)){
-			ClearMessageArray(0);
 			currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 			#if PLAYTIPMUSIC == 1
 				StopBGM();
@@ -5886,9 +5788,17 @@ void TipMenu(){
 			break;
 		}
 		controlsEnd();
+		if (_updateDispString){
+			_updateDispString=0;
+			freeWrappedText(_numTipDispLines,_tipDispLines);
+			char* _fullString = easySprintf("%s (%d/%d)",currentPresetTipNameList.theArray[_chosenTip-1],_chosenTip,currentPresetTipUnlockList.theArray[currentPresetChapter]);
+			wrapText(_fullString,&_numTipDispLines,&_tipDispLines,screenWidth-MENUOPTIONOFFSET-MENUCURSOROFFSET);
+			free(_fullString);
+		}
 		startDrawing();
-		for (i = 0; i < 3; i++){
-			drawText(MENUOPTIONOFFSET,currentTextHeight+i*(currentTextHeight),(char*)currentMessages[i]);
+		int i;
+		for (i=0;i<_numTipDispLines;++i){
+			drawText(MENUOPTIONOFFSET,currentTextHeight+i*currentTextHeight,_tipDispLines[i]);
 		}
 		drawText(5,screenHeight-5-currentTextHeight*3,"Left and Right - Change TIP");
 		drawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back");
@@ -5897,6 +5807,7 @@ void TipMenu(){
 		endDrawing();
 		fpsCapWait();
 	}
+	freeWrappedText(_numTipDispLines,_tipDispLines);
 }
 void ChapterJump(){
 	controlsEnd();
@@ -5929,7 +5840,7 @@ void ChapterJump(){
 				_chapterChoice=currentPresetChapter;
 			}
 		}
-		_choice = MenuControls(_choice,0,1);
+		_choice = menuControls(_choice,0,1);
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice==0){
 				controlsEnd();
@@ -6017,7 +5928,7 @@ void controls_setDefaultGame(){
 }
 void NavigationMenu(){
 	signed char _choice=0;
-	int _endofscriptwidth = textWidth(normalFont,(char*)"End of script: ");
+	int _endofscriptwidth = textWidth(normalFont,"End of script: ");
 	char _endOfChapterString[10];
 	itoa(currentPresetChapter,_endOfChapterString,10);
 
@@ -6057,7 +5968,6 @@ void NavigationMenu(){
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		fpsCapStart();
 		controlsStart();
-
 		// Editor secret code
 			if (wasJustPressed(BUTTON_UP)){
 				_codeProgress = Password(_codeProgress,0);
@@ -6077,19 +5987,7 @@ void NavigationMenu(){
 					_codeProgress=0;
 				}
 			}
-
-		if (wasJustPressed(BUTTON_DOWN)){
-			_choice++;
-			if (_choice>_maxListSlot){
-				_choice=0;
-			}
-		}
-		if (wasJustPressed(BUTTON_UP)){
-			_choice--;
-			if (_choice<0){
-				_choice=_maxListSlot;
-			}
-		}
+		_choice=menuControls(_choice,0,_maxListSlot);
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice==_nextButtonSlot){
 				printf("Go to next chapter\n");
@@ -6151,7 +6049,7 @@ void NewGameMenu(){
 	while (1){
 		fpsCapStart();
 		controlsStart();
-		_choice = MenuControls(_choice,0,1);
+		_choice = menuControls(_choice,0,1);
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice==0){
 				break;
@@ -6338,11 +6236,11 @@ int vndsSaveSelector(){
 					char** _wrappedLines;
 					int _numLines;
 					wrapText(_loadedTextThumb[_tempIndex],&_numLines,&_wrappedLines,_slotWidth-5);
-
 					int k;
 					for (k=0;k<_numLines;++k){
 						drawText(j*_slotWidth+5,i*_slotHeight+5+currentTextHeight*(k+1),_wrappedLines[k]);
 					}
+					freeWrappedText(_numLines,_wrappedLines);
 				}
 				drawText(j*_slotWidth+5,i*_slotHeight+5,_labelBuffer);
 				drawHallowRect(j*_slotWidth,i*_slotHeight,_slotWidth,_slotHeight,SAVESELECTORRECTTHICK,_r,_g,_b,255);
@@ -6453,7 +6351,7 @@ void VNDSNavigationMenu(){
 		fpsCapStart();
 		controlsStart();
 
-		_choice = MenuControls(_choice,0,3);
+		_choice = menuControls(_choice,0,3);
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice<=1){
 				forceResettingsButton=0;
