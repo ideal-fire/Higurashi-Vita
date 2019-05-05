@@ -1,19 +1,18 @@
 #ifndef HAPPYFPSCAP
 #define HAPPYFPSCAP
 
+#if PLATFORM == PLAT_VITA
+	#include <psp2/kernel/processmgr.h>
+#endif
 
 #define MILISECONDSPERFRAME 17
 
 // The milisecodnds at the start of the frame.
 unsigned int frameStartMiliseconds;
-#if COUNTFRAMES == 1
-	unsigned int numberOfFrames;
-#endif
 signed char capEnabled = 1;
 
 void fpsCapStart(){
-	#if PLATFORM == PLAT_VITA
-	#else
+	#if GBPLAT==GB_LINUX || GBPLAT==GB_WINDOWS
 		frameStartMiliseconds = getMilli();
 	#endif
 }

@@ -33,6 +33,9 @@ int InputValidity=1;
 	TODO - Upgrade to libgoodbrew
 		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 
+	TODO - Redo image chars to just have width=height
+	TODO - Update platform to make libgoodbrew platform constants
+
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
 		text x1b[0m
@@ -59,8 +62,14 @@ int InputValidity=1;
 #include <Lua/lualib.h>
 #include <Lua/lauxlib.h>
 //
+#if GBPLAT == GB_VITA
+	#include <libvita2dplusbloat/vita2d.h>
+	#include <psp2/display.h> // used with thumbnail creation
+	#include <psp2/power.h> // overclock
+	#include <psp2/ctrl.h> // sound protect thread
+#endif
 #include "legarchive.h"
-#include "utils.h"
+#include "../stolenCode/customgetline.h"
 
 #define LOCATION_UNDEFINED 0
 #define LOCATION_CG 1
@@ -86,6 +95,7 @@ int InputValidity=1;
 	int advboxHeight = 75;
 	#define cpuOverclocked textIsBottomScreen
 #endif
+char* vitaAppId="HIGURASHI";
 #if PLATFORM == PLAT_VITA
 	#define CANINVERT 1
 #elif PLATFORM == PLAT_3DS
@@ -218,6 +228,7 @@ char* gamesFolder;
 	SceTouchData touch_old[SCE_TOUCH_PORT_MAX_NUM];
 	SceTouchData touch[SCE_TOUCH_PORT_MAX_NUM];
 	signed char vndsVitaTouch=1;
+	NathanAudio* _mlgsnd_loadAudioFILE(legArchiveFile _passedFile, char _passedFileFormat, char _passedShouldLoop, char _passedShouldStream);
 #endif
 
 void invertImage(crossTexture _passedImage, signed char _doInvertAlpha);
@@ -499,6 +510,12 @@ signed char forceDropshadowOption=1;
 /*
 ====================================================
 */
+int fixX(int _passed){
+	return _passed;
+}
+int fixY(int _passed){
+	return _passed;
+}
 void showErrorIfNull(void* _passedImage){
 	if (!_passedImage){
 		printf("Error, showErrorIfNull.\n");
@@ -552,23 +569,11 @@ char* charToSwitch(char _boolValue){
 double applyGraphicsScale(double _valueToScale){
 	return _valueToScale*graphicsScale;
 }
-char* mallocForString(const char* _stringToPutInBuffer){
-	char* _returnString = malloc(strlen(_stringToPutInBuffer)+1);
-	strcpy(_returnString,_stringToPutInBuffer);
-	return _returnString;
-}
 void changeMallocString(char** _stringToChange, const char* _newValue){
 	if (*_stringToChange!=NULL){
 		free(*_stringToChange);
 	}
-	if (_newValue!=NULL){
-		*_stringToChange = mallocForString(_newValue);
-	}else{
-		*_stringToChange=NULL;
-	}
-}
-int specificCenter(int _part, int _total){
-	return (_total-_part)/2;
+	*_stringToChange = _newValue!=NULL ? strdup(_newValue) : NULL;
 }
 #if SUBPLATFORM == SUB_UNIX
 char* itoa(int value, char* _buffer, int _uselessBase){
@@ -630,13 +635,14 @@ crossTexture LoadEmbeddedPNG(const char* path){
 	}
 	return _tempTex;
 }
-void drawDropshadowTextSpecific(int _x, int _y, char* _message, int _r, int _g, int _b, int _dropshadowR, int _dropshadowG, int _dropshadowB, int _a){
-	//#if PLATFORM == PLAT_VITA
-	//	vita2d_font_draw_text_dropshadow(fontImage,fixX(textboxXOffset+messageInBoxXOffset),fixY(messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight)),RGBA8(_r,_g,_b,_a),(char*)currentMessages[i],DROPSHADOWOFFX,DROPSHADOWOFFY,RGBA8(_dropshadowR,_dropshadowG,_dropshadowB,_a));
-	//#else
+void drawDropshadowTextSpecific(int _x, int _y, const char* _message, int _r, int _g, int _b, int _dropshadowR, int _dropshadowG, int _dropshadowB, int _a){
+	#if PLATFORM == PLAT_VITA
+		struct goodbrewfont* _realFont = (struct goodbrewfont*)normalFont;
+		vita2d_font_draw_text_dropshadow(_realFont->data,_x,_y,RGBA8(_r,_g,_b,_a),_realFont->size,_message,DROPSHADOWOFFX,DROPSHADOWOFFY,RGBA8(_dropshadowR,_dropshadowG,_dropshadowB,_a));
+	#else
 		gbDrawTextAlpha(normalFont,_x+DROPSHADOWOFFX,_y+DROPSHADOWOFFY,_message,_dropshadowR,_dropshadowG,_dropshadowB,_a);
 		gbDrawTextAlpha(normalFont,_x,_y,_message,_r,_g,_b,_a);
-	//#endif
+	#endif
 }
 void drawDropshadowText(int _x, int _y, char* _message, int _a){
 	drawDropshadowTextSpecific(_x,_y,_message,255,255,255,0,0,0,_a);
@@ -727,7 +733,7 @@ void _loadSpecificFont(char* _filename){
 	#if PLATFORM != PLAT_VITA
 		normalFont = loadFont(_filename,24);
 	#else
-		vita2d_font** _realFontLocation = &(((struct goodbrewfont*)normalFont)->data);
+		vita2d_font** _realFontLocation = (vita2d_font**)&(((struct goodbrewfont*)normalFont)->data);
 		// Here I put custom code for loading fonts on the Vita. I need this for fonts with a lot of characters. Why? Well, if the font has a lot of characters, FreeType won't load all of them at once. It'll stream the characters from disk. At first that sounds good, but remember that the Vita breaks its file handles after sleep mode. So new text wouldn't work after sleep mode. I could fix this by modding libvita2d and making it use my custom IO commands, but I just don't feel like doing that right now.
 		if (*_realFontLocation!=NULL){
 			vita2d_free_font(*_realFontLocation);
@@ -1603,129 +1609,62 @@ void moveFilePointerPastNewline(crossFile fp){
 		crossfseek(fp,1,SEEK_CUR);
 	}
 }
-// LAST ARG IS WHERE THE LENGTH IS STORED
-unsigned char* ReadNumberStringList(crossFile fp, unsigned char* arraysize){
-	int numScripts;
-	char currentReadNumber[4];
-	// Add null for atoi
-	memset(&currentReadNumber[0], 0, 4);
-	crossfread(&currentReadNumber,3,1,fp);
-	numScripts = atoi(currentReadNumber);
-	moveFilePointerPastNewline(fp);
-
-	unsigned char* _thelist;
-	
-	_thelist = calloc(numScripts,sizeof(char));
-
-	int i=0;
-	for (i=0;i<numScripts;i++){
-		crossfread(&currentReadNumber,3,1,fp);
-		_thelist[i]=atoi(currentReadNumber);
-		moveFilePointerPastNewline(fp);
-	}
-
-	(*arraysize) = numScripts;
-	return _thelist;
+// getline but without a newline at the end
+char* easygetline(crossFile fp){
+	char* _tempReadLine=NULL;
+	size_t _readLength=0;
+	custom_getline(&_tempReadLine,&_readLength,fp);
+	removeNewline(_tempReadLine);
+	return _tempReadLine;
 }
-char** ReadFileStringList(crossFile fp, unsigned char* arraysize){
-	char currentReadLine[200];
-	char currentReadNumber[4];
-	// Add null for atoi
-	currentReadNumber[3]=0;
-	int linePosition=0;
-	int numScripts;
-
-	currentReadNumber[3]='\0';
-	crossfread(&currentReadNumber,3,1,fp);
-	numScripts = atoi(currentReadNumber);
-	moveFilePointerPastNewline(fp);
-	
-
-	char** _thelist;
-	
-	_thelist = (char**)calloc(numScripts,sizeof(char*));
-	unsigned char justreadbyte=00;
-
-	int i=0;
-	for (i=0;i<numScripts;i++){
-		while (currentGameStatus!=GAMESTATUS_QUIT){
-			if (crossfread(&justreadbyte,1,1,fp)!=1){
-				break;
-			}
-			// Newline char
-			// By some black magic, even though newline is two bytes, I can still detect it?
-			if (isNewLine(fp,justreadbyte)==1){
-				break;
-			}
-			currentReadLine[linePosition]=justreadbyte;
-			linePosition++;
-		}
-		// Add null character
-		currentReadLine[linePosition]='\0';
-		//_thelist[i] = 
-
-		_thelist[i] = (char*)calloc(1,linePosition+1);
-		memcpy((_thelist[i]),currentReadLine,linePosition+1);
-		
-		linePosition=0;
+int readIntLine(crossFile fp){
+	char* _tempReadLine=easygetline(fp);
+	int _ret=atoi(_tempReadLine);
+	free(_tempReadLine);
+	return _ret;
+}
+unsigned char* ReadNumberStringList(crossFile fp, unsigned char* _outArraySize){
+	*_outArraySize = readIntLine(fp);
+	unsigned char* _retList = malloc(sizeof(unsigned char)*(*_outArraySize));
+	int i;
+	for (i=0;i<*_outArraySize;++i){
+		_retList[i] = readIntLine(fp);
 	}
-
-	(*arraysize) = numScripts;
-	return _thelist;
+	return _retList;
+}
+char** ReadFileStringList(crossFile fp, unsigned char* _outArraySize){
+	*_outArraySize = readIntLine(fp);
+	char** _retList = malloc(sizeof(char*)*(*_outArraySize));
+	int i;
+	for (i=0;i<*_outArraySize;++i){
+		_retList[i] = easygetline(fp);
+	}
+	return _retList;
 }
 void LoadPreset(char* filename){
-	//currentPresetFileList
+	tipNamesLoaded=0;
+	chapterNamesLoaded=0;
 	crossFile fp;
 	fp = crossfopen(filename, "r");
-	//fprintf(fp,"There are %d music deocoders available\n", Mix_GetNumMusicDecoders());
-	//int i;
 	currentPresetFileList.theArray = ReadFileStringList(fp,&currentPresetFileList.length);
-	//for (i=0;i<currentPresetFileList.length;i++){
-	//	printf("%s\n",currentPresetFileList.theArray[i]);
-	//}
 	if (gameHasTips==1){
 		currentPresetTipList.theArray = ReadFileStringList(fp,&currentPresetTipList.length);
-		//for (i=0;i<currentPresetTipList.length;i++){
-		//	printf("%s\n",currentPresetTipList.theArray[i]);
-		//}
-		//printf("Is %s\n",currentReadNumber);
-	
 		currentPresetTipUnlockList.theArray = ReadNumberStringList(fp,&(currentPresetTipUnlockList.length));
-		//for (i=0;i<currentPresetTipUnlockList.length;i++){
-		//	printf("%d\n",currentPresetTipUnlockList.theArray[i]);
-		//}
 	}
-	char tempreadstring[15] = {'\0'};
-	if (gameHasTips==1){
-		// Check for the
-		// tipnames
-		// string
-		// If it exists, read the tip's names
-		if (crossfread(tempreadstring,8,1,fp)==1){
-			moveFilePointerPastNewline(fp);
-			if (strcmp(tempreadstring,"tipnames")==0){
-				currentPresetTipNameList.theArray = ReadFileStringList(fp,&currentPresetTipNameList.length);
-				tipNamesLoaded=1;
-			}else{
-				tipNamesLoaded=0;
-			}
-		}else{
-			moveFilePointerPastNewline(fp);
-			tipNamesLoaded=0;
+	char* _lastReadLine = easygetline(fp);
+	if (gameHasTips){
+		if (_lastReadLine!=NULL && !strcmp(_lastReadLine,"tipnames")){
+			currentPresetTipNameList.theArray = ReadFileStringList(fp,&currentPresetTipNameList.length);
+			tipNamesLoaded=1;
+			free(_lastReadLine);
+			_lastReadLine = easygetline(fp);
 		}
 	}
-	if (crossfread(tempreadstring,12,1,fp)==1){
-		moveFilePointerPastNewline(fp);
-		if (strcmp(tempreadstring,"chapternames")==0){
-			currentPresetFileFriendlyList.theArray = ReadFileStringList(fp,&currentPresetFileFriendlyList.length);
-			chapterNamesLoaded=1;
-		}else{
-			chapterNamesLoaded=0;
-		}
-	}else{
-		moveFilePointerPastNewline(fp);
-		chapterNamesLoaded=0;
+	if (_lastReadLine!=NULL && !strcmp(_lastReadLine,"chapternames")){
+		currentPresetFileFriendlyList.theArray = ReadFileStringList(fp,&currentPresetFileFriendlyList.length);
+		chapterNamesLoaded=1;
 	}
+	free(_lastReadLine);
 	crossfclose(fp);
 }
 void SetNextScriptName(){
@@ -2493,7 +2432,7 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 		_possibleCachedImage->filename = NULL;
 	}else{
 		Busts[passedSlot].image = safeLoadGameImage(_filename,graphicsLocation,scriptUsesFileExtensions);
-		Busts[passedSlot].relativeFilename=mallocForString(_filename);
+		Busts[passedSlot].relativeFilename=strdup(_filename);
 		if (Busts[passedSlot].image==NULL){
 			free(Busts[passedSlot].relativeFilename);
 			Busts[passedSlot].relativeFilename=NULL;
@@ -5713,7 +5652,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		if (_artBefore != graphicsLocation){
 			for (i=0;i<maxBusts;++i){
 				if (Busts[i].isActive){
-					char* _cacheFilename = mallocForString(Busts[i].relativeFilename);
+					char* _cacheFilename = strdup(Busts[i].relativeFilename);
 					DrawBustshot(i,_cacheFilename,Busts[i].xOffset,Busts[i].yOffset,Busts[i].layer,0,0,Busts[i].isInvisible);
 					free(_cacheFilename);
 				}
@@ -6912,7 +6851,7 @@ signed char init(){
 	for (i=0;i<maxBusts;i++){
 		ResetBustStruct(&(Busts[i]),0);
 	}
-	
+
 	if (initializeLua()==2){
 		return 2;
 	}

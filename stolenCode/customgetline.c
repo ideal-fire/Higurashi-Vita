@@ -28,18 +28,16 @@
  * ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE
  * POSSIBILITY OF SUCH DAMAGE.
  */
-
 #include <stdlib.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
 #include <string.h>
 
+#include <goodbrew/config.h>
+#include <goodbrew/base.h>
 // Rename both to prevent conflict on good operating systems
-
-ssize_t
-__special_getdelim(char **buf, size_t *bufsiz, int delimiter, crossFile fp)
-{
+ssize_t custom_getdelim(char **buf, size_t *bufsiz, int delimiter, crossFile fp){
 	char *ptr, *eptr;
 
 	if (*buf == NULL || *bufsiz == 0) {
@@ -76,7 +74,6 @@ __special_getdelim(char **buf, size_t *bufsiz, int delimiter, crossFile fp)
 		}
 	}
 }
-ssize_t custom_getline(char **buf, size_t *bufsiz, crossFile fp)
-{
-  return __special_getdelim(buf, bufsiz, '\n', fp);
+ssize_t custom_getline(char **buf, size_t *bufsiz, crossFile fp){
+  return custom_getdelim(buf, bufsiz, '\n', fp);
 }

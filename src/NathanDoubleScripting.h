@@ -7,7 +7,7 @@
 #include <string.h>
 #include <math.h>
 
-#include "../stolenCode/getline.h"
+#include "../stolenCode/customgetline.h"
 
 #include <Lua/lua.h>
 #include <Lua/lualib.h>

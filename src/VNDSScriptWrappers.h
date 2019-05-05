@@ -323,7 +323,7 @@ void vndswrapper_setimg(nathanscriptVariable* _passedArguments, int _numArgument
 		}else{
 			currentBustQueue[nextBustQueueSlot].x = nathanvariableToInt(&_passedArguments[1]);
 			currentBustQueue[nextBustQueueSlot].y = nathanvariableToInt(&_passedArguments[2]);
-			currentBustQueue[nextBustQueueSlot].filename = mallocForString(_passedFilename);
+			currentBustQueue[nextBustQueueSlot].filename = strdup(_passedFilename);
 			nextBustQueueSlot++;
 		}
 	}

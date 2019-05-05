@@ -57,7 +57,7 @@ LDFLAGS	=	-specs=3dsx.specs -g $(ARCH) -Wl,-Map,$(notdir $*.map)
 
 #LIBS	:=  -lGeneralGood3ds -lSDL_mixer -logg -lvorbis -lvorbisfile -lSDLmain -lSDL -lsfil -lpng -lz -lsf2d -lcitro3d -lctru -llua -lm
 #LIBS	:=  -lGeneralGood3ds -lvorbisfile -lvorbisidec -logg -lsfil -lpng -lz -lsf2d -lcitro3d -lctru -llua3ds -lm
-LIBS    :=  -lGeneralGood3ds -lvorbisfile -lvorbis -logg -lsfil -lpng -lz -lsf2d -lcitro3d -lctru -llua3ds -lm
+LIBS    :=  -lgoodbrewVita -lvorbisfile -lvorbis -logg -lsfil -lpng -lz -lsf2d -lcitro3d -lctru -llua3ds -lm
 
 #---------------------------------------------------------------------------------
 # list of directories containing libraries, this must be the top level containing
