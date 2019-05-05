@@ -1,19 +1,21 @@
 Compiling (3ds)
 ========
-make -f Makefile.3ds
-You need Lua, libsfil, and libsf2d, libpng.
-	Modified Lua source code file is in /_Notes/ModifiedLuaSourceFile/
-Every library you compile with needs to be compiled with -mfloat-abi=softfp
+Impossible right now, the 3ds version is outdated.
 
 Compiling (Vita)
 ========
 You need the modified Lua, version 5.3.4.
 	Precompiled version is already at ./lib/libluaVita.a, you only need to recompile Lua yourself if the build I posted is incompatible in the future.
 	Modified file is in /_Notes/ModifiedLuaSourceFile/
-You need libsamplerate.
-	Nobody's posted a makefile for it yet, but it's simple to make yourself. Use this as a template: https://github.com/xerpi/SDL-Vita/blob/master/Makefile.vita
-libGeneralGood
-	The libGeneralGood build in the ./lib/ folder could be outdated. If so, compile it yourself. https://github.com/MyLegGuy/libGeneralGood
+You need libsamplerate for PS Vita.
+	This does not come with vdpm.
+	You can either download the libsamplerate source code and make a makefile yourself or you can use the ZIP file I posted here (https://github.com/MyLegGuy/Higurashi-Vita/issues/7).	
+libvita2dplusbloat
+	You can find this here: https://github.com/MyLegGuy/libvita2dplusbloat
+	This can be installed alongside regular libvita2d, so don't worry.
+libgoodbrew
+	Can be found here: https://github.com/MyLegGuy/libgoodbrew
+	If you already installed this library you may need to update it if it was a long time ago.
 Everything else can be obtained with vdpm.
 	https://github.com/vitasdk/vdpm
 
