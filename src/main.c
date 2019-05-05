@@ -30,17 +30,14 @@ int InputValidity=1;
 		TODO - Allow VNDS sound command to stop all sounds
 		TODO - SetSpeedOfMessage
 	TODO - Account for image chars in text width
-	TODO - Upgrade to libgoodbrew
-		TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
+	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 
 	TODO - Redo image chars to just have width=height
 	TODO - Update platform to make libgoodbrew platform constants
-	TODO _ Remove globaltempconcat
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
 		text x1b[0m
-
 */
 // This is pretty long because foreign characters can take two bytes
 #define SINGLELINEARRAYSIZE 300
@@ -120,6 +117,7 @@ char* vitaAppId="HIGURASHI";
 #define MENUCURSOROFFSET 5
 #define MENUOPTIONOFFSET menuCursorSpaceWidth+5
 #define CLEARMESSAGEFADEOUTTIME 100
+#define DEFAULTFONTCOLOR 255,255,255
 ////////////////////////////////////
 #define TEXTBOXFADEOUTTIME 200 // In milliseconds
 #define TEXTBOXFADEINTIME 150
@@ -203,7 +201,7 @@ char* vitaAppId="HIGURASHI";
 #define PUSHEASYLUAINTSETFUNCTION(scriptFunctionName) \
 	LUAREGISTER(L_##scriptFunctionName,#scriptFunctionName)
 
-#define drawText(_x,_y,_text) gbDrawText(normalFont,_x,_y,_text,255,255,255);
+#define drawText(_x,_y,_text) gbDrawText(normalFont,_x,_y,_text,DEFAULTFONTCOLOR);
 
 ////////////////////////////////////////
 // PLatform specific variables
@@ -346,9 +344,6 @@ char* currentGameFolderName=NULL;
 #define GAMESTATUS_QUIT 99
 signed char currentGameStatus=GAMESTATUS_TITLE;
 
-unsigned char nextScriptToLoad[256] = {0};
-unsigned char globalTempConcat[256] = {0};
-
 signed char tipNamesLoaded=0;
 signed char chapterNamesLoaded=0;
 unsigned char lastSelectionAnswer=0;
@@ -400,12 +395,6 @@ unsigned char graphicsLocation = LOCATION_CGALT;
 
 unsigned char messageHistory[MAXMESSAGEHISTORY][SINGLELINEARRAYSIZE];
 unsigned char oldestMessage=0;
-
-#define TOUCHMODE_NONE 0
-#define TOUCHMODE_MAINGAME 1
-#define TOUCHMODE_MENU 2
-#define TOUCHMODE_LEFTRIGHTSELECT 3
-unsigned char easyTouchControlMode = TOUCHMODE_MENU;
 
 char presetsAreInStreamingAssets=1;
 
@@ -628,12 +617,13 @@ crossTexture SafeLoadPNG(const char* path){
 	return _tempTex;
 }
 crossTexture LoadEmbeddedPNG(const char* path){
-	fixPath((char*)path,globalTempConcat,TYPE_EMBEDDED);
-	crossTexture _tempTex = loadPNG((char*)globalTempConcat);
+	char* _fixedPath = fixPathAlloc(path,TYPE_EMBEDDED);
+	crossTexture _tempTex = loadPNG(_fixedPath);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
 		easyMessagef(1,"Failed to load image %s.\n%s",path,PLATFORM != PLAT_3DS ? "This is supposed to be embedded..." : "Check you set up everything correctly.");
 	}
+	free(_fixedPath);
 	return _tempTex;
 }
 void drawDropshadowTextSpecific(int _x, int _y, const char* _message, int _r, int _g, int _b, int _dropshadowR, int _dropshadowG, int _dropshadowB, int _a){
@@ -646,14 +636,14 @@ void drawDropshadowTextSpecific(int _x, int _y, const char* _message, int _r, in
 	#endif
 }
 void drawDropshadowText(int _x, int _y, char* _message, int _a){
-	drawDropshadowTextSpecific(_x,_y,_message,255,255,255,0,0,0,_a);
+	drawDropshadowTextSpecific(_x,_y,_message,DEFAULTFONTCOLOR,0,0,0,_a);
 }
 // Draw text intended to be used for the game, respects dropshadow setting
 void drawTextGame(int _x, int _y, char* _message, unsigned char _alpha){
 	if (dropshadowOn){
-		drawDropshadowTextSpecific(_x,_y,_message,255,255,255,0,0,0,_alpha);
+		drawDropshadowTextSpecific(_x,_y,_message,DEFAULTFONTCOLOR,0,0,0,_alpha);
 	}else{
-		gbDrawTextAlpha(normalFont,_x,_y,_message,255,255,255,_alpha);
+		gbDrawTextAlpha(normalFont,_x,_y,_message,DEFAULTFONTCOLOR,_alpha);
 	}
 }
 void drawImageChars(unsigned char _alpha){
@@ -762,15 +752,15 @@ void _loadSpecificFont(char* _filename){
 	singleSpaceWidth = textWidth(normalFont," ");
 }
 void ReloadFont(){
+	char* _fixedPath;
 	#if PLATFORM != PLAT_3DS
-		fixPath("assets/LiberationSans-Regular.ttf",globalTempConcat,TYPE_EMBEDDED);
+		_fixedPath = fixPathAlloc("assets/LiberationSans-Regular.ttf",TYPE_EMBEDDED);
 	#elif PLATFORM == PLAT_3DS
-		fixPath("assets/Bitmap-LiberationSans-Regular",globalTempConcat,TYPE_EMBEDDED);
-	#else
-		#error whoops
+		_fixedPath = fixPathAlloc("assets/Bitmap-LiberationSans-Regular",TYPE_EMBEDDED);
 	#endif
 	//_loadSpecificFont("sa0:data/font/pvf/ltn4.pvf");
-	_loadSpecificFont(globalTempConcat);
+	_loadSpecificFont(_fixedPath);
+	free(_fixedPath);
 }
 char MenuControls(char _choice,int _menuMin, int _menuMax){
 	if (wasJustPressed(BUTTON_UP)){
@@ -831,9 +821,6 @@ void WriteSDLError(){
 	#else
 		WriteToDebugFile("Can't write SDL error because not using SDL.");
 	#endif
-}
-size_t u_strlen(const unsigned char * array){
-	return (const size_t)strlen((const char*)array);
 }
 // Returns one if they chose yes
 // Returns zero if they chose no
@@ -966,7 +953,7 @@ void SetAllMusicVolume(int _passedFixedVolume){
 	}
 }
 int GetNextCharOnLine(int _linenum){
-	return u_strlen(currentMessages[_linenum]);
+	return (const size_t)strlen((const char*)currentMessages[_linenum]);
 }
 int Password(int val, int _shouldHave){
 	if (val==_shouldHave){
@@ -1024,8 +1011,7 @@ void DisposeOldScript(){
 	lua_call(L, 0, 0);
 }
 char StringStartWith(const char *a, const char *b){
-	if(strncmp(a, b, strlen(b)) == 0) return 1;
-	return 0;
+	return (strncmp(a, b, strlen(b)) == 0);
 }
 // Give it a full script file path and it will return 1 if the file was converted beforehand
 int DidActuallyConvert(char* filepath){
@@ -1060,16 +1046,11 @@ int DidActuallyConvert(char* filepath){
 	return _isConverted;
 }
 void SaveFontSizeFile(){
-	fixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
-	FILE* fp = fopen((const char*)globalTempConcat,"w");
+	char* _fixedPath = fixPathAlloc("fontsize.noob",TYPE_DATA);
+	FILE* fp = fopen(_fixedPath,"w");
 	fwrite(&fontSize,4,1,fp);
 	fclose(fp);
-}
-void LoadFontSizeFile(){
-	fixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
-	FILE* fp = fopen((const char*)globalTempConcat,"r");
-	fread(&fontSize,4,1,fp);
-	fclose(fp);
+	free(_fixedPath);
 }
 void DisplaypcallError(int val, const char* fourthMessage){
 	char* _specificError;
@@ -1091,11 +1072,6 @@ void DisplaypcallError(int val, const char* fourthMessage){
 		break;
 	}
 	easyMessagef(1,"lua_pcall failed with error %s, please report the bug on the thread.\n%s",_specificError,fourthMessage);
-}
-int _debugCount=0;
-void PrintDebugCounter(){
-	printf("DEBUG %d\n",_debugCount);
-	_debugCount++;
 }
 // Returns 1 if it worked
 char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
@@ -1159,20 +1135,6 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 		DisplaypcallError(_pcallResult,"This is the second lua_pcall in RunScript.");
 	}
 	return 1;
-}
-char* CombineStringsPLEASEFREE(const char* first, const char* firstpointfive, const char* second, const char* third){
-	char* tempstringconcat = (char*)calloc(1,strlen(first)+(firstpointfive!=NULL ? strlen(firstpointfive) : 0)+(second!=NULL ? strlen(second) : 0)+(third!=NULL ? strlen(third) : 0)+1);
-	strcpy(tempstringconcat, first);
-	if (firstpointfive!=NULL){
-		strcat(tempstringconcat, firstpointfive);
-	}
-	if (second!=NULL){
-		strcat(tempstringconcat, second);
-	}
-	if (third!=NULL){
-		strcat(tempstringconcat, third);
-	}
-	return tempstringconcat;
 }
 signed char WaitCanSkip(int amount){
 	int i=0;
@@ -1674,10 +1636,6 @@ void LoadPreset(char* filename){
 	free(_lastReadLine);
 	crossfclose(fp);
 }
-void SetNextScriptName(){
-	memset((char*)(nextScriptToLoad),'\0',sizeof(nextScriptToLoad));
-	strcpy((char*)nextScriptToLoad,currentPresetFileList.theArray[currentPresetChapter]);
-}
 int wrapNum(int _passed, int _min, int _max){
 	if (_passed<_min){
 		return _max-(_min-_passed-1);
@@ -1828,22 +1786,24 @@ void easyMessagef(char _doWait, const char* _formatString, ...){
 	free(_wrappedLines);
 	free(_completeString);
 }
+char* getSavefileName(const char* _passedPreset){
+	return easyCombineStrings(2,saveFolder,_passedPreset);
+}
 void LoadGame(){
-	strcpy((char*)globalTempConcat,saveFolder);
-	strcat((char*)globalTempConcat,currentPresetFilename);
+	char* _savefileLocation = getSavefileName(currentPresetFilename);
 	currentPresetChapter=-1;
-	if (checkFileExist((char*)globalTempConcat)==1){
+	if (checkFileExist((char*)_savefileLocation)==1){
 		FILE *fp;
-		fp = fopen((const char*)globalTempConcat, "r");
+		fp = fopen((const char*)_savefileLocation, "rb");
 		fread(&currentPresetChapter,2,1,fp);
 		fclose(fp);
 	}
+	free(_savefileLocation);
 }
 void SaveGame(){
-	strcpy((char*)globalTempConcat,saveFolder);
-	strcat((char*)globalTempConcat,currentPresetFilename);
+	char* _savefileLocation = getSavefileName(currentPresetFilename);
 	FILE *fp;
-	fp = fopen((const char*)globalTempConcat, "w");
+	fp = fopen((const char*)_savefileLocation, "wb");
 	fwrite(&currentPresetChapter,2,1,fp);
 	fclose(fp);
 }
@@ -1854,7 +1814,7 @@ void TryLoadMenuSoundEffect(const char* _passedPathIdea){
 		}
 		char* tempstringconcat;
 		if (_passedPathIdea==NULL){
-			tempstringconcat = CombineStringsPLEASEFREE(streamingAssets, "SE/","wa_038",".ogg");
+			tempstringconcat = easyCombineStrings(4,streamingAssets, "SE/","wa_038",".ogg");
 		}else{
 			tempstringconcat = (char*)_passedPathIdea;
 		}
@@ -1947,7 +1907,7 @@ char* getUserPreferredImageDirectoryFallback(char _folderPreference){
 char* _locationStringFallbackFormat(const char* filename, char _folderPreference, char* _fileFormat){
 	char* _returnFoundString;
 	// Try the user's first choice
-	_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, getUserPreferredImageDirectory(_folderPreference),filename,_fileFormat);
+	_returnFoundString = easyCombineStrings(4,streamingAssets, getUserPreferredImageDirectory(_folderPreference),filename,_fileFormat);
 	
 	if (checkFileExist(_returnFoundString)){
 		return _returnFoundString;
@@ -1955,7 +1915,7 @@ char* _locationStringFallbackFormat(const char* filename, char _folderPreference
 
 	// If not exist, try the other folder.
 	free(_returnFoundString);
-	_returnFoundString = CombineStringsPLEASEFREE(streamingAssets, getUserPreferredImageDirectoryFallback(_folderPreference),filename,_fileFormat);
+	_returnFoundString = easyCombineStrings(4,streamingAssets, getUserPreferredImageDirectoryFallback(_folderPreference),filename,_fileFormat);
 	
 	if (checkFileExist(_returnFoundString)){
 		return _returnFoundString;
@@ -2549,15 +2509,6 @@ int strlenNO1(char* src){
 	}
 	return len;
 }
-#if PLATFORM == PLAT_COMPUTER
-	int _LagTestStart;
-	void LagTestStart(){
-		_LagTestStart = getMilli();
-	}
-	void LagTestEnd(){
-		printf("lagometer: %ld\n",getMilli()-_LagTestStart);
-	}
-#endif
 char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName){
 	char* tempstringconcat = malloc(strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)+1+4);
 	strcpy(tempstringconcat,streamingAssets);
@@ -3199,9 +3150,9 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // preferredTextDisplayMode, 1 byte
 // autoModeVoicedWait, 4 bytes
 void SaveSettings(){
-	FILE* fp;
-	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
-	fp = fopen ((const char*)globalTempConcat, "w");
+	char* _fixedFilename = fixPathAlloc("settings.noob",TYPE_DATA);
+	FILE* fp=fopen(_fixedFilename, "wb");
+	free(_fixedFilename);
 
 	unsigned char _bgmTemp = floor(bgmVolume*4);
 	unsigned char _seTemp = floor(seVolume*4);
@@ -3234,18 +3185,20 @@ void SaveSettings(){
 	printf("SAved settings file.\n");
 }
 void LoadSettings(){
-	fixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
-	if (checkFileExist((const char*)globalTempConcat)==0){
-		SetDefaultFontSize();
+	char* _fixedFilename = fixPathAlloc("fontsize.noob",TYPE_DATA);
+	if (checkFileExist(_fixedFilename)){
+		FILE* fp = fopen(_fixedFilename,"rb");
+		fread(&fontSize,4,1,fp);
+		fclose(fp);
 	}else{
-		LoadFontSizeFile();
+		SetDefaultFontSize();
 	}
-	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
-	if (checkFileExist((const char*)globalTempConcat)==1){
-		FILE* fp;
-		fp = fopen ((const char*)globalTempConcat, "r");
-		unsigned char _tempOptionsFormat = 255;
+	free(_fixedFilename);
+	_fixedFilename = fixPathAlloc("settings.noob",TYPE_DATA);
+	if (checkFileExist(_fixedFilename)){
+		FILE* fp = fopen (_fixedFilename, "rb");
 		// This is the version of the format of the options file.
+		unsigned char _tempOptionsFormat;
 		fread(&_tempOptionsFormat,1,1,fp);
 		if (_tempOptionsFormat>=1){
 			fread(&cpuOverclocked,1,1,fp);
@@ -3313,6 +3266,7 @@ void LoadSettings(){
 		applyTextboxChanges();
 		printf("Loaded settings file.\n");
 	}
+	free(_fixedFilename);
 }
 #define HISTORYSCROLLBARHEIGHT (((double)HISTORYONONESCREEN/(double)MAXMESSAGEHISTORY)*screenHeight)
 //#define HISTORYSCROLLRATE (floor((double)MAXMESSAGEHISTORY/15))
@@ -3366,12 +3320,6 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 		fpsCapWait();
 	}
 }
-void ChangeEasyTouchMode(int _newControlValue){
-	controlsStart();
-	controlsEnd();
-	easyTouchControlMode = _newControlValue;
-}
-
 // FOLDER NAME SHOULD NOT END WITH SLASH
 void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName, char _isRelativeToData){
 	free(streamingAssets);
@@ -3465,15 +3413,18 @@ void LoadGameSpecificStupidity(){
 	TryLoadMenuSoundEffect(NULL);
 	RunGameSpecificLua();
 }
+void deleteIfExist(const char* _passedPath){
+	if (checkFileExist(_passedPath)){
+		remove(_passedPath);
+	}
+}
 void resetSettings(){
-	fixPath("settings.noob",globalTempConcat,TYPE_DATA);
-	if (checkFileExist(globalTempConcat)){
-		remove(globalTempConcat);
-	}
-	fixPath("fontsize.noob",globalTempConcat,TYPE_DATA);
-	if (checkFileExist(globalTempConcat)){
-		remove(globalTempConcat);
-	}
+	char* _fixedPath = fixPathAlloc("settings.noob",TYPE_DATA);
+	deleteIfExist(_fixedPath);
+	free(_fixedPath);
+	_fixedPath = fixPathAlloc("fontsize.noob",TYPE_DATA);
+	deleteIfExist(_fixedPath);
+	free(_fixedPath);
 }
 // This will assume that trying to create a directory that already exists is okay.
 // Must call this function after paths are set up.
@@ -4362,7 +4313,7 @@ void scriptPlayVoice(nathanscriptVariable* _passedArguments, int _numArguments, 
 void scriptCallScript(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	const char* filename = nathanvariableToString(&_passedArguments[0]);
 
-	char* tempstringconcat = CombineStringsPLEASEFREE(scriptFolder, "",filename,".txt");
+	char* tempstringconcat = easyCombineStrings(3,scriptFolder,filename,".txt");
 	char tempstring2[strlen(tempstringconcat)+1];
 	strcpy(tempstring2,tempstringconcat);
 	free(tempstringconcat);
@@ -4466,7 +4417,6 @@ void scriptFadeSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 //			Choice result is zero based
 //				First choice is zero, second is one
 void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	int _totalOptions = nathanvariableToInt(&_passedArguments[0]);
 	char* noobOptions[_totalOptions];
 	int i;
@@ -4565,7 +4515,6 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 	for (i=0;i<_totalOptions;i++){
 		free(noobOptions[i]);
 	}
-	ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 	return;
 }
 // Loads a special variable
@@ -5012,7 +4961,6 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 	return _returnVal;
 }
 void FontSizeSetup(){
-	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	char _choice=0;
 	char _tempNumberString[10];
 	itoa(fontSize,_tempNumberString,10);
@@ -5035,7 +4983,6 @@ void FontSizeSetup(){
 			}else if (_choice==1){
 				ReloadFont();
 			}else if (_choice==2){
-				ChangeEasyTouchMode(TOUCHMODE_MENU);
 				ReloadFont();
 				break;
 			}
@@ -5331,13 +5278,13 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
 
 	// This checks if we have Rena busts in CG AND CGAlt also loads Rena, if possible
-	char* _tempRenaPath = CombineStringsPLEASEFREE(streamingAssets,"CG/","re_se_de_a1.png","");
+	char* _tempRenaPath = easyCombineStrings(3,streamingAssets,"CG/","re_se_de_a1.png");
 	if (checkFileExist(_tempRenaPath)==1){
 		free(_tempRenaPath);
-		_tempRenaPath = CombineStringsPLEASEFREE(streamingAssets,"CGAlt/","re_se_de_a1.png","");
+		_tempRenaPath = easyCombineStrings(3,streamingAssets,"CGAlt/","re_se_de_a1.png");
 		if (checkFileExist(_tempRenaPath)==1){
 			free(_tempRenaPath);
-			_tempRenaPath = CombineStringsPLEASEFREE(streamingAssets,locationStrings[graphicsLocation],"re_se_de_a1.png",""); // New path for the user's specific graphic choice
+			_tempRenaPath = easyCombineStrings(3,streamingAssets,locationStrings[graphicsLocation],"re_se_de_a1.png"); // New path for the user's specific graphic choice
 			_renaImage = SafeLoadPNG(_tempRenaPath);
 		}
 	}
@@ -5522,7 +5469,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				}
 				if (_renaImage!=NULL){
 					freeTexture(_renaImage);
-					_tempRenaPath = CombineStringsPLEASEFREE(streamingAssets,locationStrings[graphicsLocation],"re_se_de_a1.png","");
+					_tempRenaPath = easyCombineStrings(3,streamingAssets,locationStrings[graphicsLocation],"re_se_de_a1.png");
 					_renaImage = SafeLoadPNG(_tempRenaPath);
 					free(_tempRenaPath);
 				}
@@ -5782,13 +5729,11 @@ void TitleScreen(){
 
 						free(_tempManualFileSelectionResult);
 						currentGameStatus=GAMESTATUS_TITLE;
-						ChangeEasyTouchMode(TOUCHMODE_MENU);
 					}else{
 						currentGameStatus=GAMESTATUS_MAINGAME;
 						RunScript(scriptFolder,_tempManualFileSelectionResult,0);
 						free(_tempManualFileSelectionResult);
 						currentGameStatus=GAMESTATUS_TITLE;
-						ChangeEasyTouchMode(TOUCHMODE_MENU);
 					}
 				}
 				if (presetsAreInStreamingAssets==0){ // If the presets are not specific to a StreamingAssets folder, that means that the user could be using a different StreamingAssets folder. Reset paths just in case.
@@ -5888,8 +5833,6 @@ void TipMenu(){
 	int i;
 	signed char _choice=0;
 
-	ChangeEasyTouchMode(TOUCHMODE_LEFTRIGHTSELECT);
-
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		fpsCapStart();
 		controlsStart();
@@ -5924,20 +5867,17 @@ void TipMenu(){
 			tipMenuChangeDisplay(currentPresetTipNameList.theArray[_chosenTip-1],_chosenTipString,_chosenTipStringMax);
 		}
 		if (wasJustPressed(BUTTON_A)){
-			ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 			controlsEnd();
 			// This will trick the in between lines functions into thinking that we're in normal script execution mode and not quit
 			currentGameStatus=GAMESTATUS_MAINGAME;
 			RunScript(scriptFolder, currentPresetTipList.theArray[_chosenTip-1],1);
 			controlsEnd();
-			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			currentGameStatus=GAMESTATUS_TIPMENU;
 			// Fix display after it's been cleared by the TIP
 			itoa(_chosenTip,&(_chosenTipString[0]),10);
 			tipMenuChangeDisplay(currentPresetTipNameList.theArray[_chosenTip-1],_chosenTipString,_chosenTipStringMax);
 		}
 		if (wasJustPressed(BUTTON_B)){
-			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			ClearMessageArray(0);
 			currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 			#if PLAYTIPMUSIC == 1
@@ -5959,20 +5899,12 @@ void TipMenu(){
 	}
 }
 void ChapterJump(){
-	ChangeEasyTouchMode(TOUCHMODE_LEFTRIGHTSELECT);
+	controlsEnd();
 	//currentGameStatus=3;
 	//RunScript
 	//currentGameStatus=4;
 	int _chapterChoice=0;
 	unsigned char _choice=0;
-	char _tempNumberString[15];
-	controlsEnd();
-
-	itoa(_chapterChoice,&(_tempNumberString[0]),10);
-	strcpy((char*)globalTempConcat,currentPresetFileList.theArray[_chapterChoice]);
-	strcat((char*)globalTempConcat," (");
-	strcat((char*)globalTempConcat,_tempNumberString);
-	strcat((char*)globalTempConcat,")");
 
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		fpsCapStart();
@@ -5986,12 +5918,6 @@ void ChapterJump(){
 			if (_chapterChoice>currentPresetChapter){
 				_chapterChoice=0;
 			}
-
-			itoa(_chapterChoice,&(_tempNumberString[0]),10);
-			strcpy((char*)globalTempConcat,currentPresetFileList.theArray[_chapterChoice]);
-			strcat((char*)globalTempConcat," (");
-			strcat((char*)globalTempConcat,_tempNumberString);
-			strcat((char*)globalTempConcat,")");
 		}
 		if (wasJustPressed(BUTTON_LEFT)){
 			if (!isDown(BUTTON_R)){
@@ -6002,32 +5928,14 @@ void ChapterJump(){
 			if (_chapterChoice<0){
 				_chapterChoice=currentPresetChapter;
 			}
-			itoa(_chapterChoice,&(_tempNumberString[0]),10);
-			strcpy((char*)globalTempConcat,currentPresetFileList.theArray[_chapterChoice]);
-			strcat((char*)globalTempConcat," (");
-			strcat((char*)globalTempConcat,_tempNumberString);
-			strcat((char*)globalTempConcat,")");
 		}
-		if (wasJustPressed(BUTTON_DOWN)){
-			_choice++;
-			if (_choice>1){
-				_choice=0;
-			}
-		}
-		if (wasJustPressed(BUTTON_UP)){
-			_choice--;
-			if (_choice>=240){
-				_choice=1;
-			}
-		}
+		_choice = MenuControls(_choice,0,1);
 		if (wasJustPressed(BUTTON_A)){
-			ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 			if (_choice==0){
 				controlsEnd();
 				currentGameStatus=GAMESTATUS_MAINGAME;
 				RunScript(scriptFolder, currentPresetFileList.theArray[_chapterChoice],1);
 				controlsEnd();
-				ChangeEasyTouchMode(TOUCHMODE_MENU);
 				currentGameStatus=GAMESTATUS_TIPMENU;
 				break;
 			}
@@ -6036,14 +5944,13 @@ void ChapterJump(){
 			}
 		}
 		if (wasJustPressed(BUTTON_B)){
-			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			break;
 		}
 		controlsEnd();
 		startDrawing();
 		
 		if (chapterNamesLoaded==0){
-			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),(const char*)globalTempConcat);
+			gbDrawTextf(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(0+2),DEFAULTFONTCOLOR,255,"%s (%d)",currentPresetFileList.theArray[_chapterChoice],_chapterChoice);
 		}else{
 			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice]);
 		}
@@ -6060,7 +5967,6 @@ void ChapterJump(){
 	}
 }
 void SaveGameEditor(){
-	ChangeEasyTouchMode(TOUCHMODE_LEFTRIGHTSELECT);
 	char _endOfChapterString[10];
 	itoa(currentPresetChapter,_endOfChapterString,10);
 	controlsEnd();
@@ -6083,7 +5989,6 @@ void SaveGameEditor(){
 			itoa(currentPresetChapter,_endOfChapterString,10);
 		}
 		if (wasJustPressed(BUTTON_A)){
-			ChangeEasyTouchMode(TOUCHMODE_MENU);
 			SaveGame();
 			controlsEnd();
 			break;
@@ -6111,7 +6016,6 @@ void controls_setDefaultGame(){
 	}
 }
 void NavigationMenu(){
-	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	signed char _choice=0;
 	int _endofscriptwidth = textWidth(normalFont,(char*)"End of script: ");
 	char _endOfChapterString[10];
@@ -6192,10 +6096,7 @@ void NavigationMenu(){
 				if (currentPresetChapter+1==currentPresetFileList.length){
 					easyMessagef(1,"There is no next chapter.");
 				}else{
-					easyTouchControlMode = TOUCHMODE_MAINGAME;
-					ChangeEasyTouchMode(TOUCHMODE_MAINGAME);
 					currentPresetChapter++;
-					SetNextScriptName();
 					currentGameStatus=GAMESTATUS_MAINGAME;
 					break;
 				}
@@ -6247,13 +6148,10 @@ void NavigationMenu(){
 }
 void NewGameMenu(){
 	char _choice=0;
-	ChangeEasyTouchMode(TOUCHMODE_MENU);
 	while (1){
 		fpsCapStart();
-
 		controlsStart();
 		_choice = MenuControls(_choice,0,1);
-
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice==0){
 				break;
@@ -6635,15 +6533,14 @@ void VNDSNavigationMenu(){
 // =====================================================
 char initializeLua(){
 	if (L==NULL){
-		// Initialize Lua
 		L = luaL_newstate();
 		luaL_openlibs(L);
 		initLuaWrappers();
 	
 		// happy.lua contains functions that both Higurashi script files use and my C code
-		char _didLoadHappyLua;
-		fixPath("assets/happy.lua",globalTempConcat,TYPE_EMBEDDED);
-		_didLoadHappyLua = SafeLuaDoFile(L,globalTempConcat,0);
+		char* _fixedPath = fixPathAlloc("assets/happy.lua",TYPE_EMBEDDED);
+		char _didLoadHappyLua = SafeLuaDoFile(L,_fixedPath,0);
+		free(_fixedPath);
 		lua_sethook(L, incrementScriptLineVariable, LUA_MASKLINE, 5);
 		if (_didLoadHappyLua==1){
 			#if PLATFORM == PLAT_VITA
@@ -6765,14 +6662,11 @@ signed char init(){
 	LoadSettings();
 	
 	// Check if the application came with a game embedded. If so, load it.
-	fixPath("isEmbedded.txt",globalTempConcat,TYPE_EMBEDDED);
-	if (checkFileExist(globalTempConcat)){
+	char* _fixedPath = fixPathAlloc("isEmbedded.txt",TYPE_EMBEDDED);
+	if (checkFileExist(_fixedPath)){
 		isEmbedMode=1;
-	
 		free(gamesFolder);
-		fixPath("",globalTempConcat,TYPE_EMBEDDED);
-		gamesFolder = strdup(globalTempConcat);
-	
+		gamesFolder = fixPathAlloc("",TYPE_EMBEDDED);
 		currentGameFolderName = strdup("game");
 		currentGameStatus = GAMESTATUS_LOADGAMEFOLDER;
 	}else{
@@ -6798,36 +6692,35 @@ signed char init(){
 		}
 		controlsEnd();
 	}
-	// Check if this is the new game folder mode or the old preset file mode.
-	fixPath("Games/",globalTempConcat,TYPE_DATA);
-	if (directoryExists(globalTempConcat)==1){
+	free(_fixedPath);
+	// Check if games folder mode or present files mode
+	_fixedPath = fixPathAlloc("Games/",TYPE_DATA);
+	if (directoryExists(_fixedPath)){
 		isGameFolderMode=1;
-	}else{
-		// On 3ds, only disable game folder mode if preset folder is there.
-		fixPath("Presets/",globalTempConcat,TYPE_DATA);
-		if (directoryExists(globalTempConcat)==1){
-			// Maybe, one day, I'll make it so it's 1 by default, so I'll have to have this here.
-			isGameFolderMode=0;
-		}else{
-			isGameFolderMode=1;
-		}
+	}else{ // Only allow present mode if games folder doesn't exist
+		free(_fixedPath);
+		_fixedPath=fixPathAlloc("Presets/",TYPE_DATA);
+		isGameFolderMode = !(directoryExists(_fixedPath));
 	}
+	free(_fixedPath);
 	
-	// Check for star picture in 3ds data directory to verify that they put the required files there.
 	#if PLATFORM == PLAT_3DS
 		osSetSpeedupEnable(1);
-		fixPath("assets/star.png",globalTempConcat,TYPE_EMBEDDED);
-		if (checkFileExist(globalTempConcat)==0){
-			while(1){
-				exitIfForceQuit();
-				startDrawing();
-				drawRectangle(0,0,20,100,255,0,0,255);
-				drawRectangle(20,0,30,15,255,0,0,255);
-				drawRectangle(20,35,30,15,255,0,0,255);
-				endDrawing();
-			}
-		}
 	#endif
+	char* _embeddedCheckPath = fixPathAlloc("assets/star.png",TYPE_EMBEDDED);
+	if (!checkFileExist(_embeddedCheckPath)){
+		while(1){
+			exitIfForceQuit();
+			controlsReset();
+			startDrawing();
+			drawRectangle(0,0,20,100,255,0,0,255);
+			drawRectangle(20,0,30,15,255,0,0,255);
+			drawRectangle(20,35,30,15,255,0,0,255);
+			endDrawing();
+		}
+	}
+	free(_embeddedCheckPath);
+	
 	ReloadFont();
 	if (initAudio()){
 		#if PLATFORM == PLAT_3DS
@@ -6838,11 +6731,9 @@ signed char init(){
 	}
 	menuCursorSpaceWidth = textWidth(normalFont,MENUCURSOR" ");
 	// Load the menu sound effect if it's present
-	fixPath("assets/wa_038.ogg",globalTempConcat,TYPE_EMBEDDED);
-	TryLoadMenuSoundEffect(globalTempConcat);
-	if (menuSound==NULL){
-		TryLoadMenuSoundEffect(NULL);
-	}
+	_fixedPath = fixPathAlloc("assets/wa_038.ogg",TYPE_EMBEDDED);
+	TryLoadMenuSoundEffect(_fixedPath);
+	free(_fixedPath);
 	// Needed for any advanced message display
 	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("assets/unknown.png");
 	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
@@ -6901,9 +6792,9 @@ int main(int argc, char *argv[]){
 				UpdatePresetStreamingAssetsDir(currentPresetFilename);
 				LoadGameSpecificStupidity();
 				// Create the string for the full path of the preset file and load it
-				strcpy((char*)globalTempConcat,presetFolder);
-				strcat((char*)globalTempConcat,currentPresetFilename);
-				LoadPreset((char*)globalTempConcat);
+				char* _presentFullPath = easyCombineStrings(2,presetFolder,currentPresetFilename);
+				LoadPreset(_presentFullPath);
+				free(_presentFullPath);
 				// Does not load the savefile, I promise.
 				LoadGame();
 				// If there is no save game, start a new one at chapter 0
@@ -6915,7 +6806,6 @@ int main(int argc, char *argv[]){
 					if (currentPresetChapter==-1){
 						controlsEnd();
 						currentPresetChapter=0;
-						SetNextScriptName();
 						currentGameStatus=GAMESTATUS_MAINGAME;
 					}else{
 						currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
@@ -6938,7 +6828,7 @@ int main(int argc, char *argv[]){
 				break;
 			case GAMESTATUS_MAINGAME:
 				; // This blank statement is here to allow me to declare a variable. Variables can not be declared directly after a label.
-				char _didWork = RunScript(scriptFolder, nextScriptToLoad, 1);
+				char _didWork = RunScript(scriptFolder, currentPresetFileList.theArray[currentPresetChapter], 1);
 				if (currentPresetFileList.length!=0){
 					if (_didWork==0){ // If the script didn't run, don't advance the game
 						currentPresetChapter--; // Go back a script
