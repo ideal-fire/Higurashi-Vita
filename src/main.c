@@ -1,10 +1,3 @@
-// temp variabkes
-int fontSize=0;
-int isSkipping=0;
-int InputValidity=1;
-// NTOE - FIX FONT SIZE
-//void _loadSpecificFont(char* _filename){
-
 /*
 	(OPTIONAL TODO)
 		TODO - (Optional) Italics
@@ -35,6 +28,8 @@ int InputValidity=1;
 
 	TODO - Redo image chars to just have width=height
 
+	TODO - Find places using itoa and replace with gbDrawTextf
+
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
 		text x1b[0m
@@ -42,8 +37,6 @@ int InputValidity=1;
 // This is pretty long because foreign characters can take two bytes
 #define SINGLELINEARRAYSIZE 300
 #define PLAYTIPMUSIC 0
-
-#include "main.h"
 
 // Libraries all need
 #include <math.h>
@@ -68,6 +61,7 @@ int InputValidity=1;
 #include <goodbrew/paths.h>
 #include <goodbrew/text.h>
 #include <goodbrew/useful.h>
+#include "main.h"
 #include "FpsCapper.h"
 //
 #if GBPLAT == GB_VITA
@@ -300,8 +294,9 @@ signed char menuSoundLoaded=0;
 
 // Alpha of black rectangle over screen
 unsigned char MessageBoxAlpha = 100;
-
 signed char MessageBoxEnabled=1;
+signed char isSkipping=0;
+signed char inputValidity=1;
 
 unsigned int currentScriptLine=0;
 
@@ -400,6 +395,7 @@ float seVolume = 1.0;
 float voiceVolume = 1.0;
 
 crossFont normalFont;
+double fontSize;
 int currentTextHeight;
 int singleSpaceWidth;
 #if GBPLAT == GB_VITA
@@ -458,6 +454,7 @@ char actualBackgroundSizesConfirmedForSmashFive=0;
 char* lastBackgroundFilename=NULL;
 char* currentScriptFilename=NULL;
 char* lastBGMFilename=NULL;
+char* currentFontFilename=NULL;
 
 char currentlyVNDSGame=0;
 char nextVndsBustshotSlot=0;
@@ -580,10 +577,11 @@ double applyGraphicsScale(double _valueToScale){
 	return _valueToScale*graphicsScale;
 }
 void changeMallocString(char** _stringToChange, const char* _newValue){
+	char* _newBuffer = _newValue!=NULL ? strdup(_newValue) : NULL; // Make new buffer before free allows us to set a malloc string to itself
 	if (*_stringToChange!=NULL){
 		free(*_stringToChange);
 	}
-	*_stringToChange = _newValue!=NULL ? strdup(_newValue) : NULL;
+	*_stringToChange = _newBuffer;
 }
 void XOutFunction(){
 	#if GBPLAT == GB_3DS
@@ -723,20 +721,9 @@ void WaitWithCodeEnd(int amount){
 		wait(waitwithCodeTarget-getMilli());
 	}
 }
-void SetDefaultFontSize(){
-	#if TEXTRENDERER == TEXT_DEBUG
-		fontSize = 1;
-	#endif
-	#if TEXTRENDERER == TEXT_FONTCACHE
-		fontSize = floor(screenWidth/40);
-	#endif
-	#if TEXTRENDERER == TEXT_VITA2D
-		fontSize=32;
-	#endif
-}
-void _loadSpecificFont(char* _filename){
+void reloadFont(){
 	#if GBPLAT != GB_VITA
-		normalFont = loadFont(_filename,getResonableFontSize(GBTXT));
+		normalFont = loadFont(currentFontFilename,fontSize);
 	#else
 		// Here I put custom code for loading fonts on the Vita. I need this for fonts with a lot of characters. Why? Well, if the font has a lot of characters, FreeType won't load all of them at once. It'll stream the characters from disk. At first that sounds good, but remember that the Vita breaks its file handles after sleep mode. So new text wouldn't work after sleep mode. I could fix this by modding libvita2d and making it use my custom IO commands, but I just don't feel like doing that right now.
 		struct goodbrewfont* _realFont = normalFont;
@@ -747,11 +734,11 @@ void _loadSpecificFont(char* _filename){
 		normalFont = malloc(sizeof(struct goodbrewfont));
 		_realFont = normalFont;
 		_realFont->type=GBTXT_VITA2D;
-		_realFont->size=getResonableFontSize(GBTXT_VITA2D);
+		_realFont->size=fontSize;
 		if (_loadedFontBuffer!=NULL){
 			free(_loadedFontBuffer);
 		}
-		FILE* fp = fopen(_filename, "rb");
+		FILE* fp = fopen(currentFontFilename, "rb");
 		// Get file size
 		fseek(fp, 0, SEEK_END);
 		long _foundFilesize = ftell(fp);
@@ -765,16 +752,9 @@ void _loadSpecificFont(char* _filename){
 	currentTextHeight = textHeight(normalFont);
 	singleSpaceWidth = textWidth(normalFont," ");
 }
-void ReloadFont(){
-	char* _fixedPath;
-	#if GBPLAT != GB_3DS
-		_fixedPath = fixPathAlloc("assets/LiberationSans-Regular.ttf",TYPE_EMBEDDED);
-	#elif GBPLAT == GB_3DS
-		_fixedPath = fixPathAlloc("assets/Bitmap-LiberationSans-Regular",TYPE_EMBEDDED);
-	#endif
-	//_loadSpecificFont("sa0:data/font/pvf/ltn4.pvf");
-	_loadSpecificFont(_fixedPath);
-	free(_fixedPath);
+void globalLoadFont(const char* _filename){
+	changeMallocString(&currentFontFilename,_filename);
+	reloadFont();
 }
 char menuControlsLow(int* _choice, char _canWrapUpDown, int _upDownChange, char _canWrapLeftRight, int _leftRightChange, int _menuMin, int _menuMax){
 	int _oldValue = *_choice;
@@ -1043,13 +1023,6 @@ int DidActuallyConvert(char* filepath){
 
 	fclose(file);
 	return _isConverted;
-}
-void SaveFontSizeFile(){
-	char* _fixedPath = fixPathAlloc("fontsize.noob",TYPE_DATA);
-	FILE* fp = fopen(_fixedPath,"w");
-	fwrite(&fontSize,4,1,fp);
-	fclose(fp);
-	free(_fixedPath);
 }
 void DisplaypcallError(int val, const char* fourthMessage){
 	char* _specificError;
@@ -3171,21 +3144,13 @@ void SaveSettings(){
 		fwrite(&vndsVitaTouch,sizeof(signed char),1,fp);
 	#endif
 	fwrite(&dropshadowOn,sizeof(signed char),1,fp);
+	fwrite(&fontSize,sizeof(double),1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
 }
 void LoadSettings(){
-	char* _fixedFilename = fixPathAlloc("fontsize.noob",TYPE_DATA);
-	if (checkFileExist(_fixedFilename)){
-		FILE* fp = fopen(_fixedFilename,"rb");
-		fread(&fontSize,4,1,fp);
-		fclose(fp);
-	}else{
-		SetDefaultFontSize();
-	}
-	free(_fixedFilename);
-	_fixedFilename = fixPathAlloc("settings.noob",TYPE_DATA);
+	char* _fixedFilename = fixPathAlloc("settings.noob",TYPE_DATA);
 	if (checkFileExist(_fixedFilename)){
 		FILE* fp = fopen (_fixedFilename, "rb");
 		// This is the version of the format of the options file.
@@ -3242,6 +3207,9 @@ void LoadSettings(){
 		}
 		if (_tempOptionsFormat>=13){
 			fread(&dropshadowOn,sizeof(signed char),1,fp);
+		}
+		if (_tempOptionsFormat>=13){
+			fread(&fontSize,sizeof(double),1,fp);
 		}
 		fclose(fp);
 
@@ -3391,9 +3359,6 @@ void deleteIfExist(const char* _passedPath){
 }
 void resetSettings(){
 	char* _fixedPath = fixPathAlloc("settings.noob",TYPE_DATA);
-	deleteIfExist(_fixedPath);
-	free(_fixedPath);
-	_fixedPath = fixPathAlloc("fontsize.noob",TYPE_DATA);
 	deleteIfExist(_fixedPath);
 	free(_fixedPath);
 }
@@ -4233,9 +4198,9 @@ void scriptDrawBustshot(nathanscriptVariable* _passedArguments, int _numArgument
 }
 void scriptSetValidityOfInput(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (nathanvariableToBool(&_passedArguments[0])==1){
-		InputValidity=1;
+		inputValidity=1;
 	}else{
-		InputValidity=0;
+		inputValidity=0;
 	}
 	return;
 }
@@ -4909,75 +4874,35 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 }
 void FontSizeSetup(){
 	char _choice=0;
-	char _tempNumberString[10];
-	itoa(fontSize,_tempNumberString,10);
 	while (1){
 		fpsCapStart();
 		controlsStart();
 		_choice = menuControls(_choice,0,2);
-
-		if (wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_RIGHT)){
-			if (_choice==0){
-				#if GBPLAT != GB_3DS
-					fontSize++;
-				#else
-					fontSize+=.1;
-				#endif
-				itoa(fontSize,_tempNumberString,10);
-				#if GBPLAT == GB_VITA || GBPLAT == GB_3DS
-					currentTextHeight = textHeight(normalFont);
-				#endif
-			}else if (_choice==1){
-				ReloadFont();
+		int _fakeFontSize=fontSize;
+		menuControlsLow(&_fakeFontSize,0,0,0,1,8,70);
+		fontSize=_fakeFontSize;
+		if (wasJustPressed(BUTTON_A)){
+			if (_choice==1){
+				reloadFont();
 			}else if (_choice==2){
-				ReloadFont();
+				reloadFont();
 				break;
-			}
-		}
-		if (wasJustPressed(BUTTON_B) || wasJustPressed(BUTTON_LEFT)){
-			if (_choice==0){
-				#if GBPLAT != GB_3DS
-					fontSize--;
-					if (fontSize<=5){
-						fontSize=6;
-					}
-				#else
-					fontSize-=.1;
-					if (fontSize<.8){
-						fontSize=.8;
-					}
-				#endif
-				itoa(fontSize,_tempNumberString,10);
-				#if GBPLAT == GB_VITA || GBPLAT == GB_3DS
-					currentTextHeight = textHeight(normalFont);
-				#endif
 			}
 		}
 		controlsEnd();
 		startDrawing();
-		drawText(MENUOPTIONOFFSET,currentTextHeight,"Font Size: ");
-			drawText(MENUOPTIONOFFSET+textWidth(normalFont,"Font Size: "),currentTextHeight,_tempNumberString);
-		#if GBPLAT == GB_VITA
-			drawText(MENUOPTIONOFFSET,currentTextHeight*2,"Test");
-			drawText(MENUOPTIONOFFSET,currentTextHeight*5,"Press the \"Test\" button to ");
-			drawText(MENUOPTIONOFFSET,currentTextHeight*6,"make the text look good. 32 is default.");
-		#endif
+		
+		gbDrawTextf(normalFont,MENUOPTIONOFFSET,currentTextHeight,255,255,255,255,"Font Size: %f",fontSize);
+		drawText(MENUOPTIONOFFSET,currentTextHeight*2,"Test");
 		drawText(MENUOPTIONOFFSET,currentTextHeight*3,"Done");
-		#if GBPLAT != GB_VITA
-			drawText(MENUOPTIONOFFSET,currentTextHeight*5,"You should be able to see this entire line. It shouldn't cut off.");
-	
-			drawText(MENUOPTIONOFFSET,currentTextHeight*8,"Press the BACK button to see the controls. Green and red are used");
-			drawText(MENUOPTIONOFFSET,currentTextHeight*9,"to change the font size when you're on the first option.");
-	
-			drawText(MENUOPTIONOFFSET,currentTextHeight*11,"You have to select \"Test\" to see the new size.");
-	
-			drawText(MENUOPTIONOFFSET,currentTextHeight*13,"aeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthnaeiouthn");
-		#endif
 		drawText(5,currentTextHeight*(_choice+1),MENUCURSOR);
+
+		drawText(MENUOPTIONOFFSET,currentTextHeight*5,"This is some test text for you to look at while changing the font size.");
+		drawText(MENUOPTIONOFFSET,currentTextHeight*6,"The font must be reloaded for you to see the changes.");
+		drawText(MENUOPTIONOFFSET,currentTextHeight*7,"Select the \"Test\" option to do so.");
 		endDrawing();
 		fpsCapWait();
 	}
-	SaveFontSizeFile();
 }
 void debugMenuOption(){
 	//
@@ -6329,7 +6254,7 @@ void VNDSNavigationMenu(){
 		_possibleThunbnailPath[strlen(streamingAssets)]=0;
 		strcat(_possibleThunbnailPath,"/default.ttf");
 		if (checkFileExist(_possibleThunbnailPath)){
-			_loadSpecificFont(_possibleThunbnailPath);
+			globalLoadFont(_possibleThunbnailPath);
 		}
 	}
 	//
@@ -6505,6 +6430,7 @@ signed char init(){
 	initImages();
 	setClearColor(0,0,0);
 	
+	fontSize = getResonableFontSize(GBTXT);
 	outputLineScreenWidth = screenWidth;
 	outputLineScreenHeight = screenHeight;
 	
@@ -6615,7 +6541,13 @@ signed char init(){
 	}
 	free(_embeddedCheckPath);
 	
-	ReloadFont();
+	// Load default font
+	#if GBTXT==GBTXT_BITMAP
+		currentFontFilename = fixPathAlloc("assets/Bitmap-LiberationSans-Regular",TYPE_EMBEDDED);
+	#else
+		currentFontFilename = fixPathAlloc("assets/LiberationSans-Regular.ttf",TYPE_EMBEDDED);
+	#endif //loadFont("sa0:data/font/pvf/ltn4.pvf");
+	globalLoadFont(currentFontFilename);
 	if (initAudio()){
 		#if GBPLAT == GB_3DS
 			easyMessagef(1,"dsp init failed. Do you have dsp firm dumped and in /3ds/dspfirm.cdc ?");

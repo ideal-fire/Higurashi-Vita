@@ -1,6 +1,9 @@
 #ifndef GOOD_MAIN_HEADER_HAS_DOES_BEEN_INCLUDED
 #define GOOD_MAIN_HEADER_HAS_DOES_BEEN_INCLUDED
 
+#define wasJustPressed(x) ((currentGameStatus!=GAMESTATUS_MAINGAME || inputValidity || isSkipping) && wasJustPressed(x))
+#define isDown(x) ((currentGameStatus!=GAMESTATUS_MAINGAME || inputValidity || isSkipping) && isDown(x))
+
 void startDrawing();
 void Draw(char _shouldDrawMessageBox);
 void RecalculateBustOrder();
