@@ -172,7 +172,8 @@ char* vitaAppId="HIGURASHI";
 // 11 adds vndsSpritesFade
 // 12 adds vndsVitaTouch
 // 13 adds dropshadowOn
-#define OPTIONSFILEFORMAT 13
+// 14 adds fontSize
+#define OPTIONSFILEFORMAT 14
 
 #define VNDSSAVEFORMAT 1
 
@@ -3208,7 +3209,7 @@ void LoadSettings(){
 		if (_tempOptionsFormat>=13){
 			fread(&dropshadowOn,sizeof(signed char),1,fp);
 		}
-		if (_tempOptionsFormat>=13){
+		if (_tempOptionsFormat>=14){
 			fread(&fontSize,sizeof(double),1,fp);
 		}
 		fclose(fp);
@@ -4069,11 +4070,9 @@ void scriptNotYet(nathanscriptVariable* _passedArguments, int _numArguments, nat
 // Fourth arg is unknown
 void scriptPlayBGM(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	PlayBGM(nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),nathanvariableToInt(&_passedArguments[0]));
-
 	if (nathanvariableToInt(&_passedArguments[3])!=0){
 		printf("*************** VERY IMPORTANT *******************\nThe last PlayBGM call didn't have 0 for the fourth argument! This is a good place to investigate!\n");
 	}
-
 	return;
 }
 // Some int argument
