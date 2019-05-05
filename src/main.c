@@ -35,6 +35,7 @@ int InputValidity=1;
 
 	TODO - Redo image chars to just have width=height
 	TODO - Update platform to make libgoodbrew platform constants
+	TODO _ Remove globaltempconcat
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -638,7 +639,7 @@ crossTexture LoadEmbeddedPNG(const char* path){
 void drawDropshadowTextSpecific(int _x, int _y, const char* _message, int _r, int _g, int _b, int _dropshadowR, int _dropshadowG, int _dropshadowB, int _a){
 	#if PLATFORM == PLAT_VITA
 		struct goodbrewfont* _realFont = (struct goodbrewfont*)normalFont;
-		vita2d_font_draw_text_dropshadow(_realFont->data,_x,_y,RGBA8(_r,_g,_b,_a),_realFont->size,_message,DROPSHADOWOFFX,DROPSHADOWOFFY,RGBA8(_dropshadowR,_dropshadowG,_dropshadowB,_a));
+		vita2d_font_draw_text_dropshadow(_realFont->data,_x,_y+textHeight(normalFont),RGBA8(_r,_g,_b,_a),_realFont->size,_message,DROPSHADOWOFFX,DROPSHADOWOFFY,RGBA8(_dropshadowR,_dropshadowG,_dropshadowB,_a));
 	#else
 		gbDrawTextAlpha(normalFont,_x+DROPSHADOWOFFX,_y+DROPSHADOWOFFY,_message,_dropshadowR,_dropshadowG,_dropshadowB,_a);
 		gbDrawTextAlpha(normalFont,_x,_y,_message,_r,_g,_b,_a);
