@@ -62,6 +62,17 @@ int InputValidity=1;
 #include <Lua/lualib.h>
 #include <Lua/lauxlib.h>
 //
+#include <goodbrew/config.h>
+#include <goodbrew/base.h>
+#include <goodbrew/graphics.h>
+#include <goodbrew/controls.h>
+#include <goodbrew/images.h>
+#include <goodbrew/sound.h>
+#include <goodbrew/paths.h>
+#include <goodbrew/text.h>
+#include <goodbrew/useful.h>
+#include "FpsCapper.h"
+//
 #if GBPLAT == GB_VITA
 	#include <libvita2dplusbloat/vita2d.h>
 	#include <psp2/display.h> // used with thumbnail creation
@@ -134,17 +145,6 @@ char* vitaAppId="HIGURASHI";
 #define PREFER_DIR_SE 1
 #define PREFER_DIR_VOICE 2
 #define PREFER_DIR_NOMEIMPORTA 3
-
-#include <goodbrew/config.h>
-#include <goodbrew/base.h>
-#include <goodbrew/graphics.h>
-#include <goodbrew/controls.h>
-#include <goodbrew/images.h>
-#include <goodbrew/sound.h>
-#include <goodbrew/paths.h>
-#include <goodbrew/text.h>
-#include <goodbrew/useful.h>
-#include "FpsCapper.h"
 
 // System string
 #if __UNIX__ || __linux__ || __gnu_linux__
@@ -733,11 +733,16 @@ void _loadSpecificFont(char* _filename){
 	#if PLATFORM != PLAT_VITA
 		normalFont = loadFont(_filename,24);
 	#else
-		vita2d_font** _realFontLocation = (vita2d_font**)&(((struct goodbrewfont*)normalFont)->data);
 		// Here I put custom code for loading fonts on the Vita. I need this for fonts with a lot of characters. Why? Well, if the font has a lot of characters, FreeType won't load all of them at once. It'll stream the characters from disk. At first that sounds good, but remember that the Vita breaks its file handles after sleep mode. So new text wouldn't work after sleep mode. I could fix this by modding libvita2d and making it use my custom IO commands, but I just don't feel like doing that right now.
-		if (*_realFontLocation!=NULL){
-			vita2d_free_font(*_realFontLocation);
+		struct goodbrewfont* _realFont = normalFont;
+		if (_realFont!=NULL){
+			vita2d_free_font(_realFont->data);
+			free(_realFont);
 		}
+		normalFont = malloc(sizeof(struct goodbrewfont));
+		_realFont = normalFont;
+		_realFont->type=GBTXT_VITA2D;
+		_realFont->size=getResonableFontSize(GBTXT_VITA2D);
 		if (_loadedFontBuffer!=NULL){
 			free(_loadedFontBuffer);
 		}
@@ -750,7 +755,7 @@ void _loadSpecificFont(char* _filename){
 		_loadedFontBuffer = malloc(_foundFilesize);
 		fread(_loadedFontBuffer, _foundFilesize, 1, fp);
 		fclose(fp);
-		*_realFontLocation = vita2d_load_font_mem(_loadedFontBuffer,_foundFilesize);
+		_realFont->data = vita2d_load_font_mem(_loadedFontBuffer,_foundFilesize);
 	#endif
 	currentTextHeight = textHeight(normalFont);
 	singleSpaceWidth = textWidth(normalFont," ");
@@ -804,6 +809,7 @@ char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
 void WriteToDebugFile(const char* stuff){
 	#if PLATFORM == PLAT_COMPUTER
 		printf("%s\n",stuff);
+		return;
 	#endif
 	char* _tempDebugFileLocationBuffer = malloc(strlen(gbDataFolder)+strlen("log.txt")+1);
 	strcpy(_tempDebugFileLocationBuffer,gbDataFolder);
@@ -6704,6 +6710,7 @@ signed char init(){
 	
 	generalGoodInit();
 	initGraphics(960,544,&screenWidth,&screenHeight);
+	initImages();
 	setClearColor(0,0,0);
 	
 	outputLineScreenWidth = screenWidth;
@@ -6820,7 +6827,6 @@ signed char init(){
 			}
 		}
 	#endif
-	
 	ReloadFont();
 	if (initAudio()){
 		#if PLATFORM == PLAT_3DS
@@ -6829,16 +6835,13 @@ signed char init(){
 			easyMessagef(1,"audio init failed. isn't supposed to be possible...");
 		#endif
 	}
-	
 	menuCursorSpaceWidth = textWidth(normalFont,MENUCURSOR" ");
-	
 	// Load the menu sound effect if it's present
 	fixPath("assets/wa_038.ogg",globalTempConcat,TYPE_EMBEDDED);
 	TryLoadMenuSoundEffect(globalTempConcat);
 	if (menuSound==NULL){
 		TryLoadMenuSoundEffect(NULL);
 	}
-	
 	// Needed for any advanced message display
 	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("assets/unknown.png");
 	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
@@ -6855,7 +6858,6 @@ signed char init(){
 	if (initializeLua()==2){
 		return 2;
 	}
-	
 	#if PLATFORM == PLAT_VITA && SOUNDPLAYER != SND_VITA
 		// Create the protection thread.
 		if (pthread_create(&soundProtectThreadId, NULL, &soundProtectThread, NULL) != 0){
