@@ -5835,6 +5835,7 @@ void controls_setDefaultGame(){
 	}
 }
 void NavigationMenu(){
+	controlsReset();
 	signed char _choice=0;
 	int _endofscriptwidth = textWidth(normalFont,"End of script: ");
 	char _nextChapterExist=0;
