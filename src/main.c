@@ -23,12 +23,8 @@
 		TODO - Allow VNDS sound command to stop all sounds
 		TODO - SetSpeedOfMessage
 		TODO - Sort files in file browser
-	TODO - Account for image chars in text width
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
-
-	TODO - Redo image chars to just have width=height
-
-	TODO - Find places using itoa and replace with gbDrawTextf
+	TODO - Settings menu is like 500 lines long and uses itoa a billion times
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -116,7 +112,6 @@ char* vitaAppId="HIGURASHI";
 ////////////////////////////////////
 #define MAXMUSICARRAY 10
 #define MAXSOUNDEFFECTARRAY 10
-#define IMAGECHARSPACESTRING "   "
 #define MESSAGEEDGEOFFSET 10
 #define MENUSFXON 1
 
@@ -356,6 +351,8 @@ unsigned short imageCharCharPositions[MAXIMAGECHAR] = {0};
 #define IMAGECHARNOTE 2
 #define IMAGECHARUNKNOWN 0
 crossTexture imageCharImages[3]; // PLEASE DON'T FORGET TO CHANGE THIS IF ANOTHER IMAGE CHAR IS ADDED
+int numImageCharSpaceEquivalent;
+int imageCharSlotCenter;
 
 #define FILTERTYPE_INACTIVE 0 // This one is different from Higurashi, in Higurashi it defaults to FILTERTYPE_EFFECTCOLORMIX
 #define FILTERTYPE_EFFECTCOLORMIX 1
@@ -663,7 +660,7 @@ void drawImageChars(unsigned char _alpha){
 	int i;
 	for (i=0;i<MAXIMAGECHAR;i++){
 		if (imageCharType[i]!=-1){
-			drawTextureSizedAlpha(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],textWidth(normalFont,IMAGECHARSPACESTRING),textHeight(normalFont),_alpha);
+			drawTextureSizedAlpha(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],currentTextHeight,currentTextHeight,_alpha);
 		}
 	}
 }
@@ -752,6 +749,12 @@ void reloadFont(){
 	#endif
 	currentTextHeight = textHeight(normalFont);
 	singleSpaceWidth = textWidth(normalFont," ");
+	numImageCharSpaceEquivalent=currentTextHeight/singleSpaceWidth;
+
+	char _tempBuffer[numImageCharSpaceEquivalent+1];
+	memset(_tempBuffer,' ',numImageCharSpaceEquivalent);
+	_tempBuffer[numImageCharSpaceEquivalent]='\0';
+	imageCharSlotCenter=(textWidth(normalFont,_tempBuffer)-currentTextHeight)/2;
 }
 void globalLoadFont(const char* _filename){
 	changeMallocString(&currentFontFilename,_filename);
@@ -775,6 +778,11 @@ char menuControlsLow(int* _choice, char _canWrapUpDown, int _upDownChange, char 
 	}
 	*_choice = _canWrapUpDown ? wrapNum(*_choice,_menuMin,_menuMax) : limitNum(*_choice,_menuMin,_menuMax);
 	return _oldValue!=*_choice;
+}
+int retMenuControlsLow(int _choice, char _canWrapUpDown, int _upDownChange, char _canWrapLeftRight, int _leftRightChange, int _menuMin, int _menuMax){
+	int _fakeRet=_choice;
+	menuControlsLow(&_fakeRet,_canWrapUpDown,_upDownChange,_canWrapLeftRight,_leftRightChange,_menuMin,_menuMax);
+	return _fakeRet;
 }
 int menuControls(int _choice,int _menuMin,int _menuMax){
 	menuControlsLow(&_choice,1,1,0,0,_menuMin,_menuMax);
@@ -2799,21 +2807,19 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 						_imagechartype = IMAGECHARUNKNOWN;
 					}
 					if (_imagechartype != IMAGECHARUNKNOWN){
-						message[i]=0; // So we can use textWidth
+						message[i]='\0'; // So we can use textWidth
 						for (j=0;j<MAXIMAGECHAR;j++){
 							if (imageCharType[j]==-1){
-								imageCharX[j] = textWidth(normalFont,&(message[lastNewlinePosition+1]))+textboxXOffset+messageInBoxXOffset;
+								imageCharX[j] = textWidth(normalFont,&(message[lastNewlinePosition+1]))+textboxXOffset+messageInBoxXOffset+imageCharSlotCenter;
 								imageCharY[j] = messageInBoxYOffset+12+textboxYOffset+currentLine*(currentTextHeight);
 								imageCharLines[j] = currentLine;
-								message[i]='\0';
 								imageCharCharPositions[j] = strlenNO1(&(message[lastNewlinePosition+1]));
 								imageCharType[j] = _imagechartype;
-								//printf("Asssigned line %d and pos %d\n",imageCharLines[j],imageCharCharPositions[j]);
 								break;
 							}
 						}
-						memset(&(message[i]),32,3);
-						i+=2;
+						memset(&(message[i]),32,numImageCharSpaceEquivalent);
+						i+=(numImageCharSpaceEquivalent-1);
 					}
 				}else if (message[i]=='\n'){
 					message[i]='\0';
@@ -2981,7 +2987,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			for (i=0;i<MAXIMAGECHAR;i++){
 				if (imageCharType[i]!=-1){
 					if ((imageCharLines[i]<_currentDrawLine) || (imageCharLines[i]==_currentDrawLine && imageCharCharPositions[i]<=_currentDrawChar)){
-						drawTextureSized(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],textWidth(normalFont,IMAGECHARSPACESTRING),textHeight(normalFont));
+						drawTextureSized(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],currentTextHeight,currentTextHeight);
 					}
 				}
 			}
@@ -4877,9 +4883,7 @@ void FontSizeSetup(){
 		fpsCapStart();
 		controlsStart();
 		_choice = menuControls(_choice,0,2);
-		int _fakeFontSize=fontSize;
-		menuControlsLow(&_fakeFontSize,0,0,0,1,8,70);
-		fontSize=_fakeFontSize;
+		fontSize=retMenuControlsLow(fontSize,0,0,0,1,8,70);;
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice==1){
 				reloadFont();
@@ -5798,27 +5802,11 @@ void ChapterJump(){
 	}
 }
 void SaveGameEditor(){
-	char _endOfChapterString[10];
-	itoa(currentPresetChapter,_endOfChapterString,10);
 	controlsEnd();
 	while (1){
 		fpsCapStart();
-
 		controlsStart();
-		if (wasJustPressed(BUTTON_RIGHT)){
-			currentPresetChapter++;
-			if (currentPresetChapter>currentPresetFileList.length-1){
-				currentPresetChapter=0;
-			}
-			itoa(currentPresetChapter,_endOfChapterString,10);
-		}
-		if (wasJustPressed(BUTTON_LEFT)){
-			currentPresetChapter--;
-			if (currentPresetChapter<0){
-				currentPresetChapter=currentPresetFileList.length-1;
-			}
-			itoa(currentPresetChapter,_endOfChapterString,10);
-		}
+		currentPresetChapter = retMenuControlsLow(currentPresetChapter,0,0,1,1,0,currentPresetFileList.length-1);
 		if (wasJustPressed(BUTTON_A)){
 			SaveGame();
 			controlsEnd();
@@ -5827,7 +5815,7 @@ void SaveGameEditor(){
 		controlsEnd();
 		startDrawing();
 		if (chapterNamesLoaded==0){
-			drawText(MENUOPTIONOFFSET, currentTextHeight, _endOfChapterString);
+			gbDrawTextf(normalFont,MENUOPTIONOFFSET,currentTextHeight,DEFAULTFONTCOLOR,255,"%d",currentPresetChapter);
 		}else{
 			drawText(MENUOPTIONOFFSET, currentTextHeight, currentPresetFileFriendlyList.theArray[currentPresetChapter]);
 		}
@@ -5849,9 +5837,6 @@ void controls_setDefaultGame(){
 void NavigationMenu(){
 	signed char _choice=0;
 	int _endofscriptwidth = textWidth(normalFont,"End of script: ");
-	char _endOfChapterString[10];
-	itoa(currentPresetChapter,_endOfChapterString,10);
-
 	char _nextChapterExist=0;
 	// Checks if there is another chapter left in the preset file. If so, set the variable accordingly
 	if (!(currentPresetChapter+1>=currentPresetFileList.length)){
@@ -5902,7 +5887,6 @@ void NavigationMenu(){
 				_codeProgress = Password(_codeProgress,3);
 				if (_codeProgress==4){
 					SaveGameEditor();
-					itoa(currentPresetChapter,_endOfChapterString,10);
 					_nextChapterExist=1;
 					_codeProgress=0;
 				}
@@ -5941,7 +5925,7 @@ void NavigationMenu(){
 
 		drawText(MENUOPTIONOFFSET,0,"End of script: ");
 		if (chapterNamesLoaded==0){
-			drawText(_endofscriptwidth+MENUOPTIONOFFSET,0,_endOfChapterString);
+			gbDrawTextf(normalFont,DEFAULTFONTCOLOR,255,_endofscriptwidth+MENUOPTIONOFFSET,0,"%d",currentPresetChapter);
 		}else{
 			drawText(_endofscriptwidth+MENUOPTIONOFFSET,0,currentPresetFileFriendlyList.theArray[currentPresetChapter]);
 		}
@@ -6125,7 +6109,6 @@ int vndsSaveSelector(){
 		}
 		startDrawing();
 		char _labelBuffer[17];
-		strcpy(_labelBuffer,"Slot ");
 		for (i=0;i<SAVEMENUPAGEH;++i){
 			int j;
 			for (j=0;j<SAVEMENUPAGEW;++j){
@@ -6142,14 +6125,11 @@ int vndsSaveSelector(){
 					_g=255;
 					_b=255;
 				}
-				
 				// Thumb goes behind everything else
 				if (_loadedThumbnail[_tempIndex]!=NULL){
 					drawTexture(_loadedThumbnail[_tempIndex],(j+1)*_slotWidth-getTextureWidth(_loadedThumbnail[_tempIndex]),i*_slotHeight);
 				}
-
-				int _trueIndex = _tempIndex+_slotOffset;
-				itoa(_trueIndex,&(_labelBuffer[5]),10);
+				sprintf(_labelBuffer,"Slot %d",_tempIndex+_slotOffset);
 				if (_loadedTextThumb[_tempIndex]==NULL){
 					strcat(_labelBuffer," (Empty)");
 				}else{
