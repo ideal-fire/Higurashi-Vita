@@ -19,12 +19,12 @@
 				Change the actual text box X and text box Y and use the input arg as a percentage of the screen?
 			How does this work in ADV mode?
 				Actually, the command is removed in ADV mode.
-		TODO - Expression changes look odd.
 		TODO - Allow VNDS sound command to stop all sounds
 		TODO - SetSpeedOfMessage
 		TODO - Sort files in file browser
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 	TODO - Settings menu is like 500 lines long and uses itoa a billion times
+	TODO - show adv names
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -43,6 +43,7 @@
 #include <pthread.h>
 #include <ctype.h> // toupper
 #include <stdarg.h>
+#include <limits.h>
 //
 #include <Lua/lua.h>
 #include <Lua/lualib.h>
@@ -157,7 +158,7 @@ char* vitaAppId="HIGURASHI";
 // 1 is start
 // 2 adds BGM and SE volume
 // 3 adds voice volume
-// 4 adds MessageBoxAlpha and textOnlyOverBackground
+// 4 adds preferredBoxAlpha and textOnlyOverBackground
 // 5 adds textSpeed
 // 6 adds vndsClearAtBottom
 // 7 adds showVNDSWarnings
@@ -289,7 +290,8 @@ crossSE menuSound=NULL;
 signed char menuSoundLoaded=0;
 
 // Alpha of black rectangle over screen
-unsigned char MessageBoxAlpha = 100;
+unsigned char currentBoxAlpha = 100;
+unsigned char preferredBoxAlpha = 100;
 signed char MessageBoxEnabled=1;
 signed char isSkipping=0;
 signed char inputValidity=1;
@@ -375,8 +377,8 @@ int autoModeVoicedWait=500;
 signed char cpuOverclocked=0;
 
 #define TEXTMODE_NVL 0
-#define TEXTMODE_AVD 1 // Wrong spelling
 #define TEXTMODE_ADV 1
+#define TEXTMODE_AVD TEXTMODE_ADV // Wrong spelling
 char gameTextDisplayMode=TEXTMODE_NVL;
 signed char dropshadowOn=1;
 char hasOwnVoiceSetting=0;
@@ -399,8 +401,7 @@ int singleSpaceWidth;
 #if GBPLAT == GB_VITA
 	pthread_t soundProtectThreadId;
 	void* _loadedFontBuffer=NULL;
-#endif
-#if GBPLAT == GB_3DS
+#elif GBPLAT == GB_3DS
 	char _3dsSoundProtectThreadIsAlive=1;
 	Thread _3dsSoundUpdateThread;
 	char _bgmIsLock=0;
@@ -461,6 +462,8 @@ signed char vndsClearAtBottom=0;
 signed char showVNDSWarnings=1;
 signed char imagesAreJpg=0;
 signed char dynamicAdvBoxHeight=0;
+char* currentADVName=NULL;
+signed char advNameEnabled=0;
 // Will only be used in games it can be used in
 signed char preferredTextDisplayMode=TEXTMODE_NVL;
 signed char useSoundArchive=0;
@@ -656,11 +659,13 @@ void drawTextGame(int _x, int _y, char* _message, unsigned char _alpha){
 		gbDrawTextAlpha(normalFont,_x,_y,_message,DEFAULTFONTCOLOR,_alpha);
 	}
 }
-void drawImageChars(unsigned char _alpha){
+void drawImageChars(unsigned char _alpha, int _maxDrawLine, int _maxDrawLineChar){
 	int i;
-	for (i=0;i<MAXIMAGECHAR;i++){
+	for (i=0;i<MAXIMAGECHAR;++i){
 		if (imageCharType[i]!=-1){
-			drawTextureSizedAlpha(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],currentTextHeight,currentTextHeight,_alpha);
+			if ((imageCharLines[i]<_maxDrawLine) || (imageCharLines[i]==_maxDrawLine && imageCharCharPositions[i]<=_maxDrawLineChar)){
+				drawTextureSized(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],currentTextHeight,currentTextHeight);
+			}
 		}
 	}
 }
@@ -676,17 +681,17 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
 			if (strlen(currentMessages[i])==0){
 				drawText(0,0,"."); // Hotfix to fix crash when no text on bottom screen.
 			}
-			for (i = 0; i < _maxDrawLine; i++){
+			for (i=0;i<_maxDrawLine;i++){
 				drawText(0,12+i*(currentTextHeight),(char*)currentMessages[i]);
 			}
-			drawImageChars(_alpha);
+			drawImageChars(_alpha,INT_MAX,0);
 			return;
 		}
 	#endif
-	for (i = 0; i < _maxDrawLine; i++){
+	for (i=0;i<_maxDrawLine;i++){
 		drawTextGame(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],_alpha);
 	}
-	drawImageChars(_alpha);
+	drawImageChars(_alpha,INT_MAX,0);
 }
 void DrawMessageBox(char _textmodeToDraw){
 	#if GBPLAT == GB_3DS
@@ -695,13 +700,9 @@ void DrawMessageBox(char _textmodeToDraw){
 		}
 	#endif
 	if (_textmodeToDraw == TEXTMODE_NVL || currentCustomTextbox==NULL){
-		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,MessageBoxAlpha);
+		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,currentBoxAlpha);
 	}else{
-		if (canChangeBoxAlpha){
-			drawTextureSizedAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset,outputLineScreenWidth-textboxXOffset,advboxHeight,MessageBoxAlpha);
-		}else{
-			drawTextureSized(currentCustomTextbox,textboxXOffset,textboxYOffset,outputLineScreenWidth-textboxXOffset,advboxHeight);
-		}
+		drawTextureSizedAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset,outputLineScreenWidth-textboxXOffset,advboxHeight,currentBoxAlpha);
 	}
 }
 void DrawCurrentFilter(){
@@ -1858,6 +1859,11 @@ void setTextOnlyOverBackground(char _newValue){
 	}
 }
 void applyTextboxChanges(){
+	if (!canChangeBoxAlpha){
+		currentBoxAlpha=255;
+	}else{
+		currentBoxAlpha=preferredBoxAlpha;
+	}
 	setTextOnlyOverBackground(textOnlyOverBackground);
 }
 // Returns the folder for CG or CGAlt depending on the user's settings
@@ -2983,14 +2989,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				drawTextGame(textboxXOffset+messageInBoxXOffset,12+messageInBoxYOffset+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],255);
 			}
 			currentMessages[_currentDrawLine][_currentDrawChar+1]=_tempCharCache;
-			// TODO - Use function for this
-			for (i=0;i<MAXIMAGECHAR;i++){
-				if (imageCharType[i]!=-1){
-					if ((imageCharLines[i]<_currentDrawLine) || (imageCharLines[i]==_currentDrawLine && imageCharCharPositions[i]<=_currentDrawChar)){
-						drawTextureSized(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],currentTextHeight,currentTextHeight);
-					}
-				}
-			}
+			drawImageChars(0,_currentDrawLine,_currentDrawChar);
 		}
 		endDrawing();
 		if (_isDone==0 && ( (textSpeed>0) || (_slowTextSpeed++ == abs(textSpeed)) )){
@@ -3112,7 +3111,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // BGM volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
 // SE volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
 // Voice volume, 1 byte, multiply it by 4 so it's a whole number when writing to save file
-// MessageBoxAlpha, 1 byte
+// preferredBoxAlpha, 1 byte
 // textOnlyOverBackground, 1 byte
 // textSpeed, 1 byte
 // vndsClearAtBottom, 1 byte
@@ -3138,7 +3137,7 @@ void SaveSettings(){
 	fwrite(&_bgmTemp,1,1,fp);
 	fwrite(&_seTemp,1,1,fp);
 	fwrite(&_voiceTemp,1,1,fp);
-	fwrite(&MessageBoxAlpha,1,1,fp);
+	fwrite(&preferredBoxAlpha,1,1,fp);
 	fwrite(&textOnlyOverBackground,1,1,fp);
 	fwrite(&textSpeed,1,1,fp);
 	fwrite(&vndsClearAtBottom,sizeof(signed char),1,fp);
@@ -3183,7 +3182,7 @@ void LoadSettings(){
 			voiceVolume = (float)_voiceTemp/4;
 		}
 		if (_tempOptionsFormat>=4){
-			fread(&MessageBoxAlpha,1,1,fp);
+			fread(&preferredBoxAlpha,1,1,fp);
 			fread(&textOnlyOverBackground,1,1,fp);
 		}
 		if (_tempOptionsFormat>=5){
@@ -3822,19 +3821,19 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 }
 void _textboxTransition(char _isOn, int _totalTime){
 	if (MessageBoxEnabled!=_isOn && !isSkipping){
-		signed short _fadeoutPerUpdate = ceil(MessageBoxAlpha/(double)TEXTBOXFADEOUTUPDATES(_totalTime));
-		unsigned char _oldMessageBoxAlpha = MessageBoxAlpha;
+		signed short _fadeoutPerUpdate = ceil(currentBoxAlpha/(double)TEXTBOXFADEOUTUPDATES(_totalTime));
+		unsigned char _oldMessageBoxAlpha = currentBoxAlpha;
 		if (_isOn==0){
 			_fadeoutPerUpdate*=-1;
 		}
 		if (_isOn==1){
-			MessageBoxAlpha=0;
+			currentBoxAlpha=0;
 		}
-		MessageBoxAlpha+=_fadeoutPerUpdate;
+		currentBoxAlpha+=_fadeoutPerUpdate;
 		while (1){
 			fpsCapStart();
-			if (!(MessageBoxAlpha+_fadeoutPerUpdate<=0 || MessageBoxAlpha+_fadeoutPerUpdate>=_oldMessageBoxAlpha)){
-				MessageBoxAlpha+=_fadeoutPerUpdate;
+			if (!(currentBoxAlpha+_fadeoutPerUpdate<=0 || currentBoxAlpha+_fadeoutPerUpdate>=_oldMessageBoxAlpha)){
+				currentBoxAlpha+=_fadeoutPerUpdate;
 			}else{
 				break;
 			}
@@ -3843,7 +3842,7 @@ void _textboxTransition(char _isOn, int _totalTime){
 			endDrawing();
 			fpsCapWait();
 		}
-		MessageBoxAlpha = _oldMessageBoxAlpha;
+		currentBoxAlpha = _oldMessageBoxAlpha;
 	}
 	MessageBoxEnabled=_isOn;
 }
@@ -4576,6 +4575,7 @@ void scriptOptionsSetTips(nathanscriptVariable* _passedArguments, int _numArgume
 }
 void scriptOptionsCanChangeBoxAlpha(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	canChangeBoxAlpha = nathanvariableToBool(&_passedArguments[0]);
+	currentBoxAlpha=255;
 	return;
 }
 
@@ -5147,7 +5147,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 	itoa(seVolume*4, _tempItoaHoldSE,10);
 	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
-	itoa(MessageBoxAlpha, _tempItoaHoldBoxAlpha,10);
+	itoa(preferredBoxAlpha, _tempItoaHoldBoxAlpha,10);
 	makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
 
 	// This checks if we have Rena busts in CG AND CGAlt also loads Rena, if possible
@@ -5188,71 +5188,13 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		if (wasJustPressed(BUTTON_X)){
 			break;
 		}
-		if (wasJustPressed(BUTTON_LEFT)){
-			if (_choice==2){
-				if (bgmVolume==0){
-					bgmVolume=1.25;
-				}
-				bgmVolume-=.25;
-				itoa(bgmVolume*4,_tempItoaHoldBGM,10);
-				SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
-			}else if (_choice==3){
-				if (seVolume==0){
-					seVolume=1.25;
-				}
-				seVolume-=.25;
-				itoa(seVolume*4,_tempItoaHoldSE,10);
-				if (menuSoundLoaded==1){
-					setSFXVolumeBefore(menuSound,FixSEVolume(256));
-				}
-				PlayMenuSound();
-			}else if (_choice==_textSpeedSlot){
-				textSpeed--;
-				if (textSpeed==-11){
-					textSpeed=-10;
-				}else if (textSpeed==TEXTSPEED_INSTANT-1){
-					textSpeed=10;
-				}else if (textSpeed==0){
-					textSpeed=-1;
-				}
-				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
-			}else if (_choice==_autoModeSpeedSlot){
-				_settingsChangeAuto(&autoModeWait,_tempAutoModeString);
-			}else if (_choice==_autoModeSpeedVoiceSlot){
-				_settingsChangeAuto(&autoModeVoicedWait,_tempAutoModeVoiceString);
-			}else if (_choice==_messageBoxAlphaSlot){ /////////////////////////////////////////////
-				// char will wrap, we don't want that
-				int _tempHoldChar = MessageBoxAlpha;
-				if (isDown(BUTTON_L)){
-					_tempHoldChar-=15;
-				}else{
-					_tempHoldChar-=25;
-				}
-				if (_tempHoldChar<=0){
-					_tempHoldChar=0;
-				}
-				MessageBoxAlpha = _tempHoldChar;
-				itoa(MessageBoxAlpha,_tempItoaHoldBoxAlpha,10);
-			}else if (_choice==_voiceVolumeSlot){
-				if (voiceVolume==0){
-					voiceVolume=1.25;
-				}
-				voiceVolume-=.25;
-				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
-			}
-		}
-		if (wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_RIGHT)){
+		if (wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_RIGHT) || wasJustPressed(BUTTON_LEFT)){
+			char _isRight = wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_RIGHT);
+			signed char _directionMultiplier = _isRight ? 1 : -1;
 			if (_choice==0){ // Resume
 				PlayMenuSound();
 				break;
-			}/*else if (_choice==1){
-				if (isDown(BUTTON_L)){
-					autoModeWait+=50;
-				}else{
-					autoModeWait+=100;
-				}
-				itoa(autoModeWait,_tempAutoModeString,10);
-			}*/else if (_choice==1){ // CPU speed
+			}else if (_choice==1){ // CPU speed
 				PlayMenuSound();
 				if (cpuOverclocked==0){
 					cpuOverclocked=1;
@@ -5270,21 +5212,36 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					#endif
 				}
 			}else if (_choice==2){
-				if (bgmVolume==1){
-					bgmVolume=0;
+				if (_isRight){
+					if (bgmVolume==1){
+						bgmVolume=0;
+					}else{
+						bgmVolume+=.25;
+					}
 				}else{
-					bgmVolume+=.25;
+					if (bgmVolume==0){
+						bgmVolume=1;
+					}else{
+						bgmVolume-=.25;
+					}
 				}
 				itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 				SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
 			}else if (_choice==3){
-				if (seVolume==1){
-					seVolume=0;
+				if (_isRight){
+					if (seVolume==1){
+						seVolume=0;
+					}else{
+						seVolume+=.25;
+					}
 				}else{
-					seVolume+=.25;
+					if (seVolume==0){
+						seVolume=1;
+					}else{
+						seVolume-=.25;
+					}
 				}
 				itoa(seVolume*4,_tempItoaHoldSE,10);
-
 				if (menuSoundLoaded==1){
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
@@ -5299,20 +5256,30 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					easyMessagef(1,"Restart for the changes to take effect.");
 				}
 			}else if (_choice==_textOverBGSlot){
-				setTextOnlyOverBackground(!textOnlyOverBackground);
+				textOnlyOverBackground=!textOnlyOverBackground;
 				if (textOnlyOverBackground){
 					_settingsOptionsValueText[_textOverBGSlot] = "Small";
 				}else{
 					_settingsOptionsValueText[_textOverBGSlot] = "Full";
 				}
 			}else if (_choice==_textSpeedSlot){
-				textSpeed++;
-				if (textSpeed==11){
-					textSpeed=TEXTSPEED_INSTANT;
-				}else if (textSpeed==TEXTSPEED_INSTANT+1){
-					textSpeed=TEXTSPEED_INSTANT;
-				}else if (textSpeed==0){
-					textSpeed=1;
+				textSpeed+=_directionMultiplier;
+				if (_isRight){
+					if (textSpeed==11){
+						textSpeed=TEXTSPEED_INSTANT;
+					}else if (textSpeed==TEXTSPEED_INSTANT+1){
+						textSpeed=TEXTSPEED_INSTANT;
+					}else if (textSpeed==0){
+						textSpeed=1;
+					}
+				}else{
+					if (textSpeed==-11){
+						textSpeed=-10;
+					}else if (textSpeed==TEXTSPEED_INSTANT-1){
+						textSpeed=10;
+					}else if (textSpeed==0){
+						textSpeed=-1;
+					}
 				}
 				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
 			}else if (_choice==_autoModeSpeedSlot){
@@ -5320,16 +5287,18 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			}else if (_choice==_autoModeSpeedVoiceSlot){
 				_settingsChangeAuto(&autoModeVoicedWait,_tempAutoModeVoiceString);
 			}else if (_choice==_messageBoxAlphaSlot){ /////////////////////////////////////////////
-				int _tempHoldChar = MessageBoxAlpha;
+				int _tempHoldChar = preferredBoxAlpha; // Prevent wrapping
 				if (isDown(BUTTON_L)){
-					_tempHoldChar+=15;
+					_tempHoldChar+=15*_directionMultiplier;
 				}else{
-					_tempHoldChar+=25;
+					_tempHoldChar+=25*_directionMultiplier;
 				}
 				if (_tempHoldChar>255){
 					_tempHoldChar=255;
+				}else if (_tempHoldChar<0){
+					_tempHoldChar=0;
 				}
-				MessageBoxAlpha = _tempHoldChar;
+				preferredBoxAlpha = _tempHoldChar;
 				itoa(_tempHoldChar,_tempItoaHoldBoxAlpha,10);
 			}else if (_choice==_bustLocationSlot){
 				PlayMenuSound();
@@ -5347,10 +5316,18 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					free(_tempRenaPath);
 				}
 			}else if (_choice==_voiceVolumeSlot){
-				if (voiceVolume==1){
-					voiceVolume=0;
+				if (_isRight){
+					if (voiceVolume==1){
+						voiceVolume=0;
+					}else{
+						voiceVolume+=.25;
+					}
 				}else{
-					voiceVolume+=.25;
+					if (voiceVolume==0){
+						voiceVolume=1;
+					}else{
+						voiceVolume-=.25;
+					}
 				}
 				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
 			}else if (_choice==_restartBgmActionSlot){
@@ -5414,11 +5391,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					lockBGM();
 				#endif
 				endType = Line_ContinueAfterTyping;
-				if (_choice==99){
-					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
-				}else{
-					currentGameStatus=GAMESTATUS_QUIT;
-				}
+				currentGameStatus=GAMESTATUS_QUIT;
 				exit(0);
 				break;
 			}
@@ -5444,7 +5417,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(1-_scrollOffset),_settingsOptionsMainText[1],0,255,0);
 		}
 		// If message box alpha is very high or text is on the bottom screen then make the message box alpha text red
-		if ( (MessageBoxAlpha>=230 && canChangeBoxAlpha) || (GBPLAT == GB_3DS && cpuOverclocked)){
+		if ( (preferredBoxAlpha>=230 && canChangeBoxAlpha) || (GBPLAT == GB_3DS && cpuOverclocked)){
 			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(_messageBoxAlphaSlot-_scrollOffset),_settingsOptionsMainText[_messageBoxAlphaSlot],255,0,0);
 		}
 		if (_shouldShowVNDSSettings && currentlyVNDSGame && gameTextDisplayMode == TEXTMODE_ADV){
@@ -5469,6 +5442,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		fpsCapWait();
 		exitIfForceQuit();
 	}
+	applyTextboxChanges();
 	controlsEnd();
 	SaveSettings();
 	if (_renaImage!=NULL){
@@ -5860,7 +5834,7 @@ void NavigationMenu(){
 		_nextButtonSlot=_slotAssignIndex;
 		_slotAssignIndex++;
 	}else{
-		_nextButtonSlot=99;
+		_nextButtonSlot=CHAR_MAX;
 	}
 	_chapterButtonSlot = _slotAssignIndex;
 	_slotAssignIndex++;
@@ -5868,7 +5842,7 @@ void NavigationMenu(){
 		_tipButtonSlot=_slotAssignIndex;
 		_slotAssignIndex++;
 	}else{
-		_tipButtonSlot=99;
+		_tipButtonSlot=CHAR_MAX;
 	}
 	_quitButtonSlot=_slotAssignIndex;
 	while (currentGameStatus!=GAMESTATUS_QUIT){
@@ -6358,7 +6332,7 @@ void initializeNathanScript(){
 	if (!nathanscriptIsInit){
 		nathanscriptIsInit=1;
 		nathanscriptInit();
-		// TODO - Pre-realloc to number of functions we need.
+		nathanscriptIncreaseMaxFunctions(nathanCurrentMaxFunctions+13);
 		nathanscriptAddFunction(vndswrapper_text,nathanscriptMakeConfigByte(1,0),"text");
 		nathanscriptAddFunction(vndswrapper_sound,nathanscriptMakeConfigByte(0,1),"sound");
 		nathanscriptAddFunction(vndswrapper_choice,nathanscriptMakeConfigByte(1,0),"choice");
@@ -6394,7 +6368,6 @@ void initializeNathanScript(){
 void testCode(){
 	//#warning TEST CODE INCLUDED!
 }
-
 signed char init(){
 	#ifdef OVERRIDE_INIT
 		return customInit();
