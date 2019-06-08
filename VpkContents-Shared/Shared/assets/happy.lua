@@ -1,6 +1,6 @@
 TEXTMODE_NVL = 0;
 TEXTMODE_ADV = 1;
-TEXTMODE_AVD = TEXTMODE_ADV; -- Compatibility with old versions
+TEXTMODE_AVD = TEXTMODE_ADV; // Compatibility with old versions
 
 Line_ContinueAfterTyping=0;
 Line_WaitForInput=1;
