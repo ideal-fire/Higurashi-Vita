@@ -171,7 +171,9 @@ char* vitaAppId="HIGURASHI";
 // 14 adds fontSize
 #define OPTIONSFILEFORMAT 14
 
-#define VNDSSAVEFORMAT 1
+// 1 is end
+// 2 adds currentADVName
+#define VNDSSAVEFORMAT 2
 
 #define VNDSGLOBALSSAVEFORMAT 1
 
@@ -340,7 +342,6 @@ unsigned char lastSelectionAnswer=0;
 
 // The x position on screen of this image character
 signed short imageCharX[MAXIMAGECHAR] = {0};
-// The y position on screen of this image character
 signed short imageCharY[MAXIMAGECHAR] = {0};
 // The character that the image character is. The values in here are one of the IMAGECHAR constants
 signed char imageCharType[MAXIMAGECHAR] = {0};
@@ -1859,7 +1860,7 @@ void setTextOnlyOverBackground(char _newValue){
 	}
 }
 void applyTextboxChanges(){
-	if (!canChangeBoxAlpha){
+	if (!canChangeBoxAlpha && gameTextDisplayMode==TEXTMODE_ADV){
 		currentBoxAlpha=255;
 	}else{
 		currentBoxAlpha=preferredBoxAlpha;
@@ -3640,42 +3641,33 @@ char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 	if (nathanscriptCurrentOpenFile==NULL){
 		return 1;
 	}
-
 	if (_saveSpot){
 		FILE* fp = fopen(_filename,"wb");
 		if (fp==NULL){
 			return 1;
 		}
-		
 		// Save options file format
 		unsigned char _tempOptionsFormat = VNDSSAVEFORMAT;
 		fwrite(&_tempOptionsFormat,sizeof(unsigned char),1,fp); //
-	
 		// Save the current script
 		writeLengthStringToFile(fp,currentScriptFilename);
-	
 		// Save the position in the current script
 		long int _currentFilePosition = crossftell(nathanscriptCurrentOpenFile);
 		fwrite(&_currentFilePosition,sizeof(long int),1,fp); //
-	
 		// Save the max number of lines we can have on screen, this makes the saves safe even if I change this number
 		int i;
 		i=MAXLINES;
 		fwrite(&i,sizeof(int),1,fp); //
 		// Save our current line
 		fwrite(&currentLine,sizeof(int),1,fp); //
-	
 		// Save the current messages
 		for (i=0;i<MAXLINES;i++){
 			writeLengthStringToFile(fp, currentMessages[i]); //
 		}
-	
 		// Save the background filename
 		writeLengthStringToFile(fp,lastBackgroundFilename); //
-	
 		// Write the number of busts we're saving
 		fwrite(&maxBusts,sizeof(int),1,fp); //
-	
 		// Write the bust data
 		for (i=0;i<maxBusts;i++){
 			fwrite(&(Busts[i].xOffset),sizeof(signed int),1,fp); //
@@ -3686,10 +3678,11 @@ char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 				writeLengthStringToFile(fp,Busts[i].relativeFilename); //
 			}
 		}
-	
+		//
 		writeLengthStringToFile(fp,lastBGMFilename);
 		fwrite(&lastBGMVolume,sizeof(int),1,fp);
-	
+		// format v2
+		writeLengthStringToFile(fp,currentADVName);
 		// Write game specific var list
 		saveVariableList(fp,nathanscriptGamevarList,nathanscriptTotalGamevar); //
 		fclose(fp);
@@ -3737,7 +3730,7 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 	FILE* fp = fopen(_filename,"rb");
 	unsigned char _readFileFormat;
 	fread(&_readFileFormat,sizeof(unsigned char),1,fp); //
-	if (_readFileFormat!=1){
+	if (_readFileFormat!=1 && _readFileFormat!=2){
 		easyMessagef(1,"Bad file format version. %d",_readFileFormat);
 		fclose(fp);
 	}
@@ -3784,6 +3777,16 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 		PlayBGM(_foundBGMFilename,lastBGMVolume,0);
 	}
 	free(_foundBGMFilename);
+
+	if (_readFileFormat>=2){
+		char* _foundADVName = readLengthStringFromFile(fp);
+		if (strlen(_foundADVName)!=0){
+			currentADVName=_foundADVName;
+			advNameEnabled=1;
+		}else{
+			free(_foundADVName);
+		}
+	}
 
 	loadVariableList(fp,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
 	fclose(fp);
@@ -4026,6 +4029,9 @@ void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments,
 	if (_passedArguments[3].variableType!=NATHAN_TYPE_NULL){
 		if (strcmp(nathanvariableToString(&_passedArguments[3]),"0")==0){
 			return;
+		}
+		if (_passedArguments[2].variableType!=NATHAN_TYPE_NULL){ // If an English adv name was passed
+			advNameEnabled=1;
 		}
 		OutputLine((unsigned const char*)nathanvariableToString(&_passedArguments[3]),nathanvariableToInt(&_passedArguments[4]),0);
 		outputLineWait();
@@ -5039,7 +5045,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}
 	SETTINGSMENU_EASYADDOPTION("Auto Speed:",_autoModeSpeedSlot);
 	SETTINGSMENU_EASYADDOPTION("Auto Voiced Speed:",_autoModeSpeedVoiceSlot);
-	if (canChangeBoxAlpha){
+	if (canChangeBoxAlpha || gameTextDisplayMode==TEXTMODE_NVL){
 		SETTINGSMENU_EASYADDOPTION("Message Box Alpha:",_messageBoxAlphaSlot);
 	}
 	if (_showArtLocationSlot){
