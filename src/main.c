@@ -693,16 +693,16 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
 	}
 	drawImageChars(_alpha,INT_MAX,0);
 }
-void DrawMessageBox(char _textmodeToDraw){
+void DrawMessageBox(char _textmodeToDraw, unsigned char _targetAlpha){
 	#if GBPLAT == GB_3DS
 		if (textIsBottomScreen==1){
 			return;
 		}
 	#endif
 	if (_textmodeToDraw == TEXTMODE_NVL || currentCustomTextbox==NULL){
-		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,currentBoxAlpha);
+		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,_targetAlpha);
 	}else{
-		drawTextureSizedAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset,outputLineScreenWidth-textboxXOffset,advboxHeight,currentBoxAlpha);
+		drawTextureSizedAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset,outputLineScreenWidth-textboxXOffset,advboxHeight,_targetAlpha);
 	}
 }
 void DrawCurrentFilter(){
@@ -4434,7 +4434,7 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		controlsEnd();
 		startDrawing();
 		Draw(0);
-		DrawMessageBox(TEXTMODE_NVL);
+		DrawMessageBox(TEXTMODE_NVL,preferredBoxAlpha);
 		for (i=0;i<_totalOptions;i++){
 			if (_choice!=i){
 				drawText(MENUOPTIONOFFSET,i*currentTextHeight,noobOptions[i]);
@@ -4719,7 +4719,7 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 		DrawCurrentFilter();
 	}
 	if (_shouldDrawMessageBox==1){
-		DrawMessageBox(gameTextDisplayMode);
+		DrawMessageBox(gameTextDisplayMode,currentBoxAlpha);
 	}
 	if (_shouldDrawHighBusts){
 		for (i = maxBusts-1; i != -1; i--){
@@ -4939,7 +4939,6 @@ void overrideIfSet(signed char* _possibleTarget, signed char _possibleOverride){
 		*_possibleTarget = _possibleOverride;
 	}
 }
-#define ISTEXTSPEEDBAR 0
 #define MAXOPTIONSSETTINGS 23
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
