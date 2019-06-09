@@ -469,6 +469,9 @@ signed char showVNDSWarnings=1;
 signed char imagesAreJpg=0;
 signed char dynamicAdvBoxHeight=0;
 char* currentADVName=NULL;
+char advNameR=255;
+char advNameG=255;
+char advNameB=255;
 signed char prefersADVNames=1;
 // 1 if supported
 // 2 if they're forced
@@ -1751,7 +1754,6 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 
 	free(_workable);
 }
-
 void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
 	controlsStart();
 	controlsEnd();
@@ -1779,7 +1781,6 @@ void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
 		exitIfForceQuit();
 	}while (currentGameStatus!=GAMESTATUS_QUIT && _doWait);
 }
-
 void easyMessagef(char _doWait, const char* _formatString, ...){
 	va_list _tempArgs;
 	va_start(_tempArgs, _formatString);
@@ -3507,7 +3508,9 @@ void activateHigurashiSettings(){
 	scriptForceResourceUppercase=0;
 	dynamicScaleEnabled=higurashiUsesDynamicScale;
 	advNamesPersist=1;
-	advNamesSupported=1;
+	if (!advNamesSupported){
+		advNamesSupported=1;
+	}
 	//shouldUseBustCache=0;
 	applyTextboxChanges();
 }
@@ -4058,6 +4061,20 @@ void safeVNDSSaveMenu(){
 		free(_savedPath);
 	}
 }
+void setADVName(char* _newName){
+	advNameR=255;
+	advNameG=255;
+	advNameB=255;
+	if (_newName!=NULL){
+		if (!advNamesSupported){
+			advNamesSupported=1;
+			applyTextboxChanges();
+		}
+		//<color=#5ec69a>Mion</color>
+
+	}
+	changeMallocString(&currentADVName,_newName);
+}
 /*
 =================================================
 */
@@ -4072,13 +4089,9 @@ void scriptClearMessage(nathanscriptVariable* _passedArguments, int _numArgument
 }
 void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (_passedArguments[2].variableType==NATHAN_TYPE_STRING){ // If an English adv name was passed
-		if (!advNamesSupported){
-			advNamesSupported=1;
-			applyTextboxChanges();
-		}
-		changeMallocString(&currentADVName,nathanvariableToString(&_passedArguments[2]));
+		setADVName(nathanvariableToString(&_passedArguments[2]));
 	}else if (shouldShowADVNames() && !advNamesPersist){
-		changeMallocString(&currentADVName,NULL);
+		setADVName(NULL);
 	}
 	if (_passedArguments[3].variableType!=NATHAN_TYPE_NULL){
 		if (strcmp(nathanvariableToString(&_passedArguments[3]),"0")==0){
@@ -4636,7 +4649,7 @@ void scriptOptionsCanChangeBoxAlpha(nathanscriptVariable* _passedArguments, int 
 	return;
 }
 
-// Srttings menu override
+// Settings menu override
 EASYLUAINTSETFUNCTION(oMenuQuit,forceShowQuit)
 EASYLUAINTSETFUNCTION(oMenuVNDSSettings,forceShowVNDSSettings)
 EASYLUAINTSETFUNCTION(oMenuVNDSSave,forceShowVNDSSave)
@@ -4651,7 +4664,8 @@ EASYLUAINTSETFUNCTION(oMenuTextOverBG,forceTextOverBGOption) // text only over b
 EASYLUAINTSETFUNCTION(textOnlyOverBackground,textOnlyOverBackground);
 EASYLUAINTSETFUNCTION(dynamicAdvBoxHeight,dynamicAdvBoxHeight);
 EASYLUAINTSETFUNCTION(advboxHeight,advboxHeight)
-EASYLUAINTSETFUNCTION(setADVNameSupport,prefersADVNames)
+EASYLUAINTSETFUNCTION(setADVNameSupport,advNamesSupported)
+EASYLUAINTSETFUNCTION(advNamesPersist,advNamesPersist)
 
 // normal image 1, hover image 1, select image 1, normal image 2, hover image 2, select image 2
 void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){

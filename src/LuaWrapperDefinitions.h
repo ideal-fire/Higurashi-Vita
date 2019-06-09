@@ -114,6 +114,7 @@ void initLuaWrappers(){
 	PUSHEASYLUAINTSETFUNCTION(textOnlyOverBackground)
 	PUSHEASYLUAINTSETFUNCTION(advboxHeight)
 	PUSHEASYLUAINTSETFUNCTION(setADVNameSupport)
+	PUSHEASYLUAINTSETFUNCTION(advNamesPersist)
 
 	// Commands exclusive to my engine
 	PUSHLUAWRAPPER(scriptDebugFile,"Debugfile")
