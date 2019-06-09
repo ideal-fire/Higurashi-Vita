@@ -147,7 +147,7 @@ char* vitaAppId="HIGURASHI";
 
 #define STUPIDTEXTYOFF 12
 #define totalTextYOff() (STUPIDTEXTYOFF+messageInBoxYOffset+textboxYOffset)
-#define shouldShowADVNames() (gameTextDisplayMode==TEXTMODE_ADV && advNameEnabled)
+#define shouldShowADVNames() (gameTextDisplayMode==TEXTMODE_ADV && (advNamesSupported==2 || (advNamesSupported && prefersADVNames)))
 #define ADVNAMEOFFSET (currentTextHeight*1.5) // Space between ADV name and rest of the text
 
 // TODO - Proper libGeneralGood support for this
@@ -173,7 +173,8 @@ char* vitaAppId="HIGURASHI";
 // 12 adds vndsVitaTouch
 // 13 adds dropshadowOn
 // 14 adds fontSize
-#define OPTIONSFILEFORMAT 14
+// 15 adds prefersADVNames
+#define OPTIONSFILEFORMAT 15
 
 // 1 is end
 // 2 adds currentADVName
@@ -296,8 +297,8 @@ crossSE menuSound=NULL;
 signed char menuSoundLoaded=0;
 
 // Alpha of black rectangle over screen
-unsigned char currentBoxAlpha = 100;
-unsigned char preferredBoxAlpha = 100;
+unsigned char currentBoxAlpha=100;
+unsigned char preferredBoxAlpha=100;
 signed char MessageBoxEnabled=1;
 signed char isSkipping=0;
 signed char inputValidity=1;
@@ -468,7 +469,10 @@ signed char showVNDSWarnings=1;
 signed char imagesAreJpg=0;
 signed char dynamicAdvBoxHeight=0;
 char* currentADVName=NULL;
-signed char advNameEnabled=0;
+signed char prefersADVNames=1;
+// 1 if supported
+// 2 if they're forced
+char advNamesSupported=0;
 char advNamesPersist=0;
 // Will only be used in games it can be used in
 signed char preferredTextDisplayMode=TEXTMODE_NVL;
@@ -489,9 +493,9 @@ signed char forceScalingOption=-1;
 signed char forceTextBoxModeOption=-1;
 signed char forceVNDSFadeOption=-1;
 signed char forceDebugButton=-1;
-signed char forceResettingsButton = 1;
-signed char forceTextOverBGOption = 1;
-signed char forceFontSizeOption = 1;
+signed char forceResettingsButton=1;
+signed char forceTextOverBGOption=1;
+signed char forceFontSizeOption=1;
 signed char forceDropshadowOption=1;
 
 #ifdef SPECIALEDITION
@@ -707,7 +711,7 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 		}
 	#endif
 	*/
-	if (advNameEnabled && currentADVName!=NULL){
+	if (shouldShowADVNames() && currentADVName!=NULL){
 		drawTextGame(textboxXOffset+messageInBoxXOffset,totalTextYOff()-ADVNAMEOFFSET,currentADVName,_alpha);
 	}
 	for (i=0;i<_maxDrawLine;i++){
@@ -3183,6 +3187,7 @@ void SaveSettings(){
 	#endif
 	fwrite(&dropshadowOn,sizeof(signed char),1,fp);
 	fwrite(&fontSize,sizeof(double),1,fp);
+	fwrite(&prefersADVNames,sizeof(signed char),1,fp);
 
 	fclose(fp);
 	printf("SAved settings file.\n");
@@ -3248,6 +3253,9 @@ void LoadSettings(){
 		}
 		if (_tempOptionsFormat>=14){
 			fread(&fontSize,sizeof(double),1,fp);
+		}
+		if (_tempOptionsFormat>=15){
+			fread(&prefersADVNames,sizeof(signed char),1,fp);
 		}
 		fclose(fp);
 
@@ -3499,7 +3507,7 @@ void activateHigurashiSettings(){
 	scriptForceResourceUppercase=0;
 	dynamicScaleEnabled=higurashiUsesDynamicScale;
 	advNamesPersist=1;
-	advNameEnabled=1;
+	advNamesSupported=1;
 	//shouldUseBustCache=0;
 	applyTextboxChanges();
 }
@@ -3817,7 +3825,9 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 		char* _foundADVName = readLengthStringFromFile(fp);
 		if (strlen(_foundADVName)!=0){
 			currentADVName=_foundADVName;
-			advNameEnabled=1;
+			if (!advNamesSupported){
+				advNamesSupported=1;
+			}
 		}else{
 			free(_foundADVName);
 		}
@@ -4062,12 +4072,12 @@ void scriptClearMessage(nathanscriptVariable* _passedArguments, int _numArgument
 }
 void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (_passedArguments[2].variableType==NATHAN_TYPE_STRING){ // If an English adv name was passed
-		if (!advNameEnabled){
-			advNameEnabled=1;
+		if (!advNamesSupported){
+			advNamesSupported=1;
 			applyTextboxChanges();
 		}
 		changeMallocString(&currentADVName,nathanvariableToString(&_passedArguments[2]));
-	}else if (advNameEnabled && !advNamesPersist){
+	}else if (shouldShowADVNames() && !advNamesPersist){
 		changeMallocString(&currentADVName,NULL);
 	}
 	if (_passedArguments[3].variableType!=NATHAN_TYPE_NULL){
@@ -4640,7 +4650,8 @@ EASYLUAINTSETFUNCTION(oMenuTextOverBG,forceTextOverBGOption) // text only over b
 // Manually set the options if you've chosen to disable the menu option
 EASYLUAINTSETFUNCTION(textOnlyOverBackground,textOnlyOverBackground);
 EASYLUAINTSETFUNCTION(dynamicAdvBoxHeight,dynamicAdvBoxHeight);
-EASYLUAINTSETFUNCTION(advboxHeight,advboxHeight) 
+EASYLUAINTSETFUNCTION(advboxHeight,advboxHeight)
+EASYLUAINTSETFUNCTION(setADVNameSupport,prefersADVNames)
 
 // normal image 1, hover image 1, select image 1, normal image 2, hover image 2, select image 2
 void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -4986,7 +4997,7 @@ void overrideIfSet(signed char* _possibleTarget, signed char _possibleOverride){
 		*_possibleTarget = _possibleOverride;
 	}
 }
-#define MAXOPTIONSSETTINGS 23
+#define MAXOPTIONSSETTINGS 24
 #define SETTINGSMENU_EASYADDOPTION(a,b) \
 	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
 	b = _maxOptionSlotUsed;
@@ -4995,6 +5006,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		customSettingsMenu(_shouldShowQuit,_shouldShowVNDSSettings,_shouldShowVNDSSave,_shouldShowRestartBGM,_showArtLocationSlot,_showScalingOption,_showTextBoxModeOption,_showVNDSFadeOption,_showDebugButton);
 		return;
 	#endif
+	signed char _showADVNamesOption=(advNamesSupported==1);
 
 	// Allow global overide for settings
 	overrideIfSet(&_shouldShowQuit,forceShowQuit);
@@ -5048,6 +5060,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	#if GBPLAT == GB_VITA
 		signed char _vndsVitaTouchSlot=-2;
 	#endif
+	signed char _preferAdvNamesSlot=-2;
 	
 	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
 	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
@@ -5127,6 +5140,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	#if GBPLAT == GB_VITA
 		SETTINGSMENU_EASYADDOPTION("Vita Touch:",_vndsVitaTouchSlot);
 	#endif
+	if (_showADVNamesOption){
+		SETTINGSMENU_EASYADDOPTION("ADV Names:",_preferAdvNamesSlot);
+	}
 	// Quit button is always last
 	if (currentGameStatus!=GAMESTATUS_TITLE){
 		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Quit";
@@ -5172,20 +5188,14 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		_settingsOptionsValueText[_textboxModeSlot]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
 	}
 	if (_showVNDSFadeOption){
-		if (vndsSpritesFade){
-			_settingsOptionsValueText[_vndsBustFadeEnableSlot]="On";
-		}else{
-			_settingsOptionsValueText[_vndsBustFadeEnableSlot]="Off";
-		}
+		_settingsOptionsValueText[_vndsBustFadeEnableSlot]=charToSwitch(vndsSpritesFade);
 	}
-
 	#if GBPLAT == GB_VITA
-		if(vndsVitaTouch){
-			_settingsOptionsValueText[_vndsVitaTouchSlot] = "On";
-		}else{
-			_settingsOptionsValueText[_vndsVitaTouchSlot] = "Off";
-		}
+		_settingsOptionsValueText[_vndsVitaTouchSlot] = charToSwitch(vndsVitaTouch);
 	#endif
+	if (_showADVNamesOption){
+		_settingsOptionsValueText[_preferAdvNamesSlot] = charToSwitch(prefersADVNames);
+	}
 
 	// Make strings
 	itoa(autoModeWait,_tempAutoModeString,10);
@@ -5432,6 +5442,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			else if (_choice==_dropshadowSlot){
 				dropshadowOn = !dropshadowOn;
 				_settingsOptionsValueText[_dropshadowSlot] = charToSwitch(dropshadowOn);
+			}else if (_choice==_preferAdvNamesSlot){
+				prefersADVNames=!prefersADVNames;
+				_settingsOptionsValueText[_preferAdvNamesSlot]=prefersADVNames ? "On" : "Off";
 			}else if (_choice==_maxOptionSlotUsed){ // Quit
 				#if GBPLAT == GB_3DS
 					lockBGM();
