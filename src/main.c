@@ -24,7 +24,7 @@
 		TODO - Sort files in file browser
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 	TODO - Settings menu is like 500 lines long and uses itoa a billion times
-	TODO - show adv names
+	TODO - Fadeout image char
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -145,6 +145,11 @@ char* vitaAppId="HIGURASHI";
 	#warning please make platform string
 	#define SYSTEMSTRING "UNKNOWN"
 #endif
+
+#define STUPIDTEXTYOFF 12
+#define totalTextYOff() (STUPIDTEXTYOFF+messageInBoxYOffset+textboxYOffset)
+#define shouldShowADVNames() (gameTextDisplayMode==TEXTMODE_ADV && advNameEnabled)
+#define ADVNAMEOFFSET (currentTextHeight*1.5) // Space between ADV name and rest of the text
 
 // TODO - Proper libGeneralGood support for this
 #if GBSND == GBSND_VITA
@@ -465,6 +470,7 @@ signed char imagesAreJpg=0;
 signed char dynamicAdvBoxHeight=0;
 char* currentADVName=NULL;
 signed char advNameEnabled=0;
+char advNamesPersist=0;
 // Will only be used in games it can be used in
 signed char preferredTextDisplayMode=TEXTMODE_NVL;
 signed char useSoundArchive=0;
@@ -671,11 +677,23 @@ void drawImageChars(unsigned char _alpha, int _maxDrawLine, int _maxDrawLineChar
 	}
 }
 // Number of lines to draw is not zero based
-void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
+// _finalLineMaxChar is the last char on the last line to draw. Must be a position inside the string, 
+void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxChar){
 	if (_maxDrawLine==-1){
 		_maxDrawLine=MAXLINES;
 	}
+	char _oldFinalChar;
+	if (_finalLineMaxChar!=-1){
+		if (_finalLineMaxChar<strlen(currentMessages[_maxDrawLine-1])){ // Bounds check
+			// Temporarily trim the string
+			_oldFinalChar = currentMessages[_maxDrawLine-1][_finalLineMaxChar+1];
+			currentMessages[_maxDrawLine-1][_finalLineMaxChar+1]='\0';
+		}else{
+			_finalLineMaxChar=-1;
+		}
+	}
 	int i;
+	/*
 	#if GBPLAT == GB_3DS
 		if (textIsBottomScreen==1){
 			startDrawingBottom();
@@ -683,16 +701,24 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine){
 				drawText(0,0,"."); // Hotfix to fix crash when no text on bottom screen.
 			}
 			for (i=0;i<_maxDrawLine;i++){
-				drawText(0,12+i*(currentTextHeight),(char*)currentMessages[i]);
+				drawText(0,STUPIDTEXTYOFF+i*currentTextHeight,(char*)currentMessages[i]);
 			}
 			drawImageChars(_alpha,INT_MAX,0);
 			return;
 		}
 	#endif
-	for (i=0;i<_maxDrawLine;i++){
-		drawTextGame(textboxXOffset+messageInBoxXOffset,messageInBoxYOffset+12+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],_alpha);
+	*/
+	if (advNameEnabled && currentADVName!=NULL){
+		drawTextGame(textboxXOffset+messageInBoxXOffset,totalTextYOff()-ADVNAMEOFFSET,currentADVName,_alpha);
 	}
-	drawImageChars(_alpha,INT_MAX,0);
+	for (i=0;i<_maxDrawLine;i++){
+		drawTextGame(textboxXOffset+messageInBoxXOffset,totalTextYOff()+i*currentTextHeight,(char*)currentMessages[i],_alpha);
+	}
+	drawImageChars(_alpha,_maxDrawLine-1,_finalLineMaxChar!=-1 ? _finalLineMaxChar : INT_MAX);
+	// Fix string if we trimmed it for _finalLineMaxChar
+	if (_finalLineMaxChar!=-1){
+		currentMessages[_maxDrawLine-1][_finalLineMaxChar+1]=_oldFinalChar;
+	}
 }
 void DrawMessageBox(char _textmodeToDraw, unsigned char _targetAlpha){
 	#if GBPLAT == GB_3DS
@@ -922,17 +948,18 @@ void ClearMessageArray(char _doFadeTransition){
 			}
 			startDrawing();
 			drawAdvanced(1,1,1,MessageBoxEnabled,1,0);
-			DrawMessageText(_currentTextAlpha,-1);
+			DrawMessageText(_currentTextAlpha,-1,-1);
 			endDrawing();
 			fpsCapWait();
 		}
 	}
-	for (i = 0; i < MAXLINES; ++i){
+	for (i=0;i<MAXLINES;++i){
 		currentMessages[i][0]='\0';
 	}
 	for (i=0;i<MAXIMAGECHAR;i++){
 		imageCharType[i]=-1;
 	}
+	changeMallocString(&currentADVName,NULL);
 }
 void SetAllMusicVolume(int _passedFixedVolume){
 	int i;
@@ -1820,6 +1847,7 @@ void* recalloc(void* _oldBuffer, int _newSize, int _oldSize){
 	return _newBuffer;
 }
 // If we're doing textOnlyOverBackground, make the textbox start at the right place according to global variables for background sizes
+// Called often, so it's separate from applyTextboxChanges
 void updateTextPositions(){
 	if (textOnlyOverBackground){
 		textboxXOffset = floor((float)(screenWidth-applyGraphicsScale(actualBackgroundWidth))/2);
@@ -1845,27 +1873,29 @@ void updateGraphicsScale(){
 		graphicsScale=1;
 	}
 }
-void setTextOnlyOverBackground(char _newValue){
-	textOnlyOverBackground=_newValue;
-	if (gameTextDisplayMode == TEXTMODE_ADV){
+void applyTextboxChanges(){
+	if (gameTextDisplayMode==TEXTMODE_ADV){
 		textboxYOffset=screenHeight-advboxHeight;
 	}else{
 		textboxYOffset=0;
 	}
+	if (!canChangeBoxAlpha && gameTextDisplayMode==TEXTMODE_ADV){
+		currentBoxAlpha=255;
+	}else{
+		currentBoxAlpha=preferredBoxAlpha;
+	}
+	if (shouldShowADVNames()){
+		messageInBoxYOffset = currentTextHeight*1.5;
+	}else{
+		messageInBoxYOffset=0;
+	}
+	// Apply textOnlyOverBackground setting
 	if (textOnlyOverBackground==0){
 		textboxXOffset=0;
 		outputLineScreenWidth = screenWidth;
 	}else{
 		updateTextPositions();
 	}
-}
-void applyTextboxChanges(){
-	if (!canChangeBoxAlpha && gameTextDisplayMode==TEXTMODE_ADV){
-		currentBoxAlpha=255;
-	}else{
-		currentBoxAlpha=preferredBoxAlpha;
-	}
-	setTextOnlyOverBackground(textOnlyOverBackground);
 }
 // Returns the folder for CG or CGAlt depending on the user's settings
 char* getUserPreferredImageDirectory(char _folderPreference){
@@ -2065,7 +2095,7 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLi
 			startDrawing();
 			drawAdvanced(1,1,1,1,1,0); // Don't draw message text during transitions
 			if (_maxDrawLine!=0){
-				DrawMessageText(255,_maxDrawLine);
+				DrawMessageText(255,_maxDrawLine,-1);
 			}
 			endDrawing();
 			fpsCapWait();
@@ -2074,20 +2104,28 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLi
 	advboxHeight=_newHeight;
 	applyTextboxChanges();
 }
+// The reason _maxDrawLine is passed is a mystery because text isn't drawn during smoothADVBoxHeightTransition
+// _overrideNewHeight is in lines
 void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
 	if (_maxDrawLine==-1){
 		_maxDrawLine=MAXLINES;
 	}
+	int _newAdvBoxHeight;
 	if (_overrideNewHeight==-1){
-		_overrideNewHeight=1; // One extra line to be safe
+		_newAdvBoxHeight=1; // One extra line to be safe
 		short i;
 		for (i=0;i<MAXLINES;++i){
 			if (currentMessages[i][0]!='\0'){
-				_overrideNewHeight=i+2; // Last non-empty line. Adding 1 is for the free line, adding another 1 is because line index is 0 based
+				_overrideNewHeight=i+2; // Last non-empty line. Adding 1 is for the free line, adding another 1 is because line index is 0 based.
 			}
 		}
+		if (shouldShowADVNames()){
+			_newAdvBoxHeight+=ADVNAMEOFFSET;
+		}
+		_newAdvBoxHeight*=currentTextHeight;
+	}else{
+		_newAdvBoxHeight = _overrideNewHeight*currentTextHeight;
 	}
-	int _newAdvBoxHeight = _overrideNewHeight*currentTextHeight;
 	if (_maxDrawLine!=0){
 		smoothADVBoxHeightTransition(advboxHeight,_newAdvBoxHeight,_maxDrawLine);
 	}else{
@@ -2818,7 +2856,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 						for (j=0;j<MAXIMAGECHAR;j++){
 							if (imageCharType[j]==-1){
 								imageCharX[j] = textWidth(normalFont,&(message[lastNewlinePosition+1]))+textboxXOffset+messageInBoxXOffset+imageCharSlotCenter;
-								imageCharY[j] = messageInBoxYOffset+12+textboxYOffset+currentLine*(currentTextHeight);
+								imageCharY[j] = totalTextYOff()+currentLine*currentTextHeight;
 								imageCharLines[j] = currentLine;
 								imageCharCharPositions[j] = strlenNO1(&(message[lastNewlinePosition+1]));
 								imageCharType[j] = _imagechartype;
@@ -2984,13 +3022,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			}
 		#endif
 		if (MessageBoxEnabled==1){
-			char _tempCharCache = currentMessages[_currentDrawLine][_currentDrawChar+1];
-			currentMessages[_currentDrawLine][_currentDrawChar+1]='\0';
-			for (i = 0; i <= _currentDrawLine; i++){
-				drawTextGame(textboxXOffset+messageInBoxXOffset,12+messageInBoxYOffset+textboxYOffset+i*(currentTextHeight),(char*)currentMessages[i],255);
-			}
-			currentMessages[_currentDrawLine][_currentDrawChar+1]=_tempCharCache;
-			drawImageChars(0,_currentDrawLine,_currentDrawChar);
+			DrawMessageText(255,_currentDrawLine+1,_currentDrawChar);
 		}
 		endDrawing();
 		if (_isDone==0 && ( (textSpeed>0) || (_slowTextSpeed++ == abs(textSpeed)) )){
@@ -3456,6 +3488,7 @@ void activateVNDSSettings(){
 	scriptScreenHeight=192;
 	scriptForceResourceUppercase=0;
 	dynamicScaleEnabled=1;
+	advNamesPersist=0;
 	//shouldUseBustCache=1;
 }
 void activateHigurashiSettings(){
@@ -3466,7 +3499,10 @@ void activateHigurashiSettings(){
 	scriptScreenHeight=480;
 	scriptForceResourceUppercase=0;
 	dynamicScaleEnabled=higurashiUsesDynamicScale;
+	advNamesPersist=1;
+	advNameEnabled=1;
 	//shouldUseBustCache=0;
+	applyTextboxChanges();
 }
 #if GBPLAT == GB_VITA
 	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
@@ -4026,12 +4062,18 @@ void scriptClearMessage(nathanscriptVariable* _passedArguments, int _numArgument
 	return;
 }
 void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	if (_passedArguments[2].variableType==NATHAN_TYPE_STRING){ // If an English adv name was passed
+		if (!advNameEnabled){
+			advNameEnabled=1;
+			applyTextboxChanges();
+		}
+		changeMallocString(&currentADVName,nathanvariableToString(&_passedArguments[2]));
+	}else if (advNameEnabled && !advNamesPersist){
+		changeMallocString(&currentADVName,NULL);
+	}
 	if (_passedArguments[3].variableType!=NATHAN_TYPE_NULL){
 		if (strcmp(nathanvariableToString(&_passedArguments[3]),"0")==0){
 			return;
-		}
-		if (_passedArguments[2].variableType!=NATHAN_TYPE_NULL){ // If an English adv name was passed
-			advNameEnabled=1;
 		}
 		OutputLine((unsigned const char*)nathanvariableToString(&_passedArguments[3]),nathanvariableToInt(&_passedArguments[4]),0);
 		outputLineWait();
@@ -4735,7 +4777,7 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 		}
 	}
 	if (_shouldDrawMessageText==1){
-		DrawMessageText(255,-1);
+		DrawMessageText(255,-1,-1);
 	}
 }
 void Draw(char _shouldDrawMessageBox){
@@ -4775,7 +4817,7 @@ char upgradeToGameFolder(){
 			fpsCapStart();
 			controlsEnd();
 			startDrawing();
-			DrawMessageText(255,-1);
+			DrawMessageText(255,-1,-1);
 			endDrawing();
 			controlsStart();
 			fpsCapWait();
@@ -5606,13 +5648,12 @@ void TitleScreen(){
 					ClearMessageArray(0);
 					controlsStart();
 					controlsEnd();
-					OutputLine("This process will convert your legacy preset & StreamingAssets setup to the new game folder setup. It's makes everything easier, so you should do it.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
-
+					OutputLine("This process will convert your legacy preset & StreamingAssets setup to the new game folder setup. It makes everything easier, so you should do it.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
 					while (!wasJustPressed(BUTTON_A)){
 						fpsCapStart();
 						controlsEnd();
 						startDrawing();
-						DrawMessageText(255,-1);
+						DrawMessageText(255,-1,-1);
 						endDrawing();
 						controlsStart();
 						fpsCapWait();
