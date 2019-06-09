@@ -24,7 +24,6 @@
 		TODO - Sort files in file browser
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 	TODO - Settings menu is like 500 lines long and uses itoa a billion times
-	TODO - Fadeout image char
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -671,7 +670,7 @@ void drawImageChars(unsigned char _alpha, int _maxDrawLine, int _maxDrawLineChar
 	for (i=0;i<MAXIMAGECHAR;++i){
 		if (imageCharType[i]!=-1){
 			if ((imageCharLines[i]<_maxDrawLine) || (imageCharLines[i]==_maxDrawLine && imageCharCharPositions[i]<=_maxDrawLineChar)){
-				drawTextureSized(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],currentTextHeight,currentTextHeight);
+				drawTextureSizedAlpha(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],currentTextHeight,currentTextHeight,_alpha);
 			}
 		}
 	}
