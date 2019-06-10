@@ -5072,7 +5072,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		customSettingsMenu(_shouldShowQuit,_shouldShowVNDSSettings,_shouldShowVNDSSave,_shouldShowRestartBGM,_showArtLocationSlot,_showScalingOption,_showTextBoxModeOption,_showVNDSFadeOption,_showDebugButton);
 		return;
 	#endif
-	signed char _showADVNamesOption=(advNamesSupported==1);
+	signed char _showADVNamesOption=(gameTextDisplayMode==TEXTMODE_ADV && advNamesSupported==1);
 
 	// Allow global overide for settings
 	overrideIfSet(&_shouldShowQuit,forceShowQuit);
