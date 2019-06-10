@@ -179,6 +179,7 @@ char* vitaAppId="HIGURASHI";
 // 1 is end
 // 2 adds currentADVName
 #define VNDSSAVEFORMAT 2
+#define validVNDSSaveFormat(a) (a==1 || a==2)
 
 #define VNDSGLOBALSSAVEFORMAT 1
 
@@ -2120,7 +2121,7 @@ void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
 		short i;
 		for (i=0;i<MAXLINES;++i){
 			if (currentMessages[i][0]!='\0'){
-				_overrideNewHeight=i+2; // Last non-empty line. Adding 1 is for the free line, adding another 1 is because line index is 0 based.
+				_newAdvBoxHeight=i+2; // Last non-empty line. Adding 1 is for the free line, adding another 1 is because line index is 0 based.
 			}
 		}
 		if (shouldShowADVNames()){
@@ -3777,7 +3778,7 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 	FILE* fp = fopen(_filename,"rb");
 	unsigned char _readFileFormat;
 	fread(&_readFileFormat,sizeof(unsigned char),1,fp); //
-	if (_readFileFormat!=1 && _readFileFormat!=2){
+	if (!validVNDSSaveFormat(_readFileFormat)){
 		easyMessagef(1,"Bad file format version. %d",_readFileFormat);
 		fclose(fp);
 	}
@@ -3855,7 +3856,7 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 	controlsEnd();
 
 	if (gameTextDisplayMode==TEXTMODE_ADV && dynamicAdvBoxHeight){
-		updateDynamicADVBox(-1,-1);
+		updateDynamicADVBox(0,-1);
 	}
 
 	// Open
@@ -6156,7 +6157,7 @@ int vndsSaveSelector(){
 						FILE* fp = fopen(_tempFilename,"rb");
 						unsigned char _readFileFormat;
 						fread(&_readFileFormat,sizeof(unsigned char),1,fp);
-						if (_readFileFormat==1){
+						if (validVNDSSaveFormat(_readFileFormat)){
 							skipLengthStringInFile(fp); // Skip script filename
 							fseek(fp,sizeof(long int)+sizeof(int),SEEK_CUR); // Seek past position and MAXLINES
 							int _displayLine;
