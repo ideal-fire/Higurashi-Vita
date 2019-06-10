@@ -469,9 +469,9 @@ signed char showVNDSWarnings=1;
 signed char imagesAreJpg=0;
 signed char dynamicAdvBoxHeight=0;
 char* currentADVName=NULL;
-char advNameR=255;
-char advNameG=255;
-char advNameB=255;
+unsigned char advNameR=255;
+unsigned char advNameG=255;
+unsigned char advNameB=255;
 signed char prefersADVNames=1;
 // 1 if supported
 // 2 if they're forced
@@ -715,7 +715,7 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 	#endif
 	*/
 	if (shouldShowADVNames() && currentADVName!=NULL){
-		drawTextGame(textboxXOffset+messageInBoxXOffset,totalTextYOff()-ADVNAMEOFFSET,currentADVName,_alpha);
+		drawDropshadowTextSpecific(textboxXOffset+messageInBoxXOffset,totalTextYOff()-ADVNAMEOFFSET,currentADVName,advNameR,advNameG,advNameB,0,0,0,_alpha);
 	}
 	for (i=0;i<_maxDrawLine;i++){
 		drawTextGame(textboxXOffset+messageInBoxXOffset,totalTextYOff()+i*currentTextHeight,(char*)currentMessages[i],_alpha);
@@ -2830,6 +2830,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			// Here we have special checks for stuff like image characters and new lines.
 			if (message[i]<65 || message[i]>122){
 				if (message[i]=='<'){
+					// TODO - Won't work if only a less than sign and not a tag
 					int k;
 					// Loop and look for the end
 					for (k=i+1;k<i+100;k++){
@@ -4061,19 +4062,70 @@ void safeVNDSSaveMenu(){
 		free(_savedPath);
 	}
 }
-void setADVName(char* _newName){
+void resetADVNameColor(){
 	advNameR=255;
 	advNameG=255;
 	advNameB=255;
+}
+#define COLORMARKUPSTART "<color=#"
+#define COLORMARKUPEND "</color>"
+void setADVName(char* _newName){
+	resetADVNameColor();
 	if (_newName!=NULL){
 		if (!advNamesSupported){
 			advNamesSupported=1;
 			applyTextboxChanges();
 		}
-		//<color=#5ec69a>Mion</color>
-
+		int _cachedStrlen=strlen(_newName);
+		char _actualNameBuff[strlen(_newName)+1];
+		_actualNameBuff[0]='\0';
+		int i;
+		// Search for color markup
+		// //<color=#5ec69a>Mion</color>
+		for (i=0;i<_cachedStrlen;++i){
+			if (_newName[i]=='<'){
+				if (strncmp(&(_newName[i]),COLORMARKUPSTART,strlen(COLORMARKUPSTART))==0){
+					i+=strlen(COLORMARKUPSTART);
+					if (i+8+strlen(COLORMARKUPEND)<_cachedStrlen){
+						// Load RGB
+						char _tempNumBuffer[3];
+						_tempNumBuffer[2]='\0';
+						char j;
+						for (j=0;j<3;++j){
+							_tempNumBuffer[0]=_newName[i++];
+							_tempNumBuffer[1]=_newName[i++];
+							int _parsedValue = strtol(_tempNumBuffer,NULL,16);
+							switch(j){
+								case 0:
+									advNameR=_parsedValue;
+									break;
+								case 1:
+									advNameG=_parsedValue;
+									break;
+								case 2:
+									advNameB=_parsedValue;
+									break;
+							}
+						}
+						char* _endPos = strstr(_newName,COLORMARKUPEND);
+						if (_newName[i]=='>' && _endPos!=NULL){ 
+							_endPos[0]='\0';
+							strcat(_actualNameBuff,&(_newName[++i]));
+							for (;_newName[i];++i); // Bring loop variable to the null char that we just set
+							i+=(strlen(COLORMARKUPEND)-1);
+							_endPos[0]=COLORMARKUPEND[0];
+						}else{ // If the tag end isn't in the correct spot, bail
+							resetADVNameColor();
+							i-=(6+strlen(COLORMARKUPSTART));
+						}
+					}
+				}
+			}
+		}
+		changeMallocString(&currentADVName,strlen(_actualNameBuff)!=0 ? _actualNameBuff : _newName);
+	}else{
+		changeMallocString(&currentADVName,NULL);
 	}
-	changeMallocString(&currentADVName,_newName);
 }
 /*
 =================================================
