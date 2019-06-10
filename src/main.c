@@ -716,7 +716,7 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 	#endif
 	*/
 	if (shouldShowADVNames() && currentADVName!=NULL){
-		drawDropshadowTextSpecific(textboxXOffset+messageInBoxXOffset,totalTextYOff()-ADVNAMEOFFSET,currentADVName,advNameR,advNameG,advNameB,0,0,0,_alpha);
+		drawDropshadowTextSpecific(textboxXOffset+messageInBoxXOffset,totalTextYOff()-ADVNAMEOFFSET,currentADVName,advNameR,advNameG,advNameB,0,0,0,255);
 	}
 	for (i=0;i<_maxDrawLine;i++){
 		drawTextGame(textboxXOffset+messageInBoxXOffset,totalTextYOff()+i*currentTextHeight,(char*)currentMessages[i],_alpha);
@@ -966,7 +966,9 @@ void ClearMessageArray(char _doFadeTransition){
 	for (i=0;i<MAXIMAGECHAR;i++){
 		imageCharType[i]=-1;
 	}
-	changeMallocString(&currentADVName,NULL);
+	if (advNamesPersist!=2){
+		changeMallocString(&currentADVName,NULL);
+	}
 }
 void SetAllMusicVolume(int _passedFixedVolume){
 	int i;
@@ -2109,7 +2111,6 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLi
 	advboxHeight=_newHeight;
 	applyTextboxChanges();
 }
-// The reason _maxDrawLine is passed is a mystery because text isn't drawn during smoothADVBoxHeightTransition
 // _overrideNewHeight is in lines
 void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
 	if (_maxDrawLine==-1){
@@ -2123,13 +2124,13 @@ void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
 			if (currentMessages[i][0]!='\0'){
 				_newAdvBoxHeight=i+2; // Last non-empty line. Adding 1 is for the free line, adding another 1 is because line index is 0 based.
 			}
-		}
-		if (shouldShowADVNames()){
-			_newAdvBoxHeight+=ADVNAMEOFFSET;
-		}
+		}		
 		_newAdvBoxHeight*=currentTextHeight;
 	}else{
 		_newAdvBoxHeight = _overrideNewHeight*currentTextHeight;
+	}
+	if (shouldShowADVNames()){
+		_newAdvBoxHeight+=ADVNAMEOFFSET;
 	}
 	if (_maxDrawLine!=0){
 		smoothADVBoxHeightTransition(advboxHeight,_newAdvBoxHeight,_maxDrawLine);
@@ -4143,7 +4144,7 @@ void scriptClearMessage(nathanscriptVariable* _passedArguments, int _numArgument
 void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (_passedArguments[2].variableType==NATHAN_TYPE_STRING){ // If an English adv name was passed
 		setADVName(nathanvariableToString(&_passedArguments[2]));
-	}else if (shouldShowADVNames() && !advNamesPersist){
+	}else if (shouldShowADVNames() && advNamesPersist==0){
 		setADVName(NULL);
 	}
 	if (_passedArguments[3].variableType!=NATHAN_TYPE_NULL){
@@ -6457,7 +6458,7 @@ void initializeNathanScript(){
 	if (!nathanscriptIsInit){
 		nathanscriptIsInit=1;
 		nathanscriptInit();
-		nathanscriptIncreaseMaxFunctions(nathanCurrentMaxFunctions+13);
+		nathanscriptIncreaseMaxFunctions(nathanCurrentMaxFunctions+14);
 		nathanscriptAddFunction(vndswrapper_text,nathanscriptMakeConfigByte(1,0),"text");
 		nathanscriptAddFunction(vndswrapper_sound,nathanscriptMakeConfigByte(0,1),"sound");
 		nathanscriptAddFunction(vndswrapper_choice,nathanscriptMakeConfigByte(1,0),"choice");
@@ -6472,6 +6473,7 @@ void initializeNathanScript(){
 		nathanscriptAddFunction(scriptImageChoice,0,"imagechoice");
 		nathanscriptAddFunction(vndswrapper_ENDOF,0,"ENDSCRIPT");
 		nathanscriptAddFunction(vndswrapper_ENDOF,0,"END_OF_FILE");
+		nathanscriptAddFunction(vndswrapper_advname,0,"advname");
 
 		// Load global variables
 		char _globalsSaveFilePath[strlen(saveFolder)+strlen("vndsGlobals")+1];

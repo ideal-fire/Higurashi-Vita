@@ -159,7 +159,6 @@ void _vndsChangeScriptFiles(const char* _newFilename){
 	nathanscriptCurrentOpenFile = crossfopen(_tempstringconcat,"rb");
 	nathanscriptCurrentLine=1;
 }
-
 // Will always start on an avalible line
 void vndswrapper_text(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (currentLine==MAXLINES){
@@ -328,7 +327,6 @@ void vndswrapper_setimg(nathanscriptVariable* _passedArguments, int _numArgument
 		}
 	}
 }
-
 // jump file.scr [label]
 void vndswrapper_jump(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	_vndsChangeScriptFiles(nathanvariableToString(&_passedArguments[0]));
@@ -336,12 +334,10 @@ void vndswrapper_jump(nathanscriptVariable* _passedArguments, int _numArguments,
 		genericGotoLabel(nathanvariableToString(&_passedArguments[1]));
 	}
 }
-
 // ENDSCRIPT and END_OF_FILE do the same thing
 void vndswrapper_ENDOF(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	_vndsChangeScriptFiles("main.scr");
 }
-
 // Same as setvar
 void vndswrapper_gsetvar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	genericSetVarCommand(_argumentList, _totalArguments, _returnedReturnArray, _returnArraySize,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar,0);
@@ -366,7 +362,6 @@ void vndswrapper_music(nathanscriptVariable* _argumentList, int _totalArguments,
 	}
 	PlayBGM(_passedFilename,128,0);
 }
-
 // sound filename
 // sound ~
 // the argument to make it play multiple times is a lie, at least for the original VNDS
@@ -386,5 +381,11 @@ void vndswrapper_sound(nathanscriptVariable* _passedArguments, int _numArguments
 		}
 	}
 }
-
+void vndswrapper_advname(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	if (_numArguments==0){
+		setADVName(NULL);
+	}else{
+		setADVName(nathanvariableToString(&_passedArguments[0]));
+	}
+}
 #endif
