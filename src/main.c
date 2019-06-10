@@ -5166,7 +5166,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}
 	SETTINGSMENU_EASYADDOPTION("Auto Speed:",_autoModeSpeedSlot);
 	SETTINGSMENU_EASYADDOPTION("Auto Voiced Speed:",_autoModeSpeedVoiceSlot);
-	if (canChangeBoxAlpha || gameTextDisplayMode==TEXTMODE_NVL){
+	if (gameTextDisplayMode==TEXTMODE_NVL || canChangeBoxAlpha){
 		SETTINGSMENU_EASYADDOPTION("Message Box Alpha:",_messageBoxAlphaSlot);
 	}
 	if (_showArtLocationSlot){
@@ -5236,7 +5236,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}
 	_settingsOptionsValueText[2] = &(_tempItoaHoldBGM[0]);
 	_settingsOptionsValueText[3] = &(_tempItoaHoldSE[0]);
-	if (canChangeBoxAlpha){
+	if (gameTextDisplayMode==TEXTMODE_NVL || canChangeBoxAlpha){
 		_settingsOptionsValueText[_messageBoxAlphaSlot] = &(_tempItoaHoldBoxAlpha[0]);
 	}
 	_settingsOptionsValueText[_textSpeedSlot] = &(_tempItoaHoldTextSpeed[0]);
