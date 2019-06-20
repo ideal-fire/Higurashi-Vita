@@ -6506,7 +6506,9 @@ signed char init(){
 	}
 	
 	generalGoodInit();
-	initGraphics(960,544,&screenWidth,&screenHeight);
+	initGraphics(960,544,0);
+	screenWidth = getScreenWidth();
+	screenHeight = getScreenHeight();
 	initImages();
 	setClearColor(0,0,0);
 	
