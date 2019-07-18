@@ -1,3 +1,0 @@
-cd build
-valgrind --track-origins=yes ./a.exe
-cd ..
