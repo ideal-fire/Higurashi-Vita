@@ -254,7 +254,7 @@ void vndswrapper_choice(nathanscriptVariable* _passedArguments, int _numArgument
 	freeNathanscriptVariableArray(_fakeArgumentArray,2);
 }
 void vndswrapper_delay(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	if (isSkipping!=1 && capEnabled==1){
+	if (isSkipping!=1){
 		#if !_VNDSWAITDISABLE
 			long _totalMillisecondWaitTime = ((nathanvariableToFloat(&_passedArguments[0])/(float)60)*1000);
 			wait(_totalMillisecondWaitTime);

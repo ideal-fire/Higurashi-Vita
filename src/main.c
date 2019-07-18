@@ -58,7 +58,6 @@
 #include <goodbrew/text.h>
 #include <goodbrew/useful.h>
 #include "main.h"
-#include "FpsCapper.h"
 //
 #if GBPLAT == GB_VITA
 	#include <libvita2dplusbloat/vita2d.h>
@@ -518,6 +517,13 @@ signed char forceDropshadowOption=1;
 double partMoveFills(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
 	return ((_totalDifference-(_startTime+_totalDifference-_curTicks))/(double)_totalDifference)*_max;
 }
+double partMoveFillsCapped(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
+	if (_curTicks>=_startTime+_totalDifference){
+		return _max;
+	}else{
+		return partMoveFills(_curTicks,_startTime,_totalDifference,_max);
+	}
+}
 double partMoveEmptys(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
 	return _max-partMoveFills(_curTicks,_startTime,_totalDifference,_max);
 }
@@ -867,7 +873,6 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 	controlsStart();
 	controlsEnd();
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		fpsCapStart();
 		controlsStart();
 		if (wasJustPressed(BUTTON_A)){
 			PlayMenuSound();
@@ -893,7 +898,6 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 		drawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight*2,"Yes");
 		drawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight,"No");
 		endDrawing();
-		fpsCapWait();
 	}
 	return 0;
 }
@@ -931,9 +935,6 @@ void clearHistory(){
 		messageHistory[i][0]='\0';
 	}
 }
-signed int getChangePerFrame(signed int _totalRequiredChange, signed int _totalTime){
-	return atLeastOne(floor(((_totalRequiredChange)/(60*((double)_totalTime/1000)))));
-}
 void ClearMessageArray(char _doFadeTransition){
 	if (textSpeed==TEXTSPEED_INSTANT){
 		_doFadeTransition=0;
@@ -948,19 +949,13 @@ void ClearMessageArray(char _doFadeTransition){
 		}
 	}
 	if (_totalAddedToHistory!=0 && MessageBoxEnabled && !isSkipping && _doFadeTransition){ // If we actually added stuff
-		signed int _changePerFrame = getChangePerFrame(255,CLEARMESSAGEFADEOUTTIME);
-		signed int _currentTextAlpha = 255;
-		while (_currentTextAlpha>0){
-			fpsCapStart();
-			_currentTextAlpha-=_changePerFrame;
-			if (_currentTextAlpha<0){
-				_currentTextAlpha=0;
-			}
+		u64 _startTime=getMilli();
+		u64 _currentTime;
+		while ((_currentTime=getMilli())<_startTime+CLEARMESSAGEFADEOUTTIME){
 			startDrawing();
 			drawAdvanced(1,1,1,MessageBoxEnabled,1,0);
-			DrawMessageText(_currentTextAlpha,-1,-1);
+			DrawMessageText(255-partMoveFillsCapped(_currentTime,_startTime,CLEARMESSAGEFADEOUTTIME,255),-1,-1);
 			endDrawing();
-			fpsCapWait();
 		}
 	}
 	for (i=0;i<MAXLINES;++i){
@@ -1175,24 +1170,6 @@ signed char WaitCanSkip(int amount){
 	wait(amount%50);
 	return 0;
 }
-void DrawUntilX(){
-	while (1){
-		fpsCapStart();
-
-		controlsStart();
-		if (wasJustPressed(BUTTON_A) || isSkipping==1){
-			break;
-		}
-		controlsEnd();
-
-		startDrawing();
-		Draw(MessageBoxEnabled);
-		endDrawing();
-
-		fpsCapWait();
-	}
-	controlsEnd();
-}
 // If we've run out of new lines, shift everything up.
 void LastLineLazyFix(int* _line){
 	if (*_line==MAXLINES){
@@ -1215,10 +1192,6 @@ void LastLineLazyFix(int* _line){
 				}
 			}
 		}
-
-		//DrawUntilX();
-		//ClearMessageArray();
-		//*_line=0;
 	}
 }
 void changeIfLazyLastLineFix(int* _line, int* _toChange){
@@ -1355,7 +1328,6 @@ void outputLineWait(){
 	#endif
 	char _didPressCircle=0;
 	do{
-		fpsCapStart();
 		controlsStart();
 		Update();
 		startDrawing();
@@ -1432,7 +1404,6 @@ void outputLineWait(){
 			DrawHistory(messageHistory);
 		}
 		controlsEnd();
-		fpsCapWait();
 		if (autoModeOn==1 && _toggledTextboxTime==0){
 			if (_inBetweenLinesMilisecondsStart!=0){ // If we're not waiting for audio to end
 				if (getMilli()>=(_inBetweenLinesMilisecondsStart+_chosenAutoWait)){
@@ -1764,7 +1735,6 @@ void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
 	controlsStart();
 	controlsEnd();
 	do{
-		fpsCapStart();
 		controlsStart();
 		if (wasJustPressed(BUTTON_A)){
 			controlsStart();
@@ -1783,7 +1753,6 @@ void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
 			drawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.");
 		}
 		endDrawing();
-		fpsCapWait();
 		exitIfForceQuit();
 	}while (currentGameStatus!=GAMESTATUS_QUIT && _doWait);
 }
@@ -2087,7 +2056,6 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLi
 		char _isGoingDown = _changePerFrame<0;
 		_changePerFrame = _changePerFrame < 0 ? _changePerFrame*-1 : _changePerFrame;
 		while (1){
-			fpsCapStart();
 			// Apply the changes
 			if (_isGoingDown){
 				advboxHeight-=_changePerFrame;
@@ -2108,7 +2076,6 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLi
 				DrawMessageText(255,_maxDrawLine,-1);
 			}
 			endDrawing();
-			fpsCapWait();
 		}
 	}
 	advboxHeight=_newHeight;
@@ -2183,7 +2150,6 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 
 		if (_wait==1){
 			while (Busts[passedSlot].isActive==1){
-				fpsCapStart();
 				controlsStart();
 				Update();
 				startDrawing();
@@ -2193,7 +2159,6 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 					Busts[passedSlot].alpha = 1;
 				}
 				controlsEnd();
-				fpsCapWait();
 			}
 		}
 	}
@@ -2221,7 +2186,6 @@ void FadeAllBustshots(int _time, char _wait){
 					}
 				}
 			}
-			fpsCapStart();
 			controlsStart();
 			Update();
 			startDrawing();
@@ -2235,7 +2199,6 @@ void FadeAllBustshots(int _time, char _wait){
 				}
 			}
 			controlsEnd();
-			fpsCapWait();
 		}
 	}
 }
@@ -2255,12 +2218,10 @@ void waitForBustFade(){
 		if (!_didBreak){
 			break;
 		}
-		fpsCapStart();
 		Update();
 		startDrawing();
 		Draw(MessageBoxEnabled);
 		endDrawing();
-		fpsCapWait();
 	}
 }
 void DrawScene(const char* _filename, int time){
@@ -2300,8 +2261,6 @@ void DrawScene(const char* _filename, int time){
 			updateTextPositions();
 		}
 		while (_backgroundAlpha<255){
-			fpsCapStart();
-	
 			Update();
 			_backgroundAlpha+=_alphaPerFrame;
 			if (_backgroundAlpha>255){
@@ -2330,7 +2289,6 @@ void DrawScene(const char* _filename, int time){
 				_backgroundAlpha=254;
 			}
 			controlsEnd();
-			fpsCapWait();
 		}
 
 		if (currentBackground!=NULL){
@@ -2485,7 +2443,6 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 	}
 	if (_waitforfadein==1){
 		while (Busts[passedSlot].alpha<255){
-			fpsCapStart();
 			controlsStart();
 			Update();
 			if (Busts[passedSlot].alpha>255){
@@ -2504,7 +2461,6 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 				break;
 			}
 			controlsEnd();
-			fpsCapWait();
 		}
 	}
 	return 0;
@@ -3007,10 +2963,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	#endif
 	char _slowTextSpeed=0;
 	while(_isDone==0){
-		#if GBPLAT != GB_VITA
-			fpsCapStart();
-		#endif
-
 		// The first one that takes two bytes is U+0080, or 0xC2 0x80
 		// If it is a two byte character, we don't want to try and draw when there's only one byte. Skip to include the next one.
 		if (currentMessages[_currentDrawLine][_currentDrawChar]>=0xC2){
@@ -3018,7 +2970,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		}
 
 		controlsStart();
-		if (wasJustPressed(BUTTON_A) || capEnabled==0){
+		if (wasJustPressed(BUTTON_A)){
 			_isDone=1;
 		}
 		updateControlsGeneral();
@@ -3054,9 +3006,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				}
 			}
 		}
-		#if GBPLAT != GB_VITA
-			fpsCapWait();
-		#endif
 	}
 	#if GBPLAT == GB_3DS
 		if (textIsBottomScreen==1){
@@ -3288,7 +3237,6 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 	int _maxScroll = MAXMESSAGEHISTORY-HISTORYONONESCREEN;
 	int _scrollOffset=_maxScroll;
 	while (1){
-		fpsCapStart();
 		controlsStart();
 		menuControlsLow(&_scrollOffset,0,HISTORYSCROLLRATE,0,HISTORYSCROLLRATE*2,0,_maxScroll);
 		if (wasJustPressed(BUTTON_B) || wasJustPressed(BUTTON_START)){
@@ -3309,7 +3257,6 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 		drawRectangle((screenWidth-5),0,5,screenHeight,0,0,0,255);
 		drawRectangle((screenWidth-5),floor((screenHeight-HISTORYSCROLLBARHEIGHT)*((double)_scrollOffset/(MAXMESSAGEHISTORY-HISTORYONONESCREEN))),5,HISTORYSCROLLBARHEIGHT,255,0,0,255);
 		endDrawing();
-		fpsCapWait();
 	}
 }
 // FOLDER NAME SHOULD NOT END WITH SLASH
@@ -4164,7 +4111,7 @@ void scriptOutputLineAll(nathanscriptVariable* _passedArguments, int _numArgumen
 }
 //
 void scriptWait(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	if (isSkipping!=1 && capEnabled==1){
+	if (isSkipping!=1){
 		wait(nathanvariableToInt(&_passedArguments[0]));
 	}
 	return;
@@ -4319,24 +4266,13 @@ void scriptDrawBustshot(nathanscriptVariable* _passedArguments, int _numArgument
 	return;
 }
 void scriptSetValidityOfInput(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	if (nathanvariableToBool(&_passedArguments[0])==1){
-		inputValidity=1;
-	}else{
-		inputValidity=0;
-	}
+	inputValidity=(nathanvariableToBool(&_passedArguments[0])==1);	
 	return;
 }
 // Fadeout time
 // Wait for completely fadeout
 void scriptFadeAllBustshots(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	FadeAllBustshots(nathanvariableToInt(&_passedArguments[0]),nathanvariableToBool(&_passedArguments[1]));
-	//int i;
-	//for (i=0;i<maxBusts;i++){
-	//	if (Busts[i].isActive==1){
-	//		freeTexture(Busts[i].image);
-	//		ResetBustStruct(&(Busts[i]));
-	//	}
-	//}
 	return;
 }
 void scriptDisableWindow(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -4443,7 +4379,6 @@ void scriptMoveSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 
 	if (_waitforcompletion==1){
 		while(Busts[_passedSlot].bustStatus!=BUST_STATUS_NORMAL){
-			fpsCapStart();
 			controlsStart();
 			if (wasJustPressed(BUTTON_A)){
 				Busts[_passedSlot].xOffset=nathanvariableToInt(&_passedArguments[1])+320;
@@ -4454,7 +4389,6 @@ void scriptMoveSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 			startDrawing();
 			Draw(MessageBoxEnabled);
 			endDrawing();
-			fpsCapWait();
 		}
 	}
 	return;
@@ -4496,7 +4430,6 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 	// This is the actual loop for choosing the choice
 	signed char _choice=0;
 	while (1){
-		fpsCapStart();
 		controlsStart();
 		char _oldIndex = _choice;
 		_choice = menuControls(_choice,0,_totalOptions-1);
@@ -4562,7 +4495,6 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		drawText(MENUCURSOROFFSET*2,_choice*currentTextHeight,MENUCURSOR);
 
 		endDrawing();
-		fpsCapWait();
 	}
 
 	if (currentlyVNDSGame){
@@ -4752,8 +4684,6 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 	_startDrawX = (screenWidth - _firstChoiceWidth)/2.0;
 	_startDrawY = ((textboxYOffset!=0 ? textboxYOffset : screenHeight)/2.0)-((_numberOfChoices)*_firstChoiceHeight+(_numberOfChoices-1)*_halfFirstChoiceHeight)/2.0;
 	while (1){
-		fpsCapStart();
-
 		controlsStart();
 		_userChoice = menuControls(_userChoice,0,_numberOfChoices-1);
 		if (wasJustPressed(BUTTON_A)){
@@ -4784,8 +4714,6 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 			drawTexture(_passedSelectImages[_userChoice],_startDrawX,_startDrawY+_firstChoiceHeight*_userChoice+_halfFirstChoiceHeight*_userChoice);
 		}
 		endDrawing();
-
-		fpsCapWait();
 	}
 
 	for (i=0;i<_numberOfChoices;i++){
@@ -4886,13 +4814,11 @@ char upgradeToGameFolder(){
 		char* _bigMessageBuffer = easySprintf("Now that you've upgraded one or more of your StreamingAssets folders to include the preset file, you need to move all your StreamingAssets folder(s) using VitaShell or MolecularShell to\n%s\nYou will need to create that games folder first. After you create that game folder, you won't be able to use preset mode anymore, so make sure you've upgraded all of your StreamingAssets folders before.",gamesFolder);
 		OutputLine(_bigMessageBuffer,Line_WaitForInput,0);
 		while (!wasJustPressed(BUTTON_A)){
-			fpsCapStart();
 			controlsEnd();
 			startDrawing();
 			DrawMessageText(255,-1,-1);
 			endDrawing();
 			controlsStart();
-			fpsCapWait();
 		}
 		free(_bigMessageBuffer);
 	}else{
@@ -4955,7 +4881,6 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 		}
 		int _tmpoffset=0;
 		while (currentGameStatus!=GAMESTATUS_QUIT){
-			fpsCapStart();
 			controlsStart();
 			menuControlsLow(&_choice,1,1,0,5,0,totalFiles-1);
 			if (wasJustPressed(BUTTON_A)){
@@ -4986,7 +4911,6 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 			drawText(5,5+currentTextHeight*((_choice-_tmpoffset)+2),MENUCURSOR);
 			endDrawing();
 			controlsEnd();
-			fpsCapWait();
 		}
 	}
 
@@ -5000,7 +4924,6 @@ char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessa
 void FontSizeSetup(){
 	char _choice=0;
 	while (1){
-		fpsCapStart();
 		controlsStart();
 		_choice = menuControls(_choice,0,2);
 		fontSize=retMenuControlsLow(fontSize,0,0,0,1,8,70);;
@@ -5024,7 +4947,6 @@ void FontSizeSetup(){
 		drawText(MENUOPTIONOFFSET,currentTextHeight*6,"The font must be reloaded for you to see the changes.");
 		drawText(MENUOPTIONOFFSET,currentTextHeight*7,"Select the \"Test\" option to do so.");
 		endDrawing();
-		fpsCapWait();
 	}
 }
 void debugMenuOption(){
@@ -5288,7 +5210,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		_needToScroll=1;
 	}
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		fpsCapStart();
 		controlsStart();
 		if (menuControlsLow(&_choice,1,1,0,0,0,_maxOptionSlotUsed)){
 			if (_choice>=_optionsOnScreen/2){
@@ -5560,7 +5481,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			}
 		#endif
 		endDrawing();
-		fpsCapWait();
 		exitIfForceQuit();
 	}
 	applyTextboxChanges();
@@ -5612,7 +5532,6 @@ void TitleScreen(){
 		}
 	#endif
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		fpsCapStart();
 		controlsStart();
 		// Password right left down up square
 			if (wasJustPressed(BUTTON_RIGHT)){
@@ -5627,7 +5546,6 @@ void TitleScreen(){
 				_titlePassword = Password(_titlePassword,4);
 				if (_titlePassword==5){
 					if (LazyChoice("Would you like to activate top secret","speedy mode for testing?",NULL,NULL)==1){
-						capEnabled=0;
 						autoModeWait=50;
 					}
 				}
@@ -5724,13 +5642,11 @@ void TitleScreen(){
 					controlsEnd();
 					OutputLine("This process will convert your legacy preset & StreamingAssets setup to the new game folder setup. It makes everything easier, so you should do it.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
 					while (!wasJustPressed(BUTTON_A)){
-						fpsCapStart();
 						controlsEnd();
 						startDrawing();
 						DrawMessageText(255,-1,-1);
 						endDrawing();
 						controlsStart();
-						fpsCapWait();
 					}
 					if (LazyChoice("Upgrade to game folder mode?",NULL,NULL,NULL)){
 						if (upgradeToGameFolder()){
@@ -5770,7 +5686,6 @@ void TitleScreen(){
 		#endif
 		endDrawing();
 		controlsEnd();
-		fpsCapWait();
 		exitIfForceQuit();
 	}
 }
@@ -5787,7 +5702,6 @@ void TipMenu(){
 	int _numTipDispLines=0;
 	char** _tipDispLines=NULL;
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		fpsCapStart();
 		controlsStart();
 		_updateDispString|=menuControlsLow(&_chosenTip,0,0,1,1,1,currentPresetTipUnlockList.theArray[currentPresetChapter]);
 		if (wasJustPressed(BUTTON_A)){
@@ -5823,7 +5737,6 @@ void TipMenu(){
 		drawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select");
 
 		endDrawing();
-		fpsCapWait();
 	}
 	freeWrappedText(_numTipDispLines,_tipDispLines);
 }
@@ -5836,7 +5749,6 @@ void ChapterJump(){
 	unsigned char _choice=0;
 
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		fpsCapStart();
 		controlsStart();
 		if (wasJustPressed(BUTTON_RIGHT)){
 			if (!isDown(BUTTON_R)){
@@ -5892,13 +5804,11 @@ void ChapterJump(){
 		drawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back");
 		drawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select");
 		endDrawing();
-		fpsCapWait();
 	}
 }
 void SaveGameEditor(){
 	controlsEnd();
 	while (1){
-		fpsCapStart();
 		controlsStart();
 		currentPresetChapter = retMenuControlsLow(currentPresetChapter,0,0,1,1,0,currentPresetFileList.length-1);
 		if (wasJustPressed(BUTTON_A)){
@@ -5917,7 +5827,6 @@ void SaveGameEditor(){
 		drawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight*2, SELECTBUTTONNAME" - Finish and save");
 		drawText(MENUOPTIONOFFSET, screenHeight-currentTextHeight, "Left and Right - Change last completed chapter");
 		endDrawing();
-		fpsCapWait();
 	}
 }
 void controls_setDefaultGame(){
@@ -5966,7 +5875,6 @@ void NavigationMenu(){
 	}
 	_quitButtonSlot=_slotAssignIndex;
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		fpsCapStart();
 		controlsStart();
 		// Editor secret code
 			if (wasJustPressed(BUTTON_UP)){
@@ -6039,14 +5947,12 @@ void NavigationMenu(){
 		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Exit");
 		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
 		endDrawing();
-		fpsCapWait();
 		exitIfForceQuit();
 	}
 }
 void NewGameMenu(){
 	char _choice=0;
 	while (1){
-		fpsCapStart();
 		controlsStart();
 		_choice = menuControls(_choice,0,1);
 		if (wasJustPressed(BUTTON_A)){
@@ -6067,8 +5973,6 @@ void NewGameMenu(){
 		drawText(MENUOPTIONOFFSET,currentTextHeight*4,"Savegame Editor");
 		drawText(5,currentTextHeight*(_choice+3),MENUCURSOR);
 		endDrawing();
-
-		fpsCapWait();
 	}
 }
 // Returns selected slot or -1
@@ -6343,7 +6247,6 @@ void VNDSNavigationMenu(){
 	
 	controlsEnd();
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		fpsCapStart();
 		controlsStart();
 
 		_choice = menuControls(_choice,0,3);
@@ -6418,7 +6321,6 @@ void VNDSNavigationMenu(){
 		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
 
 		endDrawing();
-		fpsCapWait();
 		exitIfForceQuit();
 	}
 	free(_loadedNovelName);
