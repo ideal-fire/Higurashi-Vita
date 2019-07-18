@@ -24,6 +24,11 @@
 		TODO - Sort files in file browser
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 	TODO - Settings menu is like 500 lines long and uses itoa a billion times
+		TODO - have an int for each one and a format string?
+	TODO - What's with this maxlines nonsense?
+	TODO - is entire font in memory nonsense still needed
+	TODO - Fix this text speed setting nonsense
+	TODO - Stop. no. don't reuse the isActuallyUsingUma0 or cpuOverclocked variable for screen postion on 3ds or whatever.
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -107,7 +112,6 @@ char* vitaAppId="HIGURASHI";
 ////////////////////////////////////
 #define TEXTBOXFADEOUTTIME 200 // In milliseconds
 #define TEXTBOXFADEINTIME 150
-#define TEXTBOXFADEOUTUPDATES(x) ((((double)x)/1000)*60) // Update frames
 ////////////////////////////////////
 #define MAXMUSICARRAY 10
 #define MAXSOUNDEFFECTARRAY 10
@@ -278,7 +282,6 @@ lua_State* L = NULL;
 #define Line_Normal 2
 #define LINE_RESERVED 3
 int endType;
-signed char useVsync=0;
 unsigned char currentMessages[MAXLINES][SINGLELINEARRAYSIZE];
 int currentLine=0;
 int place=0;
@@ -373,7 +376,6 @@ unsigned char filterR;
 unsigned char filterG;
 unsigned char filterB;
 unsigned char filterA;
-unsigned char filterActive=0;
 signed char currentFilterType=FILTERTYPE_INACTIVE;
 
 signed char autoModeOn=0;
@@ -749,10 +751,9 @@ void DrawMessageBox(char _textmodeToDraw, unsigned char _targetAlpha){
 	}
 }
 void DrawCurrentFilter(){
-	if (currentFilterType!=FILTERTYPE_NEGATIVE){
+	if (currentFilterType==FILTERTYPE_EFFECTCOLORMIX){
 		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,filterR,filterG,filterB,filterA);
-	}
-	//drawRectangle(0,0,960,screenHeight,filterR,255-(filterG*filterA*.0011),filterB,255);
+	}	
 }
 u64 waitwithCodeTarget;
 void WaitWithCodeStart(int amount){
@@ -858,13 +859,6 @@ void WriteToDebugFile(const char* stuff){
 		fclose(fp);
 	}
 	free(_tempDebugFileLocationBuffer);
-}
-void WriteSDLError(){
-	#if GBREND == GBREND_SDL || GBSND == GBSND_SDL
-		WriteToDebugFile(SDL_GetError());
-	#else
-		WriteToDebugFile("Can't write SDL error because not using SDL.");
-	#endif
 }
 // Returns one if they chose yes
 // Returns zero if they chose no
@@ -1258,6 +1252,7 @@ void Update(){
 		}
 	}
 }
+// the history array wraps. This fixes the array index.
 int FixHistoryOldSub(int _val, int _scroll){
 	if (_val+_scroll>=MAXMESSAGEHISTORY){
 		return (_val+_scroll)-MAXMESSAGEHISTORY;
@@ -1265,7 +1260,7 @@ int FixHistoryOldSub(int _val, int _scroll){
 		return _val+_scroll;
 	}
 }
-void incrementScriptLineVariable(lua_State *L, lua_Debug *ar){
+void incrementScriptLineVariable(lua_State* L, lua_Debug* ar){
 	currentScriptLine++;
 }
 void updateControlsGeneral(){
@@ -2251,7 +2246,7 @@ void DrawScene(const char* _filename, int time){
 			currentBackground=NULL;
 			return;
 		}
-		if (filterActive && currentFilterType==FILTERTYPE_NEGATIVE){
+		if (currentFilterType==FILTERTYPE_NEGATIVE){
 			invertImage(newBackground,0);
 		}
 		if (actualBackgroundSizesConfirmedForSmashFive==0){
@@ -2317,7 +2312,7 @@ void DrawScene(const char* _filename, int time){
 		}
 	}
 	// Fix the bust cache if cached images are inverted.
-	if (filterActive && currentFilterType==FILTERTYPE_NEGATIVE){
+	if (currentFilterType==FILTERTYPE_NEGATIVE){
 		for (i=0;i<maxBusts;++i){
 			if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
 				invertImage(Busts[i].image,0);
@@ -2392,7 +2387,7 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 			return 0;
 		}
 	}
-	if (filterActive==1 && currentFilterType==FILTERTYPE_NEGATIVE){
+	if (currentFilterType==FILTERTYPE_NEGATIVE){
 		invertImage(Busts[passedSlot].image,0);
 	}
 
@@ -3872,7 +3867,6 @@ void showTextbox(){
 	}
 #endif
 void applyNegative(int _actionTime, signed char _waitforcompletion){
-	filterActive=1;
 	#if CANINVERT
 		// Invert all images
 		currentFilterType = FILTERTYPE_NEGATIVE;
@@ -3898,7 +3892,6 @@ void removeNegative(int _actionTime, signed char _waitforcompletion){
 		// Inverting everything again fixes it
 		applyNegative(_actionTime,_waitforcompletion);
 	#endif
-	filterActive=0;
 	currentFilterType=FILTERTYPE_INACTIVE;
 }
 void addGamePresetToLegacyFolder(char* _streamingAssetsRoot, char* _presetFilenameRelative){
@@ -4140,9 +4133,6 @@ void scriptNotYet(nathanscriptVariable* _passedArguments, int _numArguments, nat
 // Fourth arg is unknown
 void scriptPlayBGM(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	PlayBGM(nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),nathanvariableToInt(&_passedArguments[0]));
-	if (nathanvariableToInt(&_passedArguments[3])!=0){
-		printf("*************** VERY IMPORTANT *******************\nThe last PlayBGM call didn't have 0 for the fourth argument! This is a good place to investigate!\n");
-	}
 	return;
 }
 // Some int argument
@@ -4219,12 +4209,6 @@ void scriptStopBGM(nathanscriptVariable* _passedArguments, int _numArguments, na
 	// Fadein time
 	// (bool) wait for fadein? (15)
 void scriptDrawBustshotWithFiltering(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	int i;
-	for (i=8;i!=12;i++){
-		if (nathanvariableToInt(&_passedArguments[i-1])!=0){
-			printf("***********************IMPORTANT INFORMATION***************************\nAn argument I know nothing about was just used in DrawBustshotWithFiltering!\n***********************************************\n");
-		}
-	}
 	DrawBustshot(nathanvariableToInt(&_passedArguments[0]), nathanvariableToString(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[4]), nathanvariableToInt(&_passedArguments[5]), nathanvariableToInt(&_passedArguments[12]), nathanvariableToInt(&_passedArguments[13]), nathanvariableToBool(&_passedArguments[14]), nathanvariableToInt(&_passedArguments[11]));
 	return;
 }
@@ -4254,14 +4238,6 @@ void scriptDrawBustshot(nathanscriptVariable* _passedArguments, int _numArgument
 		Draw(MessageBoxEnabled);
 		endDrawing();
 	}
-
-	int i;
-	for (i=8;i!=12;i++){
-		if (nathanvariableToInt(&_passedArguments[i-1])!=0){
-			printf("***********************IMPORTANT INFORMATION***************************\nAn argument I know nothing about was just used in DrawBustshotWithFiltering!\n***********************************************\n");
-		}
-	}
-	
 	DrawBustshot(nathanvariableToInt(&_passedArguments[0]), nathanvariableToString(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[2]), nathanvariableToInt(&_passedArguments[3]), nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]), nathanvariableToBool(&_passedArguments[15]), nathanvariableToInt(&_passedArguments[12]));
 	return;
 }
@@ -4549,7 +4525,6 @@ void scriptDrawFilm(nathanscriptVariable* _passedArguments, int _numArguments, n
 	if (currentFilterType==0){ // Default
 		currentFilterType = FILTERTYPE_EFFECTCOLORMIX;
 	}
-	filterActive=1;
 	if (currentFilterType<=1){
 		filterR = nathanvariableToInt(&_passedArguments[1]);
 		filterG = nathanvariableToInt(&_passedArguments[2]);
@@ -4562,6 +4537,7 @@ void scriptDrawFilm(nathanscriptVariable* _passedArguments, int _numArguments, n
 		filterG = 255;
 		filterB = 255;
 		filterA = 127;
+		currentFilterType = FILTERTYPE_EFFECTCOLORMIX;
 	}
 	return;
 }
@@ -4576,7 +4552,6 @@ void scriptFadeFilm(nathanscriptVariable* _passedArguments, int _numArguments, n
 	if (currentFilterType==FILTERTYPE_NEGATIVE){
 		removeNegative(nathanvariableToInt(&_passedArguments[0]),nathanvariableToBool(&_passedArguments[1]));
 	}
-	filterActive=0;
 	currentFilterType = FILTERTYPE_INACTIVE;
 }
 // This command is used so unoften that I didn't bother to make it look good.
@@ -4763,7 +4738,7 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 			}
 		}
 	}
-	if (filterActive==1 && _shouldDrawFilter){
+	if (_shouldDrawFilter){
 		DrawCurrentFilter();
 	}
 	if (_shouldDrawMessageBox==1){
