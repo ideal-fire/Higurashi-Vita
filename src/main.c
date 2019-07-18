@@ -468,7 +468,6 @@ char nextVndsBustshotSlot=0;
 // If all the text should be cleared when the text reached the bottom of the screen when playing a VNDS game
 signed char vndsClearAtBottom=0;
 signed char showVNDSWarnings=1;
-signed char imagesAreJpg=0;
 signed char dynamicAdvBoxHeight=0;
 char* currentADVName=NULL;
 unsigned char advNameR=255;
@@ -560,13 +559,6 @@ void showErrorIfNull(void* _passedImage){
 void drawTextureScaleAlphaGood(const crossTexture texture, float x, float y, double x_scale, double y_scale, unsigned char alpha){
 	drawTextureSizedAlpha(texture,x,y,getTextureWidth(texture)*x_scale,getTextureHeight(texture)*y_scale,alpha);
 }
-crossTexture _loadGameImage(const char* path){
-	if (imagesAreJpg){
-		return loadJPG((char*)path);
-	}else{
-		return loadPNG((char*)path);
-	}
-}
 char shouldShowWarnings(){
 	return !(currentlyVNDSGame && !showVNDSWarnings);
 }
@@ -646,8 +638,8 @@ void PlayMenuSound(){
 		playSound(menuSound,10);
 	}
 }
-crossTexture SafeLoadPNG(const char* path){
-	crossTexture _tempTex = loadPNG((char*)path);
+crossTexture safeLoadImage(const char* path){
+	crossTexture _tempTex = loadImage((char*)path);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
 		easyMessagef(1,"Failed to load image %s, what will happen now?!",path);
@@ -656,7 +648,7 @@ crossTexture SafeLoadPNG(const char* path){
 }
 crossTexture LoadEmbeddedPNG(const char* path){
 	char* _fixedPath = fixPathAlloc(path,TYPE_EMBEDDED);
-	crossTexture _tempTex = loadPNG(_fixedPath);
+	crossTexture _tempTex = loadImage(_fixedPath);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
 		easyMessagef(1,"Failed to load image %s.\n%s",path,GBPLAT != GB_3DS ? "This is supposed to be embedded..." : "Check you set up everything correctly.");
@@ -1969,7 +1961,7 @@ crossTexture safeLoadGameImage(const char* filename, char _folderPreference, cha
 		}
 		return NULL;
 	}
-	crossTexture _returnLoadedPNG = _loadGameImage(_tempFoundFilename);
+	crossTexture _returnLoadedPNG = loadImage(_tempFoundFilename);
 	free(_tempFoundFilename);
 	#if GBPLAT == GB_VITA
 		// Smooth scaling
@@ -3333,7 +3325,7 @@ void loadADVBox(){
 		generateADVBoxPath(_tempFilepathBuffer,"DEFAULT");
 	}
 	if (checkFileExist(_tempFilepathBuffer)){
-		currentCustomTextbox = loadPNG(_tempFilepathBuffer);
+		currentCustomTextbox = loadImage(_tempFilepathBuffer);
 	}else{
 		#if GBPLAT != GB_3DS
 			currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBox.png");
@@ -5173,7 +5165,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		if (checkFileExist(_tempRenaPath)==1){
 			free(_tempRenaPath);
 			_tempRenaPath = easyCombineStrings(3,streamingAssets,locationStrings[graphicsLocation],"re_se_de_a1.png"); // New path for the user's specific graphic choice
-			_renaImage = SafeLoadPNG(_tempRenaPath);
+			_renaImage = safeLoadImage(_tempRenaPath);
 		}
 	}
 	free(_tempRenaPath);
@@ -5326,7 +5318,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				if (_renaImage!=NULL){
 					freeTexture(_renaImage);
 					_tempRenaPath = easyCombineStrings(3,streamingAssets,locationStrings[graphicsLocation],"re_se_de_a1.png");
-					_renaImage = SafeLoadPNG(_tempRenaPath);
+					_renaImage = safeLoadImage(_tempRenaPath);
 					free(_tempRenaPath);
 				}
 			}else if (_choice==_voiceVolumeSlot){
@@ -6067,7 +6059,7 @@ int vndsSaveSelector(){
 									// temp for load BMP
 									_loadedThumbnail[_tempIndex]=vita2d_load_BMP_file(_thumbFilename);
 								#else
-									_loadedThumbnail[_tempIndex]=loadPNG(_thumbFilename);
+									_loadedThumbnail[_tempIndex]=loadImage(_thumbFilename);
 								#endif
 							}
 						}else{
@@ -6155,7 +6147,6 @@ void VNDSNavigationMenu(){
 		char _loadedVersionNumber;
 		fread(&_loadedVersionNumber,1,1,fp);
 		fclose(fp);
-		imagesAreJpg=0;
 	}else{
 		if (!defaultGameIsSet && !isEmbedMode){
 			//LazyMessage("VNDSVita Game Converter < v1.1",NULL,"Game may crash.",NULL);
@@ -6167,7 +6158,7 @@ void VNDSNavigationMenu(){
 	strcat(_possibleThunbnailPath,"/thumbnail.png");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(BUTTON_R)){
 		easyMessagef(0,"Loading thumbnail");
-		_loadedThumbnail = _loadGameImage(_possibleThunbnailPath);
+		_loadedThumbnail = loadImage(_possibleThunbnailPath);
 	}
 	//
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
