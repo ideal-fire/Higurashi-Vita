@@ -515,6 +515,12 @@ signed char forceDropshadowOption=1;
 		return _buffer;
 	}
 #endif
+double partMoveFills(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
+	return ((_totalDifference-(_startTime+_totalDifference-_curTicks))/(double)_totalDifference)*_max;
+}
+double partMoveEmptys(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
+	return _max-partMoveFills(_curTicks,_startTime,_totalDifference,_max);
+}
 int fixX(int _passed){
 	return _passed;
 }
@@ -554,10 +560,7 @@ crossTexture _loadGameImage(const char* path){
 	}
 }
 char shouldShowWarnings(){
-	if (currentlyVNDSGame && !showVNDSWarnings){
-		return 0;
-	}
-	return 1;
+	return !(currentlyVNDSGame && !showVNDSWarnings);
 }
 // Directly remove file extension from string, string should not be const.
 void removeFileExtension(char* _passedFilename){
@@ -3875,26 +3878,17 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 }
 void _textboxTransition(char _isOn, int _totalTime){
 	if (MessageBoxEnabled!=_isOn && !isSkipping){
-		signed short _fadeoutPerUpdate = ceil(currentBoxAlpha/(double)TEXTBOXFADEOUTUPDATES(_totalTime));
 		unsigned char _oldMessageBoxAlpha = currentBoxAlpha;
-		if (_isOn==0){
-			_fadeoutPerUpdate*=-1;
-		}
-		if (_isOn==1){
-			currentBoxAlpha=0;
-		}
-		currentBoxAlpha+=_fadeoutPerUpdate;
-		while (1){
-			fpsCapStart();
-			if (!(currentBoxAlpha+_fadeoutPerUpdate<=0 || currentBoxAlpha+_fadeoutPerUpdate>=_oldMessageBoxAlpha)){
-				currentBoxAlpha+=_fadeoutPerUpdate;
-			}else{
-				break;
+		u64 _startTime = getMilli();
+		u64 _curTime;
+		while ((_curTime = getMilli())<_startTime+_totalTime){
+			currentBoxAlpha=partMoveFills(_curTime,_startTime,_totalTime,_oldMessageBoxAlpha);
+			if (!_isOn){
+				currentBoxAlpha=_oldMessageBoxAlpha-currentBoxAlpha;
 			}
 			startDrawing();
 			drawAdvanced(1,1,1,1,1,0); // Don't draw text
 			endDrawing();
-			fpsCapWait();
 		}
 		currentBoxAlpha = _oldMessageBoxAlpha;
 	}
