@@ -126,7 +126,7 @@ int inBetweenVNDSLines(int _aboutToCommandIndex){
 				}
 			}
 
-			waitForBustFade();
+			waitForBustSettle();
 
 			// Shift busts back to their lowest possible slots
 			for (i=1;i<maxBusts;++i){

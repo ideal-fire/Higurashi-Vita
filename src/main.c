@@ -29,6 +29,9 @@
 	TODO - is entire font in memory nonsense still needed
 	TODO - Fix this text speed setting nonsense
 	TODO - Stop. no. don't reuse the isActuallyUsingUma0 or cpuOverclocked variable for screen postion on 3ds or whatever.
+	TODO - Game specific settings files
+	TODO - Draw text with color properties. to allow having colors for every individual character, make a duplicate array, type uint64_t, first three bytes for color, last byte for text property flags
+	TODO - FileSelector is bad
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -217,7 +220,7 @@ char* gamesFolder;
 #define BUST_STATUS_NORMAL 0
 #define BUST_STATUS_FADEIN 1 // var 1 is alpha per frame. var 2 is the time until we're actually going to start the fadein. Until var 2 is at 0, this bust will have 0 alpha. For some reason, the Higurashi engine wastes half of the specified time with the bust just not there.
 #define BUST_STATUS_FADEOUT 2 // var 1 is alpha per frame
-#define BUST_STATUS_FADEOUT_MOVE 3 // var 1 is alpha per frame. var 2 is x per frame. var 3 is y per frame
+//#define BUST_STATUS_FADEOUT_MOVE 3 // var 1 is alpha per frame. var 2 is x per frame. var 3 is y per frame
 #define BUST_STATUS_SPRITE_MOVE 4 // var 1 is x per frame, var 2 is y per frame
 #define BUST_STATUS_TRANSFORM_FADEIN 5 // The bust is fading into an already used slot. image is what the new texture is going to be thats fading in, transformTexture is the old texture that is fading out. var 1 is alpha per frame. added to image, subtracted from transformTexture.
 
@@ -239,15 +242,20 @@ typedef struct{
 	int layer;
 	signed short alpha;
 	unsigned char bustStatus;
-	int statusVariable;
-	int statusVariable2;
-	int statusVariable3;
-	int statusVariable4;
-	crossTexture transformTexture; // See BUST_STATUS_TRANSFORM_FADEIN. This is the texture that is transforming
+	char* relativeFilename; // Filename passed by the script
 	unsigned int lineCreatedOn;
 	double cacheXOffsetScale;
 	double cacheYOffsetScale;
-	char* relativeFilename; // Filename passed by the script
+	// status variables. ignore most time.
+	u64 fadeStartTime; // for BUST_STATUS_FADEIN
+	u64 fadeEndTime;
+	int startXMove;
+	int startYMove;
+	int diffXMove;
+	int diffYMove;
+	u64 startMoveTime;
+	int diffMoveTime;
+	crossTexture transformTexture; // See BUST_STATUS_TRANSFORM_FADEIN. This is the texture that is transforming
 }bust;
 typedef struct{
 	crossTexture image;
@@ -1189,23 +1197,48 @@ void changeIfLazyLastLineFix(int* _line, int* _toChange){
 }
 // Update what bustshots are doing depending on their bustStatus
 void Update(){
-	int i=0;
+	u64 _curTime=getMilli();
+	int i;
 	for (i = 0; i < maxBusts; i++){
-		if (Busts[i].bustStatus == BUST_STATUS_FADEIN){
-			if (Busts[i].statusVariable2>0){
-				Busts[i].statusVariable2-=17;
-				if (Busts[i].statusVariable2>4000000){ // If we went back too far, causing the int to wrap.
-					Busts[i].statusVariable2=0;
-					//Busts[i].bustStatus = BUST_STATUS_NORMAL;
+
+
+		switch(Busts[i].bustStatus){
+			case BUST_STATUS_FADEIN:
+			case BUST_STATUS_TRANSFORM_FADEIN:
+				if (_curTime>Busts[i].fadeStartTime){
+					if (_curTime>=Busts[i].fadeEndTime){
+						if (Busts[i].bustStatus == BUST_STATUS_TRANSFORM_FADEIN){
+							freeTexture(Busts[i].transformTexture);
+							Busts[i].transformTexture=NULL;
+						}
+						Busts[i].alpha=255;
+						Busts[i].bustStatus = BUST_STATUS_NORMAL;
+					}else{
+						Busts[i].alpha=partMoveFills(_curTime,Busts[i].fadeStartTime,Busts[i].fadeEndTime-Busts[i].fadeStartTime,255);
+					}
 				}
-			}else{
-				Busts[i].alpha += Busts[i].statusVariable;
-				if (Busts[i].alpha>=255){
-					Busts[i].alpha=255;
+				break;
+			case BUST_STATUS_FADEOUT:
+				if (_curTime>Busts[i].fadeEndTime){
+					ResetBustStruct(&(Busts[i]),1);
+					RecalculateBustOrder();
+				}else{
+					Busts[i].alpha=partMoveEmptys(_curTime, Busts[i].fadeStartTime, Busts[i].fadeEndTime-Busts[i].fadeStartTime, 255);
+				}
+				break;
+			case BUST_STATUS_SPRITE_MOVE:
+				if (_curTime>Busts[i].startMoveTime+Busts[i].diffMoveTime){
 					Busts[i].bustStatus = BUST_STATUS_NORMAL;
+					Busts[i].xOffset=Busts[i].startXMove+Busts[i].diffXMove;
+					Busts[i].yOffset=Busts[i].startYMove+Busts[i].diffYMove;
+				}else{
+					Busts[i].xOffset=Busts[i].startXMove+partMoveFills(_curTime,Busts[i].startMoveTime,Busts[i].diffMoveTime,Busts[i].diffXMove);
+					Busts[i].yOffset=Busts[i].startYMove+partMoveFills(_curTime,Busts[i].startMoveTime,Busts[i].diffMoveTime,Busts[i].diffYMove);
 				}
-			}
+				break;
 		}
+
+		/*
 		if (Busts[i].bustStatus == BUST_STATUS_TRANSFORM_FADEIN){
 			Busts[i].alpha+=Busts[i].statusVariable;
 			if (Busts[i].alpha>=255){
@@ -1214,7 +1247,8 @@ void Update(){
 				freeTexture(Busts[i].transformTexture);
 				Busts[i].transformTexture=NULL;
 			}
-		}
+			}*/
+		/*
 		if (Busts[i].bustStatus == BUST_STATUS_FADEOUT){
 			Busts[i].alpha -= Busts[i].statusVariable;
 			if (Busts[i].alpha<=0){
@@ -1225,6 +1259,7 @@ void Update(){
 				RecalculateBustOrder();
 			}	
 		}
+		
 		if (Busts[i].bustStatus == BUST_STATUS_SPRITE_MOVE){
 			if (abs(Busts[i].statusVariable3-(Busts[i].xOffset+Busts[i].statusVariable))<abs(Busts[i].statusVariable3-Busts[i].xOffset)){
 				Busts[i].xOffset+=Busts[i].statusVariable;
@@ -1241,7 +1276,7 @@ void Update(){
 				Busts[i].bustStatus = BUST_STATUS_NORMAL;
 				printf("DONE SPRITE MOVING\n");
 			}
-		}
+			}*/
 	}
 }
 // the history array wraps. This fixes the array index.
@@ -2113,28 +2148,17 @@ char* getFileExtension(char* _passedFilename){
 }
 //===================
 void FadeBustshot(int passedSlot,int _time,char _wait){
-	if (isSkipping==1){
+	if (isSkipping){
 		_time=0;
 	}
 	//int passedSlot = nathanvariableToInt(&_passedArguments[1)-1;
 	//Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
 	//Busts[passedSlot].statusVariable = 
-	Busts[passedSlot].alpha=0;
+	
 	Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
 	if (_time!=0){
 		Busts[passedSlot].alpha=255;
-		//int _time = floor(nathanvariableToInt(&_passedArguments[7));
-		int _totalFrames = floor(60*(_time/(double)1000));
-		if (_totalFrames==0){
-			_totalFrames=1;
-		}
-		int _alphaPerFrame=floor(255/_totalFrames);
-		if (_alphaPerFrame==0){
-			_alphaPerFrame=1;
-		}
-		Busts[passedSlot].statusVariable=_alphaPerFrame;
-		Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
-
+		Busts[passedSlot].fadeEndTime=getMilli()+_time;
 		if (_wait==1){
 			while (Busts[passedSlot].isActive==1){
 				controlsStart();
@@ -2148,13 +2172,15 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 				controlsEnd();
 			}
 		}
+	}else{
+		// The free will happen on the next update
+		Busts[passedSlot].alpha=0;
 	}
 }
 void FadeAllBustshots(int _time, char _wait){
-	if (isSkipping==1){
+	if (isSkipping){
 		_time=0;
 	}
-
 	int i=0;
 	for (i=0;i<maxBusts;i++){
 		if (Busts[i].isActive==1){
@@ -2189,17 +2215,15 @@ void FadeAllBustshots(int _time, char _wait){
 		}
 	}
 }
-void waitForBustFade(){
+void waitForBustSettle(){
 	int i;
 	while(1){
 		char _didBreak=0;
 		for (i=0;i<maxBusts;i++){
 			//printf("%d is not done.",i);
-			if (Busts[i].isActive==1){
-				if (Busts[i].bustStatus!=BUST_STATUS_NORMAL){
-					_didBreak=1;
-					break;
-				}
+			if (Busts[i].isActive && Busts[i].bustStatus!=BUST_STATUS_NORMAL){
+				_didBreak=1;
+				break;
 			}
 		}
 		if (!_didBreak){
@@ -2403,28 +2427,14 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 	RecalculateBustOrder();
 	if (_fadeintime!=0){
 		Busts[passedSlot].alpha=0;
-		int _timeTotal = _fadeintime;
-		int _time;
+		u64 _curTime = getMilli();
 		if (Busts[passedSlot].bustStatus == BUST_STATUS_TRANSFORM_FADEIN){
-			_time = _fadeintime; // Transform fadein doesn't waste time
+			Busts[passedSlot].fadeStartTime=_curTime; // Transform fadein doesn't waste any time
 		}else{
-			_time = floor(_fadeintime/2); // Normal fadein wastes half the time for no reason
-		}
-		int _totalFrames = floor(60*(_time/(double)1000));
-		if (_totalFrames==0){
-			_totalFrames=1;
-		}
-		int _alphaPerFrame=floor(255/_totalFrames);
-		if (_alphaPerFrame==0){
-			_alphaPerFrame=1;
-		}
-		Busts[passedSlot].statusVariable=_alphaPerFrame;
-		if (Busts[passedSlot].bustStatus != BUST_STATUS_TRANSFORM_FADEIN){ // If we're not transforming, go ahead and set this as a normal fadein
-			Busts[passedSlot].statusVariable2 = _timeTotal -_time;
 			Busts[passedSlot].bustStatus = BUST_STATUS_FADEIN;
-		}else{
-			Busts[passedSlot].statusVariable2 = 0;
+			Busts[passedSlot].fadeStartTime=_curTime+_fadeintime/2; // Normal fadein wastes half the time for no reason
 		}
+		Busts[passedSlot].fadeEndTime=_curTime+_fadeintime;		
 	}else{
 		Busts[passedSlot].bustStatus = BUST_STATUS_NORMAL;
 	}
@@ -4308,49 +4318,23 @@ void scriptDrawSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 void scriptMoveSprite(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	int _totalTime = nathanvariableToInt(&_passedArguments[8]);
 	int _passedSlot = nathanvariableToInt(&_passedArguments[0]);
-	// Number of x pixles the sprite has to move by the end
-
-	printf("arg2:%d\n",(int)nathanvariableToInt(&_passedArguments[1]));
-	printf("x:%d\n",Busts[_passedSlot].xOffset);
-
-	int _xTengoQue = nathanvariableToInt(&_passedArguments[1])-(Busts[_passedSlot].xOffset-320);
-	int _yTengoQue = nathanvariableToInt(&_passedArguments[2])-(Busts[_passedSlot].yOffset-240);
-	char _waitforcompletion = nathanvariableToBool(&_passedArguments[9]);
-
-	Busts[_passedSlot].statusVariable3 = nathanvariableToInt(&_passedArguments[1])+320;
-	Busts[_passedSlot].statusVariable4 = nathanvariableToInt(&_passedArguments[2])+240;
-
 	if (_totalTime!=0){
-		unsigned int _totalFrames = floor(60*(_totalTime/(double)1000));
-		int _xPerFrame = floor(_xTengoQue/_totalFrames);
-		if (_xPerFrame==0){
-			_xPerFrame=1;
-		}
-		printf("xtq: %d\n",_xTengoQue);
-		printf("xprf: %d\n",_xPerFrame);
-		printf("ytq: %d\n",_yTengoQue);
-		printf("tf: %d\n",_totalFrames);
-		int _yPerFrame = floor(_yTengoQue/(double)_totalFrames);
-		if (_yPerFrame==0){
-			_yPerFrame=1;
-		}
-
-		Busts[_passedSlot].statusVariable = _xPerFrame;
-		printf("yperfraeme: %d\n",_yPerFrame);
-		Busts[_passedSlot].statusVariable2 = _yPerFrame;
+		int _xTengoQue = nathanvariableToInt(&_passedArguments[1])-(Busts[_passedSlot].xOffset-320);
+		int _yTengoQue = nathanvariableToInt(&_passedArguments[2])-(Busts[_passedSlot].yOffset-240);
 		Busts[_passedSlot].bustStatus = BUST_STATUS_SPRITE_MOVE;
-
+		Busts[_passedSlot].diffMoveTime=_totalTime;
+		Busts[_passedSlot].startMoveTime=getMilli();
+		Busts[_passedSlot].diffXMove = _xTengoQue;
+		Busts[_passedSlot].diffYMove = _yTengoQue;
 	}else{
 		Busts[_passedSlot].xOffset=nathanvariableToInt(&_passedArguments[1])+320;
 		Busts[_passedSlot].yOffset=nathanvariableToInt(&_passedArguments[2])+240;
 	}
-
-	if (_waitforcompletion==1){
+	if (nathanvariableToBool(&_passedArguments[9])){
 		while(Busts[_passedSlot].bustStatus!=BUST_STATUS_NORMAL){
 			controlsStart();
 			if (wasJustPressed(BUTTON_A)){
-				Busts[_passedSlot].xOffset=nathanvariableToInt(&_passedArguments[1])+320;
-				Busts[_passedSlot].yOffset=nathanvariableToInt(&_passedArguments[2])+240;
+				Busts[_passedSlot].diffMoveTime=0;
 			}
 			controlsEnd();
 			Update();
