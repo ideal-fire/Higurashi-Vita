@@ -580,19 +580,6 @@ void removeFileExtension(char* _passedFilename){
 		}
 	}
 }
-/*
-// This is what my brother made when I asked him to make a file extension chopper for me because he never helps me with code in return.
-void removeFileExtension(char* String){
-	int I=0, Size=strlen(String);
-	for(I=Size-1; I>=0; I--){
-	    if(String[I]=='.'){
-	        String[I]=0;
-	        break;
-	    }
-	    String[I]=0;
-	}
-}
-*/
 char* charToBoolString(char _boolValue){
 	return _boolValue ? "True" : "False";
 }
@@ -1148,7 +1135,7 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	return 1;
 }
 signed char WaitCanSkip(int amount){
-	int i=0;
+	int i;
 	controlsStart();
 	controlsEnd();
 	for (i = 0; i < floor(amount/50); ++i){
@@ -2181,7 +2168,7 @@ void FadeAllBustshots(int _time, char _wait){
 	if (isSkipping){
 		_time=0;
 	}
-	int i=0;
+	int i;
 	for (i=0;i<maxBusts;i++){
 		if (Busts[i].isActive==1){
 			FadeBustshot(i,_time,0);
@@ -2239,20 +2226,6 @@ void DrawScene(const char* _filename, int time){
 	if (isSkipping==1){
 		time=0;
 	}
-	int _alphaPerFrame=255;
-	int i=0;
-	signed short _backgroundAlpha=0;
-
-	if (time!=0){
-		int _totalFrames = floor(60*(time/(double)1000));
-		if (_totalFrames==0){
-			_totalFrames=1;
-		}
-		_alphaPerFrame=floor(255/_totalFrames);
-		if (_alphaPerFrame==0){
-			_alphaPerFrame=1;
-		}
-	}
 	// If we're NOT doing the VNDS easy bust reset trick
 	if (!(lastBackgroundFilename!=NULL && strcmp(lastBackgroundFilename,_filename)==0)){
 		changeMallocString(&lastBackgroundFilename,_filename);
@@ -2271,44 +2244,47 @@ void DrawScene(const char* _filename, int time){
 			updateGraphicsScale();
 			updateTextPositions();
 		}
-		while (_backgroundAlpha<255){
-			Update();
-			_backgroundAlpha+=_alphaPerFrame;
-			if (_backgroundAlpha>255){
-				_backgroundAlpha=255;
-			}
-			// Change alpha of busts made on the last line
-			for (i = maxBusts-1; i != -1; i--){
-				if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1 && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
-					Busts[bustOrder[i]].alpha = _backgroundAlpha;
+		if (time!=0){
+			u64 _startTime=getMilli();
+			u64 _curTime;
+			while ((_curTime = getMilli())<_startTime+time){
+				Update();
+				int _backgroundAlpha=partMoveFillsCapped(_curTime,_startTime,time,255);
+				// Change alpha of busts made on the last line
+				int i;
+				for (i=maxBusts-1;i!=-1;i--){
+					if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1 && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
+						Busts[bustOrder[i]].alpha = _backgroundAlpha;
+					}
 				}
-			}
-			startDrawing();
-			drawAdvanced(1,1,0,0,1,0);
-			DrawBackgroundAlpha(newBackground,_backgroundAlpha);
-			// Draw busts created on the last line at the same alpha as the new background
-			for (i = maxBusts-1; i != -1; i--){
-				if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1 && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
-					DrawBust(&(Busts[bustOrder[i]]));
+				startDrawing();
+				drawAdvanced(1,1,0,0,1,0); // Draws the old background
+				DrawBackgroundAlpha(newBackground,_backgroundAlpha); // Draws the new background on top
+				// Draw busts created on the last line at the same alpha as the new background
+				for (i = maxBusts-1; i != -1; i--){
+					if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1 && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
+						DrawBust(&(Busts[bustOrder[i]]));
+					}
 				}
-			}
-			drawAdvanced(0,0,1,MessageBoxEnabled,0,MessageBoxEnabled);
-			endDrawing();
+				drawAdvanced(0,0,1,MessageBoxEnabled,0,MessageBoxEnabled);
+				endDrawing();
 	
-			controlsStart();
-			if (wasJustPressed(BUTTON_A)){
-				_backgroundAlpha=254;
+				controlsStart();
+				if (wasJustPressed(BUTTON_A)){
+					controlsEnd();
+					break;
+				}
+				controlsEnd();
 			}
-			controlsEnd();
 		}
-
 		if (currentBackground!=NULL){
 			freeTexture(currentBackground);
 		}
 		currentBackground=newBackground;
 	}
 	// Fix alpha for busts created on the last line
-	for (i = maxBusts-1; i != -1; i--){
+	int i;
+	for (i=maxBusts-1;i!=-1;i--){
 		if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1 && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
 			Busts[bustOrder[i]].alpha = 255;
 		}
@@ -4782,7 +4758,7 @@ char upgradeToGameFolder(){
 // Returns 2 if no files found
 char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage){
 
-	int i=0;
+	int i;
 	int totalFiles=0;
 
 	int _returnVal=0;
