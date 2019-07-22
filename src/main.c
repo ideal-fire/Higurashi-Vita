@@ -1134,23 +1134,6 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	}
 	return 1;
 }
-signed char WaitCanSkip(int amount){
-	int i;
-	controlsStart();
-	controlsEnd();
-	for (i = 0; i < floor(amount/50); ++i){
-		wait(50);
-		controlsStart();
-		if (wasJustPressed(BUTTON_A)){
-			controlsEnd();
-			printf("Skipped with %d left\n",amount-i);
-			return 1;
-		}
-		controlsEnd();
-	}
-	wait(amount%50);
-	return 0;
-}
 // If we've run out of new lines, shift everything up.
 void LastLineLazyFix(int* _line){
 	if (*_line==MAXLINES){
@@ -1187,8 +1170,6 @@ void Update(){
 	u64 _curTime=getMilli();
 	int i;
 	for (i = 0; i < maxBusts; i++){
-
-
 		switch(Busts[i].bustStatus){
 			case BUST_STATUS_FADEIN:
 			case BUST_STATUS_TRANSFORM_FADEIN:
@@ -1224,46 +1205,6 @@ void Update(){
 				}
 				break;
 		}
-
-		/*
-		if (Busts[i].bustStatus == BUST_STATUS_TRANSFORM_FADEIN){
-			Busts[i].alpha+=Busts[i].statusVariable;
-			if (Busts[i].alpha>=255){
-				Busts[i].alpha=255;
-				Busts[i].bustStatus = BUST_STATUS_NORMAL;
-				freeTexture(Busts[i].transformTexture);
-				Busts[i].transformTexture=NULL;
-			}
-			}*/
-		/*
-		if (Busts[i].bustStatus == BUST_STATUS_FADEOUT){
-			Busts[i].alpha -= Busts[i].statusVariable;
-			if (Busts[i].alpha<=0){
-				Busts[i].alpha=0;
-				Busts[i].isActive=0;
-				ResetBustStruct(&(Busts[i]),1);
-				Busts[i].bustStatus = BUST_STATUS_NORMAL;
-				RecalculateBustOrder();
-			}	
-		}
-		
-		if (Busts[i].bustStatus == BUST_STATUS_SPRITE_MOVE){
-			if (abs(Busts[i].statusVariable3-(Busts[i].xOffset+Busts[i].statusVariable))<abs(Busts[i].statusVariable3-Busts[i].xOffset)){
-				Busts[i].xOffset+=Busts[i].statusVariable;
-			}else{
-				Busts[i].xOffset=Busts[i].statusVariable3;
-			}
-
-			if (abs(Busts[i].statusVariable4-(Busts[i].yOffset+Busts[i].statusVariable2))<abs(Busts[i].statusVariable4-Busts[i].yOffset)){
-				Busts[i].yOffset+=Busts[i].statusVariable2;
-			}else{
-				Busts[i].yOffset=Busts[i].statusVariable4;
-			}
-			if ((Busts[i].xOffset == Busts[i].statusVariable3) && (Busts[i].yOffset==Busts[i].statusVariable4)){
-				Busts[i].bustStatus = BUST_STATUS_NORMAL;
-				printf("DONE SPRITE MOVING\n");
-			}
-			}*/
 	}
 }
 // the history array wraps. This fixes the array index.
@@ -1504,16 +1445,6 @@ void DrawBust(bust* passedBust){
 			GetXAndYOffset(currentBackground,&_tempXOffset,&_tempYOffset);
 		}
 	}
-
-	//printf("=====\n");
-	//printf("GraphicsScale:%f\n",graphicsScale);
-	//printf("TempYOffset:%d\n",_tempYOffset);
-	//printf("YOffset;%d\n",passedBust->yOffset);
-	//printf("cacheYOffsetScale:%f\n",passedBust->cacheYOffsetScale);
-	//printf("TotalYOffset:%d\n",(int)(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale));
-	//printf("ImageHeight:%d\n",getTextureHeight(passedBust->image));
-	//printf("SclaedImageHeight:%d\n",(int)(getTextureHeight(passedBust->image)*graphicsScale));
-
 	// If the busts end one pixel off again, it may be because these are now int instead of float.
 	float _drawBustX = ceil(_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale);
 	float _drawBustY = ceil(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale);
@@ -3507,10 +3438,7 @@ void activateHigurashiSettings(){
 #endif
 #if GBPLAT == GB_3DS
 	char getIsCiaBuild(){
-		if (checkFileExist("romfs:/assets/star.png")){
-			return 1;
-		}
-		return 0;
+		return checkFileExist("romfs:/assets/star.png");
 	}
 	void soundUpdateThread(void *arg){
 		int i;
