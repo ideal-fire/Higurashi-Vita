@@ -992,13 +992,12 @@ void ResetBustStruct(bust* passedBust, int canfree){
 			freeTexture(passedBust->image);
 		}
 		if (passedBust->relativeFilename!=NULL){
-				free(passedBust->relativeFilename);
-			}
+			free(passedBust->relativeFilename);
+		}
 		if (passedBust->transformTexture!=NULL){
 			freeTexture(passedBust->transformTexture);
 		}
 	}
-	
 	passedBust->image=NULL;
 	passedBust->transformTexture=NULL;
 	passedBust->xOffset=0;
@@ -2232,13 +2231,10 @@ void DrawScene(const char* _filename, int time){
 			// Must set these to NULL because we free later
 			Busts[i].relativeFilename=NULL;
 			Busts[i].image=NULL;
-		}
-	}
-	// Fix the bust cache if cached images are inverted.
-	if (currentFilterType==FILTERTYPE_NEGATIVE){
-		for (i=0;i<maxBusts;++i){
-			if (Busts[i].isActive==1 && Busts[i].lineCreatedOn != currentScriptLine-1){
-				invertImage(Busts[i].image,0);
+
+			// Fix the bust cache if cached images are inverted.
+			if (currentFilterType==FILTERTYPE_NEGATIVE){
+				invertImage(_slotToUse->image,0);
 			}
 		}
 	}
@@ -3750,6 +3746,10 @@ void showTextbox(){
 }
 #if GBPLAT == GB_VITA
 	void invertImage(vita2d_texture* _passedImage, signed char _doInvertAlpha){
+		if (_passedImage==NULL){
+			easyMessagef(1,"Null image passed to invertImage");
+			return;
+		}
 		// Don't recalculate these every time
 		uint32_t _cachedImageWidth = vita2d_texture_get_width(_passedImage);
 		uint32_t _cachedImageHeight = vita2d_texture_get_height(_passedImage);
