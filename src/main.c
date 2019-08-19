@@ -751,9 +751,9 @@ void WaitWithCodeEnd(int amount){
 		wait(waitwithCodeTarget-getMilli());
 	}
 }
-void reloadFont(){
+void reloadFont(double _passedSize){
 	#if GBPLAT != GB_VITA
-		normalFont = loadFont(currentFontFilename,fontSize);
+		normalFont = loadFont(currentFontFilename,_passedSize);
 	#else
 		// Here I put custom code for loading fonts on the Vita. I need this for fonts with a lot of characters. Why? Well, if the font has a lot of characters, FreeType won't load all of them at once. It'll stream the characters from disk. At first that sounds good, but remember that the Vita breaks its file handles after sleep mode. So new text wouldn't work after sleep mode. I could fix this by modding libvita2d and making it use my custom IO commands, but I just don't feel like doing that right now.
 		struct goodbrewfont* _realFont = normalFont;
@@ -764,7 +764,7 @@ void reloadFont(){
 		normalFont = malloc(sizeof(struct goodbrewfont));
 		_realFont = normalFont;
 		_realFont->type=GBTXT_VITA2D;
-		_realFont->size=fontSize;
+		_realFont->size=_passedSize;
 		if (_loadedFontBuffer!=NULL){
 			free(_loadedFontBuffer);
 		}
@@ -790,7 +790,7 @@ void reloadFont(){
 }
 void globalLoadFont(const char* _filename){
 	changeMallocString(&currentFontFilename,_filename);
-	reloadFont();
+	reloadFont(fontSize);
 }
 char menuControlsLow(int* _choice, char _canWrapUpDown, int _upDownChange, char _canWrapLeftRight, int _leftRightChange, int _menuMin, int _menuMax){
 	int _oldValue = *_choice;
@@ -4495,6 +4495,7 @@ EASYLUAINTSETFUNCTION(oMenuVNDSBustFade,forceVNDSFadeOption)
 EASYLUAINTSETFUNCTION(oMenuDebugButton,forceDebugButton)
 EASYLUAINTSETFUNCTION(oMenuTextboxMode,forceTextBoxModeOption) // ADV or NVL
 EASYLUAINTSETFUNCTION(oMenuTextOverBG,forceTextOverBGOption) // text only over background
+EASYLUAINTSETFUNCTION(oMenuFontSize,forceFontSizeOption)
 // Manually set the options if you've chosen to disable the menu option
 EASYLUAINTSETFUNCTION(textOnlyOverBackground,textOnlyOverBackground);
 EASYLUAINTSETFUNCTION(dynamicAdvBoxHeight,dynamicAdvBoxHeight);
@@ -4602,6 +4603,10 @@ void scriptSetIncludedFileExtensions(nathanscriptVariable* _passedArguments, int
 }
 void scriptSetForceCapFilenames(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	scriptForceResourceUppercase = nathanvariableToBool(&_passedArguments[0]);
+	return;
+}
+void scriptSetFontSize(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	reloadFont(nathanvariableToInt(&_passedArguments[0]));
 	return;
 }
 #include "LuaWrapperDefinitions.h"
@@ -4784,9 +4789,9 @@ void FontSizeSetup(){
 		fontSize=retMenuControlsLow(fontSize,0,0,0,1,8,70);;
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice==1){
-				reloadFont();
+				reloadFont(fontSize);
 			}else if (_choice==2){
-				reloadFont();
+				reloadFont(fontSize);
 				break;
 			}
 		}
@@ -6185,7 +6190,10 @@ char initializeLua(){
 		L = luaL_newstate();
 		luaL_openlibs(L);
 		initLuaWrappers();
-	
+
+		lua_pushnumber(L,GBPLAT);
+		lua_setglobal(L,"GBPLAT");
+		
 		// happy.lua contains functions that both Higurashi script files use and my C code
 		char* _fixedPath = fixPathAlloc("assets/happy.lua",TYPE_EMBEDDED);
 		char _didLoadHappyLua = SafeLuaDoFile(L,_fixedPath,0);

@@ -46,6 +46,7 @@ GENERATELUAWRAPPER(scriptImageChoice);
 GENERATELUAWRAPPER(scriptSetPositionsSize);
 GENERATELUAWRAPPER(scriptSetIncludedFileExtensions);
 GENERATELUAWRAPPER(scriptSetForceCapFilenames);
+GENERATELUAWRAPPER(scriptSetFontSize);
 GENERATELUAWRAPPER(scriptNegative);
 
 //===============================================================
@@ -100,6 +101,7 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptSetPositionsSize,"OptionsSetPositionSize")
 	PUSHLUAWRAPPER(scriptSetIncludedFileExtensions,"OptionsSetIncludedFileExtensions")
 	PUSHLUAWRAPPER(scriptSetForceCapFilenames,"OptionsSetResourceUppercase")
+	PUSHLUAWRAPPER(scriptSetFontSize,"OptionsSetFontSize")
 	PUSHEASYLUAINTSETFUNCTION(oMenuQuit)
 	PUSHEASYLUAINTSETFUNCTION(oMenuVNDSSettings)
 	PUSHEASYLUAINTSETFUNCTION(oMenuVNDSSave)
@@ -110,6 +112,7 @@ void initLuaWrappers(){
 	PUSHEASYLUAINTSETFUNCTION(oMenuDebugButton)
 	PUSHEASYLUAINTSETFUNCTION(oMenuTextboxMode)
 	PUSHEASYLUAINTSETFUNCTION(oMenuTextOverBG)
+	PUSHEASYLUAINTSETFUNCTION(oMenuFontSize)
 	PUSHEASYLUAINTSETFUNCTION(dynamicAdvBoxHeight)
 	PUSHEASYLUAINTSETFUNCTION(textOnlyOverBackground)
 	PUSHEASYLUAINTSETFUNCTION(advboxHeight)
