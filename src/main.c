@@ -732,14 +732,14 @@ void DrawMessageBox(char _textmodeToDraw, unsigned char _targetAlpha){
 		}
 	#endif
 	if (_textmodeToDraw == TEXTMODE_NVL || currentCustomTextbox==NULL){
-		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,_targetAlpha);
+		drawRectangle(textboxXOffset,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,_targetAlpha);
 	}else{
-		drawTextureSizedAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset,outputLineScreenWidth-textboxXOffset,advboxHeight,_targetAlpha);
+		drawTextureSizedAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset,outputLineScreenWidth,advboxHeight,_targetAlpha);
 	}
 }
 void DrawCurrentFilter(){
 	if (currentFilterType==FILTERTYPE_EFFECTCOLORMIX){
-		drawRectangle(0,0,outputLineScreenWidth,outputLineScreenHeight,filterR,filterG,filterB,filterA);
+		drawRectangle(textboxXOffset,0,outputLineScreenWidth,outputLineScreenHeight,filterR,filterG,filterB,filterA);
 	}	
 }
 u64 waitwithCodeTarget;
@@ -1770,7 +1770,7 @@ void* recalloc(void* _oldBuffer, int _newSize, int _oldSize){
 void updateTextPositions(){
 	if (textOnlyOverBackground){
 		textboxXOffset = floor((float)(screenWidth-applyGraphicsScale(actualBackgroundWidth))/2);
-		outputLineScreenWidth = screenWidth - textboxXOffset;
+		outputLineScreenWidth = screenWidth - textboxXOffset*2;
 	}
 	#if GBPLAT == GB_3DS
 		if (textIsBottomScreen==1){
@@ -2663,7 +2663,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		if (message[i]==32){ // Only check when we meet a space. 32 is a space in ASCII
 			message[i]='\0';
 			// Check if the text has gone past the end of the screen OR we're out of array space for this line
-			if (textWidth(normalFont,&(message[lastNewlinePosition+1]))>=outputLineScreenWidth-textboxXOffset-MESSAGEEDGEOFFSET-messageInBoxXOffset || i-lastNewlinePosition>=SINGLELINEARRAYSIZE-1){
+			if (textWidth(normalFont,&(message[lastNewlinePosition+1]))>=outputLineScreenWidth-MESSAGEEDGEOFFSET-messageInBoxXOffset || i-lastNewlinePosition>=SINGLELINEARRAYSIZE-1){
 				char _didWork=0;
 				for (j=i-1;j>lastNewlinePosition+1;j--){
 					//printf("J:%d, M:%c\n",j,message[j]);
@@ -2790,7 +2790,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
 	}
 	// This code will make a new line if there needs to be one because of the last word
-	if (textWidth(normalFont,&(message[lastNewlinePosition+1]))>=outputLineScreenWidth-textboxXOffset-MESSAGEEDGEOFFSET-messageInBoxXOffset){
+	if (textWidth(normalFont,&(message[lastNewlinePosition+1]))>=outputLineScreenWidth-MESSAGEEDGEOFFSET-messageInBoxXOffset){
 		char _didWork=0;
 		for (j=totalMessageLength-1;j>lastNewlinePosition+1;j--){
 			if (message[j]==32){
@@ -2814,7 +2814,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			for (i=lastNewlinePosition+1;i<totalMessageLength;i++){
 				char _tempCharCache = message[i];
 				message[i]='\0';
-				if (textWidth(normalFont,&(message[lastNewlinePosition+1]))>outputLineScreenWidth-textboxXOffset-MESSAGEEDGEOFFSET-messageInBoxXOffset){
+				if (textWidth(normalFont,&(message[lastNewlinePosition+1]))>outputLineScreenWidth-MESSAGEEDGEOFFSET-messageInBoxXOffset){
 					// What this means is that when only the string UP TO the last character was small enough. Now we have to replicate the behavior of the previous loop to get the shorter string.
 					char _tempCharCache2 = message[i-1];
 					message[i-1]='\0';
@@ -3150,7 +3150,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 		controlsEnd();
 		startDrawing();
 		Draw(0);
-		drawRectangle(textboxXOffset,0,outputLineScreenWidth-textboxXOffset,screenHeight,0,0,0,150);
+		drawRectangle(textboxXOffset,0,outputLineScreenWidth,screenHeight,0,0,0,150);
 		int i;
 		for (i = 0; i < HISTORYONONESCREEN; i++){
 			gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*currentTextHeight,(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],255,255,255);
