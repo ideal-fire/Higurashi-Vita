@@ -536,12 +536,14 @@ double partMoveFillsCapped(u64 _curTicks, u64 _startTime, int _totalDifference, 
 double partMoveEmptys(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
 	return _max-partMoveFills(_curTicks,_startTime,_totalDifference,_max);
 }
-int fixX(int _passed){
-	return _passed;
-}
-int fixY(int _passed){
-	return _passed;
-}
+#ifndef SPECIALEDITION
+	int fixX(int _passed){
+		return _passed;
+	}
+	int fixY(int _passed){
+		return _passed;
+	}
+#endif
 int limitNum(int _passed, int _min, int _max){
 	if (_passed<_min){
 		return _min;
@@ -6250,77 +6252,46 @@ void initializeNathanScript(){
 		increaseVNDSBustInfoArraysSize(0,maxBusts);
 	}
 }
-void testCode(){
-	//#warning TEST CODE INCLUDED!
-}
-signed char init(){
-	#ifdef OVERRIDE_INIT
-		return customInit();
-	#endif
+// All init after this assumes this is avalible
+void hVitaCrutialInit(){
 	srand (time(NULL));
-	int i;
-	for (i=0;i<3;i++){
-		printf("====================================================\n");
-	}
-	
 	generalGoodInit();
 	initGraphics(960,544,0);
 	screenWidth = getScreenWidth();
 	screenHeight = getScreenHeight();
 	initImages();
 	setClearColor(0,0,0);
-	
-	fontSize = getResonableFontSize(GBTXT);
-	outputLineScreenWidth = screenWidth;
-	outputLineScreenHeight = screenHeight;
-	
-	// Guess the graphic sizes
-	actualBackgroundWidth = screenWidth;
-	actualBackgroundHeight = screenHeight;
-	actualBackgroundSizesConfirmedForSmashFive=0;
-	
-	// Make buffers for busts
-	increaseBustArraysSize(0,maxBusts);
-	
-	// Reset bust cache
-	// I could memset everything to 0, but apparently NULL is not guaranteed to be represented by all 0.
-	// https://stackoverflow.com/questions/9894013/is-null-always-zero-in-c
-	for (i=0;i<MAXBUSTCACHE;++i){
-		bustCache[i].filename=NULL;
-		bustCache[i].image=NULL;
+	isActuallyUsingUma0=initGoodBrewDataDir();
+	#if GBPLAT == GB_VITA
+		sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
+		sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
+		sceTouchEnableTouchForce(SCE_TOUCH_PORT_FRONT);
+		sceTouchEnableTouchForce(SCE_TOUCH_PORT_BACK);
+	#elif GBPLAT == GB_3DS
+		osSetSpeedupEnable(1);
+	#endif
+}
+// verify install
+void hVitaCheckVpk(){
+	char* _embeddedCheckPath = fixPathAlloc("assets/star.png",TYPE_EMBEDDED);
+	if (!checkFileExist(_embeddedCheckPath)){
+		while(1){
+			exitIfForceQuit();
+			controlsReset();
+			startDrawing();
+			drawRectangle(0,0,20,100,255,0,0,255);
+			drawRectangle(20,0,30,15,255,0,0,255);
+			drawRectangle(20,35,30,15,255,0,0,255);
+			endDrawing();
+		}
 	}
-	
-	// Setup gbDataFolder variable. Defaults to uma0 if it exists and it's unsafe build
-	if (generateDefaultDataDirectory(&gbDataFolder,-1)==1){
-		isActuallyUsingUma0=1;
-	}
-	
-	// These will soon be freed
-	streamingAssets = malloc(1);
-	presetFolder = malloc(1);
-	scriptFolder = malloc(1);
-	
-	saveFolder = malloc(strlen(gbDataFolder)+strlen("Saves/")+1);
-	strcpy(saveFolder,gbDataFolder);
-	strcat(saveFolder,"Saves/");
-	
-	gamesFolder = malloc(strlen(gbDataFolder)+strlen("Games/")+1);
-	strcpy(gamesFolder,gbDataFolder);
-	strcat(gamesFolder,"Games/");
-	
-	// Make file paths with default StreamingAssets folder
-	GenerateStreamingAssetsPaths("StreamingAssets",1);
-	
-	// Save folder, data folder, and others
-	createRequiredDirectories();
-	
-	//
-	ClearDebugFile();
-	
+	free(_embeddedCheckPath);
+}
+// Must come before font loading because it loads font size
+void hVitaInitSettings(){
 	// This will also load the font size file and therefor must come before font loading
 	// Will not crash if no settings found
 	LoadSettings();
-	
 	// Check if the application came with a game embedded. If so, load it.
 	char* _fixedPath = fixPathAlloc("isEmbedded.txt",TYPE_EMBEDDED);
 	if (checkFileExist(_fixedPath)){
@@ -6363,59 +6334,35 @@ signed char init(){
 		isGameFolderMode = !(directoryExists(_fixedPath));
 	}
 	free(_fixedPath);
-	
-	#if GBPLAT == GB_3DS
-		osSetSpeedupEnable(1);
-	#endif
-	char* _embeddedCheckPath = fixPathAlloc("assets/star.png",TYPE_EMBEDDED);
-	if (!checkFileExist(_embeddedCheckPath)){
-		while(1){
-			exitIfForceQuit();
-			controlsReset();
-			startDrawing();
-			drawRectangle(0,0,20,100,255,0,0,255);
-			drawRectangle(20,0,30,15,255,0,0,255);
-			drawRectangle(20,35,30,15,255,0,0,255);
-			endDrawing();
-		}
-	}
-	free(_embeddedCheckPath);
-	
+}
+void hVitaInitFont(){
 	// Load default font
+	fontSize = getResonableFontSize(GBTXT);
 	#if GBTXT==GBTXT_BITMAP
 		currentFontFilename = fixPathAlloc("assets/Bitmap-LiberationSans-Regular",TYPE_EMBEDDED);
 	#else
 		currentFontFilename = fixPathAlloc("assets/LiberationSans-Regular.ttf",TYPE_EMBEDDED);
 	#endif //loadFont("sa0:data/font/pvf/ltn4.pvf");
 	globalLoadFont(currentFontFilename);
+	menuCursorSpaceWidth = textWidth(normalFont,MENUCURSOR" ");
+	// Needed for any advanced message display
+	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("assets/unknown.png");
+	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
+	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("assets/star.png");
+}
+// relies on font for error messages
+void hVitaInitSound(){
 	if (initAudio()){
 		#if GBPLAT == GB_3DS
 			easyMessagef(1,"dsp init failed. Do you have dsp firm dumped and in /3ds/dspfirm.cdc ?");
 		#else
 			easyMessagef(1,"audio init failed. isn't supposed to be possible...");
 		#endif
-	}
-	menuCursorSpaceWidth = textWidth(normalFont,MENUCURSOR" ");
+	}	
 	// Load the menu sound effect if it's present
-	_fixedPath = fixPathAlloc("assets/wa_038.ogg",TYPE_EMBEDDED);
+	char* _fixedPath = fixPathAlloc("assets/wa_038.ogg",TYPE_EMBEDDED);
 	TryLoadMenuSoundEffect(_fixedPath);
 	free(_fixedPath);
-	// Needed for any advanced message display
-	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("assets/unknown.png");
-	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
-	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("assets/star.png");
-	
-	for (i=0;i<MAXIMAGECHAR;i++){
-		imageCharType[i]=-1;
-	}
-	ClearMessageArray(0);
-	for (i=0;i<maxBusts;i++){
-		ResetBustStruct(&(Busts[i]),0);
-	}
-
-	if (initializeLua()==2){
-		return 2;
-	}
 	#if GBPLAT == GB_VITA && GBSND != GBSND_VITA
 		// Create the protection thread.
 		if (pthread_create(&soundProtectThreadId, NULL, &soundProtectThread, NULL) != 0){
@@ -6428,15 +6375,57 @@ signed char init(){
 		svcGetThreadPriority(&_foundMainThreadPriority, CUR_THREAD_HANDLE);
 		_3dsSoundUpdateThread = threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
 	#endif
-	#if GBPLAT == GB_VITA
-		sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
-		sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
-		sceTouchEnableTouchForce(SCE_TOUCH_PORT_FRONT);
-		sceTouchEnableTouchForce(SCE_TOUCH_PORT_BACK);
+}
+// no other init functions rely on this one, and this one relies only on crutial
+void hVitaInitMisc(){
+	int i;
+	increaseBustArraysSize(0,maxBusts);	
+	for (i=0;i<MAXIMAGECHAR;i++){
+		imageCharType[i]=-1;
+	}
+	ClearMessageArray(0);
+	for (i=0;i<maxBusts;i++){
+		ResetBustStruct(&(Busts[i]),0);
+	}
+	// Reset bust cache
+	// I could memset everything to 0, but apparently NULL is not guaranteed to be represented by all 0.
+	// https://stackoverflow.com/questions/9894013/is-null-always-zero-in-c
+	for (i=0;i<MAXBUSTCACHE;++i){
+		bustCache[i].filename=NULL;
+		bustCache[i].image=NULL;
+	}
+	//
+	outputLineScreenWidth = screenWidth;
+	outputLineScreenHeight = screenHeight;
+	// Guess the graphic sizes
+	actualBackgroundWidth = screenWidth;
+	actualBackgroundHeight = screenHeight;
+	actualBackgroundSizesConfirmedForSmashFive=0;
+	//
+	saveFolder = malloc(strlen(gbDataFolder)+strlen("Saves/")+1);
+	strcpy(saveFolder,gbDataFolder);
+	strcat(saveFolder,"Saves/");
+	gamesFolder = malloc(strlen(gbDataFolder)+strlen("Games/")+1);
+	strcpy(gamesFolder,gbDataFolder);
+	strcat(gamesFolder,"Games/");
+	// Make file paths with default StreamingAssets folder
+	GenerateStreamingAssetsPaths("StreamingAssets",1);
+	// Save folder, data folder, and others
+	createRequiredDirectories();
+	//
+	ClearDebugFile();
+}
+signed char init(){
+	#ifdef OVERRIDE_INIT
+		return customInit();
 	#endif
-	
-	testCode();
-	return 0;
+	hVitaCrutialInit();
+	hVitaCheckVpk();
+	hVitaInitMisc();
+	hVitaInitSettings();
+	hVitaInitFont();
+	hVitaInitSound();
+	return initializeLua();
 }
 #ifdef SPECIALEDITION
 	#include "specialEditionFooter.h"
