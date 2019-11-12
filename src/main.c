@@ -25,7 +25,6 @@
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 	TODO - Settings menu is like 500 lines long and uses itoa a billion times
 		TODO - have an int for each one and a format string?
-	TODO - What's with this maxlines nonsense?
 	TODO - is entire font in memory nonsense still needed
 	TODO - Fix this text speed setting nonsense
 	TODO - Stop. no. don't reuse the isActuallyUsingUma0 or cpuOverclocked variable for screen postion on 3ds or whatever.
@@ -276,8 +275,6 @@ cachedImage bustCache[MAXBUSTCACHE];
 
 bust* Busts;
 
-#define MAXLINES 15
-
 lua_State* L = NULL;
 /*
 	Line_ContinueAfterTyping=0; (No wait after text display, go right to next script line)
@@ -290,7 +287,8 @@ lua_State* L = NULL;
 #define Line_Normal 2
 #define LINE_RESERVED 3
 int endType;
-unsigned char currentMessages[MAXLINES][SINGLELINEARRAYSIZE];
+int maxLines=0;
+char** currentMessages;
 int currentLine=0;
 int place=0;
 
@@ -683,11 +681,44 @@ void drawImageChars(unsigned char _alpha, int _maxDrawLine, int _maxDrawLineChar
 		}
 	}
 }
+void changeMaxLines(int _newMax){
+	if (_newMax==maxLines || _newMax<=0){
+		return;
+	}
+	char** _newCurrentMessages = malloc(sizeof(char*)*_newMax);
+	if (_newMax<maxLines){
+		int _diff = maxLines-_newMax;
+		// Copy the latest lines that can fit
+		memcpy(_newCurrentMessages,&(currentMessages[_diff]),_newMax*sizeof(char*));
+		// free the lines that are gone
+		int i;
+		for (i=0;i<_diff;++i){
+			free(currentMessages[i]);
+		}
+	}else{
+		if (maxLines!=0 && currentMessages){
+			// Copy all the old lines
+			memcpy(_newCurrentMessages,currentMessages,sizeof(char*)*maxLines);
+		}
+		// alloc new ones
+		int i;
+		for (i=maxLines;i<_newMax;++i){
+			_newCurrentMessages[i]=malloc(SINGLELINEARRAYSIZE);
+			_newCurrentMessages[i][0]='\0';
+		}
+	}
+	free(currentMessages);
+	maxLines=_newMax;
+	currentMessages=_newCurrentMessages;
+}
+void recalculateMaxLines(){
+	changeMaxLines((outputLineScreenHeight-totalTextYOff())/currentTextHeight);
+}
 // Number of lines to draw is not zero based
 // _finalLineMaxChar is the last char on the last line to draw. Must be a position inside the string, 
 void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxChar){
 	if (_maxDrawLine==-1){
-		_maxDrawLine=MAXLINES;
+		_maxDrawLine=maxLines;
 	}
 	char _oldFinalChar;
 	if (_finalLineMaxChar!=-1){
@@ -789,6 +820,8 @@ void reloadFont(double _passedSize){
 	memset(_tempBuffer,' ',numImageCharSpaceEquivalent);
 	_tempBuffer[numImageCharSpaceEquivalent]='\0';
 	imageCharSlotCenter=(textWidth(normalFont,_tempBuffer)-currentTextHeight)/2;
+
+	recalculateMaxLines();
 }
 void globalLoadFont(const char* _filename){
 	changeMallocString(&currentFontFilename,_filename);
@@ -925,7 +958,7 @@ void ClearMessageArray(char _doFadeTransition){
 	currentLine=0;
 	int i;
 	int _totalAddedToHistory=0;
-	for (i = 0; i < MAXLINES; i++){
+	for (i=0;i<maxLines;i++){
 		if (currentMessages[i][0]!='\0'){
 			addToMessageHistory(currentMessages[i]);
 			_totalAddedToHistory++;
@@ -941,7 +974,7 @@ void ClearMessageArray(char _doFadeTransition){
 			endDrawing();
 		}
 	}
-	for (i=0;i<MAXLINES;++i){
+	for (i=0;i<maxLines;++i){
 		currentMessages[i][0]='\0';
 	}
 	for (i=0;i<MAXIMAGECHAR;i++){
@@ -1137,13 +1170,13 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 }
 // If we've run out of new lines, shift everything up.
 void LastLineLazyFix(int* _line){
-	if (*_line==MAXLINES){
+	if (*_line==maxLines){
 		int i;
 		addToMessageHistory(currentMessages[0]);
-		for (i=1;i<MAXLINES;i++){
+		for (i=1;i<maxLines;i++){
 			strcpy(currentMessages[i-1],currentMessages[i]);
 		}
-		currentMessages[MAXLINES-1][0]=0;
+		currentMessages[maxLines-1][0]=0;
 		(*_line)--;
 
 		for (i=0;i<MAXIMAGECHAR;i++){
@@ -2025,13 +2058,13 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLi
 // _overrideNewHeight is in lines
 void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
 	if (_maxDrawLine==-1){
-		_maxDrawLine=MAXLINES;
+		_maxDrawLine=maxLines;
 	}
 	int _newAdvBoxHeight;
 	if (_overrideNewHeight==-1){
 		_newAdvBoxHeight=1; // One extra line to be safe
 		short i;
-		for (i=0;i<MAXLINES;++i){
+		for (i=0;i<maxLines;++i){
 			if (currentMessages[i][0]!='\0'){
 				_newAdvBoxHeight=i+2; // Last non-empty line. Adding 1 is for the free line, adding another 1 is because line index is 0 based.
 			}
@@ -2056,11 +2089,13 @@ void enableVNDSADVMode(){
 	applyTextboxChanges();
 	loadADVBox();
 	updateDynamicADVBox(0,-1);
+	recalculateMaxLines();
 }
 void disableVNDSADVMode(){
 	gameTextDisplayMode=TEXTMODE_NVL;
 	dynamicAdvBoxHeight=0;
 	applyTextboxChanges();
+	recalculateMaxLines();
 }
 char* getFileExtension(char* _passedFilename){
 	return &(_passedFilename[strlen(_passedFilename)-3]);
@@ -3249,6 +3284,7 @@ void loadADVBox(){
 		#endif
 	}
 	applyTextboxChanges();
+	recalculateMaxLines();
 }
 void LoadGameSpecificStupidity(){
 	TryLoadMenuSoundEffect(NULL);
@@ -3353,6 +3389,7 @@ void activateVNDSSettings(){
 	dynamicScaleEnabled=1;
 	advNamesPersist=0;
 	//shouldUseBustCache=1;
+	recalculateMaxLines();
 }
 void activateHigurashiSettings(){
 	currentlyVNDSGame=0;
@@ -3368,6 +3405,7 @@ void activateHigurashiSettings(){
 	}
 	//shouldUseBustCache=0;
 	applyTextboxChanges();
+	recalculateMaxLines();
 }
 #if GBPLAT == GB_VITA
 	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
@@ -3554,12 +3592,11 @@ char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 		fwrite(&_currentFilePosition,sizeof(long int),1,fp); //
 		// Save the max number of lines we can have on screen, this makes the saves safe even if I change this number
 		int i;
-		i=MAXLINES;
-		fwrite(&i,sizeof(int),1,fp); //
+		fwrite(&maxLines,sizeof(int),1,fp); //
 		// Save our current line
 		fwrite(&currentLine,sizeof(int),1,fp); //
 		// Save the current messages
-		for (i=0;i<MAXLINES;i++){
+		for (i=0;i<maxLines;i++){
 			writeLengthStringToFile(fp, currentMessages[i]); //
 		}
 		// Save the background filename
@@ -3640,6 +3677,17 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 	fread(&_readMaxLines,sizeof(int),1,fp); //
 	fread(&currentLine,sizeof(int),1,fp); //
 	int i;
+	if (_readMaxLines>maxLines){ // Skip the lines we can't hold
+		for (i=0;i<_readMaxLines-maxLines;++i){
+			free(readLengthStringFromFile(fp));
+		}
+		_readMaxLines=maxLines;
+	}else{ // Zero the extra space lines
+		for (i=_readMaxLines;i<maxLines;++i){
+			currentMessages[i][0]='\0';
+		}
+	}
+	// Read the lines
 	for (i=0;i<_readMaxLines;i++){
 		char* _tempReadLine = readLengthStringFromFile(fp); //
 		strcpy(&(currentMessages[i][0]),_tempReadLine);
@@ -5920,7 +5968,7 @@ int vndsSaveSelector(){
 						fread(&_readFileFormat,sizeof(unsigned char),1,fp);
 						if (validVNDSSaveFormat(_readFileFormat)){
 							skipLengthStringInFile(fp); // Skip script filename
-							fseek(fp,sizeof(long int)+sizeof(int),SEEK_CUR); // Seek past position and MAXLINES
+							fseek(fp,sizeof(long int)+sizeof(int),SEEK_CUR); // Seek past position and maxLines
 							int _displayLine;
 							fread(&_displayLine,sizeof(int),1,fp);
 
@@ -6376,9 +6424,11 @@ void hVitaInitSound(){
 		_3dsSoundUpdateThread = threadCreate(soundUpdateThread, NULL, 4 * 1024, _foundMainThreadPriority-1, -2, false);
 	#endif
 }
-// no other init functions rely on this one, and this one relies only on crutial
+// no other init functions rely on this one, and this one relies only on crutial.
+// but this will overwirte maxLines if set by font function
 void hVitaInitMisc(){
 	int i;
+	changeMaxLines(15);
 	increaseBustArraysSize(0,maxBusts);	
 	for (i=0;i<MAXIMAGECHAR;i++){
 		imageCharType[i]=-1;
