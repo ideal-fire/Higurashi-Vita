@@ -1642,6 +1642,7 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 	if (_cachedStrlen==0){
 		*_numLines=0;
 		*_realLines=NULL;
+		free(_workable);
 		return;
 	}
 	int _lastNewline = -1; // Index
@@ -5895,7 +5896,6 @@ int vndsSaveSelector(){
 	#ifdef OVERRIDE_VNDSSAVEMENU
 		return customVNDSSaveSelector();
 	#endif
-
 	controlsStart();
 	controlsEnd();
 	// screenWidth/3/2 free space for each text
@@ -5905,8 +5905,8 @@ int vndsSaveSelector(){
 	crossTexture _loadedThumbnail[SAVEMENUPAGESIZE]={NULL};
 	char* _loadedTextThumb[SAVEMENUPAGESIZE]={NULL};
 
+	int _ret=-2;
 	char _reloadThumbs=1;
-
 	// Preserve these between calls for easy slot selection
 	static int _selected=0;
 	static int _slotOffset=0;
@@ -5944,11 +5944,31 @@ int vndsSaveSelector(){
 		}if (wasJustPressed(BUTTON_DOWN)){
 			_selected = wrapNum(_selected+SAVEMENUPAGEW,0,SAVEMENUPAGESIZE-1);
 		}if (wasJustPressed(BUTTON_A)){
-			return _selected+_slotOffset;
+			_ret=_selected+_slotOffset;
 		}if (wasJustPressed(BUTTON_B)){
-			return -1;
+			_ret=-1;
 		}
 		controlsEnd();
+		// Free thumbs before leave or on page switch
+		if (_ret!=-2 || _reloadThumbs){
+			for (i=0;i<SAVEMENUPAGEH;++i){
+				int j;
+				for (j=0;j<SAVEMENUPAGEW;++j){
+					int _tempIndex = j+i*SAVEMENUPAGEW;
+					if (_loadedThumbnail[_tempIndex]!=NULL){
+						freeTexture(_loadedThumbnail[_tempIndex]);
+						_loadedThumbnail[_tempIndex]=NULL;
+					}
+					if (_loadedTextThumb[_tempIndex]!=NULL){
+						free(_loadedTextThumb[_tempIndex]);
+						_loadedTextThumb[_tempIndex]=NULL;
+					}
+				}
+			}
+			if (_ret!=-2){
+				break;
+			}
+		}
 		if (_reloadThumbs){
 			easyMessagef(0,"Loading thumbnails...");
 			if (_slotOffset<0){
@@ -5962,10 +5982,6 @@ int vndsSaveSelector(){
 				for (j=0;j<SAVEMENUPAGEW;++j){
 					int _tempIndex = j+i*SAVEMENUPAGEW;
 					int _trueIndex = _tempIndex+_slotOffset;
-					if (_loadedThumbnail[_tempIndex]!=NULL){
-						free(_loadedThumbnail[_tempIndex]);
-						_loadedThumbnail[_tempIndex]=NULL;
-					}
 					char* _tempFilename = easyVNDSSaveName(_trueIndex);
 					if (checkFileExist(_tempFilename)){
 						FILE* fp = fopen(_tempFilename,"rb");
@@ -5973,10 +5989,11 @@ int vndsSaveSelector(){
 						fread(&_readFileFormat,sizeof(unsigned char),1,fp);
 						if (validVNDSSaveFormat(_readFileFormat)){
 							skipLengthStringInFile(fp); // Skip script filename
-							fseek(fp,sizeof(long int)+sizeof(int),SEEK_CUR); // Seek past position and maxLines
+							fseek(fp,sizeof(long int),SEEK_CUR); // Seek past position and maxLines
+							int _readMaxLines;
+							fread(&_readMaxLines,sizeof(int),1,fp);
 							int _displayLine;
 							fread(&_displayLine,sizeof(int),1,fp);
-
 							// This next block of code loads the text thumbnail. Extra code is used to support both VNDS games (which have their currentLine variable set to the next line they'll use, which is empty) and OutputLine games (which have their currentLine variable anywhere, including on a line that has text). This loading code checks if the text on the currentLine line has text on it. If it does, it'll show that one. Otherwise it will go back a line and show that one.
 							//
 							// Skip all but two lines before where we are
@@ -5987,7 +6004,7 @@ int vndsSaveSelector(){
 							// Read string right before where we are. If our primary line doesn't look good, this one will be used.
 							char* _backupString = readLengthStringFromFile(fp);
 							// If the display line is 0 then no lines were skipped and our backup string is actually our primary string
-							if (_displayLine!=0){
+							if (_displayLine!=0 && _displayLine!=_readMaxLines){
 								// If our current line isn't empty, we'll use that. Otherwise we'll use the backup line.
 								char* _possiblePrimary = readLengthStringFromFile(fp);
 								if (strlen(_possiblePrimary)!=0){
@@ -6003,12 +6020,7 @@ int vndsSaveSelector(){
 							strcpy(_thumbFilename,_tempFilename);
 							strcat(_thumbFilename,".thumb");
 							if (checkFileExist(_thumbFilename)){
-								#if GBPLAT == GB_VITA
-									// temp for load BMP
-									_loadedThumbnail[_tempIndex]=vita2d_load_BMP_file(_thumbFilename);
-								#else
-									_loadedThumbnail[_tempIndex]=loadImage(_thumbFilename);
-								#endif
+								_loadedThumbnail[_tempIndex]=loadImage(_thumbFilename);
 							}
 						}else{
 							_loadedTextThumb[_tempIndex]=NULL;
@@ -6066,7 +6078,7 @@ int vndsSaveSelector(){
 		
 		endDrawing();
 	}
-	return -1;
+	return _ret;
 }
 // Hold L to disable font loading
 // Hold R to disable all optional loading
