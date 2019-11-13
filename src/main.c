@@ -30,7 +30,6 @@
 	TODO - Stop. no. don't reuse the isActuallyUsingUma0 or cpuOverclocked variable for screen postion on 3ds or whatever.
 	TODO - Game specific settings files
 	TODO - Draw text with color properties. to allow having colors for every individual character, make a duplicate array, type uint64_t, first three bytes for color, last byte for text property flags
-	TODO - FileSelector is bad
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -408,8 +407,8 @@ float bgmVolume = 0.75;
 float seVolume = 1.0;
 float voiceVolume = 1.0;
 
-crossFont normalFont;
-double fontSize;
+crossFont normalFont=NULL;
+double fontSize=-10; // default value < 0
 int currentTextHeight;
 int singleSpaceWidth;
 #if GBPLAT == GB_VITA
@@ -786,6 +785,9 @@ void WaitWithCodeEnd(int amount){
 }
 void reloadFont(double _passedSize){
 	#if GBPLAT != GB_VITA
+		if (normalFont!=NULL){
+			freeFont(normalFont);
+		}
 		normalFont = loadFont(currentFontFilename,_passedSize);
 	#else
 		// Here I put custom code for loading fonts on the Vita. I need this for fonts with a lot of characters. Why? Well, if the font has a lot of characters, FreeType won't load all of them at once. It'll stream the characters from disk. At first that sounds good, but remember that the Vita breaks its file handles after sleep mode. So new text wouldn't work after sleep mode. I could fix this by modding libvita2d and making it use my custom IO commands, but I just don't feel like doing that right now.
@@ -4736,100 +4738,43 @@ char upgradeToGameFolder(){
 	}
 	return _didUpgradeOne;
 }
-// Returns 0 if normal
-// Returns 1 if user quit
-// Returns 2 if no files found
-char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage){
-
-	int i;
-	int totalFiles=0;
-
-	int _returnVal=0;
-
-	// Can hold MAXFILES filenames
-	// Each with no more than 50 characters (51 char block of memory. extra one for null char)
-	char** filenameholder;
-	filenameholder = (char**)calloc(MAXFILES,sizeof(char*));
-	for (i=0;i<MAXFILES;i++){
-		filenameholder[i]=(char*)calloc(1,MAXFILELENGTH);
-	}
-
-	crossDir dir;
-	crossDirStorage lastStorage;
-	dir = openDirectory (directorylocation);
-
-	if (dirOpenWorked(dir)==0){
-		easyMessagef(1,"Failed to open directory %s",directorylocation);
-		// Free memori
-		for (i=0;i<MAXFILES;i++){
-			free(filenameholder[i]);
-		}
-		free(filenameholder);
-		*_chosenfile = NULL;
+char FileSelector(char* _dirPath, char** _retChosen, char* _promptMessage){
+	*_retChosen=NULL;
+	crossDir dir=openDirectory(_dirPath);
+	if (!dirOpenWorked(dir)){
+		easyMessagef(1,"Failed to open directory %s",_dirPath);
 		return 2;
 	}
-
-	for (i=0;i<MAXFILES;i++){
-		if (directoryRead(&dir,&lastStorage) == 0){
-			break;
+	char _ret=0;
+	int _maxFiles=20;
+	char** _foundFiles = malloc(sizeof(char*)*_maxFiles);
+	crossDirStorage lastStorage;
+	int _nFiles;
+	for (_nFiles=0;directoryRead(&dir,&lastStorage)!=0;_nFiles++){
+		if (_nFiles==_maxFiles){
+			_maxFiles*=2;
+			_foundFiles = realloc(_foundFiles,sizeof(char*)*_maxFiles);
 		}
-		memcpy((filenameholder[i]),getDirectoryResultName(&lastStorage),strlen(getDirectoryResultName(&lastStorage))+1);
+		_foundFiles[_nFiles] = strdup(getDirectoryResultName(&lastStorage));
 	}
 	directoryClose (dir);
-	
-	totalFiles = i;
-
-	if (totalFiles==0){
+	if (_nFiles==0){
 		easyMessagef(1,"No files found.");
-		*_chosenfile=NULL;
-		_returnVal=2;
+		_ret=2;
 	}else{
-		int _choice=0;
-		int _maxPerNoScroll=floor((screenHeight-5-currentTextHeight*2)/(currentTextHeight));
-		if (totalFiles<_maxPerNoScroll){
-			_maxPerNoScroll=totalFiles;
-		}
-		int _tmpoffset=0;
-		while (currentGameStatus!=GAMESTATUS_QUIT){
-			controlsStart();
-			menuControlsLow(&_choice,1,1,0,5,0,totalFiles-1);
-			if (wasJustPressed(BUTTON_A)){
-				(*_chosenfile) = (char*)calloc(1,strlen(filenameholder[_choice])+1);
-				memcpy(*_chosenfile,filenameholder[_choice],strlen(filenameholder[_choice])+1);
-				PlayMenuSound();
-				break;		
-			}
-			if (wasJustPressed(BUTTON_B)){
-				(*_chosenfile) = NULL;
-				_returnVal=1;
-				break;		
-			}
-	
-			startDrawing();
-			//DrawText(20,20+textHeight(normalFont)+i*(textHeight(normalFont)),currentMessages[i]);
-			if (promptMessage!=NULL){
-				drawText(MENUOPTIONOFFSET,5,promptMessage);
-			}
-			_tmpoffset=_choice+1-_maxPerNoScroll;
-			if (_tmpoffset<0){
-				_tmpoffset=0;
-			}
-			for (i=0;i<_maxPerNoScroll;i++){
-				drawText(MENUOPTIONOFFSET,5+currentTextHeight*(i+2),filenameholder[i+_tmpoffset]);
-			}
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*((_choice-_tmpoffset)+2),filenameholder[_choice],0,255,0);
-			drawText(5,5+currentTextHeight*((_choice-_tmpoffset)+2),MENUCURSOR);
-			endDrawing();
-			controlsEnd();
+		int _menuRet = showMenu(_foundFiles,_nFiles,_promptMessage);
+		if (_menuRet==-1){
+			_ret=1;
+		}else{
+			*_retChosen=strdup(_foundFiles[_menuRet]);
 		}
 	}
-
-	// Free memori
-	for (i=0;i<MAXFILES;i++){
-		free(filenameholder[i]);
+	int i;
+	for (i=0;i<_nFiles;++i){
+		free(_foundFiles[i]);
 	}
-	free(filenameholder);
-	return _returnVal;
+	free(_foundFiles);
+	return _ret;
 }
 void FontSizeSetup(){
 	char _choice=0;
@@ -5113,7 +5058,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}
 	free(_tempRenaPath);
 	
-	_optionsOnScreen = (screenHeight/(double)currentTextHeight)-1;
+	_optionsOnScreen = (screenHeight/currentTextHeight)-1;
 	if (_optionsOnScreen>_maxOptionSlotUsed){
 		_optionsOnScreen = _maxOptionSlotUsed+1;
 	}else{
@@ -5420,6 +5365,44 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			outputLineScreenHeight = 240;
 		}
 	#endif
+}
+// returns -1 if user quit, otherwise returns chosen index
+int showMenu(char** _options, int _numOptions, const char* _title){
+	int _scrollOffset=0;
+	int _choice=0;
+	int _optionsOnScreen = screenHeight/currentTextHeight-1;
+	if (_optionsOnScreen>_numOptions){
+		_optionsOnScreen=_numOptions;
+	}
+	while(currentGameStatus!=GAMESTATUS_QUIT){
+		controlsStart();
+		if (menuControlsLow(&_choice,1,1,0,_optionsOnScreen,0,_numOptions-1)){
+			if (_choice>=_optionsOnScreen/2){
+				_scrollOffset = _choice-_optionsOnScreen/2;
+				if (_scrollOffset+_optionsOnScreen>_numOptions){
+					_scrollOffset=_numOptions-_optionsOnScreen;
+				}
+			}else{
+				_scrollOffset=0;
+			}
+		}
+		if (wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_B)){
+			controlsEnd();
+			return wasJustPressed(BUTTON_B) ? -1 : _choice;
+		}
+		controlsEnd();
+		startDrawing();
+		drawText(MENUCURSOROFFSET,(_choice-_scrollOffset)*currentTextHeight,MENUCURSOR);
+		int i;
+		for (i=0;i<_optionsOnScreen;++i){
+			drawText(MENUOPTIONOFFSET,currentTextHeight*i,_options[i+_scrollOffset]);
+		}
+		if (_optionsOnScreen!=_numOptions && _scrollOffset!=_numOptions-_optionsOnScreen){
+			drawText(MENUOPTIONOFFSET,currentTextHeight*_optionsOnScreen,"\\/\\/\\/\\/");
+		}
+		endDrawing();
+	}
+	return -1;
 }
 void TitleScreen(){
 	signed char _choice=0;
@@ -6385,7 +6368,9 @@ void hVitaInitSettings(){
 }
 void hVitaInitFont(){
 	// Load default font
-	fontSize = getResonableFontSize(GBTXT);
+	if (fontSize<0){
+		fontSize = getResonableFontSize(GBTXT);
+	}
 	#if GBTXT==GBTXT_BITMAP
 		currentFontFilename = fixPathAlloc("assets/Bitmap-LiberationSans-Regular",TYPE_EMBEDDED);
 	#else
@@ -6485,7 +6470,6 @@ int main(int argc, char *argv[]){
 	if (init()==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
-
 	// Put stupid test stuff here
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
