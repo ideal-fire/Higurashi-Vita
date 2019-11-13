@@ -30,6 +30,13 @@
 	TODO - Stop. no. don't reuse the isActuallyUsingUma0 or cpuOverclocked variable for screen postion on 3ds or whatever.
 	TODO - Game specific settings files
 	TODO - Draw text with color properties. to allow having colors for every individual character, make a duplicate array, type uint64_t, first three bytes for color, last byte for text property flags
+	TODO - in manual mode, running _GameSpecific.lua first won't keep the settings from being reset by activeVNDSSettings called before manual script.s
+	TODO - i removed the secret save file editor code
+				if (_codeProgress==4){
+					SaveGameEditor();
+					_nextChapterExist=1;
+					_codeProgress=0;
+				}
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -343,7 +350,6 @@ char* currentGameFolderName=NULL;
 #define GAMESTATUS_PRESETSELECTION 2
 #define GAMESTATUS_MAINGAME 3
 #define GAMESTATUS_NAVIGATIONMENU 4
-#define GAMESTATUS_TIPMENU 5
 #define GAMESTATUS_GAMEFOLDERSELECTION 6
 #define GAMESTATUS_LOADGAMEFOLDER 7
 #define GAMESTATUS_QUIT 99
@@ -520,6 +526,9 @@ signed char forceDropshadowOption=1;
 		return _buffer;
 	}
 #endif
+int easyCenter(int _smallSize, int _bigSize){
+	return (_bigSize-_smallSize)/2;
+}
 double partMoveFills(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
 	return ((_totalDifference-(_startTime+_totalDifference-_curTicks))/(double)_totalDifference)*_max;
 }
@@ -4762,7 +4771,7 @@ char FileSelector(char* _dirPath, char** _retChosen, char* _promptMessage){
 		easyMessagef(1,"No files found.");
 		_ret=2;
 	}else{
-		int _menuRet = showMenu(_foundFiles,_nFiles,_promptMessage);
+		int _menuRet = showMenu(0,_promptMessage,_nFiles,_foundFiles,1);
 		if (_menuRet==-1){
 			_ret=1;
 		}else{
@@ -5366,18 +5375,52 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		}
 	#endif
 }
+// Starting at _startIndex, search _searchThis for the next slot that is 1
+// No overflow protection
+// If you pass null, it just returns _startIndex
+int getNextEnabled(char* _searchThis, int _startIndex){
+	if (_searchThis==NULL){
+		return _startIndex;
+	}
+	int i;
+	for (i=_startIndex;_searchThis[i]!=1;++i);
+	return i;
+}
+char* newShowMap(int _numElements){
+	char* _ret = malloc(sizeof(char)*_numElements);
+	memset(_ret,1,sizeof(char)*_numElements);
+	return _ret;
+}
 // returns -1 if user quit, otherwise returns chosen index
-int showMenu(char** _options, int _numOptions, const char* _title){
-	int _scrollOffset=0;
-	int _choice=0;
+int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char* _showMap, char _canQuit){
+	controlsReset();
+	int i;
+	int _ret=-1;
+	int _numOptions;
+	if (_showMap){
+		_numOptions=0;
+		for (i=0;i<_mapSize;++i){
+			if (_showMap[i]){
+				++_numOptions;
+			}
+		}
+	}else{
+		_numOptions=_mapSize;
+	}
+	if (_numOptions==0){
+		return -1;
+	}
+	int _scrollOffset=-1;
 	int _optionsOnScreen = (_title!=NULL ? screenHeight-currentTextHeight*1.5 : screenHeight)/currentTextHeight-1;
 	if (_optionsOnScreen>_numOptions){
 		_optionsOnScreen=_numOptions;
 	}
-	int _menuOffY = (_title!=NULL) ? currentTextHeight : 0;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
 		if (menuControlsLow(&_choice,1,1,0,_optionsOnScreen,0,_numOptions-1)){
+			_scrollOffset=-1;
+		}
+		if (_scrollOffset==-1){ // queued scroll update
 			if (_choice>=_optionsOnScreen/2){
 				_scrollOffset = _choice-_optionsOnScreen/2;
 				if (_scrollOffset+_optionsOnScreen>_numOptions){
@@ -5387,21 +5430,35 @@ int showMenu(char** _options, int _numOptions, const char* _title){
 				_scrollOffset=0;
 			}
 		}
-		if (wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_B)){
-			int _ret = wasJustPressed(BUTTON_B) ? -1 : _choice; // temp var because controlsEnd is after this
-			controlsEnd();
-			return _ret;
+		if (wasJustPressed(BUTTON_B)){ // cancel
+			_ret=-1;
+			break;
+		}
+		if (wasJustPressed(BUTTON_A)){
+			// Get the real index and set _ret to it
+			_ret=-1;
+			for (i=0;i<=_choice;++i){
+				_ret=getNextEnabled(_showMap,_ret+1);
+			}
+			break;
 		}
 		controlsEnd();
 		startDrawing();
 		if (_title!=NULL){
-			drawText(0,0,_title);
+			drawText(easyCenter(textWidth(normalFont,_title),screenWidth),0,_title);
 			gbSetDrawOffY(currentTextHeight*1.5);
 		}	
 		drawText(MENUCURSOROFFSET,(_choice-_scrollOffset)*currentTextHeight,MENUCURSOR);
-		int i;
+		// Draw the menu options
+		int _lastDrawn=-1;
+		// First, fast forward to the correct starting index according to scroll
+		for (i=0;i<_scrollOffset;++i){
+			_lastDrawn = getNextEnabled(_showMap,_lastDrawn+1);
+		}
+		// Draw the entries currently on screen
 		for (i=0;i<_optionsOnScreen;++i){
-			drawText(MENUOPTIONOFFSET,currentTextHeight*i,_options[i+_scrollOffset]);
+			_lastDrawn  = getNextEnabled(_showMap,_lastDrawn+1);
+			drawText(MENUOPTIONOFFSET,currentTextHeight*i,_options[_lastDrawn]);
 		}
 		if (_optionsOnScreen!=_numOptions && _scrollOffset!=_numOptions-_optionsOnScreen){
 			drawText(MENUOPTIONOFFSET,currentTextHeight*_optionsOnScreen,"\\/\\/\\/\\/");
@@ -5409,7 +5466,11 @@ int showMenu(char** _options, int _numOptions, const char* _title){
 		gbSetDrawOffY(0);
 		endDrawing();
 	}
-	return -1;
+	controlsEnd();
+	return _ret;
+}
+int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _options, char _canQuit){
+	return showMenuAdvanced(_defaultChoice,_title,_numOptions,_options,NULL,_canQuit);
 }
 void TitleScreen(){
 	signed char _choice=0;
@@ -5559,8 +5620,6 @@ void TitleScreen(){
 				_choice=0;
 			}
 		}
-		
-
 		startDrawing();
 
 		drawText(MENUOPTIONOFFSET,5,"Main Menu");
@@ -5609,7 +5668,7 @@ void TipMenu(){
 			// This will trick the in between lines functions into thinking that we're in normal script execution mode and not quit
 			currentGameStatus=GAMESTATUS_MAINGAME;
 			RunScript(scriptFolder, currentPresetTipList.theArray[_chosenTip-1],1);
-			currentGameStatus=GAMESTATUS_TIPMENU;
+			currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 			controlsReset();
 		}
 		if (wasJustPressed(BUTTON_B)){
@@ -5677,7 +5736,7 @@ void ChapterJump(){
 				currentGameStatus=GAMESTATUS_MAINGAME;
 				RunScript(scriptFolder, currentPresetFileList.theArray[_chapterChoice],1);
 				controlsEnd();
-				currentGameStatus=GAMESTATUS_TIPMENU;
+				currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 				break;
 			}
 			if (_choice==1){
@@ -5738,141 +5797,59 @@ void controls_setDefaultGame(){
 	}
 }
 void NavigationMenu(){
-	controlsReset();
-	signed char _choice=0;
-	int _endofscriptwidth = textWidth(normalFont,"End of script: ");
-	char _nextChapterExist=0;
-	// Checks if there is another chapter left in the preset file. If so, set the variable accordingly
-	if (!(currentPresetChapter+1>=currentPresetFileList.length)){
-		_nextChapterExist=1;
+	char* _menuTitle;
+	if (chapterNamesLoaded){
+		_menuTitle=easySprintf("End of script: %s",currentPresetFileFriendlyList.theArray[currentPresetChapter]);
 	}else{
-		// This is the default value. I just put this line of code here so I can remember
-		_nextChapterExist=0;
+		_menuTitle=easySprintf("End of script: %d",currentPresetChapter);
 	}
-
-	unsigned char _codeProgress=0;
-	char _maxListSlot=1; // For chapter jump and exit
-	if (_nextChapterExist==1){
-		_maxListSlot++;
+	char* _menuOptions[] = {
+		"Next",
+		"Chapter Jump",
+		"View Tips",
+		"Exit",
+	};
+	char* _optionOn = newShowMap(4);
+	// if tips disabled or no tips unlocked
+	if (!gameHasTips || currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
+		_optionOn[2]=0;
 	}
-	if (gameHasTips==1){
-		_maxListSlot++;
+	if (currentPresetChapter+1>=currentPresetFileList.length){
+		_optionOn[0]=0;
 	}
-	char _nextButtonSlot, _chapterButtonSlot, _tipButtonSlot, _quitButtonSlot, _slotAssignIndex = 0;
-	if (_nextChapterExist==1){
-		_nextButtonSlot=_slotAssignIndex;
-		_slotAssignIndex++;
-	}else{
-		_nextButtonSlot=CHAR_MAX;
-	}
-	_chapterButtonSlot = _slotAssignIndex;
-	_slotAssignIndex++;
-	if (gameHasTips==1){
-		_tipButtonSlot=_slotAssignIndex;
-		_slotAssignIndex++;
-	}else{
-		_tipButtonSlot=CHAR_MAX;
-	}
-	_quitButtonSlot=_slotAssignIndex;
-	while (currentGameStatus!=GAMESTATUS_QUIT){
-		controlsStart();
-		// Editor secret code
-			if (wasJustPressed(BUTTON_UP)){
-				_codeProgress = Password(_codeProgress,0);
-			}
-			if (wasJustPressed(BUTTON_DOWN)){
-				_codeProgress = Password(_codeProgress,1);
-			}
-			if (wasJustPressed(BUTTON_LEFT)){
-				_codeProgress = Password(_codeProgress,2);
-			}
-			if (wasJustPressed(BUTTON_RIGHT)){
-				_codeProgress = Password(_codeProgress,3);
-				if (_codeProgress==4){
-					SaveGameEditor();
-					_nextChapterExist=1;
-					_codeProgress=0;
-				}
-			}
-		_choice=menuControls(_choice,0,_maxListSlot);
-		if (wasJustPressed(BUTTON_A)){
-			if (_choice==_nextButtonSlot){
-				printf("Go to next chapter\n");
-				if (currentPresetChapter+1==currentPresetFileList.length){
-					easyMessagef(1,"There is no next chapter.");
-				}else{
-					currentPresetChapter++;
-					currentGameStatus=GAMESTATUS_MAINGAME;
-					break;
-				}
-			}else if (_choice==_chapterButtonSlot){
-				ChapterJump();
-			}else if (_choice==_tipButtonSlot){
-				printf("Viewing tips\n");
-				currentGameStatus=GAMESTATUS_TIPMENU;
-				controlsEnd();
-				#if PLAYTIPMUSIC == 1
-					PlayBGM("lsys14",256);
-				#endif
-				break;
-			}else if (_choice==_quitButtonSlot){
-				currentGameStatus=GAMESTATUS_QUIT;
-				break;
+	int _choice=0;
+	while(currentGameStatus!=GAMESTATUS_QUIT){
+		_choice = showMenuAdvanced(_choice,_menuTitle,4,_menuOptions,_optionOn,0);
+		if (_choice==0){
+			printf("Go to next chapter\n");
+			if (currentPresetChapter+1==currentPresetFileList.length){
+				easyMessagef(1,"There is no next chapter.");
 			}else{
-				printf("INVALID SELECTION\n");
+				currentPresetChapter++;
+				currentGameStatus=GAMESTATUS_MAINGAME;
+				break;
 			}
+		}else if (_choice==1){
+			ChapterJump();
+		}else if (_choice==2){
+			#if PLAYTIPMUSIC == 1
+				PlayBGM("lsys14",256);
+			#endif
+			TipMenu();
+		}else if (_choice==3){
+			currentGameStatus=GAMESTATUS_QUIT;
 		}
-		controls_setDefaultGame();
-		controlsEnd();
-		startDrawing();
-
-		drawText(MENUOPTIONOFFSET,0,"End of script: ");
-		if (chapterNamesLoaded==0){
-			gbDrawTextf(normalFont,DEFAULTFONTCOLOR,255,_endofscriptwidth+MENUOPTIONOFFSET,0,"%d",currentPresetChapter);
-		}else{
-			drawText(_endofscriptwidth+MENUOPTIONOFFSET,0,currentPresetFileFriendlyList.theArray[currentPresetChapter]);
-		}
-
-		char _currentListDrawPosition=0;
-		if (_nextChapterExist==1){
-			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Next");
-			_currentListDrawPosition++;
-		}
-		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Chapter Jump");
-		_currentListDrawPosition++;
-		if (gameHasTips==1){	
-			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"View Tips");
-			_currentListDrawPosition++;
-		}
-		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(_currentListDrawPosition+2),"Exit");
-		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
-		endDrawing();
-		exitIfForceQuit();
 	}
+	free(_optionOn);
+	free(_menuTitle);
+	controlsEnd();
 }
 void NewGameMenu(){
-	char _choice=0;
-	while (1){
-		controlsStart();
-		_choice = menuControls(_choice,0,1);
-		if (wasJustPressed(BUTTON_A)){
-			if (_choice==0){
-				break;
-			}else{
-				currentPresetChapter=0;
-				controlsEnd();
-				SaveGameEditor();
-				break;
-			}
-		}
-		controlsEnd();
-
-		startDrawing();
-		drawText(MENUOPTIONOFFSET,currentTextHeight,"NEW GAME");
-		drawText(MENUOPTIONOFFSET,currentTextHeight*3,"Start from beginning");
-		drawText(MENUOPTIONOFFSET,currentTextHeight*4,"Savegame Editor");
-		drawText(5,currentTextHeight*(_choice+3),MENUCURSOR);
-		endDrawing();
+	char* _options[]={"Start from beginning","Savegame Editor"};
+	char _choice=showMenuAdvanced(0,"NEW GAME",2,_options,NULL,0);
+	if (_choice==1){
+		currentPresetChapter=0;
+		SaveGameEditor();
 	}
 }
 // Returns selected slot or -1
@@ -6477,7 +6454,6 @@ int main(int argc, char *argv[]){
 	if (init()==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
-	// Put stupid test stuff here
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
 			case GAMESTATUS_TITLE:
@@ -6547,10 +6523,6 @@ int main(int argc, char *argv[]){
 			case GAMESTATUS_NAVIGATIONMENU:
 				// Menu for chapter jump, tip selection, and going to the next chapter
 				NavigationMenu();
-				break;
-			case GAMESTATUS_TIPMENU:
-				// Menu for selecting tip to view
-				TipMenu();
 				break;
 			case GAMESTATUS_GAMEFOLDERSELECTION: // Sets game folder selection folder name to currentGameFolderName
 				;
