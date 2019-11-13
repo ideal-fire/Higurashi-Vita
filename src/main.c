@@ -1192,9 +1192,12 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	}
 	return 1;
 }
-// If we've run out of new lines, shift everything up.
+// If the passed line index is too far down (>= maxLines), shift everything up to make room for a new line
 void LastLineLazyFix(int* _line){
-	if (*_line==maxLines){
+	if (*_line>=maxLines){
+		if (*_line>maxLines){
+			*_line=maxLines;
+		}
 		int i;
 		addToMessageHistory(currentMessages[0]);
 		for (i=1;i<maxLines;i++){
@@ -1381,7 +1384,7 @@ void outputLineWait(){
 			}
 		#endif
 
-		if (wasJustPressed(BUTTON_A) || touch_bool ){
+		if (wasJustPressed(BUTTON_A) || touch_bool){
 			if (_didPressCircle==1){
 				showTextbox();
 			}

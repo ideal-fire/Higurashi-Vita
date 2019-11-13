@@ -161,7 +161,7 @@ void _vndsChangeScriptFiles(const char* _newFilename){
 }
 // Will always start on an avalible line
 void vndswrapper_text(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	if (currentLine==maxLines){
+	if (currentLine>=maxLines){
 		if (vndsClearAtBottom){
 			ClearMessageArray(1);
 			currentLine=0;
