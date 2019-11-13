@@ -37,6 +37,7 @@
 					_nextChapterExist=1;
 					_codeProgress=0;
 				}
+	TODO - holding skip key causes flash dynamic adv box a bit biffer
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -526,6 +527,18 @@ signed char forceDropshadowOption=1;
 		return _buffer;
 	}
 #endif
+int getOtherScaled(int _orig, int _scaled, int _altDim){
+	return _altDim*(_scaled/(double)_orig);
+}
+void fitInBox(int _imgW, int _imgH, int _boxW, int _boxH, int* _retW, int* _retH){
+	if ((_boxW/(double)_imgW) < (_boxH/(double)_imgH)){
+		*_retW=_boxW;
+		*_retH=getOtherScaled(_imgW,_boxW,_imgH);
+	}else{
+		*_retW=getOtherScaled(_imgH,_boxH,_imgW);
+		*_retH=_boxH;
+	}
+}
 int easyCenter(int _smallSize, int _bigSize){
 	return (_bigSize-_smallSize)/2;
 }
@@ -3633,13 +3646,13 @@ char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 		saveVariableList(fp,nathanscriptGamevarList,nathanscriptTotalGamevar); //
 		fclose(fp);
 	}
+	// thumbnail saving can fail and return here. will not count as a return 1 error
 	if (_saveThumb){
+		char _thumbFilename[strlen(_filename)+7];
+		strcpy(_thumbFilename,_filename);
+		strcat(_thumbFilename,".thumb");
 		// Renderer specific code for saving thumbnails
 		#if GBPLAT == GB_VITA	
-			char _thumbFilename[strlen(_filename)+7];
-			strcpy(_thumbFilename,_filename);
-			strcat(_thumbFilename,".thumb");
-	
 			int _destWidth = THUMBWIDTH;
 			int _destHeight = THUMBHEIGHT;
 			vita2d_texture* _smallTexture = vita2d_create_empty_texture_rendertarget(_destWidth,_destHeight,SCE_GXM_TEXTURE_FORMAT_A8B8G8R8);
@@ -3668,6 +3681,31 @@ char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 			BMP_Free(testimg);
 			
 			freeTexture(_smallTexture);
+		#elif GBREND==GBREND_SDL
+			startDrawing();
+			Draw(0);
+			endDrawing();
+			SDL_Surface* _saveSurface;
+			#if SDL_BYTEORDER == SDL_BIG_ENDIAN
+				_saveSurface=SDL_CreateRGBSurface(0,screenWidth,screenHeight,32,0xff000000,0x00ff0000,0x0000ff00,0x000000ff);
+			#else
+				_saveSurface=SDL_CreateRGBSurface(0,screenWidth,screenHeight,32,0x000000ff,0x0000ff00,0x00ff0000,0xff000000);
+			#endif
+			if (_saveSurface!=NULL){
+				SDL_ClearError();
+				SDL_LockSurface(_saveSurface);
+				if (SDL_RenderReadPixels(mainWindowRenderer,NULL,_saveSurface->format->format,_saveSurface->pixels,_saveSurface->pitch)==0){
+					if (SDL_SaveBMP(_saveSurface,_thumbFilename)!=0){
+						printf("Error saving surface\n");
+					}
+					SDL_UnlockSurface(_saveSurface);
+				}else{
+					printf("error reading pixels: %s\n",SDL_GetError());
+				}
+				SDL_FreeSurface(_saveSurface);
+			}else{
+				printf("error making surface\n");
+			}
 		#endif
 	}
 	return 0;
@@ -6003,7 +6041,10 @@ int vndsSaveSelector(){
 				}
 				// Thumb goes behind everything else
 				if (_loadedThumbnail[_tempIndex]!=NULL){
-					drawTexture(_loadedThumbnail[_tempIndex],(j+1)*_slotWidth-getTextureWidth(_loadedThumbnail[_tempIndex]),i*_slotHeight);
+					int _destW;
+					int _destH;
+					fitInBox(getTextureWidth(_loadedThumbnail[_tempIndex]),getTextureHeight(_loadedThumbnail[_tempIndex]),_slotWidth,_slotHeight,&_destW,&_destH);
+					drawTextureSized(_loadedThumbnail[_tempIndex],(j+1)*_slotWidth-_destW,i*_slotHeight+easyCenter(_destH,_slotHeight),_destW,_destH);
 				}
 				sprintf(_labelBuffer,"Slot %d",_tempIndex+_slotOffset);
 				if (_loadedTextThumb[_tempIndex]==NULL){
