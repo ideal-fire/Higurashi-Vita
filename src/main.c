@@ -5370,10 +5370,11 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 int showMenu(char** _options, int _numOptions, const char* _title){
 	int _scrollOffset=0;
 	int _choice=0;
-	int _optionsOnScreen = screenHeight/currentTextHeight-1;
+	int _optionsOnScreen = (_title!=NULL ? screenHeight-currentTextHeight*1.5 : screenHeight)/currentTextHeight-1;
 	if (_optionsOnScreen>_numOptions){
 		_optionsOnScreen=_numOptions;
 	}
+	int _menuOffY = (_title!=NULL) ? currentTextHeight : 0;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
 		if (menuControlsLow(&_choice,1,1,0,_optionsOnScreen,0,_numOptions-1)){
@@ -5387,11 +5388,16 @@ int showMenu(char** _options, int _numOptions, const char* _title){
 			}
 		}
 		if (wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_B)){
+			int _ret = wasJustPressed(BUTTON_B) ? -1 : _choice; // temp var because controlsEnd is after this
 			controlsEnd();
-			return wasJustPressed(BUTTON_B) ? -1 : _choice;
+			return _ret;
 		}
 		controlsEnd();
 		startDrawing();
+		if (_title!=NULL){
+			drawText(0,0,_title);
+			gbSetDrawOffY(currentTextHeight*1.5);
+		}	
 		drawText(MENUCURSOROFFSET,(_choice-_scrollOffset)*currentTextHeight,MENUCURSOR);
 		int i;
 		for (i=0;i<_optionsOnScreen;++i){
@@ -5400,6 +5406,7 @@ int showMenu(char** _options, int _numOptions, const char* _title){
 		if (_optionsOnScreen!=_numOptions && _scrollOffset!=_numOptions-_optionsOnScreen){
 			drawText(MENUOPTIONOFFSET,currentTextHeight*_optionsOnScreen,"\\/\\/\\/\\/");
 		}
+		gbSetDrawOffY(0);
 		endDrawing();
 	}
 	return -1;
