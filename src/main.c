@@ -37,7 +37,6 @@
 					_nextChapterExist=1;
 					_codeProgress=0;
 				}
-	TODO - holding skip key causes flash dynamic adv box a bit biffer
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -137,6 +136,10 @@ char* vitaAppId="HIGURASHI";
 
 #define DROPSHADOWOFFX 1
 #define DROPSHADOWOFFY 1
+
+// ratio of screen width that the text will scroll in one second
+#define TEXTSCROLLPERSECOND .25
+#define TEXTSCROLLDELAYTIME 300
 
 #define PREFER_DIR_BGM 0
 #define PREFER_DIR_SE 1
@@ -543,7 +546,7 @@ int easyCenter(int _smallSize, int _bigSize){
 	return (_bigSize-_smallSize)/2;
 }
 double partMoveFills(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
-	return ((_totalDifference-(_startTime+_totalDifference-_curTicks))/(double)_totalDifference)*_max;
+	return ((_totalDifference-(_startTime+_totalDifference-_curTicks))*_max)/(double)_totalDifference;
 }
 double partMoveFillsCapped(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
 	if (_curTicks>=_startTime+_totalDifference){
@@ -5457,12 +5460,33 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 	if (_optionsOnScreen>_numOptions){
 		_optionsOnScreen=_numOptions;
 	}
+	char _curScrollDirection;
+	int _maxHScroll;
+	u64 _startHScroll;
+	int _scrollTime;
+	int _curRealIndex;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
 		if (menuControlsLow(&_choice,1,1,0,_optionsOnScreen,0,_numOptions-1)){
 			_scrollOffset=-1;
 		}
-		if (_scrollOffset==-1){ // queued scroll update
+		if (_scrollOffset==-1){ // queued menu info update
+			// Find horizontal scroll info
+			_curRealIndex = -1;
+			for (i=0;i<=_choice;++i){
+				_curRealIndex = getNextEnabled(_showMap,_curRealIndex+1);
+			}
+			int _curWidth = textWidth(normalFont,_options[_curRealIndex]);
+			int _maxTextWidth = screenWidth-MENUOPTIONOFFSET;
+			if (_curWidth>_maxTextWidth){
+				_maxHScroll=_curWidth-_maxTextWidth;
+				_startHScroll=getMilli()+TEXTSCROLLDELAYTIME;
+				_scrollTime = ((_maxHScroll/(double)screenWidth)/TEXTSCROLLPERSECOND)*1000;
+			}else{
+				_maxHScroll=0;
+			}
+			_curScrollDirection=0;
+			// update vertical scroll info
 			if (_choice>=_optionsOnScreen/2){
 				_scrollOffset = _choice-_optionsOnScreen/2;
 				if (_scrollOffset+_optionsOnScreen>_numOptions){
@@ -5472,7 +5496,7 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 				_scrollOffset=0;
 			}
 		}
-		if (wasJustPressed(BUTTON_B)){ // cancel
+		if (wasJustPressed(BUTTON_B) && _canQuit){ // cancel
 			_ret=-1;
 			break;
 		}
@@ -5489,7 +5513,35 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 		if (_title!=NULL){
 			drawText(easyCenter(textWidth(normalFont,_title),screenWidth),0,_title);
 			gbSetDrawOffY(currentTextHeight*1.5);
-		}	
+		}
+		if (_maxHScroll!=0){
+		startCalcOffset:
+			;
+			u64 _curTime = getMilli();
+			int _xOff;
+			if (_curTime>_startHScroll){
+				int _diff = abs(_startHScroll-_curTime);
+				if (_diff>_scrollTime){
+					if (_diff>_scrollTime+TEXTSCROLLDELAYTIME){
+						_startHScroll=_startHScroll+_scrollTime+TEXTSCROLLDELAYTIME;
+						_curScrollDirection=!_curScrollDirection;
+						goto startCalcOffset;
+					}else{
+						_xOff=_curScrollDirection ? 0 : _maxHScroll;
+					}
+				}else{
+					_xOff = partMoveFills(_curTime,_startHScroll,_scrollTime,_maxHScroll);
+					if (_curScrollDirection){
+						_xOff=_maxHScroll-_xOff;
+						
+					}
+				}
+			}else{
+				_xOff=0;
+			}
+			drawText(MENUOPTIONOFFSET-_xOff,(_choice-_scrollOffset)*currentTextHeight,_options[_curRealIndex]);
+		}
+		drawRectangle(0,0,MENUOPTIONOFFSET,screenHeight,0,0,0,255);
 		drawText(MENUCURSOROFFSET,(_choice-_scrollOffset)*currentTextHeight,MENUCURSOR);
 		// Draw the menu options
 		int _lastDrawn=-1;
@@ -5500,6 +5552,9 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 		// Draw the entries currently on screen
 		for (i=0;i<_optionsOnScreen;++i){
 			_lastDrawn  = getNextEnabled(_showMap,_lastDrawn+1);
+			if (i==_choice-_scrollOffset && _maxHScroll!=0){
+				continue;
+			}
 			drawText(MENUOPTIONOFFSET,currentTextHeight*i,_options[_lastDrawn]);
 		}
 		if (_optionsOnScreen!=_numOptions && _scrollOffset!=_numOptions-_optionsOnScreen){
@@ -6510,6 +6565,12 @@ int main(int argc, char *argv[]){
 	if (init()==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
+	char* op[] = {"abcdefghijklmnopqrstuvwxyz1234567890","b","c","d","e","f","123456789012345678901234567890abcdefghijklmnopqrstuvwxyz"};
+	char* a = newShowMap(7);
+	a[1]=0;
+	a[5]=0;
+	showMenuAdvanced(0,NULL,7,op,a,0);
+	
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
 			case GAMESTATUS_TITLE:
