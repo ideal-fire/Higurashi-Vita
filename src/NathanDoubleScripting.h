@@ -987,6 +987,8 @@ void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nat
 }
 
 void nathanscriptLowDoFile(crossFile _passedFile, intFunction _beforeExecuteFunction){
+	controlsStart();
+	controlsEnd();
 	nathanscriptCurrentOpenFile = _passedFile;
 	while (!crossfeof(nathanscriptCurrentOpenFile)){
 		int _foundCommandIndex;

@@ -37,6 +37,8 @@
 					_nextChapterExist=1;
 					_codeProgress=0;
 				}
+	TODO - add veritcal das to showMenu
+	TODO - textbox alpha should change with background alpha
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -137,6 +139,7 @@ char* vitaAppId="HIGURASHI";
 #define DROPSHADOWOFFX 1
 #define DROPSHADOWOFFY 1
 
+// showMenu
 // ratio of screen width that the text will scroll in one second
 #define TEXTSCROLLPERSECOND .25
 #define TEXTSCROLLDELAYTIME 300
@@ -530,6 +533,14 @@ signed char forceDropshadowOption=1;
 		return _buffer;
 	}
 #endif
+// the list itself must also be allocated
+void freeAllocdStrList(char** _passedList, int _passedLen){
+	int i;
+	for (i=0;i<_passedLen;++i){
+		free(_passedList[i]);
+	}
+	free(_passedList);
+}
 int getOtherScaled(int _orig, int _scaled, int _altDim){
 	return _altDim*(_scaled/(double)_orig);
 }
@@ -4823,11 +4834,7 @@ char FileSelector(char* _dirPath, char** _retChosen, char* _promptMessage){
 			*_retChosen=strdup(_foundFiles[_menuRet]);
 		}
 	}
-	int i;
-	for (i=0;i<_nFiles;++i){
-		free(_foundFiles[i]);
-	}
-	free(_foundFiles);
+	freeAllocdStrList(_foundFiles,_nFiles);
 	return _ret;
 }
 void FontSizeSetup(){
@@ -5437,9 +5444,18 @@ char* newShowMap(int _numElements){
 	return _ret;
 }
 // returns -1 if user quit, otherwise returns chosen index
+// pass the real _choice index
 int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char* _showMap, char _canQuit){
 	controlsReset();
 	int i;
+	// convert the passed _choice from real index in _options to fake index
+	if (_showMap){
+		for (i=0;i<_choice;++i){
+			if (!_showMap[i]){
+				--_choice;
+			}
+		}
+	}
 	int _ret=-1;
 	int _numOptions;
 	if (_showMap){
@@ -5747,120 +5763,54 @@ void TitleScreen(){
 }
 void TipMenu(){
 	if (currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
-		easyMessagef(1,"No tips unlocked.");
+		easyMessagef(1,"No TIPS unlocked.");
 		currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 		controlsEnd();
 		return;
 	}
-	// The number for the tip the user has selected. Starts at 1. Subtract 1 if using this for an array
-	int _chosenTip=1;
-	char _updateDispString=1;
-	int _numTipDispLines=0;
-	char** _tipDispLines=NULL;
-	while (currentGameStatus!=GAMESTATUS_QUIT){
-		controlsStart();
-		_updateDispString|=menuControlsLow(&_chosenTip,0,0,1,1,1,currentPresetTipUnlockList.theArray[currentPresetChapter]);
-		if (wasJustPressed(BUTTON_A)){
-			controlsReset();
-			// This will trick the in between lines functions into thinking that we're in normal script execution mode and not quit
-			currentGameStatus=GAMESTATUS_MAINGAME;
-			RunScript(scriptFolder, currentPresetTipList.theArray[_chosenTip-1],1);
-			currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
-			controlsReset();
-		}
-		if (wasJustPressed(BUTTON_B)){
-			currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
+	char** _options = malloc(sizeof(char*)*currentPresetTipUnlockList.theArray[currentPresetChapter]);
+	int i;
+	for (i=0;i<currentPresetTipUnlockList.theArray[currentPresetChapter];++i){
+		_options[i] = tipNamesLoaded ? currentPresetTipNameList.theArray[i] : currentPresetTipList.theArray[i];
+	}
+	int _chosenIndex=0;
+	while(1){
+		_chosenIndex = showMenu(_chosenIndex,"TIP Menu",currentPresetTipUnlockList.theArray[currentPresetChapter],_options,1);		
+		if (_chosenIndex==-1){
 			#if PLAYTIPMUSIC == 1
 				StopBGM();
 			#endif
 			break;
+		}else{
+			controlsReset();
+			// This will trick the in between lines functions into thinking that we're in normal script execution mode and not quit
+			currentGameStatus=GAMESTATUS_MAINGAME;
+			RunScript(scriptFolder, currentPresetTipList.theArray[_chosenIndex],1);
+			currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
+			controlsReset();
+			continue;
 		}
-		controlsEnd();
-		if (_updateDispString){
-			_updateDispString=0;
-			freeWrappedText(_numTipDispLines,_tipDispLines);
-			char* _fullString = easySprintf("%s (%d/%d)",currentPresetTipNameList.theArray[_chosenTip-1],_chosenTip,currentPresetTipUnlockList.theArray[currentPresetChapter]);
-			wrapText(_fullString,&_numTipDispLines,&_tipDispLines,screenWidth-MENUOPTIONOFFSET-MENUCURSOROFFSET);
-			free(_fullString);
-		}
-		startDrawing();
-		int i;
-		for (i=0;i<_numTipDispLines;++i){
-			drawText(MENUOPTIONOFFSET,currentTextHeight+i*currentTextHeight,_tipDispLines[i]);
-		}
-		drawText(5,screenHeight-5-currentTextHeight*3,"Left and Right - Change TIP");
-		drawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back");
-		drawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select");
-
-		endDrawing();
 	}
-	freeWrappedText(_numTipDispLines,_tipDispLines);
+	free(_options);		
 }
 void ChapterJump(){
-	controlsEnd();
-	//currentGameStatus=3;
-	//RunScript
-	//currentGameStatus=4;
-	int _chapterChoice=0;
-	unsigned char _choice=0;
-
-	while (currentGameStatus!=GAMESTATUS_QUIT){
-		controlsStart();
-		if (wasJustPressed(BUTTON_RIGHT)){
-			if (!isDown(BUTTON_R)){
-				_chapterChoice++;
-			}else{
-				_chapterChoice+=5;
-			}
-			if (_chapterChoice>currentPresetChapter){
-				_chapterChoice=0;
-			}
-		}
-		if (wasJustPressed(BUTTON_LEFT)){
-			if (!isDown(BUTTON_R)){
-				_chapterChoice--;
-			}else{
-				_chapterChoice-=5;
-			}
-			if (_chapterChoice<0){
-				_chapterChoice=currentPresetChapter;
-			}
-		}
-		_choice = menuControls(_choice,0,1);
-		if (wasJustPressed(BUTTON_A)){
-			if (_choice==0){
-				controlsEnd();
-				currentGameStatus=GAMESTATUS_MAINGAME;
-				RunScript(scriptFolder, currentPresetFileList.theArray[_chapterChoice],1);
-				controlsEnd();
-				currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
-				break;
-			}
-			if (_choice==1){
-				break;
-			}
-		}
-		if (wasJustPressed(BUTTON_B)){
-			break;
-		}
-		controlsEnd();
-		startDrawing();
-		
-		if (chapterNamesLoaded==0){
-			gbDrawTextf(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(0+2),DEFAULTFONTCOLOR,255,"%s (%d)",currentPresetFileList.theArray[_chapterChoice],_chapterChoice);
-		}else{
-			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),currentPresetFileFriendlyList.theArray[_chapterChoice]);
-		}
-
-		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Back");
-		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
-
-		drawText(5,screenHeight-5-currentTextHeight*4,"Left and Right - Change chapter");
-		drawText(5,screenHeight-5-currentTextHeight*3,"R and Left or Right - Change chapter quickly");
-		drawText(5,screenHeight-5-currentTextHeight*2,BACKBUTTONNAME" - Back");
-		drawText(5,screenHeight-5-currentTextHeight,SELECTBUTTONNAME" - Select");
-		endDrawing();
+	char** _options = malloc(sizeof(char*)*(currentPresetChapter+1));
+	int i;
+	for (i=0;i<=currentPresetChapter;++i){
+		_options[i]=chapterNamesLoaded ? currentPresetFileFriendlyList.theArray[i] : currentPresetFileList.theArray[i];
 	}
+	int _chosenIndex=0;
+	while(1){
+		_chosenIndex = showMenu(_chosenIndex,"Chapter Jump",currentPresetChapter+1,_options,1);
+		if (_chosenIndex==-1){
+			break;
+		}else{
+			currentGameStatus=GAMESTATUS_MAINGAME;
+			RunScript(scriptFolder,currentPresetFileList.theArray[_chosenIndex],1);
+			continue;
+		}
+	}
+	free(_options);
 }
 void SaveGameEditor(){
 	controlsEnd();
@@ -5903,7 +5853,7 @@ void NavigationMenu(){
 	char* _menuOptions[] = {
 		"Next",
 		"Chapter Jump",
-		"View Tips",
+		"View TIPS",
 		"Exit",
 	};
 	char* _optionOn = newShowMap(4);
@@ -6380,7 +6330,7 @@ void initializeNathanScript(){
 }
 // All init after this assumes this is avalible
 void hVitaCrutialInit(){
-	srand (time(NULL));
+	srand(time(NULL));
 	generalGoodInit();
 	initGraphics(960,544,0);
 	screenWidth = getScreenWidth();
@@ -6565,12 +6515,6 @@ int main(int argc, char *argv[]){
 	if (init()==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
-	char* op[] = {"abcdefghijklmnopqrstuvwxyz1234567890","b","c","d","e","f","123456789012345678901234567890abcdefghijklmnopqrstuvwxyz"};
-	char* a = newShowMap(7);
-	a[1]=0;
-	a[5]=0;
-	showMenuAdvanced(0,NULL,7,op,a,0);
-	
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
 			case GAMESTATUS_TITLE:
