@@ -39,6 +39,9 @@
 				}
 	TODO - add veritcal das to showMenu
 	TODO - textbox alpha should change with background alpha
+	TODO - what is exitIfForceQuit
+	TODO - what is this LazyChoice nonsense?
+	TODO - Fix old character art peeks out the edge of textbox
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -135,6 +138,7 @@ char* vitaAppId="HIGURASHI";
 #define SAVEMENUPAGEH 3
 #define SAVEMENUPAGESIZE (SAVEMENUPAGEW*SAVEMENUPAGEH)
 #define MAXSAVESLOT 258 // Divisible by 6
+#define VNDSSAVESELSLOTPREFIX "Slot "
 
 #define DROPSHADOWOFFX 1
 #define DROPSHADOWOFFY 1
@@ -188,7 +192,7 @@ char* vitaAppId="HIGURASHI";
 // 9 adds preferredTextDisplayMode
 // 10 adds autoModeVoicedWait
 // 11 adds vndsSpritesFade
-// 12 adds vndsVitaTouch
+// 12 adds touchProceed
 // 13 adds dropshadowOn
 // 14 adds fontSize
 // 15 adds prefersADVNames
@@ -240,9 +244,9 @@ char* gamesFolder;
 	#include <psp2/touch.h>
 	SceTouchData touch_old[SCE_TOUCH_PORT_MAX_NUM];
 	SceTouchData touch[SCE_TOUCH_PORT_MAX_NUM];
-	signed char vndsVitaTouch=1;
 	NathanAudio* _mlgsnd_loadAudioFILE(legArchiveFile _passedFile, char _passedFileFormat, char _passedShouldLoop, char _passedShouldStream);
 #endif
+signed char touchProceed=1;
 
 void invertImage(crossTexture _passedImage, signed char _doInvertAlpha);
 typedef struct{
@@ -1389,12 +1393,12 @@ void outputLineWait(){
 		int touch_bool = 0;
 		#if GBPLAT == GB_VITA
 			memcpy(touch_old, touch, sizeof(touch_old));
-			if (vndsVitaTouch){
+			if (touchProceed){
 				int port;
 				for (port = 0; port < SCE_TOUCH_PORT_MAX_NUM; port++){
 					sceTouchPeek(port, &touch[port], 1);
 				}
-				touch_bool = vndsVitaTouch && ((touch[SCE_TOUCH_PORT_FRONT].reportNum == 1) && (touch_old[SCE_TOUCH_PORT_FRONT].reportNum == 0));
+				touch_bool = touchProceed && ((touch[SCE_TOUCH_PORT_FRONT].reportNum == 1) && (touch_old[SCE_TOUCH_PORT_FRONT].reportNum == 0));
 			}
 		#endif
 
@@ -3117,9 +3121,7 @@ void SaveSettings(){
 	fwrite(&preferredTextDisplayMode,sizeof(signed char),1,fp);
 	fwrite(&autoModeVoicedWait,sizeof(int),1,fp);
 	fwrite(&vndsSpritesFade,sizeof(signed char),1,fp);
-	#if GBPLAT == GB_VITA
-		fwrite(&vndsVitaTouch,sizeof(signed char),1,fp);
-	#endif
+	fwrite(&touchProceed,sizeof(signed char),1,fp);
 	fwrite(&dropshadowOn,sizeof(signed char),1,fp);
 	fwrite(&fontSize,sizeof(double),1,fp);
 	fwrite(&prefersADVNames,sizeof(signed char),1,fp);
@@ -3179,9 +3181,7 @@ void LoadSettings(){
 			fread(&vndsSpritesFade,sizeof(signed char),1,fp);
 		}
 		if (_tempOptionsFormat>=12){
-			#if GBPLAT == GB_VITA
-				fread(&vndsVitaTouch,sizeof(signed char),1,fp);
-			#endif
+			fread(&touchProceed,sizeof(signed char),1,fp);
 		}
 		if (_tempOptionsFormat>=13){
 			fread(&dropshadowOn,sizeof(signed char),1,fp);
@@ -4897,10 +4897,42 @@ void overrideIfSet(signed char* _possibleTarget, signed char _possibleOverride){
 		*_possibleTarget = _possibleOverride;
 	}
 }
-#define MAXOPTIONSSETTINGS 24
-#define SETTINGSMENU_EASYADDOPTION(a,b) \
-	_settingsOptionsMainText[++_maxOptionSlotUsed] = a; \
-	b = _maxOptionSlotUsed;
+typedef enum{
+	SETTING_BACK=0,
+	SETTING_SAVE,
+	SETTING_RESTARTBGM, //
+	SETTING_BGMVOL,
+	SETTING_SEVOL,
+	SETTING_VOICEVOL,
+	SETTING_TEXTSCREEN, //
+	SETTING_TEXTSPEED,
+	SETTING_DROPSHADOW,
+	SETTING_FONTSIZE,
+	SETTING_BOXALPHA, //
+	SETTING_TEXTBOXW,
+	SETTING_TEXTMODE,
+	SETTING_ADVNAMES,
+	SETTING_HITBOTTOMCLEAR,
+	SETTING_AUTOSPEED, //
+	SETTING_AUTOVOICEDSPEED,
+	SETTING_BUSTLOC, //
+	SETTING_VNDSWAR, //
+	SETTING_VNDSFADE,
+	SETTING_DYNAMICSCAL,
+	SETTING_TOUCH, //
+	SETTING_OVERCLOCK, //
+	SETTING_DEFAULT,
+	SETTING_DEBUG,
+	SETTING_QUIT,
+
+	SETTINGS_MAX,
+}settingsSlotNum;
+/*
+  -- How to add a new option to the settings menu --
+  Step 1 - Add a new enum to settingsSlotNum. make sure it's before SETTINGS_MAX
+  Step 2 - Using your enum value as the array index, assign the _settings and (optional) _values strings.
+  Step 3 - In the big switch statement, add a new case with your enum
+*/
 void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption, signed char _showVNDSFadeOption, signed char _showDebugButton){
 	#ifdef OVERRIDE_SETTINGSMENU
 		customSettingsMenu(_shouldShowQuit,_shouldShowVNDSSettings,_shouldShowVNDSSave,_shouldShowRestartBGM,_showArtLocationSlot,_showScalingOption,_showTextBoxModeOption,_showVNDSFadeOption,_showDebugButton);
@@ -4919,16 +4951,10 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	overrideIfSet(&_showVNDSFadeOption,forceVNDSFadeOption);
 	overrideIfSet(&_showDebugButton,forceDebugButton);
 
-	controlsStart();
-	controlsEnd();
+	controlsReset();
 	PlayMenuSound();
-	int _choice=0;
-	signed char _scrollOffset=0;
-	signed char _optionsOnScreen;
-	signed char _needToScroll=0;
 	int i;
 	char _artBefore=graphicsLocation; // This variable is used to check if the player changed the bust location after exiting
-	crossTexture _renaImage=NULL;
 	char _tempItoaHoldBGM[5] = {'\0'};
 	char _tempItoaHoldSE[5] = {'\0'};
 	char _tempItoaHoldVoice[5] = {'\0'};
@@ -4936,168 +4962,129 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	char _tempItoaHoldTextSpeed[8] = {'\0'}; // Needs to be big enough to hold "instant"
 	char _tempAutoModeString[10] = {'\0'};
 	char _tempAutoModeVoiceString[10] = {'\0'};
-	char _maxOptionSlotUsed=0;
+		
+	char* _settingsOn = newShowMap(SETTINGS_MAX);
+	char* _settings[] = {
+		NULL, // back
+		"=Save Game=",
+		"Restart BGM", // sound
+		"BGM Volume:",
+		"SE Volume:",
+		"Voice Volume:",
+		"Text Screen:", // text
+		"Text Speed:",
+		"Drop Shadow:",
+		"Font Size",
+		"Message Box Alpha:", // textbox
+		"Textbox:",
+		"Text Mode:",
+		"ADV Names:",
+		"Clear at bottom:",
+		"Auto Speed:", // auto
+		"Auto Voiced Speed:",
+		"Bust Location:", // graphics
+		"VNDS Warnings:", // VNDS specific
+		"VNDS Image Fade:",
+		"Dynamic Scaling:",
+		"Vita Touch:", // controls
+		"Overclock CPU", // misc
+		"Defaults",
+		"Debug",
+		"Quit",
+	};
+	_settings[SETTING_BACK] = (currentGameStatus == GAMESTATUS_TITLE) ? "Back" : "Resume";
+	//
+	char* _values[SETTINGS_MAX] = {NULL};
 
-	// Dynamic slots
-	signed char _resettingsSlot=-2;
-	signed char _textOverBGSlot=-2;
-	signed char _fontSizeSlot=-2;
-	signed char _textSpeedSlot=-2;
-	signed char _vndsSaveOptionsSlot=-2;
-	signed char _vndsHitBottomActionSlot=-2;
-	signed char _restartBgmActionSlot=-2;
-	signed char _vndsErrorShowToggleSlot=-2;
-	signed char _voiceVolumeSlot=-2;
-	signed char _bustLocationSlot=-2;
-	signed char _messageBoxAlphaSlot=-2;
-	signed char _higurashiScalingSlot=-2;
-	signed char _textboxModeSlot=-2;
-	signed char _autoModeSpeedSlot=-2;
-	signed char _autoModeSpeedVoiceSlot=-2;
-	signed char _vndsBustFadeEnableSlot=-2;
-	signed char _debugButtonSlot=-2;
-	signed char _dropshadowSlot=-2;
-	#if GBPLAT == GB_VITA
-		signed char _vndsVitaTouchSlot=-2;
-	#endif
-	signed char _preferAdvNamesSlot=-2;
+	_settingsOn[SETTING_SAVE]=_shouldShowVNDSSave;
 	
-	char* _settingsOptionsMainText[MAXOPTIONSSETTINGS];
-	char* _settingsOptionsValueText[MAXOPTIONSSETTINGS];
-	// Init value slots
-	for (i=0;i<MAXOPTIONSSETTINGS;i++){
-		_settingsOptionsValueText[i]=NULL;
+	_settingsOn[SETTING_RESTARTBGM]=_shouldShowRestartBGM;
+	_values[SETTING_BGMVOL] = &(_tempItoaHoldBGM[0]);
+	_values[SETTING_SEVOL] = &(_tempItoaHoldSE[0]);
+	_values[SETTING_VOICEVOL] = &(_tempItoaHoldVoice[0]);
+	if (!hasOwnVoiceSetting){
+		_settingsOn[SETTING_VOICEVOL]=0;
 	}
-	if (currentGameStatus == _shouldShowQuit){
-		_settingsOptionsMainText[0] = "Back";
-	}else{
-		_settingsOptionsMainText[0] = "Resume";
-	}
-	#if GBPLAT == GB_VITA
-		_settingsOptionsMainText[1] = "Overclock CPU";
-	#elif GBPLAT == GB_3DS
-		_settingsOptionsMainText[1] = "Text:";
-		if (textIsBottomScreen==1){
-			_settingsOptionsValueText[1] = "Bottom Screen";
-		}else{
-			_settingsOptionsValueText[1] = "Top Screen";
-		}
+
+	// text
+	#if GBPLAT == GB_3DS
+		_values[SETTING_TEXTSCREEN] = textIsBottomScreen ? "Bottom Screen" : "Top Screen";
 	#else
-		_settingsOptionsMainText[1] = "Nothing";
+		_settingsOn[SETTING_TEXTSCREEN]=0;
 	#endif
-	_settingsOptionsMainText[2] = "BGM Volume:";
-	_settingsOptionsMainText[3] = "SE Volume:";
-	_maxOptionSlotUsed=3;
-
-	// Add new, optional settings here
-	if (hasOwnVoiceSetting){
-		SETTINGSMENU_EASYADDOPTION("Voice Volume:",_voiceVolumeSlot);
-	}
-	SETTINGSMENU_EASYADDOPTION("Text Speed:",_textSpeedSlot);
-	if (forceTextOverBGOption){
-		SETTINGSMENU_EASYADDOPTION("Textbox:",_textOverBGSlot);
-	}
-	SETTINGSMENU_EASYADDOPTION("Auto Speed:",_autoModeSpeedSlot);
-	SETTINGSMENU_EASYADDOPTION("Auto Voiced Speed:",_autoModeSpeedVoiceSlot);
-	if (gameTextDisplayMode==TEXTMODE_NVL || canChangeBoxAlpha){
-		SETTINGSMENU_EASYADDOPTION("Message Box Alpha:",_messageBoxAlphaSlot);
-	}
-	if (_showArtLocationSlot){
-		SETTINGSMENU_EASYADDOPTION("Bust Location:",_bustLocationSlot);
-	}
-	if (_shouldShowRestartBGM==1){
-		SETTINGSMENU_EASYADDOPTION("Restart BGM",_restartBgmActionSlot);
-	}
-	if (_shouldShowVNDSSave){
-		SETTINGSMENU_EASYADDOPTION("=Save Game=",_vndsSaveOptionsSlot);
-	}
-	if (_shouldShowVNDSSettings){
-		SETTINGSMENU_EASYADDOPTION("Clear at bottom:",_vndsHitBottomActionSlot);
-		SETTINGSMENU_EASYADDOPTION("VNDS Warnings:",_vndsErrorShowToggleSlot);
-	}
-	if (_showScalingOption){
-		SETTINGSMENU_EASYADDOPTION("Dynamic Scaling: ",_higurashiScalingSlot);
-	}
-	if (_showTextBoxModeOption){
-		SETTINGSMENU_EASYADDOPTION("Text Mode: ",_textboxModeSlot);
-	}
-	if (_showVNDSFadeOption){
-		SETTINGSMENU_EASYADDOPTION("VNDS Image Fade:",_vndsBustFadeEnableSlot);
-	}
-	if (_showDebugButton){
-		SETTINGSMENU_EASYADDOPTION("Debug",_debugButtonSlot);
-	}
-	if (forceResettingsButton){
-		SETTINGSMENU_EASYADDOPTION("Defaults",_resettingsSlot);
-	}
-	if (forceFontSizeOption){
-		SETTINGSMENU_EASYADDOPTION("Font Size",_fontSizeSlot);
-	}
+	_values[SETTING_TEXTSPEED] = &(_tempItoaHoldTextSpeed[0]);
 	if (forceDropshadowOption){
-		SETTINGSMENU_EASYADDOPTION("Drop Shadow:",_dropshadowSlot);
-		_settingsOptionsValueText[_dropshadowSlot] = charToSwitch(dropshadowOn);
+		_values[SETTING_DROPSHADOW] = charToSwitch(dropshadowOn);
+	}else{
+		_settingsOn[SETTING_DROPSHADOW]=0;
 	}
-	#if GBPLAT == GB_VITA
-		SETTINGSMENU_EASYADDOPTION("Vita Touch:",_vndsVitaTouchSlot);
-	#endif
-	if (_showADVNamesOption){
-		SETTINGSMENU_EASYADDOPTION("ADV Names:",_preferAdvNamesSlot);
-	}
-	// Quit button is always last
-	if (currentGameStatus!=GAMESTATUS_TITLE){
-		_settingsOptionsMainText[++_maxOptionSlotUsed] = "Quit";
-	}
-
-	//////////////////
-	// Set values here
-	//////////////////
-	// Set pointers to menu option value text
-	if (forceTextOverBGOption){
-		_settingsOptionsValueText[_textOverBGSlot] = textOnlyOverBackground ? "Small" : "Full";
-	}
-	_settingsOptionsValueText[_autoModeSpeedSlot]=&(_tempAutoModeString[0]);
-	_settingsOptionsValueText[_autoModeSpeedVoiceSlot]=&(_tempAutoModeVoiceString[0]);
-	if (hasOwnVoiceSetting){
-		_settingsOptionsValueText[_voiceVolumeSlot] = &(_tempItoaHoldVoice[0]);
-	}
-	if (_showArtLocationSlot){
-		if (graphicsLocation == LOCATION_CG){
-			_settingsOptionsValueText[_bustLocationSlot]="CG";
-		}else if (graphicsLocation == LOCATION_CGALT){
-			_settingsOptionsValueText[_bustLocationSlot]="CGAlt";
-		}
-	}
-	_settingsOptionsValueText[2] = &(_tempItoaHoldBGM[0]);
-	_settingsOptionsValueText[3] = &(_tempItoaHoldSE[0]);
+	// font size
+	_settingsOn[SETTING_FONTSIZE]=forceFontSizeOption;
 	if (gameTextDisplayMode==TEXTMODE_NVL || canChangeBoxAlpha){
-		_settingsOptionsValueText[_messageBoxAlphaSlot] = &(_tempItoaHoldBoxAlpha[0]);
+		_values[SETTING_BOXALPHA] = &(_tempItoaHoldBoxAlpha[0]);
+	}else{
+		_settingsOn[SETTING_BOXALPHA]=0;
 	}
-	_settingsOptionsValueText[_textSpeedSlot] = &(_tempItoaHoldTextSpeed[0]);
-	if (_shouldShowVNDSSettings){
-		_settingsOptionsValueText[_vndsHitBottomActionSlot] = charToBoolString(vndsClearAtBottom);
-		if (showVNDSWarnings){
-			_settingsOptionsValueText[_vndsErrorShowToggleSlot] = "Show";
-		}else{
-			_settingsOptionsValueText[_vndsErrorShowToggleSlot] = "Hide";
-		}
-	}
-	if (_showScalingOption){
-		_settingsOptionsValueText[_higurashiScalingSlot]=charToSwitch(higurashiUsesDynamicScale);
+	if (forceTextOverBGOption){
+		_values[SETTING_TEXTBOXW] = textOnlyOverBackground ? "Small" : "Full";
+	}else{
+		_settingsOn[SETTING_TEXTBOXW]=0;
 	}
 	if (_showTextBoxModeOption){
-		_settingsOptionsValueText[_textboxModeSlot]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
+		_values[SETTING_TEXTMODE]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
+	}else{
+		_settingsOn[SETTING_TEXTMODE]=0;
+	}
+	if (_showADVNamesOption){
+		_values[SETTING_ADVNAMES]=charToSwitch(prefersADVNames);
+	}else{
+		_settingsOn[SETTING_ADVNAMES]=0;
+	}
+	if (_shouldShowVNDSSettings){
+		_values[SETTING_HITBOTTOMCLEAR] = charToBoolString(vndsClearAtBottom);
+	}else{
+		_settingsOn[SETTING_HITBOTTOMCLEAR]=0;
+	}
+	// auto stuff
+	_values[SETTING_AUTOSPEED]=&(_tempAutoModeString[0]);
+	_values[SETTING_AUTOVOICEDSPEED]=&(_tempAutoModeVoiceString[0]);
+	// graphics stuff
+	if (_showArtLocationSlot){
+		_values[SETTING_BUSTLOC]=(graphicsLocation == LOCATION_CG ? "CG" : (graphicsLocation==LOCATION_CGALT ? "CGAlt" : "Undefined"));
+	}else{
+		_settingsOn[SETTING_BUSTLOC]=0;
+	}
+	// vnds specific settings
+	if (_shouldShowVNDSSettings){
+		_values[SETTING_VNDSWAR] = showVNDSWarnings ? "Show" : "Hide";
+	}else{
+		_settingsOn[SETTING_VNDSWAR]=0;
 	}
 	if (_showVNDSFadeOption){
-		_settingsOptionsValueText[_vndsBustFadeEnableSlot]=charToSwitch(vndsSpritesFade);
+		_values[SETTING_VNDSFADE]=charToSwitch(vndsSpritesFade);
+	}else{
+		_settingsOn[SETTING_VNDSFADE]=0;
 	}
+	if (_showScalingOption){
+		_values[SETTING_DYNAMICSCAL]=charToSwitch(higurashiUsesDynamicScale);
+	}else{
+		_settingsOn[SETTING_DYNAMICSCAL]=0;
+	}
+	// controls
 	#if GBPLAT == GB_VITA
-		_settingsOptionsValueText[_vndsVitaTouchSlot] = charToSwitch(vndsVitaTouch);
+		_values[SETTING_TOUCH] = charToSwitch(touchProceed);
+	#else
+		_settingsOn[SETTING_TOUCH]=0;
 	#endif
-	if (_showADVNamesOption){
-		_settingsOptionsValueText[_preferAdvNamesSlot] = charToSwitch(prefersADVNames);
-	}
+	// misc
+	#if GBPLAT != GB_VITA
+		_settingsOn[SETTING_OVERCLOCK]=0;
+	#endif
+	_settingsOn[SETTING_DEBUG]=_showDebugButton;
+	_settingsOn[SETTING_DEFAULT]=forceResettingsButton;
 
-	// Make strings
+	/////////////////////////////////////////////////////////////	
+	// make strings
 	itoa(autoModeWait,_tempAutoModeString,10);
 	itoa(autoModeVoicedWait,_tempAutoModeVoiceString,10);
 	itoa(bgmVolume*4,_tempItoaHoldBGM,10);
@@ -5105,68 +5092,33 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
 	itoa(preferredBoxAlpha, _tempItoaHoldBoxAlpha,10);
 	makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
-
-	// This checks if we have Rena busts in CG AND CGAlt also loads Rena, if possible
-	char* _tempRenaPath = easyCombineStrings(3,streamingAssets,"CG/","re_se_de_a1.png");
-	if (checkFileExist(_tempRenaPath)==1){
-		free(_tempRenaPath);
-		_tempRenaPath = easyCombineStrings(3,streamingAssets,"CGAlt/","re_se_de_a1.png");
-		if (checkFileExist(_tempRenaPath)==1){
-			free(_tempRenaPath);
-			_tempRenaPath = easyCombineStrings(3,streamingAssets,locationStrings[graphicsLocation],"re_se_de_a1.png"); // New path for the user's specific graphic choice
-			_renaImage = safeLoadImage(_tempRenaPath);
-		}
-	}
-	free(_tempRenaPath);
-	
-	_optionsOnScreen = (screenHeight/currentTextHeight)-1;
-	if (_optionsOnScreen>_maxOptionSlotUsed){
-		_optionsOnScreen = _maxOptionSlotUsed+1;
-	}else{
-		_needToScroll=1;
-	}
-	while (currentGameStatus!=GAMESTATUS_QUIT){
-		controlsStart();
-		if (menuControlsLow(&_choice,1,1,0,0,0,_maxOptionSlotUsed)){
-			if (_choice>=_optionsOnScreen/2){
-				_scrollOffset = _choice-_optionsOnScreen/2;
-				if (_scrollOffset+_optionsOnScreen>_maxOptionSlotUsed){
-					_scrollOffset=_maxOptionSlotUsed-(_optionsOnScreen-1);
-				}
-			}else{
-				_scrollOffset=0;
-			}
-		}
-		if (wasJustPressed(BUTTON_B)){
-			break;
-		}
-		if (wasJustPressed(BUTTON_X)){
-			break;
-		}
-		if (wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_RIGHT) || wasJustPressed(BUTTON_LEFT)){
-			char _isRight = wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_RIGHT);
-			signed char _directionMultiplier = _isRight ? 1 : -1;
-			if (_choice==0){ // Resume
-				PlayMenuSound();
+	//////////////////////////
+	int _choice=0;
+	char _shouldExit=0;
+	while(!_shouldExit){
+		_choice=showMenuAdvanced(_choice,"Settings",24,_settings,_values,_settingsOn,0);
+		char _isRight = wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_RIGHT);
+		signed char _directionMultiplier = _isRight ? 1 : -1;
+		switch(_choice){
+			case SETTING_BACK:
+				_shouldExit=1;
 				break;
-			}else if (_choice==1){ // CPU speed
-				PlayMenuSound();
-				if (cpuOverclocked==0){
-					cpuOverclocked=1;
+			case SETTING_OVERCLOCK:
+				if (!cpuOverclocked){
 					#if GBPLAT == GB_VITA
 						scePowerSetArmClockFrequency(444);
-					#elif GBPLAT == GB_3DS
-						_settingsOptionsValueText[1] = "Bottom Screen";
 					#endif
-				}else if (cpuOverclocked==1){
-					cpuOverclocked=0;
+				}else{
 					#if GBPLAT == GB_VITA
 						scePowerSetArmClockFrequency(333);
-					#elif GBPLAT == GB_3DS
-						_settingsOptionsValueText[1] = "Top Screen";
 					#endif
 				}
-			}else if (_choice==2){
+				cpuOverclocked=!cpuOverclocked;
+				break;
+			case SETTING_RESTARTBGM:
+				PlayBGM(lastBGMFilename,lastBGMVolume,1);
+				break;
+			case SETTING_BGMVOL:
 				if (_isRight){
 					if (bgmVolume==1){
 						bgmVolume=0;
@@ -5182,7 +5134,8 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				}
 				itoa(bgmVolume*4,_tempItoaHoldBGM,10);
 				SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
-			}else if (_choice==3){
+				break;
+			case SETTING_SEVOL:
 				if (_isRight){
 					if (seVolume==1){
 						seVolume=0;
@@ -5201,23 +5154,41 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
 				}
 				PlayMenuSound();
-			}else if (_choice==_fontSizeSlot){
+				break;
+			case SETTING_VOICEVOL:
+				if (_isRight){
+					if (voiceVolume==1){
+						voiceVolume=0;
+					}else{
+						voiceVolume+=.25;
+					}
+				}else{
+					if (voiceVolume==0){
+						voiceVolume=1;
+					}else{
+						voiceVolume-=.25;
+					}
+				}
+				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
+				break;
+			case SETTING_FONTSIZE:
 				FontSizeSetup();
-				currentTextHeight = textHeight(normalFont);
-			}else if (_choice==_resettingsSlot){
-				PlayMenuSound();
+				break;
+			case SETTING_DEFAULT:
 				if (LazyChoice("This will reset your settings.","Is this okay?",NULL,NULL)==1){
 					resetSettings();
 					easyMessagef(1,"Restart for the changes to take effect.");
 				}
-			}else if (_choice==_textOverBGSlot){
+				break;
+			case SETTING_TEXTBOXW:
 				textOnlyOverBackground=!textOnlyOverBackground;
 				if (textOnlyOverBackground){
-					_settingsOptionsValueText[_textOverBGSlot] = "Small";
+					_values[SETTING_TEXTBOXW] = "Small";
 				}else{
-					_settingsOptionsValueText[_textOverBGSlot] = "Full";
+					_values[SETTING_TEXTBOXW] = "Full";
 				}
-			}else if (_choice==_textSpeedSlot){
+				break;
+			case SETTING_TEXTSPEED:
 				textSpeed+=_directionMultiplier;
 				if (_isRight){
 					if (textSpeed==11){
@@ -5237,11 +5208,15 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					}
 				}
 				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
-			}else if (_choice==_autoModeSpeedSlot){
+				break;
+			case SETTING_AUTOSPEED:
 				_settingsChangeAuto(&autoModeWait,_tempAutoModeString);
-			}else if (_choice==_autoModeSpeedVoiceSlot){
+				break;
+			case SETTING_AUTOVOICEDSPEED:
 				_settingsChangeAuto(&autoModeVoicedWait,_tempAutoModeVoiceString);
-			}else if (_choice==_messageBoxAlphaSlot){ /////////////////////////////////////////////
+				break;
+			case SETTING_BOXALPHA:
+			{
 				int _tempHoldChar = preferredBoxAlpha; // Prevent wrapping
 				if (isDown(BUTTON_L)){
 					_tempHoldChar+=15*_directionMultiplier;
@@ -5255,96 +5230,81 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				}
 				preferredBoxAlpha = _tempHoldChar;
 				itoa(_tempHoldChar,_tempItoaHoldBoxAlpha,10);
-			}else if (_choice==_bustLocationSlot){
-				PlayMenuSound();
+			}
+				break;
+			case SETTING_BUSTLOC:
 				if (graphicsLocation == LOCATION_CG){
 					graphicsLocation = LOCATION_CGALT;
-					_settingsOptionsValueText[_bustLocationSlot]="CGAlt";
+					_values[SETTING_BUSTLOC]="CGAlt";
 				}else if (graphicsLocation == LOCATION_CGALT){
 					graphicsLocation = LOCATION_CG;
-					_settingsOptionsValueText[_bustLocationSlot]="CG";
+					_values[SETTING_BUSTLOC]="CG";
 				}
-				if (_renaImage!=NULL){
-					freeTexture(_renaImage);
-					_tempRenaPath = easyCombineStrings(3,streamingAssets,locationStrings[graphicsLocation],"re_se_de_a1.png");
-					_renaImage = safeLoadImage(_tempRenaPath);
-					free(_tempRenaPath);
-				}
-			}else if (_choice==_voiceVolumeSlot){
-				if (_isRight){
-					if (voiceVolume==1){
-						voiceVolume=0;
-					}else{
-						voiceVolume+=.25;
-					}
-				}else{
-					if (voiceVolume==0){
-						voiceVolume=1;
-					}else{
-						voiceVolume-=.25;
-					}
-				}
-				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
-			}else if (_choice==_restartBgmActionSlot){
-				PlayBGM(lastBGMFilename,lastBGMVolume,1);
-			}else if (_choice==_vndsSaveOptionsSlot){ // VNDS Save
+				break;
+			case SETTING_SAVE:
 				PlayMenuSound();
 				safeVNDSSaveMenu();
-			}else if (_choice==_vndsHitBottomActionSlot){
+				break;
+			case SETTING_HITBOTTOMCLEAR:
 				vndsClearAtBottom = !vndsClearAtBottom;
-				_settingsOptionsValueText[_vndsHitBottomActionSlot] = charToBoolString(vndsClearAtBottom);
-			}else if (_choice==_vndsErrorShowToggleSlot){
+				_values[SETTING_HITBOTTOMCLEAR] = charToBoolString(vndsClearAtBottom);
+				break;
+			case SETTING_VNDSWAR:
 				showVNDSWarnings = !showVNDSWarnings;
 				if (showVNDSWarnings){
-					_settingsOptionsValueText[_vndsErrorShowToggleSlot] = "Show";
+					_values[SETTING_VNDSWAR] = "Show";
 				}else{
-					_settingsOptionsValueText[_vndsErrorShowToggleSlot] = "Hide";
+					_values[SETTING_VNDSWAR] = "Hide";
 				}
-			}else if (_choice==_higurashiScalingSlot){
+				break;
+			case SETTING_DYNAMICSCAL:
 				higurashiUsesDynamicScale=!higurashiUsesDynamicScale;
 				dynamicScaleEnabled=higurashiUsesDynamicScale;
 				updateGraphicsScale();
 				updateTextPositions();
-				_settingsOptionsValueText[_higurashiScalingSlot]=charToSwitch(higurashiUsesDynamicScale);
+				_values[SETTING_DYNAMICSCAL]=charToSwitch(higurashiUsesDynamicScale);
 				for (i=0;i<maxBusts;++i){
 					if (Busts[i].isActive){
 						Busts[i].cacheXOffsetScale = GetXOffsetScale(Busts[i].image);
 						Busts[i].cacheYOffsetScale = GetYOffsetScale(Busts[i].image);
 					}
 				}
-			}else if (_choice==_textboxModeSlot){
+				break;
+			case SETTING_TEXTMODE:
 				preferredTextDisplayMode = (preferredTextDisplayMode==TEXTMODE_ADV ? TEXTMODE_NVL : TEXTMODE_ADV);
-				_settingsOptionsValueText[_textboxModeSlot]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
+				_values[SETTING_TEXTMODE]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
 				switchTextDisplayMode(preferredTextDisplayMode);
-			}else if (_choice==_vndsBustFadeEnableSlot){
+				break;
+			case SETTING_VNDSFADE:
 				vndsSpritesFade=!vndsSpritesFade;
 				if (_showVNDSFadeOption){
 					if (vndsSpritesFade){
-						_settingsOptionsValueText[_vndsBustFadeEnableSlot]="On";
+						_values[SETTING_VNDSFADE]="On";
 					}else{
-						_settingsOptionsValueText[_vndsBustFadeEnableSlot]="Off";
+						_values[SETTING_VNDSFADE]="Off";
 					}
 				}
-			}else if (_choice==_debugButtonSlot){
+				break;
+			case SETTING_DEBUG:
 				debugMenuOption();
-			}
-			#if GBPLAT == GB_VITA
-				else if (_choice==_vndsVitaTouchSlot){
-					vndsVitaTouch=!vndsVitaTouch;
-					if (vndsVitaTouch){
-						_settingsOptionsValueText[_vndsVitaTouchSlot]="On";
-					}else{
-						_settingsOptionsValueText[_vndsVitaTouchSlot]="Off";
-					}
+				break;
+			case SETTING_TOUCH:
+				touchProceed=!touchProceed;
+				if (touchProceed){
+					_values[SETTING_TOUCH]="On";
+				}else{
+					_values[SETTING_TOUCH]="Off";
 				}
-			#endif
-			else if (_choice==_dropshadowSlot){
+				break;
+			case SETTING_DROPSHADOW:
 				dropshadowOn = !dropshadowOn;
-				_settingsOptionsValueText[_dropshadowSlot] = charToSwitch(dropshadowOn);
-			}else if (_choice==_preferAdvNamesSlot){
+				_values[SETTING_DROPSHADOW] = charToSwitch(dropshadowOn);
+				break;
+			case SETTING_ADVNAMES:
 				prefersADVNames=!prefersADVNames;
-				_settingsOptionsValueText[_preferAdvNamesSlot]=prefersADVNames ? "On" : "Off";
-			}else if (_choice==_maxOptionSlotUsed){ // Quit
+				_values[SETTING_ADVNAMES]=prefersADVNames ? "On" : "Off";
+				break;
+			case SETTING_QUIT:
 				#if GBPLAT == GB_3DS
 					lockBGM();
 				#endif
@@ -5352,59 +5312,14 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				currentGameStatus=GAMESTATUS_QUIT;
 				exit(0);
 				break;
-			}
 		}
-		controlsEnd();
-		startDrawing();
-		drawText(5,5+(_choice-_scrollOffset)*currentTextHeight,MENUCURSOR);
-		for (i=0;i<_optionsOnScreen;i++){
-			if (i>_maxOptionSlotUsed){
-				break;
-			}
-			drawText(MENUOPTIONOFFSET,5+currentTextHeight*i,_settingsOptionsMainText[i+_scrollOffset]);
-			if (_settingsOptionsValueText[i+_scrollOffset]!=NULL){
-				drawText(MENUOPTIONOFFSET+textWidth(normalFont,_settingsOptionsMainText[i+_scrollOffset])+singleSpaceWidth,5+currentTextHeight*i,_settingsOptionsValueText[i+_scrollOffset]);
-			}
-		}
-		if (_needToScroll && _scrollOffset!=_maxOptionSlotUsed-(_optionsOnScreen-1)){
-			drawText(MENUOPTIONOFFSET,5+currentTextHeight*_optionsOnScreen,"\\/\\/\\/\\/"); // First option is at 0, so don't subtract one from _optionsOnScreen
-		}
-		
-		// Color CPU overclock text if enabled
-		if (cpuOverclocked && GBPLAT != GB_3DS){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(1-_scrollOffset),_settingsOptionsMainText[1],0,255,0);
-		}
-		// If message box alpha is very high or text is on the bottom screen then make the message box alpha text red
-		if ( (preferredBoxAlpha>=230 && canChangeBoxAlpha) || (GBPLAT == GB_3DS && cpuOverclocked)){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(_messageBoxAlphaSlot-_scrollOffset),_settingsOptionsMainText[_messageBoxAlphaSlot],255,0,0);
-		}
-		if (_shouldShowVNDSSettings && currentlyVNDSGame && gameTextDisplayMode == TEXTMODE_ADV){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(_vndsHitBottomActionSlot-_scrollOffset),_settingsOptionsMainText[_vndsHitBottomActionSlot],255,0,0);
-		}
-		// Display sample Rena if changing bust location
-		#if GBPLAT == GB_3DS
-			startDrawingBottom();
-			if (_choice==_bustLocationSlot){
-				if (_renaImage!=NULL){
-					drawTexture(_renaImage,0,screenHeight-getTextureHeight(_renaImage));
-				}
-			}
-		#else
-			if (_choice==_bustLocationSlot){
-				if (_renaImage!=NULL){
-					drawTexture(_renaImage,screenWidth-getTextureWidth(_renaImage)-5,screenHeight-getTextureHeight(_renaImage));
-				}
-			}
-		#endif
-		endDrawing();
-		exitIfForceQuit();
 	}
+	
+	//////////////////////////
+	free(_settingsOn);
 	applyTextboxChanges();
 	controlsEnd();
 	SaveSettings();
-	if (_renaImage!=NULL){
-		freeTexture(_renaImage);
-	}
 	if (currentGameStatus!=GAMESTATUS_TITLE){
 		// If we changed art location, reload busts
 		if (_artBefore != graphicsLocation){
@@ -5426,6 +5341,21 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			outputLineScreenHeight = 240;
 		}
 	#endif
+/*
+		
+		// Color CPU overclock text if enabled
+		if (cpuOverclocked && GBPLAT != GB_3DS){
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(1-_scrollOffset),_settingsOptionsMainText[1],0,255,0);
+		}
+
+		// If message box alpha is very high or text is on the bottom screen then make the message box alpha text red
+		if ( (preferredBoxAlpha>=230 && canChangeBoxAlpha) || (GBPLAT == GB_3DS && cpuOverclocked)){
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(_messageBoxAlphaSlot-_scrollOffset),_settingsOptionsMainText[_messageBoxAlphaSlot],255,0,0);
+		}
+		if (_shouldShowVNDSSettings && currentlyVNDSGame && gameTextDisplayMode == TEXTMODE_ADV){
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(_vndsHitBottomActionSlot-_scrollOffset),_settingsOptionsMainText[_vndsHitBottomActionSlot],255,0,0);
+		}
+*/
 }
 // Starting at _startIndex, search _searchThis for the next slot that is 1
 // No overflow protection
@@ -5445,12 +5375,14 @@ char* newShowMap(int _numElements){
 }
 // returns -1 if user quit, otherwise returns chosen index
 // pass the real _choice index
-int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char* _showMap, char _canQuit){
+// does not support horizontal scrolling for options with _optionValues
+int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, char _canQuit){
 	controlsReset();
 	int i;
 	// convert the passed _choice from real index in _options to fake index
 	if (_showMap){
-		for (i=0;i<_choice;++i){
+		int _realIndex=_choice;
+		for (i=0;i<_realIndex;++i){
 			if (!_showMap[i]){
 				--_choice;
 			}
@@ -5549,7 +5481,6 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 					_xOff = partMoveFills(_curTime,_startHScroll,_scrollTime,_maxHScroll);
 					if (_curScrollDirection){
 						_xOff=_maxHScroll-_xOff;
-						
 					}
 				}
 			}else{
@@ -5572,6 +5503,9 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 				continue;
 			}
 			drawText(MENUOPTIONOFFSET,currentTextHeight*i,_options[_lastDrawn]);
+			if (_optionValues && _optionValues[_lastDrawn]){
+				drawText(MENUOPTIONOFFSET+textWidth(normalFont,_options[_lastDrawn]),currentTextHeight*i,_optionValues[_lastDrawn]);
+			}
 		}
 		if (_optionsOnScreen!=_numOptions && _scrollOffset!=_numOptions-_optionsOnScreen){
 			drawText(MENUOPTIONOFFSET,currentTextHeight*_optionsOnScreen,"\\/\\/\\/\\/");
@@ -5583,7 +5517,7 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 	return _ret;
 }
 int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _options, char _canQuit){
-	return showMenuAdvanced(_defaultChoice,_title,_numOptions,_options,NULL,_canQuit);
+	return showMenuAdvanced(_defaultChoice,_title,_numOptions,_options,NULL,NULL,_canQuit);
 }
 void TitleScreen(){
 	signed char _choice=0;
@@ -5866,7 +5800,7 @@ void NavigationMenu(){
 	}
 	int _choice=0;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
-		_choice = showMenuAdvanced(_choice,_menuTitle,4,_menuOptions,_optionOn,0);
+		_choice = showMenuAdvanced(_choice,_menuTitle,4,_menuOptions,NULL,_optionOn,0);
 		if (_choice==0){
 			printf("Go to next chapter\n");
 			if (currentPresetChapter+1==currentPresetFileList.length){
@@ -5893,7 +5827,7 @@ void NavigationMenu(){
 }
 void NewGameMenu(){
 	char* _options[]={"Start from beginning","Savegame Editor"};
-	char _choice=showMenuAdvanced(0,"NEW GAME",2,_options,NULL,0);
+	char _choice=showMenu(0,"NEW GAME",2,_options,0);
 	if (_choice==1){
 		currentPresetChapter=0;
 		SaveGameEditor();
@@ -6042,7 +5976,7 @@ int vndsSaveSelector(){
 			}
 		}
 		startDrawing();
-		char _labelBuffer[17];
+		char _labelBuffer[12+strlen(VNDSSAVESELSLOTPREFIX)];
 		for (i=0;i<SAVEMENUPAGEH;++i){
 			int j;
 			for (j=0;j<SAVEMENUPAGEW;++j){
@@ -6066,7 +6000,7 @@ int vndsSaveSelector(){
 					fitInBox(getTextureWidth(_loadedThumbnail[_tempIndex]),getTextureHeight(_loadedThumbnail[_tempIndex]),_slotWidth,_slotHeight,&_destW,&_destH);
 					drawTextureSized(_loadedThumbnail[_tempIndex],(j+1)*_slotWidth-_destW,i*_slotHeight+easyCenter(_destH,_slotHeight),_destW,_destH);
 				}
-				sprintf(_labelBuffer,"Slot %d",_tempIndex+_slotOffset);
+				sprintf(_labelBuffer,VNDSSAVESELSLOTPREFIX"%d",_tempIndex+_slotOffset);
 				if (_loadedTextThumb[_tempIndex]==NULL){
 					strcat(_labelBuffer," (Empty)");
 				}else{

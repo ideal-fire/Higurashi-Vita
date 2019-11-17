@@ -32,6 +32,7 @@ int vndsSaveSelector();
 void drawHallowRect(int _x, int _y, int _w, int _h, int _thick, int _r, int _g, int _b, int _a);
 void safeVNDSSaveMenu();
 int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _options, char _canQuit);
+int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, char _canQuit);
 char* newShowMap(int _numElements);
 typedef struct{
 	char** theArray;
