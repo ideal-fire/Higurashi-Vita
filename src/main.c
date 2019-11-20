@@ -857,6 +857,9 @@ void reloadFont(double _passedSize){
 	#endif
 	currentTextHeight = textHeight(normalFont);
 	singleSpaceWidth = textWidth(normalFont," ");
+	if (singleSpaceWidth==0){
+		singleSpaceWidth=1;
+	}
 	numImageCharSpaceEquivalent=currentTextHeight/singleSpaceWidth;
 
 	char _tempBuffer[numImageCharSpaceEquivalent+1];
