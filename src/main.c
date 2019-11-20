@@ -23,11 +23,8 @@
 		TODO - SetSpeedOfMessage
 		TODO - Sort files in file browser
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
-	TODO - Settings menu is like 500 lines long and uses itoa a billion times
-		TODO - have an int for each one and a format string?
 	TODO - is entire font in memory nonsense still needed
 	TODO - Fix this text speed setting nonsense
-	TODO - Stop. no. don't reuse the isActuallyUsingUma0 or cpuOverclocked variable for screen postion on 3ds or whatever.
 	TODO - Game specific settings files
 	TODO - Draw text with color properties. to allow having colors for every individual character, make a duplicate array, type uint64_t, first three bytes for color, last byte for text property flags
 	TODO - in manual mode, running _GameSpecific.lua first won't keep the settings from being reset by activeVNDSSettings called before manual script.s
@@ -39,9 +36,9 @@
 				}
 	TODO - add veritcal das to showMenu
 	TODO - textbox alpha should change with background alpha
-	TODO - what is exitIfForceQuit
 	TODO - what is this LazyChoice nonsense?
 	TODO - Fix old character art peeks out the edge of textbox
+	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -108,7 +105,7 @@
 	#define SELECTBUTTONNAME "A"
 	#define BACKBUTTONNAME "B"
 	int advboxHeight = 75;
-	#define cpuOverclocked textIsBottomScreen
+	char textIsBottomScreen=0;
 #endif
 char* vitaAppId="HIGURASHI";
 #if GBPLAT == GB_VITA
@@ -121,7 +118,10 @@ char* vitaAppId="HIGURASHI";
 #define MENUCURSOROFFSET 5
 #define MENUOPTIONOFFSET menuCursorSpaceWidth+5
 #define CLEARMESSAGEFADEOUTTIME 100
-#define DEFAULTFONTCOLOR 255,255,255
+#define DEFAULTFONTCOLORR 255
+#define DEFAULTFONTCOLORG 255
+#define DEFAULTFONTCOLORB 255
+#define DEFAULTFONTCOLOR DEFAULTFONTCOLORR,DEFAULTFONTCOLORG,DEFAULTFONTCOLORB
 ////////////////////////////////////
 #define TEXTBOXFADEOUTTIME 200 // In milliseconds
 #define TEXTBOXFADEINTIME 150
@@ -147,6 +147,19 @@ char* vitaAppId="HIGURASHI";
 // ratio of screen width that the text will scroll in one second
 #define TEXTSCROLLPERSECOND .25
 #define TEXTSCROLLDELAYTIME 300
+// bitmap of option propterties for showMenuAdvanced
+// use the optionProp type for these
+#define OPTIONPROP_LEFTRIGHT 1
+#define OPTIONPROP_GOODCOLOR 2
+#define OPTIONPROP_BADCOLOR	 4
+//
+#define MENUPROP_CANQUIT 1
+#define MENUPROP_CANPAGEUPDOWN 2
+// return bitmap of _returnInfo from showMenuAdvanced
+// if the user pressed right to select this option
+#define MENURET_RIGHT 1
+// if the user held L when pressing the button
+#define MENURET_LBUTTON 2
 
 #define PREFER_DIR_BGM 0
 #define PREFER_DIR_SE 1
@@ -644,18 +657,6 @@ void XOutFunction(){
 	quitAudio();
 	generalGoodQuit();
 	exit(0);
-}
-char isForceQuit(){
-	#if GBPLAT == GB_3DS
-		return !(aptMainLoop());
-	#else
-		return 0;
-	#endif
-}
-void exitIfForceQuit(){
-	if (isForceQuit()==1){
-		XOutFunction();
-	}
 }
 // Give a function name to this. It will tell you if it's new.
 // THIS DOES NOT ACCOUNT FOR FUNCTIONS MADE IN happy.lua
@@ -1447,7 +1448,6 @@ void outputLineWait(){
 				#endif
 			}
 		}
-		exitIfForceQuit();
 	}while(endType==Line_Normal || endType == Line_WaitForInput);
 	// If we pressed a button to continue the text and we're doing VNDS ADV mode
 	if (currentlyVNDSGame && gameTextDisplayMode==TEXTMODE_ADV && endType==LINE_RESERVED){
@@ -1773,7 +1773,6 @@ void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
 			drawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.");
 		}
 		endDrawing();
-		exitIfForceQuit();
 	}while (currentGameStatus!=GAMESTATUS_QUIT && _doWait);
 }
 void easyMessagef(char _doWait, const char* _formatString, ...){
@@ -4880,21 +4879,30 @@ void switchTextDisplayMode(signed char _newMode){
 		easyMessagef(1,"TODO");
 	}
 }
-void _settingsChangeAuto(int* _storeValue, char* _storeString){
-	signed char _isNegative = wasJustPressed(BUTTON_LEFT) ? -1 : 1;
-	if (isDown(BUTTON_L)){
-		*_storeValue+=(int)(_isNegative*50);
-	}else{
-		*_storeValue+=(int)(_isNegative*100);
-	}
+void _settingsChangeAuto(int* _storeValue, char* _storeString, signed char _direction, char _isHoldingL){
+	*_storeValue+=(_direction*(_isHoldingL ? 50 : 100));
 	if (*_storeValue<=0){
 		*_storeValue=0;
 	}
-	itoa(*_storeValue,_storeString,10);
+	_storeString[0]='\0';
 }
 void overrideIfSet(signed char* _possibleTarget, signed char _possibleOverride){
 	if (_possibleOverride!=-1){
 		*_possibleTarget = _possibleOverride;
+	}
+}
+void incrementSoundSetting(float* _changeThis, signed char _directionMultiplier, char* _chopThisString){
+	*_changeThis+=.25*_directionMultiplier;
+	if (*_changeThis>1){
+		*_changeThis=0;
+	}else if (*_changeThis<0){
+		*_changeThis=1;
+	}
+	_chopThisString[0]='\0';
+}
+void itoaIfEmpty(int _numVal, char* _destBuffer){
+	if (_destBuffer[0]=='\0'){
+		itoa(_numVal,_destBuffer,10);
 	}
 }
 typedef enum{
@@ -4908,9 +4916,9 @@ typedef enum{
 	SETTING_TEXTSPEED,
 	SETTING_DROPSHADOW,
 	SETTING_FONTSIZE,
-	SETTING_BOXALPHA, //
+	SETTING_TEXTMODE, //
+	SETTING_BOXALPHA,
 	SETTING_TEXTBOXW,
-	SETTING_TEXTMODE,
 	SETTING_ADVNAMES,
 	SETTING_HITBOTTOMCLEAR,
 	SETTING_AUTOSPEED, //
@@ -4954,7 +4962,8 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	controlsReset();
 	PlayMenuSound();
 	int i;
-	char _artBefore=graphicsLocation; // This variable is used to check if the player changed the bust location after exiting
+	char _artBefore=graphicsLocation;
+	// important that these all start with the first element as '\0' for itoaIfEmpty
 	char _tempItoaHoldBGM[5] = {'\0'};
 	char _tempItoaHoldSE[5] = {'\0'};
 	char _tempItoaHoldVoice[5] = {'\0'};
@@ -4962,8 +4971,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	char _tempItoaHoldTextSpeed[8] = {'\0'}; // Needs to be big enough to hold "instant"
 	char _tempAutoModeString[10] = {'\0'};
 	char _tempAutoModeVoiceString[10] = {'\0'};
-		
-	char* _settingsOn = newShowMap(SETTINGS_MAX);
+	
 	char* _settings[] = {
 		NULL, // back
 		"=Save Game=",
@@ -4975,9 +4983,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		"Text Speed:",
 		"Drop Shadow:",
 		"Font Size",
-		"Message Box Alpha:", // textbox
+		"Text Mode:", // textbox
+		"Message Box Alpha:",
 		"Textbox:",
-		"Text Mode:",
 		"ADV Names:",
 		"Clear at bottom:",
 		"Auto Speed:", // auto
@@ -4993,183 +5001,158 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		"Quit",
 	};
 	_settings[SETTING_BACK] = (currentGameStatus == GAMESTATUS_TITLE) ? "Back" : "Resume";
+	optionProp _settingsProp[SETTINGS_MAX] = {
+		0,
+		0,
+		0,
+		OPTIONPROP_LEFTRIGHT,
+		OPTIONPROP_LEFTRIGHT,
+		OPTIONPROP_LEFTRIGHT,
+		0,
+		OPTIONPROP_LEFTRIGHT,
+		0,
+		0,
+		0,
+		OPTIONPROP_LEFTRIGHT,
+		0,
+		0,
+		0,
+		OPTIONPROP_LEFTRIGHT,
+		OPTIONPROP_LEFTRIGHT,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+		0,
+	};
 	//
+	char* _settingsOn = newShowMap(SETTINGS_MAX);
 	char* _values[SETTINGS_MAX] = {NULL};
-
+	// constant values or constant on/off state
 	_settingsOn[SETTING_SAVE]=_shouldShowVNDSSave;
-	
 	_settingsOn[SETTING_RESTARTBGM]=_shouldShowRestartBGM;
 	_values[SETTING_BGMVOL] = &(_tempItoaHoldBGM[0]);
 	_values[SETTING_SEVOL] = &(_tempItoaHoldSE[0]);
 	_values[SETTING_VOICEVOL] = &(_tempItoaHoldVoice[0]);
-	if (!hasOwnVoiceSetting){
-		_settingsOn[SETTING_VOICEVOL]=0;
-	}
-
-	// text
-	#if GBPLAT == GB_3DS
-		_values[SETTING_TEXTSCREEN] = textIsBottomScreen ? "Bottom Screen" : "Top Screen";
-	#else
-		_settingsOn[SETTING_TEXTSCREEN]=0;
-	#endif
+	_settingsOn[SETTING_VOICEVOL]=hasOwnVoiceSetting;
 	_values[SETTING_TEXTSPEED] = &(_tempItoaHoldTextSpeed[0]);
-	if (forceDropshadowOption){
-		_values[SETTING_DROPSHADOW] = charToSwitch(dropshadowOn);
-	}else{
-		_settingsOn[SETTING_DROPSHADOW]=0;
-	}
-	// font size
+	_settingsOn[SETTING_DROPSHADOW]=forceDropshadowOption;
 	_settingsOn[SETTING_FONTSIZE]=forceFontSizeOption;
-	if (gameTextDisplayMode==TEXTMODE_NVL || canChangeBoxAlpha){
-		_values[SETTING_BOXALPHA] = &(_tempItoaHoldBoxAlpha[0]);
-	}else{
-		_settingsOn[SETTING_BOXALPHA]=0;
-	}
-	if (forceTextOverBGOption){
-		_values[SETTING_TEXTBOXW] = textOnlyOverBackground ? "Small" : "Full";
-	}else{
-		_settingsOn[SETTING_TEXTBOXW]=0;
-	}
-	if (_showTextBoxModeOption){
-		_values[SETTING_TEXTMODE]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
-	}else{
-		_settingsOn[SETTING_TEXTMODE]=0;
-	}
-	if (_showADVNamesOption){
-		_values[SETTING_ADVNAMES]=charToSwitch(prefersADVNames);
-	}else{
-		_settingsOn[SETTING_ADVNAMES]=0;
-	}
-	if (_shouldShowVNDSSettings){
-		_values[SETTING_HITBOTTOMCLEAR] = charToBoolString(vndsClearAtBottom);
-	}else{
-		_settingsOn[SETTING_HITBOTTOMCLEAR]=0;
-	}
-	// auto stuff
-	_values[SETTING_AUTOSPEED]=&(_tempAutoModeString[0]);
+	_settingsOn[SETTING_BOXALPHA]=(gameTextDisplayMode==TEXTMODE_NVL || canChangeBoxAlpha);
+	_values[SETTING_BOXALPHA] = &(_tempItoaHoldBoxAlpha[0]);
+	_settingsOn[SETTING_TEXTMODE]=_showTextBoxModeOption;	
+	_values[SETTING_AUTOSPEED]=&(_tempAutoModeString[0]); // auto stuff
 	_values[SETTING_AUTOVOICEDSPEED]=&(_tempAutoModeVoiceString[0]);
-	// graphics stuff
-	if (_showArtLocationSlot){
-		_values[SETTING_BUSTLOC]=(graphicsLocation == LOCATION_CG ? "CG" : (graphicsLocation==LOCATION_CGALT ? "CGAlt" : "Undefined"));
-	}else{
-		_settingsOn[SETTING_BUSTLOC]=0;
-	}
-	// vnds specific settings
-	if (_shouldShowVNDSSettings){
-		_values[SETTING_VNDSWAR] = showVNDSWarnings ? "Show" : "Hide";
-	}else{
-		_settingsOn[SETTING_VNDSWAR]=0;
-	}
-	if (_showVNDSFadeOption){
-		_values[SETTING_VNDSFADE]=charToSwitch(vndsSpritesFade);
-	}else{
-		_settingsOn[SETTING_VNDSFADE]=0;
-	}
-	if (_showScalingOption){
-		_values[SETTING_DYNAMICSCAL]=charToSwitch(higurashiUsesDynamicScale);
-	}else{
-		_settingsOn[SETTING_DYNAMICSCAL]=0;
-	}
-	// controls
-	#if GBPLAT == GB_VITA
-		_values[SETTING_TOUCH] = charToSwitch(touchProceed);
-	#else
-		_settingsOn[SETTING_TOUCH]=0;
-	#endif
-	// misc
+	_settingsOn[SETTING_BUSTLOC]=_showArtLocationSlot;
+	_settingsOn[SETTING_VNDSWAR]=_shouldShowVNDSSettings;
+	_settingsOn[SETTING_VNDSFADE]=_showVNDSFadeOption;
+	_settingsOn[SETTING_DYNAMICSCAL]=_showScalingOption;
 	#if GBPLAT != GB_VITA
 		_settingsOn[SETTING_OVERCLOCK]=0;
 	#endif
 	_settingsOn[SETTING_DEBUG]=_showDebugButton;
 	_settingsOn[SETTING_DEFAULT]=forceResettingsButton;
-
-	/////////////////////////////////////////////////////////////	
-	// make strings
-	itoa(autoModeWait,_tempAutoModeString,10);
-	itoa(autoModeVoicedWait,_tempAutoModeVoiceString,10);
-	itoa(bgmVolume*4,_tempItoaHoldBGM,10);
-	itoa(seVolume*4, _tempItoaHoldSE,10);
-	itoa(voiceVolume*4, _tempItoaHoldVoice,10);
-	itoa(preferredBoxAlpha, _tempItoaHoldBoxAlpha,10);
-	makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
 	//////////////////////////
 	int _choice=0;
 	char _shouldExit=0;
 	while(!_shouldExit){
-		_choice=showMenuAdvanced(_choice,"Settings",24,_settings,_values,_settingsOn,0);
-		char _isRight = wasJustPressed(BUTTON_A) || wasJustPressed(BUTTON_RIGHT);
-		signed char _directionMultiplier = _isRight ? 1 : -1;
+		// text
+		#if GBPLAT == GB_3DS
+			_values[SETTING_TEXTSCREEN] = textIsBottomScreen ? "Bottom Screen" : "Top Screen";
+		#else
+			_settingsOn[SETTING_TEXTSCREEN]=0;
+		#endif
+		if (_settingsOn[SETTING_DROPSHADOW]){
+			_values[SETTING_DROPSHADOW] = charToSwitch(dropshadowOn);
+		}
+		_settingsOn[SETTING_TEXTBOXW]=(forceTextOverBGOption && preferredTextDisplayMode==TEXTMODE_NVL);
+		if (_settingsOn[SETTING_TEXTBOXW]){
+			_values[SETTING_TEXTBOXW] = textOnlyOverBackground ? "Small" : "Full";
+		}
+		if (_settingsOn[SETTING_TEXTMODE]){
+			_values[SETTING_TEXTMODE]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
+		}
+		_settingsOn[SETTING_ADVNAMES]=(_showADVNamesOption && preferredTextDisplayMode==TEXTMODE_ADV);
+		if (_settingsOn[SETTING_ADVNAMES]){
+			_values[SETTING_ADVNAMES]=charToSwitch(prefersADVNames);
+		}
+		_settingsOn[SETTING_HITBOTTOMCLEAR]=(_shouldShowVNDSSettings && preferredTextDisplayMode==TEXTMODE_NVL);
+		if (_settingsOn[SETTING_HITBOTTOMCLEAR]){
+			_values[SETTING_HITBOTTOMCLEAR] = charToBoolString(vndsClearAtBottom);
+		}
+		// graphics stuff
+		if (_settingsOn[SETTING_BUSTLOC]){
+			_values[SETTING_BUSTLOC]=(graphicsLocation == LOCATION_CG ? "CG" : (graphicsLocation==LOCATION_CGALT ? "CGAlt" : "Undefined"));
+		}
+		// vnds specific settings
+		if (_settingsOn[SETTING_VNDSWAR]){
+			_values[SETTING_VNDSWAR] = showVNDSWarnings ? "Show" : "Hide";
+		}
+		if (_settingsOn[SETTING_VNDSFADE]){
+			_values[SETTING_VNDSFADE]=charToSwitch(vndsSpritesFade);
+		}
+		if (_settingsOn[SETTING_DYNAMICSCAL]){
+			_values[SETTING_DYNAMICSCAL]=charToSwitch(higurashiUsesDynamicScale);
+		}
+		// controls
+		#if GBPLAT == GB_VITA
+			_values[SETTING_TOUCH] = charToSwitch(touchProceed);
+		#else
+			_settingsOn[SETTING_TOUCH]=0;
+		#endif
+		// misc
+		_values[SETTING_OVERCLOCK]=charToSwitch(cpuOverclocked);
+		// update strings if needed
+		itoaIfEmpty(autoModeWait,_tempAutoModeString);
+		itoaIfEmpty(autoModeVoicedWait,_tempAutoModeVoiceString);
+		itoaIfEmpty(bgmVolume*4,_tempItoaHoldBGM);
+		itoaIfEmpty(seVolume*4,_tempItoaHoldSE);
+		itoaIfEmpty(voiceVolume*4,_tempItoaHoldVoice);
+		itoaIfEmpty(preferredBoxAlpha,_tempItoaHoldBoxAlpha);
+		if (_tempItoaHoldTextSpeed[0]=='\0'){
+			makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
+		}
+		// update colors if needed
+		// If message box alpha is very high, make it red
+		_settingsProp[SETTING_BOXALPHA]=OPTIONPROP_LEFTRIGHT;
+		if (preferredBoxAlpha>=230){
+			_settingsProp[SETTING_BOXALPHA]|=OPTIONPROP_BADCOLOR;
+		}
+
+		char _selectionInfo;
+		_choice=showMenuAdvanced(_choice,"Settings",SETTINGS_MAX,_settings,_values,_settingsOn,_settingsProp,&_selectionInfo,0);
+		signed char _directionMultiplier = (_selectionInfo & MENURET_RIGHT) ? 1 : -1;
+		char _didHoldL = (_selectionInfo & MENURET_LBUTTON);
 		switch(_choice){
 			case SETTING_BACK:
 				_shouldExit=1;
 				break;
 			case SETTING_OVERCLOCK:
-				if (!cpuOverclocked){
-					#if GBPLAT == GB_VITA
-						scePowerSetArmClockFrequency(444);
-					#endif
-				}else{
-					#if GBPLAT == GB_VITA
-						scePowerSetArmClockFrequency(333);
-					#endif
-				}
 				cpuOverclocked=!cpuOverclocked;
+				#if GBPLAT == GB_VITA
+					scePowerSetArmClockFrequency(cpuOverclocked ? 444 : 333);
+				#endif
 				break;
 			case SETTING_RESTARTBGM:
 				PlayBGM(lastBGMFilename,lastBGMVolume,1);
 				break;
 			case SETTING_BGMVOL:
-				if (_isRight){
-					if (bgmVolume==1){
-						bgmVolume=0;
-					}else{
-						bgmVolume+=.25;
-					}
-				}else{
-					if (bgmVolume==0){
-						bgmVolume=1;
-					}else{
-						bgmVolume-=.25;
-					}
-				}
-				itoa(bgmVolume*4,_tempItoaHoldBGM,10);
+				incrementSoundSetting(&bgmVolume,_directionMultiplier,_tempItoaHoldBGM);
 				SetAllMusicVolume(FixBGMVolume(lastBGMVolume));
 				break;
 			case SETTING_SEVOL:
-				if (_isRight){
-					if (seVolume==1){
-						seVolume=0;
-					}else{
-						seVolume+=.25;
-					}
-				}else{
-					if (seVolume==0){
-						seVolume=1;
-					}else{
-						seVolume-=.25;
-					}
-				}
-				itoa(seVolume*4,_tempItoaHoldSE,10);
+				incrementSoundSetting(&seVolume,_directionMultiplier,_tempItoaHoldSE);
 				if (menuSoundLoaded==1){
 					setSFXVolumeBefore(menuSound,FixSEVolume(256));
+					PlayMenuSound();
 				}
-				PlayMenuSound();
 				break;
 			case SETTING_VOICEVOL:
-				if (_isRight){
-					if (voiceVolume==1){
-						voiceVolume=0;
-					}else{
-						voiceVolume+=.25;
-					}
-				}else{
-					if (voiceVolume==0){
-						voiceVolume=1;
-					}else{
-						voiceVolume-=.25;
-					}
-				}
-				itoa(voiceVolume*4,_tempItoaHoldVoice,10);
+				incrementSoundSetting(&voiceVolume,_directionMultiplier,_tempItoaHoldVoice);
 				break;
 			case SETTING_FONTSIZE:
 				FontSizeSetup();
@@ -5182,15 +5165,10 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				break;
 			case SETTING_TEXTBOXW:
 				textOnlyOverBackground=!textOnlyOverBackground;
-				if (textOnlyOverBackground){
-					_values[SETTING_TEXTBOXW] = "Small";
-				}else{
-					_values[SETTING_TEXTBOXW] = "Full";
-				}
 				break;
 			case SETTING_TEXTSPEED:
 				textSpeed+=_directionMultiplier;
-				if (_isRight){
+				if (_directionMultiplier==1){
 					if (textSpeed==11){
 						textSpeed=TEXTSPEED_INSTANT;
 					}else if (textSpeed==TEXTSPEED_INSTANT+1){
@@ -5207,18 +5185,18 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 						textSpeed=-1;
 					}
 				}
-				makeTextSpeedString(_tempItoaHoldTextSpeed,textSpeed);
+				_tempItoaHoldTextSpeed[0]='\0';
 				break;
 			case SETTING_AUTOSPEED:
-				_settingsChangeAuto(&autoModeWait,_tempAutoModeString);
+				_settingsChangeAuto(&autoModeWait,_tempAutoModeString,_directionMultiplier,_didHoldL);
 				break;
 			case SETTING_AUTOVOICEDSPEED:
-				_settingsChangeAuto(&autoModeVoicedWait,_tempAutoModeVoiceString);
+				_settingsChangeAuto(&autoModeVoicedWait,_tempAutoModeVoiceString,_directionMultiplier,_didHoldL);
 				break;
 			case SETTING_BOXALPHA:
 			{
 				int _tempHoldChar = preferredBoxAlpha; // Prevent wrapping
-				if (isDown(BUTTON_L)){
+				if (_didHoldL){
 					_tempHoldChar+=15*_directionMultiplier;
 				}else{
 					_tempHoldChar+=25*_directionMultiplier;
@@ -5229,17 +5207,11 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 					_tempHoldChar=0;
 				}
 				preferredBoxAlpha = _tempHoldChar;
-				itoa(_tempHoldChar,_tempItoaHoldBoxAlpha,10);
+				_tempItoaHoldBoxAlpha[0]='\0';
 			}
 				break;
 			case SETTING_BUSTLOC:
-				if (graphicsLocation == LOCATION_CG){
-					graphicsLocation = LOCATION_CGALT;
-					_values[SETTING_BUSTLOC]="CGAlt";
-				}else if (graphicsLocation == LOCATION_CGALT){
-					graphicsLocation = LOCATION_CG;
-					_values[SETTING_BUSTLOC]="CG";
-				}
+				graphicsLocation = (graphicsLocation==LOCATION_CG) ? LOCATION_CGALT : LOCATION_CG;
 				break;
 			case SETTING_SAVE:
 				PlayMenuSound();
@@ -5247,22 +5219,15 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				break;
 			case SETTING_HITBOTTOMCLEAR:
 				vndsClearAtBottom = !vndsClearAtBottom;
-				_values[SETTING_HITBOTTOMCLEAR] = charToBoolString(vndsClearAtBottom);
 				break;
 			case SETTING_VNDSWAR:
 				showVNDSWarnings = !showVNDSWarnings;
-				if (showVNDSWarnings){
-					_values[SETTING_VNDSWAR] = "Show";
-				}else{
-					_values[SETTING_VNDSWAR] = "Hide";
-				}
 				break;
 			case SETTING_DYNAMICSCAL:
 				higurashiUsesDynamicScale=!higurashiUsesDynamicScale;
 				dynamicScaleEnabled=higurashiUsesDynamicScale;
 				updateGraphicsScale();
 				updateTextPositions();
-				_values[SETTING_DYNAMICSCAL]=charToSwitch(higurashiUsesDynamicScale);
 				for (i=0;i<maxBusts;++i){
 					if (Busts[i].isActive){
 						Busts[i].cacheXOffsetScale = GetXOffsetScale(Busts[i].image);
@@ -5272,37 +5237,22 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				break;
 			case SETTING_TEXTMODE:
 				preferredTextDisplayMode = (preferredTextDisplayMode==TEXTMODE_ADV ? TEXTMODE_NVL : TEXTMODE_ADV);
-				_values[SETTING_TEXTMODE]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
 				switchTextDisplayMode(preferredTextDisplayMode);
 				break;
 			case SETTING_VNDSFADE:
 				vndsSpritesFade=!vndsSpritesFade;
-				if (_showVNDSFadeOption){
-					if (vndsSpritesFade){
-						_values[SETTING_VNDSFADE]="On";
-					}else{
-						_values[SETTING_VNDSFADE]="Off";
-					}
-				}
 				break;
 			case SETTING_DEBUG:
 				debugMenuOption();
 				break;
 			case SETTING_TOUCH:
 				touchProceed=!touchProceed;
-				if (touchProceed){
-					_values[SETTING_TOUCH]="On";
-				}else{
-					_values[SETTING_TOUCH]="Off";
-				}
 				break;
 			case SETTING_DROPSHADOW:
 				dropshadowOn = !dropshadowOn;
-				_values[SETTING_DROPSHADOW] = charToSwitch(dropshadowOn);
 				break;
 			case SETTING_ADVNAMES:
 				prefersADVNames=!prefersADVNames;
-				_values[SETTING_ADVNAMES]=prefersADVNames ? "On" : "Off";
 				break;
 			case SETTING_QUIT:
 				#if GBPLAT == GB_3DS
@@ -5314,7 +5264,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				break;
 		}
 	}
-	
 	//////////////////////////
 	free(_settingsOn);
 	applyTextboxChanges();
@@ -5341,21 +5290,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			outputLineScreenHeight = 240;
 		}
 	#endif
-/*
-		
-		// Color CPU overclock text if enabled
-		if (cpuOverclocked && GBPLAT != GB_3DS){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(1-_scrollOffset),_settingsOptionsMainText[1],0,255,0);
-		}
-
-		// If message box alpha is very high or text is on the bottom screen then make the message box alpha text red
-		if ( (preferredBoxAlpha>=230 && canChangeBoxAlpha) || (GBPLAT == GB_3DS && cpuOverclocked)){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(_messageBoxAlphaSlot-_scrollOffset),_settingsOptionsMainText[_messageBoxAlphaSlot],255,0,0);
-		}
-		if (_shouldShowVNDSSettings && currentlyVNDSGame && gameTextDisplayMode == TEXTMODE_ADV){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(_vndsHitBottomActionSlot-_scrollOffset),_settingsOptionsMainText[_vndsHitBottomActionSlot],255,0,0);
-		}
-*/
 }
 // Starting at _startIndex, search _searchThis for the next slot that is 1
 // No overflow protection
@@ -5376,8 +5310,11 @@ char* newShowMap(int _numElements){
 // returns -1 if user quit, otherwise returns chosen index
 // pass the real _choice index
 // does not support horizontal scrolling for options with _optionValues
-int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, char _canQuit){
+int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
 	controlsReset();
+	if (_returnInfo){
+		*_returnInfo=0;
+	}
 	int i;
 	// convert the passed _choice from real index in _options to fake index
 	if (_showMap){
@@ -5415,7 +5352,7 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 	int _curRealIndex;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
-		if (menuControlsLow(&_choice,1,1,0,_optionsOnScreen,0,_numOptions-1)){
+		if (menuControlsLow(&_choice,1,1,0,(_menuProp & MENUPROP_CANPAGEUPDOWN) ? _optionsOnScreen : 0,0,_numOptions-1)){
 			_scrollOffset=-1;
 		}
 		if (_scrollOffset==-1){ // queued menu info update
@@ -5444,15 +5381,37 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 				_scrollOffset=0;
 			}
 		}
-		if (wasJustPressed(BUTTON_B) && _canQuit){ // cancel
+		if (wasJustPressed(BUTTON_B) && (_menuProp & MENUPROP_CANQUIT)){ // cancel
 			_ret=-1;
 			break;
 		}
-		if (wasJustPressed(BUTTON_A)){
+		// Check if user selected this one with A button or left or right (if enabled)
+		signed char _didPress=0;
+		if (_optionProp!=NULL && (_optionProp[_curRealIndex] & OPTIONPROP_LEFTRIGHT)){
+			if (wasJustPressed(BUTTON_RIGHT)){
+				_didPress=1;
+			}else if (wasJustPressed(BUTTON_LEFT)){
+				_didPress=-1;
+			}
+		}else{
+			if (wasJustPressed(BUTTON_A)){
+				_didPress=1;
+			}
+		}
+		if (_didPress){
 			// Get the real index and set _ret to it
 			_ret=-1;
 			for (i=0;i<=_choice;++i){
 				_ret=getNextEnabled(_showMap,_ret+1);
+			}
+			// set the flag if the user pressed right to select this entry
+			if (_returnInfo){
+				if (_didPress==1){
+					*_returnInfo|=MENURET_RIGHT;
+				}
+				if (isDown(BUTTON_L)){
+					*_returnInfo|=MENURET_LBUTTON;
+				}
 			}
 			break;
 		}
@@ -5462,6 +5421,7 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 			drawText(easyCenter(textWidth(normalFont,_title),screenWidth),0,_title);
 			gbSetDrawOffY(currentTextHeight*1.5);
 		}
+		// update horizontal scroll
 		if (_maxHScroll!=0){
 		startCalcOffset:
 			;
@@ -5502,9 +5462,25 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 			if (i==_choice-_scrollOffset && _maxHScroll!=0){
 				continue;
 			}
-			drawText(MENUOPTIONOFFSET,currentTextHeight*i,_options[_lastDrawn]);
+			// process properties for this option
+			int _r = DEFAULTFONTCOLORR;
+			int _g = DEFAULTFONTCOLORG;
+			int _b = DEFAULTFONTCOLORB;
+			if (_optionProp!=NULL){
+				if (_optionProp[_lastDrawn] & OPTIONPROP_GOODCOLOR){
+					_r=0;
+					_g=255;
+					_b=0;
+				}else if (_optionProp[_lastDrawn] & OPTIONPROP_BADCOLOR){
+					_r=255;
+					_g=0;
+					_b=0;
+				}
+			}
+			// draw the option
+			gbDrawText(normalFont,MENUOPTIONOFFSET,currentTextHeight*i,_options[_lastDrawn],_r,_g,_b);
 			if (_optionValues && _optionValues[_lastDrawn]){
-				drawText(MENUOPTIONOFFSET+textWidth(normalFont,_options[_lastDrawn]),currentTextHeight*i,_optionValues[_lastDrawn]);
+				gbDrawText(normalFont,MENUOPTIONOFFSET+textWidth(normalFont,_options[_lastDrawn]),currentTextHeight*i,_optionValues[_lastDrawn],_r,_g,_b);
 			}
 		}
 		if (_optionsOnScreen!=_numOptions && _scrollOffset!=_numOptions-_optionsOnScreen){
@@ -5517,14 +5493,15 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 	return _ret;
 }
 int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _options, char _canQuit){
-	return showMenuAdvanced(_defaultChoice,_title,_numOptions,_options,NULL,NULL,_canQuit);
+	char _menuProps=MENUPROP_CANPAGEUPDOWN;
+	if (_canQuit){
+		_menuProps|=MENUPROP_CANQUIT;
+	}
+	return showMenuAdvanced(_defaultChoice,_title,_numOptions,_options,NULL,NULL,NULL,NULL,_menuProps);
 }
 void TitleScreen(){
 	signed char _choice=0;
-	signed char _titlePassword=0;
-
 	int _versionStringWidth = textWidth(normalFont,VERSIONSTRING VERSIONSTRINGSUFFIX);
-
 	char _bottomConfigurationString[13+strlen(SYSTEMSTRING)];
 	strcpy(_bottomConfigurationString,SYSTEMSTRING);
 	if (isGameFolderMode){
@@ -5541,26 +5518,7 @@ void TitleScreen(){
 	#endif
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
-		// Password right left down up square
-			if (wasJustPressed(BUTTON_RIGHT)){
-				_titlePassword=1;
-			}else if (wasJustPressed(BUTTON_LEFT)){
-				_titlePassword = Password(_titlePassword,1);
-			}else if (wasJustPressed(BUTTON_DOWN)){
-				_titlePassword = Password(_titlePassword,2);
-			}else if (wasJustPressed(BUTTON_UP)){
-				_titlePassword = Password(_titlePassword,3);
-			}else if (wasJustPressed(BUTTON_Y)){
-				_titlePassword = Password(_titlePassword,4);
-				if (_titlePassword==5){
-					if (LazyChoice("Would you like to activate top secret","speedy mode for testing?",NULL,NULL)==1){
-						autoModeWait=50;
-					}
-				}
-			}
-
 		_choice = menuControls(_choice, 0, isGameFolderMode ? 3 : 4);
-
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice==0){
 				PlayMenuSound(); 
@@ -5692,7 +5650,6 @@ void TitleScreen(){
 		#endif
 		endDrawing();
 		controlsEnd();
-		exitIfForceQuit();
 	}
 }
 void TipMenu(){
@@ -5800,7 +5757,7 @@ void NavigationMenu(){
 	}
 	int _choice=0;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
-		_choice = showMenuAdvanced(_choice,_menuTitle,4,_menuOptions,NULL,_optionOn,0);
+		_choice = showMenuAdvanced(_choice,_menuTitle,4,_menuOptions,NULL,_optionOn,NULL,NULL,0);
 		if (_choice==0){
 			printf("Go to next chapter\n");
 			if (currentPresetChapter+1==currentPresetFileList.length){
@@ -6192,7 +6149,6 @@ void VNDSNavigationMenu(){
 		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
 
 		endDrawing();
-		exitIfForceQuit();
 	}
 	free(_loadedNovelName);
 }
@@ -6286,7 +6242,6 @@ void hVitaCheckVpk(){
 	char* _embeddedCheckPath = fixPathAlloc("assets/star.png",TYPE_EMBEDDED);
 	if (!checkFileExist(_embeddedCheckPath)){
 		while(1){
-			exitIfForceQuit();
 			controlsReset();
 			startDrawing();
 			drawRectangle(0,0,20,100,255,0,0,255);
