@@ -5314,6 +5314,9 @@ char* newShowMap(int _numElements){
 // pass the real _choice index
 // does not support horizontal scrolling for options with _optionValues
 int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
+	#ifdef OVERRIDE_SHOWMENU
+		return customShowMenuAdvanced(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp);
+	#endif
 	controlsReset();
 	if (_returnInfo){
 		*_returnInfo=0;
