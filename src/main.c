@@ -932,8 +932,7 @@ void WriteToDebugFile(const char* stuff){
 // Returns zero if they chose no
 int LazyChoice(const char* stra, const char* strb, const char* strc, const char* strd){
 	int _choice=0;
-	controlsStart();
-	controlsEnd();
+	controlsReset();
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
 		if (wasJustPressed(BUTTON_A)){
@@ -1755,8 +1754,7 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 	free(_workable);
 }
 void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
-	controlsStart();
-	controlsEnd();
+	controlsReset();
 	do{
 		controlsStart();
 		if (wasJustPressed(BUTTON_A)){
@@ -3714,7 +3712,12 @@ char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 			if (_saveSurface!=NULL){
 				SDL_ClearError();
 				SDL_LockSurface(_saveSurface);
-				if (SDL_RenderReadPixels(mainWindowRenderer,NULL,_saveSurface->format->format,_saveSurface->pixels,_saveSurface->pitch)==0){
+				SDL_Rect _readRect;
+				_readRect.x=fixX(0);
+				_readRect.y=fixY(0);
+				_readRect.w=screenWidth;
+				_readRect.h=screenHeight;
+				if (SDL_RenderReadPixels(mainWindowRenderer,&_readRect,_saveSurface->format->format,_saveSurface->pixels,_saveSurface->pitch)==0){
 					if (SDL_SaveBMP(_saveSurface,_thumbFilename)!=0){
 						printf("Error saving surface\n");
 					}
@@ -3819,8 +3822,7 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 	// Have to free here because this variable is used above
 	free(_foundScriptFilename);
 
-	controlsStart();
-	controlsEnd();
+	controlsReset();
 
 	if (gameTextDisplayMode==TEXTMODE_ADV && dynamicAdvBoxHeight){
 		updateDynamicADVBox(0,-1);
@@ -4788,8 +4790,7 @@ char upgradeToGameFolder(){
 	}
 	if (_didUpgradeOne){
 		ClearMessageArray(0);
-		controlsStart();
-		controlsEnd();
+		controlsReset();
 		char* _bigMessageBuffer = easySprintf("Now that you've upgraded one or more of your StreamingAssets folders to include the preset file, you need to move all your StreamingAssets folder(s) using VitaShell or MolecularShell to\n%s\nYou will need to create that games folder first. After you create that game folder, you won't be able to use preset mode anymore, so make sure you've upgraded all of your StreamingAssets folders before.",gamesFolder);
 		OutputLine(_bigMessageBuffer,Line_WaitForInput,0);
 		while (!wasJustPressed(BUTTON_A)){
@@ -5314,9 +5315,6 @@ char* newShowMap(int _numElements){
 // pass the real _choice index
 // does not support horizontal scrolling for options with _optionValues
 int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
-	#ifdef OVERRIDE_SHOWMENU
-		return customShowMenuAdvanced(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp);
-	#endif
 	controlsReset();
 	if (_returnInfo){
 		*_returnInfo=0;
@@ -5569,8 +5567,7 @@ void TitleScreen(){
 				controlsEnd();
 				char* _tempManualFileSelectionResult;
 				FileSelector(scriptFolder,&_tempManualFileSelectionResult,(char*)"Select a script");
-				controlsStart();
-				controlsEnd();
+				controlsReset();
 				if (_tempManualFileSelectionResult!=NULL){
 					if (strlen(_tempManualFileSelectionResult)>4 && strcmp(&(_tempManualFileSelectionResult[strlen(_tempManualFileSelectionResult)-4]),".scr")==0){
 						currentGameStatus=GAMESTATUS_MAINGAME;
@@ -5610,8 +5607,7 @@ void TitleScreen(){
 					easyMessagef(1,"You really shouldn't be here. You haven't escaped, you know? You're not even going the right way.");
 				}else{
 					ClearMessageArray(0);
-					controlsStart();
-					controlsEnd();
+					controlsReset();
 					OutputLine("This process will convert your legacy preset & StreamingAssets setup to the new game folder setup. It makes everything easier, so you should do it.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
 					while (!wasJustPressed(BUTTON_A)){
 						controlsEnd();
@@ -5801,8 +5797,7 @@ int vndsSaveSelector(){
 	#ifdef OVERRIDE_VNDSSAVEMENU
 		return customVNDSSaveSelector();
 	#endif
-	controlsStart();
-	controlsEnd();
+	controlsReset();
 	// screenWidth/3/2 free space for each text
 	int _slotWidth = screenWidth/SAVEMENUPAGEW;
 	int _slotHeight = screenHeight/SAVEMENUPAGEH;
