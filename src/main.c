@@ -39,6 +39,7 @@
 	TODO - what is this LazyChoice nonsense?
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
+	TODO - allow image choice graphics of any size. and maybe even allow scrolling them
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -180,6 +181,7 @@ char* vitaAppId="HIGURASHI";
 	#define SYSTEMSTRING "UNKNOWN"
 #endif
 
+#define PREFERREDMINMAXLINES 10 // if we have fewer than this maxLines and in NVL mode then discard NVL bottom padding
 #define STUPIDTEXTYOFF 12
 #define totalTextYOff() (STUPIDTEXTYOFF+messageInBoxYOffset+textboxYOffset)
 #define shouldShowADVNames() (gameTextDisplayMode==TEXTMODE_ADV && (advNamesSupported==2 || (advNamesSupported && prefersADVNames)))
@@ -752,7 +754,13 @@ void changeMaxLines(int _newMax){
 	currentMessages=_newCurrentMessages;
 }
 void recalculateMaxLines(){
-	changeMaxLines((outputLineScreenHeight-totalTextYOff())/currentTextHeight);
+	int _usableHeight;
+	if (gameTextDisplayMode==TEXTMODE_ADV){
+		_usableHeight=outputLineScreenHeight-totalTextYOff();
+	}else{ // for nvl mode, apply the same bottom padding as we have top padding
+		_usableHeight=outputLineScreenHeight-totalTextYOff()*2;
+	}
+	changeMaxLines(_usableHeight/currentTextHeight);
 }
 // Number of lines to draw is not zero based
 // _finalLineMaxChar is the last char on the last line to draw. Must be a position inside the string, 
@@ -3594,14 +3602,11 @@ void loadVariableList(FILE* fp, nathanscriptGameVariable** _listToLoad, int* _to
 	}
 }
 char* easyVNDSSaveName(int _slot){
-	// Enough spaces for all valid paths
-	char* _tempSavefilePath = malloc(strlen(streamingAssets)+strlen(saveFolder)+strlen("embeddedGameSave")+10+1);
 	if (isEmbedMode){
-		sprintf(_tempSavefilePath,"%s%s%d",saveFolder,"embeddedGameSave",_slot);
+		return easySprintf("%s%s%d",saveFolder,"embeddedGameSave",_slot);
 	}else{
-		sprintf(_tempSavefilePath,"%s%s%d",streamingAssets,"sav",_slot);
+		return easySprintf("%s%s%d",streamingAssets,"sav",_slot);
 	}
-	return _tempSavefilePath;
 }
 // unsigned char - format version
 // script filename relative to script folder
