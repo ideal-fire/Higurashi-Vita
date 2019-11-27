@@ -522,7 +522,8 @@ void nathanscriptParseString(char* _tempReadLine, int* _storeCommandIndex, natha
 	// Total number of parsed arguments
 	int _totalArguments=0;
 	// Does not include the main command
-	nathanscriptVariable _parsedArguments[MAXNATHANARGUMENTS]; // This is so much easier than allowing unlimited arguments. Fix this on a rainy day. Or don't. It won't matter.
+	char** _parsedArguments = NULL;
+
 	char* _parsedMainCommand = readSpaceTerminated(_tempReadLine,&_lineBufferIndex,_tempSingleElementBuffer);
 	trimStart(_parsedMainCommand);
 	*_storeCommandIndex = searchStringArray(nathanFunctionNameList,nathanCurrentRegisteredFunctions,_parsedMainCommand);
@@ -531,22 +532,33 @@ void nathanscriptParseString(char* _tempReadLine, int* _storeCommandIndex, natha
 	if (_lineBufferIndex!=-1 && *_storeCommandIndex!=-1 && _storeArguments!=NULL){
 		// the text command doesn't have quotation marks around the text, so we treat everything as one argument.
 		if (nathanGetBit(nathanFunctionPropertyList[*_storeCommandIndex],0)==1){
+			_parsedArguments = malloc(sizeof(char*));
 			_totalArguments=1;
-			_parsedArguments[0].value = malloc(strlen(_tempReadLine)-strlen(_parsedMainCommand)); // No need to remove the space character because we need that extra byte for the null character
-			strcpy(_parsedArguments[0].value,&(_tempReadLine[_lineBufferIndex]));
+			_parsedArguments[0] = malloc(strlen(_tempReadLine)-strlen(_parsedMainCommand)); // No need to remove the space character because we need that extra byte for the null character
+			strcpy(_parsedArguments[0],&(_tempReadLine[_lineBufferIndex]));
 			if (nathanGetBit(nathanFunctionPropertyList[*_storeCommandIndex],1)!=1){
-				replaceIfIsVariable((char**)&(_parsedArguments[0].value));
+				replaceIfIsVariable((char**)&(_parsedArguments[0]));
 			}
 		}else{
-			// Read up to MAXNATHANARGUMENTS arguments
-			for (i=0;i<MAXNATHANARGUMENTS;i++){
-				_parsedArguments[i].value = readSpaceTerminated(_tempReadLine,&_lineBufferIndex,_tempSingleElementBuffer);
-				if (nathanGetBit(nathanFunctionPropertyList[*_storeCommandIndex],1)!=1){
-					replaceIfIsVariable((char**)&(_parsedArguments[i].value));
+			// read as many arguments as needed
+			int _parseArrSize=10;
+			_parsedArguments = malloc(sizeof(char*)*_parseArrSize);
+			i=0;
+			while(i!=-1){
+				for (;i<_parseArrSize;i++){
+					_parsedArguments[i] = readSpaceTerminated(_tempReadLine,&_lineBufferIndex,_tempSingleElementBuffer);
+					if (nathanGetBit(nathanFunctionPropertyList[*_storeCommandIndex],1)!=1){
+						replaceIfIsVariable((char**)&(_parsedArguments[i]));
+					}
+					_totalArguments++;
+					if (_lineBufferIndex==-1){
+						i=-1;
+						break;
+					}
 				}
-				_totalArguments++;
-				if (_lineBufferIndex==-1){
-					break;
+				if (i==_parseArrSize){
+					_parseArrSize*=2;
+					_parsedArguments = realloc(_parsedArguments,sizeof(char*)*_parseArrSize);
 				}
 			}
 		}
@@ -556,7 +568,7 @@ void nathanscriptParseString(char* _tempReadLine, int* _storeCommandIndex, natha
 	if (_totalArguments!=0){
 		*_storeArguments = malloc(sizeof(nathanscriptVariable)*_totalArguments);
 		for (i=0;i<_totalArguments;i++){
-			(*_storeArguments)[i] = _parsedArguments[i];
+			(*_storeArguments)[i].value = _parsedArguments[i];
 			(*_storeArguments)[i].variableType=NATHAN_TYPE_STRING;
 		}
 	}else{
@@ -564,6 +576,7 @@ void nathanscriptParseString(char* _tempReadLine, int* _storeCommandIndex, natha
 	}
 	*_storeNumArguments = _totalArguments;
 
+	free(_parsedArguments);
 	free(_parsedMainCommand);
 	free(_tempSingleElementBuffer);
 }

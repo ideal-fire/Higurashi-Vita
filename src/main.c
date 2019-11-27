@@ -1922,10 +1922,12 @@ char* getUserPreferredImageDirectoryFallback(char _folderPreference){
 }
 // Location string fallback with a specific image format
 char* _locationStringFallbackFormat(const char* filename, char _folderPreference, char* _fileFormat){
+	if (!_fileFormat){
+		_fileFormat="";
+	}
 	char* _returnFoundString;
 	// Try the user's first choice
 	_returnFoundString = easyCombineStrings(4,streamingAssets, getUserPreferredImageDirectory(_folderPreference),filename,_fileFormat);
-	
 	if (checkFileExist(_returnFoundString)){
 		return _returnFoundString;
 	}
@@ -1933,7 +1935,6 @@ char* _locationStringFallbackFormat(const char* filename, char _folderPreference
 	// If not exist, try the other folder.
 	free(_returnFoundString);
 	_returnFoundString = easyCombineStrings(4,streamingAssets, getUserPreferredImageDirectoryFallback(_folderPreference),filename,_fileFormat);
-	
 	if (checkFileExist(_returnFoundString)){
 		return _returnFoundString;
 	}
