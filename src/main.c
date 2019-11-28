@@ -65,6 +65,10 @@
 #include <Lua/lauxlib.h>
 //
 #include <goodbrew/config.h>
+#ifndef GBVERSION
+	#error update libgoodbrew
+#endif
+#include <goodbrew/platform.h>
 #include <goodbrew/base.h>
 #include <goodbrew/graphics.h>
 #include <goodbrew/controls.h>
@@ -77,6 +81,7 @@
 //
 #if GBPLAT == GB_VITA
 	#include <libvita2dplusbloat/vita2d.h>
+	#include <psp2/kernel/processmgr.h> 
 	#include <psp2/display.h> // used with thumbnail creation
 	#include <psp2/power.h> // overclock
 	#include <psp2/ctrl.h> // sound protect thread
@@ -4630,56 +4635,90 @@ EASYLUAINTSETFUNCTION(advboxHeight,advboxHeight)
 EASYLUAINTSETFUNCTION(setADVNameSupport,advNamesSupported)
 EASYLUAINTSETFUNCTION(advNamesPersist,advNamesPersist)
 
+#define MAXIMAGECHOICEW (getScreenWidth()*.85)
+#define PREFERREDIMAGECHOICESONSCREEN 7
+#define MAXIMAGECHOICEH (getScreenHeight()*(1/(double)PREFERREDIMAGECHOICESONSCREEN))
+#define MINDRAGRATIO ((1)/(double)16)
 // normal image 1, hover image 1, select image 1, normal image 2, hover image 2, select image 2
 void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	int i;
-	// When you are not interacting with that choice
-	crossTexture* _passedNormalImages;
-	// When your cursor is over that choice
-	crossTexture* _passedHoverImages;
-	// When you've selected that choice
-	crossTexture* _passedSelectImages;
-	int _numberOfChoices = _numArguments/3;
-	printf("Found %d choices\n",_numberOfChoices);
-	_passedNormalImages = malloc(sizeof(crossTexture)*_numberOfChoices);
-	_passedHoverImages = malloc(sizeof(crossTexture)*_numberOfChoices);
-	_passedSelectImages = malloc(sizeof(crossTexture)*_numberOfChoices);
-
-	for (i=0;i<_numberOfChoices;i++){
-		_passedNormalImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+1-1]),graphicsLocation,scriptUsesFileExtensions);
-		_passedHoverImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+2-1]),graphicsLocation,scriptUsesFileExtensions);
-		_passedSelectImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+3-1]),graphicsLocation,scriptUsesFileExtensions);
+	// Load images
+	crossTexture* _normalImages;
+	crossTexture* _hoverImages;
+	crossTexture* _selectImages;
+	int _numChoices = _numArguments/3;
+	_normalImages = malloc(sizeof(crossTexture)*_numChoices);
+	_hoverImages = malloc(sizeof(crossTexture)*_numChoices);
+	_selectImages = malloc(sizeof(crossTexture)*_numChoices);
+	for (i=0;i<_numChoices;i++){
+		_normalImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+1-1]),graphicsLocation,scriptUsesFileExtensions);
+		_hoverImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+2-1]),graphicsLocation,scriptUsesFileExtensions);
+		_selectImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+3-1]),graphicsLocation,scriptUsesFileExtensions);
 	}
-
-	// Y position of the first choice graphic
-	int _startDrawY;
-	// X position of every choice graphic
-	int _startDrawX;
-	//int _spaceBetweenChoices;
-
-	int _firstChoiceWidth = getTextureWidth(_passedNormalImages[0]);
-	int _firstChoiceHeight = getTextureHeight(_passedNormalImages[0]);
-	int _halfFirstChoiceHeight = _firstChoiceHeight/2.0;
-	char _userChoice=0;
+	// Get image size
+	int _choiceW;
+	int _choiceH;
+	fitInBox(getTextureWidth(_normalImages[0]),getTextureHeight(_normalImages[0]),MAXIMAGECHOICEW,MAXIMAGECHOICEH,&_choiceW,&_choiceH);
+	int _choicePad = _choiceH/2;
+	// controls
+	int _startTouchY;
+	int _startTouchX;
+	char _isDrag;
+	char _userChoice=(gbHasTouch()==GBPREFERRED) ? -1 : 0;
 	char _isHoldSelect=0;
-
-
-	_startDrawX = (screenWidth - _firstChoiceWidth)/2.0;
-	_startDrawY = ((textboxYOffset!=0 ? textboxYOffset : screenHeight)/2.0)-((_numberOfChoices)*_firstChoiceHeight+(_numberOfChoices-1)*_halfFirstChoiceHeight)/2.0;
+	// display
+	int _totalChoiceH=_choiceH*_numChoices+_choicePad*(_numChoices-1);
+	int _startDrawX = easyCenter(_choiceW,screenWidth);
+	int _startDrawY;
+	int _maxStartDrawY;
+	int _minStartDrawY;
+	int _buttonScrollStartY = PREFERREDIMAGECHOICESONSCREEN/2; // what _userChoice to start scrolling at if using buttons
+	if (_totalChoiceH<screenHeight){
+		_startDrawY = easyCenter(_totalChoiceH,screenHeight);
+		_minStartDrawY=_startDrawY;
+		_maxStartDrawY=_startDrawY;
+	}else{
+		_startDrawY=0;
+		_minStartDrawY=_totalChoiceH*-1+screenHeight;
+		_maxStartDrawY=0;
+	}
 	while (1){
 		controlsStart();
-		_userChoice = menuControls(_userChoice,0,_numberOfChoices-1);
+		if (wasJustPressed(BUTTON_TOUCH)){
+			_startTouchX=touchX;
+			_startTouchY=touchY;
+
+			if (touchX>_startDrawX && touchX<_startDrawX+_choiceW){			
+				_isDrag=0;
+				_isHoldSelect=1;
+				_userChoice=(touchY-_startDrawY)/(_choiceH+_choicePad);
+			}else{
+				_isDrag=1;
+			}
+		}else if (isDown(BUTTON_TOUCH)){
+			if (!_isDrag){
+				if (abs(touchX-_startTouchX)>(screenWidth*MINDRAGRATIO) || abs(touchY-_startTouchY)>(screenHeight*MINDRAGRATIO)){
+					_isDrag=1;
+					_isHoldSelect=0;
+					_userChoice=-1;
+					_startTouchY=touchY;
+				}
+			}else{
+				_startDrawY=limitNum(_startDrawY+(touchY-_startTouchY),_minStartDrawY,_maxStartDrawY);
+				_startTouchY=touchY;
+			}
+		}
 		if (wasJustPressed(BUTTON_A)){
 			_isHoldSelect=1;
 		}
 		if (wasJustPressed(BUTTON_UP) || wasJustPressed(BUTTON_DOWN)){
 			_isHoldSelect=0;
-		}		
-		if (wasJustPressed(BUTTON_B)){
-			break;
+			signed char _dir = wasJustPressed(BUTTON_UP) ? -1 : 1;
+			_userChoice = wrapNum(_userChoice+_dir,0,_numChoices-1);
+			_startDrawY=limitNum((_userChoice-_buttonScrollStartY)*(_choiceH+_choicePad)*-1,_minStartDrawY,_maxStartDrawY);
 		}
-		if (wasJustReleased(BUTTON_A)){
-			if (_isHoldSelect==1){
+		if (wasJustReleased(BUTTON_A) || wasJustReleased(BUTTON_TOUCH)){
+			if (_isHoldSelect==1 && _userChoice>0){
 				controlsEnd();
 				break;
 			}
@@ -4688,26 +4727,35 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 
 		startDrawing();
 		Draw(1);
-		for (i=0;i<_numberOfChoices;i++){
-			drawTexture(_passedNormalImages[i],_startDrawX,_startDrawY+_firstChoiceHeight*i+_halfFirstChoiceHeight*i);
-		}
-		if (_isHoldSelect==0){
-			drawTexture(_passedHoverImages[_userChoice],_startDrawX,_startDrawY+_firstChoiceHeight*_userChoice+_halfFirstChoiceHeight*_userChoice);
-		}else{
-			drawTexture(_passedSelectImages[_userChoice],_startDrawX,_startDrawY+_firstChoiceHeight*_userChoice+_halfFirstChoiceHeight*_userChoice);
+		for (i=0;i<_numChoices;i++){
+			int _curY=_startDrawY+(_choiceH+_choicePad)*i;
+			if (_curY<_choiceH*-1){
+				continue;
+			}else if (_curY>screenHeight){
+				break;
+			}
+			crossTexture _curImg;
+			if (i==_userChoice){
+				_curImg = _isHoldSelect ? _hoverImages[i] : _selectImages[i];
+				drawRectangle(_startDrawX,_curY,_choiceW,_choiceH,255,0,0,255);
+				continue;
+			}else{
+				_curImg = _normalImages[i];
+			}
+			drawTextureSized(_curImg,_startDrawX,_curY,_choiceW,_choiceH);
 		}
 		endDrawing();
 	}
-
-	for (i=0;i<_numberOfChoices;i++){
-		freeTexture(_passedNormalImages[i]);
-		freeTexture(_passedHoverImages[i]);
-		freeTexture(_passedSelectImages[i]);
+	//
+	for (i=0;i<_numChoices;i++){
+		freeTexture(_normalImages[i]);
+		freeTexture(_hoverImages[i]);
+		freeTexture(_selectImages[i]);
 	}
-	free(_passedNormalImages);
-	free(_passedHoverImages);
-	free(_passedSelectImages);
-
+	free(_normalImages);
+	free(_hoverImages);
+	free(_selectImages);
+	//
 	makeNewReturnArray(_returnedReturnArray,_returnArraySize,1);
 	nathanvariableArraySetFloat(*_returnedReturnArray,0,_userChoice);
 	if (currentlyVNDSGame && nathanscriptIsInit){
