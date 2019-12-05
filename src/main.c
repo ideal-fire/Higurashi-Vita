@@ -39,7 +39,7 @@
 	TODO - what is this LazyChoice nonsense?
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
-	TODO - allow image choice graphics of any size. and maybe even allow scrolling them
+	TODO - select last choice, click below it.
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -598,6 +598,12 @@ double partMoveEmptys(u64 _curTicks, u64 _startTime, int _totalDifference, doubl
 		return _passed;
 	}
 	int fixY(int _passed){
+		return _passed;
+	}
+	int fixTouchX(int _passed){
+		return _passed;
+	}
+	int fixTouchY(int _passed){
 		return _passed;
 	}
 #endif
@@ -4687,8 +4693,7 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 		if (wasJustPressed(BUTTON_TOUCH)){
 			_startTouchX=touchX;
 			_startTouchY=touchY;
-
-			if (touchX>_startDrawX && touchX<_startDrawX+_choiceW){			
+			if (fixTouchX(touchX)>_startDrawX && fixTouchX(touchX)<_startDrawX+_choiceW){			
 				_isDrag=0;
 				_isHoldSelect=1;
 				_userChoice=(touchY-_startDrawY)/(_choiceH+_choicePad);
@@ -4718,7 +4723,7 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 			_startDrawY=limitNum((_userChoice-_buttonScrollStartY)*(_choiceH+_choicePad)*-1,_minStartDrawY,_maxStartDrawY);
 		}
 		if (wasJustReleased(BUTTON_A) || wasJustReleased(BUTTON_TOUCH)){
-			if (_isHoldSelect==1 && _userChoice>0){
+			if (_isHoldSelect==1 && _userChoice>=0){
 				controlsEnd();
 				break;
 			}
@@ -4736,9 +4741,7 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 			}
 			crossTexture _curImg;
 			if (i==_userChoice){
-				_curImg = _isHoldSelect ? _hoverImages[i] : _selectImages[i];
-				drawRectangle(_startDrawX,_curY,_choiceW,_choiceH,255,0,0,255);
-				continue;
+				_curImg = _isHoldSelect ? _selectImages[i] : _hoverImages[i];
 			}else{
 				_curImg = _normalImages[i];
 			}
