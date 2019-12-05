@@ -39,7 +39,6 @@
 	TODO - what is this LazyChoice nonsense?
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
-	TODO - select last choice, click below it.
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -567,6 +566,9 @@ void freeAllocdStrList(char** _passedList, int _passedLen){
 }
 int getOtherScaled(int _orig, int _scaled, int _altDim){
 	return _altDim*(_scaled/(double)_orig);
+}
+char pointInBox(int _x, int _y, int _boxX, int _boxY, int _boxW, int _boxH){
+	return (_x>_boxX && _x<_boxX+_boxW && _y>_boxY && _y<_boxY+_boxH);
 }
 void fitInBox(int _imgW, int _imgH, int _boxW, int _boxH, int* _retW, int* _retH){
 	if ((_boxW/(double)_imgW) < (_boxH/(double)_imgH)){
@@ -4641,9 +4643,9 @@ EASYLUAINTSETFUNCTION(advboxHeight,advboxHeight)
 EASYLUAINTSETFUNCTION(setADVNameSupport,advNamesSupported)
 EASYLUAINTSETFUNCTION(advNamesPersist,advNamesPersist)
 
-#define MAXIMAGECHOICEW (getScreenWidth()*.85)
+#define MAXIMAGECHOICEW (screenWidth*.85)
 #define PREFERREDIMAGECHOICESONSCREEN 7
-#define MAXIMAGECHOICEH (getScreenHeight()*(1/(double)PREFERREDIMAGECHOICESONSCREEN))
+#define MAXIMAGECHOICEH (screenHeight*(1/(double)PREFERREDIMAGECHOICESONSCREEN))
 #define MINDRAGRATIO ((1)/(double)16)
 // normal image 1, hover image 1, select image 1, normal image 2, hover image 2, select image 2
 void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -4690,26 +4692,41 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 	}
 	while (1){
 		controlsStart();
+		int _tx = fixTouchX(touchX);
+		int _ty = fixTouchY(touchY);
+		int _potentialTouchChoice;
+		if (_ty-_startDrawY>0){
+			_potentialTouchChoice=(_ty-_startDrawY)/(_choiceH+_choicePad);
+		}else{
+			_potentialTouchChoice=-1;
+		}
+		char _touchIsInAChoice = pointInBox(_tx,_ty,_startDrawX,_startDrawY,_choiceW,_totalChoiceH) && (_ty-_startDrawY)%(_choiceH+_choicePad)<=_choiceH;
 		if (wasJustPressed(BUTTON_TOUCH)){
-			_startTouchX=touchX;
-			_startTouchY=touchY;
-			if (fixTouchX(touchX)>_startDrawX && fixTouchX(touchX)<_startDrawX+_choiceW){			
+			_startTouchX=_tx;
+			_startTouchY=_ty;
+			if (_touchIsInAChoice && _potentialTouchChoice>=0 && _potentialTouchChoice<_numChoices){
 				_isDrag=0;
 				_isHoldSelect=1;
-				_userChoice=(touchY-_startDrawY)/(_choiceH+_choicePad);
+				_userChoice=_potentialTouchChoice;
 			}else{
 				_isDrag=1;
 			}
 		}else if (isDown(BUTTON_TOUCH)){
 			if (!_isDrag){
-				if (abs(touchX-_startTouchX)>(screenWidth*MINDRAGRATIO) || abs(touchY-_startTouchY)>(screenHeight*MINDRAGRATIO)){
-					_isDrag=1;
-					_isHoldSelect=0;
-					_userChoice=-1;
-					_startTouchY=touchY;
+				if (_userChoice==-1){
+					if (abs(_tx-_startTouchX)>(screenWidth*MINDRAGRATIO) || abs(_ty-_startTouchY)>(screenHeight*MINDRAGRATIO)){
+						_isDrag=1;
+						_isHoldSelect=0;
+						_userChoice=-1;
+						_startTouchY=touchY;
+					}
+				}else{
+					if (_potentialTouchChoice!=_userChoice){
+						_userChoice=-1;
+					}
 				}
 			}else{
-				_startDrawY=limitNum(_startDrawY+(touchY-_startTouchY),_minStartDrawY,_maxStartDrawY);
+				_startDrawY=limitNum(_startDrawY+(_ty-_startTouchY),_minStartDrawY,_maxStartDrawY);
 				_startTouchY=touchY;
 			}
 		}
@@ -4729,7 +4746,6 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 			}
 		}
 		controlsEnd();
-
 		startDrawing();
 		Draw(1);
 		for (i=0;i<_numChoices;i++){
