@@ -282,7 +282,7 @@ typedef struct{
 	double cacheXOffsetScale;
 	double cacheYOffsetScale;
 	// status variables. ignore most time.
-	u64 fadeStartTime; // for BUST_STATUS_FADEIN
+	u64 fadeStartTime; // for BUST_STATUS_FADEIN, BUST_STATUS_TRANSFORM_FADEIN, BUST_STATUS_FADEOUT,
 	u64 fadeEndTime;
 	int startXMove;
 	int startYMove;
@@ -1272,7 +1272,7 @@ void changeIfLazyLastLineFix(int* _line, int* _toChange){
 void Update(){
 	u64 _curTime=getMilli();
 	int i;
-	for (i = 0; i < maxBusts; i++){
+	for (i=0;i<maxBusts;i++){
 		switch(Busts[i].bustStatus){
 			case BUST_STATUS_FADEIN:
 			case BUST_STATUS_TRANSFORM_FADEIN:
@@ -2176,10 +2176,10 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 	//int passedSlot = nathanvariableToInt(&_passedArguments[1)-1;
 	//Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
 	//Busts[passedSlot].statusVariable = 
-	
 	Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
 	if (_time!=0){
 		Busts[passedSlot].alpha=255;
+		Busts[passedSlot].fadeStartTime=getMilli();
 		Busts[passedSlot].fadeEndTime=getMilli()+_time;
 		if (_wait==1){
 			while (Busts[passedSlot].isActive==1){
