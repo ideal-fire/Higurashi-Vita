@@ -67,6 +67,9 @@
 #ifndef GBVERSION
 	#error update libgoodbrew
 #endif
+#if GBVERSION < 3
+	#error update libgoodbrew
+#endif
 #include <goodbrew/platform.h>
 #include <goodbrew/base.h>
 #include <goodbrew/graphics.h>
@@ -260,9 +263,6 @@ char* gamesFolder;
 #define BUST_STATUS_TRANSFORM_FADEIN 5 // The bust is fading into an already used slot. image is what the new texture is going to be thats fading in, transformTexture is the old texture that is fading out. var 1 is alpha per frame. added to image, subtracted from transformTexture.
 
 #if GBPLAT == GB_VITA
-	#include <psp2/touch.h>
-	SceTouchData touch_old[SCE_TOUCH_PORT_MAX_NUM];
-	SceTouchData touch[SCE_TOUCH_PORT_MAX_NUM];
 	NathanAudio* _mlgsnd_loadAudioFILE(legArchiveFile _passedFile, char _passedFileFormat, char _passedShouldLoop, char _passedShouldStream);
 #endif
 signed char touchProceed=1;
@@ -1414,18 +1414,7 @@ void outputLineWait(){
 		}
 		endDrawing();
 
-		int touch_bool = 0;
-		#if GBPLAT == GB_VITA
-			memcpy(touch_old, touch, sizeof(touch_old));
-			if (touchProceed){
-				int port;
-				for (port = 0; port < SCE_TOUCH_PORT_MAX_NUM; port++){
-					sceTouchPeek(port, &touch[port], 1);
-				}
-				touch_bool = touchProceed && ((touch[SCE_TOUCH_PORT_FRONT].reportNum == 1) && (touch_old[SCE_TOUCH_PORT_FRONT].reportNum == 0));
-			}
-		#endif
-
+		int touch_bool = touchProceed ? wasJustPressed(BUTTON_TOUCH) : 0;
 		if (wasJustPressed(BUTTON_A) || touch_bool){
 			if (_didPressCircle==1){
 				showTextbox();
@@ -5091,8 +5080,8 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		"VNDS Warnings:", // VNDS specific
 		"VNDS Image Fade:",
 		"Dynamic Scaling:",
-		"Vita Touch:", // controls
-		"Overclock CPU", // misc
+		"Touch:", // controls
+		"Overclock CPU:", // misc
 		"Defaults",
 		"Debug",
 		"Quit",
@@ -5196,11 +5185,11 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			_values[SETTING_DYNAMICSCAL]=charToSwitch(higurashiUsesDynamicScale);
 		}
 		// controls
-		#if GBPLAT == GB_VITA
+		if (gbHasTouch() & GBYES){
 			_values[SETTING_TOUCH] = charToSwitch(touchProceed);
-		#else
+		}else{
 			_settingsOn[SETTING_TOUCH]=0;
-		#endif
+		}
 		// misc
 		_values[SETTING_OVERCLOCK]=charToSwitch(cpuOverclocked);
 		// update strings if needed
@@ -6322,12 +6311,8 @@ void hVitaCrutialInit(){
 	initImages();
 	setClearColor(0,0,0);
 	isActuallyUsingUma0=initGoodBrewDataDir();
-	#if GBPLAT == GB_VITA
-		sceTouchSetSamplingState(SCE_TOUCH_PORT_FRONT, 1);
-		sceTouchSetSamplingState(SCE_TOUCH_PORT_BACK, 1);
-		sceTouchEnableTouchForce(SCE_TOUCH_PORT_FRONT);
-		sceTouchEnableTouchForce(SCE_TOUCH_PORT_BACK);
-	#elif GBPLAT == GB_3DS
+	controlsInit();
+	#if GBPLAT == GB_3DS
 		osSetSpeedupEnable(1);
 	#endif
 }
