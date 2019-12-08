@@ -556,6 +556,9 @@ signed char forceDropshadowOption=1;
 		return _buffer;
 	}
 #endif
+char proceedPressed(){
+	return wasJustPressed(BUTTON_A) || (touchProceed && wasJustPressed(BUTTON_TOUCH));
+}
 // the list itself must also be allocated
 void freeAllocdStrList(char** _passedList, int _passedLen){
 	int i;
@@ -1414,8 +1417,7 @@ void outputLineWait(){
 		}
 		endDrawing();
 
-		int touch_bool = touchProceed ? wasJustPressed(BUTTON_TOUCH) : 0;
-		if (wasJustPressed(BUTTON_A) || touch_bool){
+		if (proceedPressed()){
 			if (_didPressCircle==1){
 				showTextbox();
 			}
@@ -1767,7 +1769,7 @@ void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
 	controlsReset();
 	do{
 		controlsStart();
-		if (wasJustPressed(BUTTON_A)){
+		if (proceedPressed()){
 			controlsStart();
 			controlsEnd();
 			break;
@@ -2177,7 +2179,7 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 				startDrawing();
 				Draw(MessageBoxEnabled);
 				endDrawing();
-				if (wasJustPressed(BUTTON_A)){
+				if (proceedPressed()){
 					Busts[passedSlot].alpha = 1;
 				}
 				controlsEnd();
@@ -2215,7 +2217,7 @@ void FadeAllBustshots(int _time, char _wait){
 			startDrawing();
 			Draw(MessageBoxEnabled);
 			endDrawing();
-			if (wasJustPressed(BUTTON_A)){
+			if (proceedPressed()){
 				for (i=0;i<maxBusts;i++){
 					if (Busts[i].isActive==1){
 						Busts[i].alpha=1;
@@ -2294,7 +2296,7 @@ void DrawScene(const char* _filename, int time){
 				endDrawing();
 	
 				controlsStart();
-				if (wasJustPressed(BUTTON_A)){
+				if (proceedPressed()){
 					controlsEnd();
 					break;
 				}
@@ -2445,7 +2447,7 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 			startDrawing();
 			Draw(MessageBoxEnabled);
 			endDrawing();
-			if (wasJustPressed(BUTTON_A) || skippedInitialWait==1){
+			if (proceedPressed() || skippedInitialWait==1){
 				Busts[passedSlot].alpha = 255;
 				Busts[passedSlot].bustStatus = BUST_STATUS_NORMAL;
 				startDrawing();
@@ -2964,7 +2966,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		}
 
 		controlsStart();
-		if (wasJustPressed(BUTTON_A)){
+		if (proceedPressed()){
 			_isDone=1;
 		}
 		updateControlsGeneral();
@@ -4366,7 +4368,7 @@ void scriptMoveSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 	if (nathanvariableToBool(&_passedArguments[9])){
 		while(Busts[_passedSlot].bustStatus!=BUST_STATUS_NORMAL){
 			controlsStart();
-			if (wasJustPressed(BUTTON_A)){
+			if (proceedPressed()){
 				Busts[_passedSlot].diffMoveTime=0;
 			}
 			controlsEnd();
@@ -5185,7 +5187,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			_values[SETTING_DYNAMICSCAL]=charToSwitch(higurashiUsesDynamicScale);
 		}
 		// controls
-		if (gbHasTouch() & GBYES){
+		if (gbHasTouch()==GBYES){ // do not allow turning off touch if it's the preferred method
 			_values[SETTING_TOUCH] = charToSwitch(touchProceed);
 		}else{
 			_settingsOn[SETTING_TOUCH]=0;
