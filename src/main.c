@@ -4672,8 +4672,19 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 	int _startTouchY;
 	int _startTouchX;
 	char _isDrag;
-	char _userChoice=(gbHasTouch()==GBPREFERRED) ? -1 : 0;
-	char _isHoldSelect=0;
+	char _canDrag;
+	char _userChoice;
+	int _isHoldSelect=-1;
+	int _lastTouchX;
+	int _lastTouchY;
+	if (gbHasTouch()==GBPREFERRED){
+		_lastTouchX=-1;
+		_lastTouchY=-1;
+	}else{
+		_lastTouchX=touchX;
+		_lastTouchY=touchY;
+		_userChoice=0;
+	}
 	// display
 	int _totalChoiceH=_choiceH*_numChoices+_choicePad*(_numChoices-1);
 	int _startDrawX = easyCenter(_choiceW,screenWidth);
@@ -4685,38 +4696,46 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 		_startDrawY = easyCenter(_totalChoiceH,screenHeight);
 		_minStartDrawY=_startDrawY;
 		_maxStartDrawY=_startDrawY;
+		_canDrag=0;
 	}else{
 		_startDrawY=0;
 		_minStartDrawY=_totalChoiceH*-1+screenHeight;
 		_maxStartDrawY=0;
+		_canDrag=1;
 	}
 	while (1){
 		controlsStart();
 		int _tx = fixTouchX(touchX);
 		int _ty = fixTouchY(touchY);
+		char _touchIsInAChoice = pointInBox(_tx,_ty,_startDrawX,_startDrawY,_choiceW,_totalChoiceH) && (_ty-_startDrawY)%(_choiceH+_choicePad)<=_choiceH;
 		int _potentialTouchChoice;
 		if (_ty-_startDrawY>0){
 			_potentialTouchChoice=(_ty-_startDrawY)/(_choiceH+_choicePad);
 		}else{
 			_potentialTouchChoice=-1;
 		}
-		char _touchIsInAChoice = pointInBox(_tx,_ty,_startDrawX,_startDrawY,_choiceW,_totalChoiceH) && (_ty-_startDrawY)%(_choiceH+_choicePad)<=_choiceH;
+		if (_tx!=_lastTouchX || _ty!=_lastTouchY){
+			_userChoice=_touchIsInAChoice ? _potentialTouchChoice : -1;
+			_lastTouchX=_tx;
+			_lastTouchY=_ty;
+		}
+		
 		if (wasJustPressed(BUTTON_TOUCH)){
 			_startTouchX=_tx;
 			_startTouchY=_ty;
 			if (_touchIsInAChoice && _potentialTouchChoice>=0 && _potentialTouchChoice<_numChoices){
 				_isDrag=0;
-				_isHoldSelect=1;
 				_userChoice=_potentialTouchChoice;
+				_isHoldSelect=_userChoice;
 			}else{
-				_isDrag=1;
+				_isDrag=_canDrag;
 			}
 		}else if (isDown(BUTTON_TOUCH)){
-			if (!_isDrag){
+			if (!_isDrag && _canDrag){
 				if (_userChoice==-1){
 					if (abs(_tx-_startTouchX)>(screenWidth*MINDRAGRATIO) || abs(_ty-_startTouchY)>(screenHeight*MINDRAGRATIO)){
 						_isDrag=1;
-						_isHoldSelect=0;
+						_isHoldSelect=-1;
 						_userChoice=-1;
 						_startTouchY=touchY;
 					}
@@ -4731,19 +4750,20 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 			}
 		}
 		if (wasJustPressed(BUTTON_A)){
-			_isHoldSelect=1;
+			_isHoldSelect=_userChoice;
 		}
 		if (wasJustPressed(BUTTON_UP) || wasJustPressed(BUTTON_DOWN)){
-			_isHoldSelect=0;
+			_isHoldSelect=-1;
 			signed char _dir = wasJustPressed(BUTTON_UP) ? -1 : 1;
 			_userChoice = wrapNum(_userChoice+_dir,0,_numChoices-1);
 			_startDrawY=limitNum((_userChoice-_buttonScrollStartY)*(_choiceH+_choicePad)*-1,_minStartDrawY,_maxStartDrawY);
 		}
 		if (wasJustReleased(BUTTON_A) || wasJustReleased(BUTTON_TOUCH)){
-			if (_isHoldSelect==1 && _userChoice>=0){
+			if (_isHoldSelect!=-1 && _userChoice==_isHoldSelect){
 				controlsEnd();
 				break;
 			}
+			_isHoldSelect=-1;
 		}
 		controlsEnd();
 		startDrawing();
@@ -4757,7 +4777,7 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 			}
 			crossTexture _curImg;
 			if (i==_userChoice){
-				_curImg = _isHoldSelect ? _selectImages[i] : _hoverImages[i];
+				_curImg = _isHoldSelect==i ? _selectImages[i] : _hoverImages[i];
 			}else{
 				_curImg = _normalImages[i];
 			}
