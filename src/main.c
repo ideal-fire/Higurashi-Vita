@@ -4105,12 +4105,10 @@ void setADVName(char* _newName){
 */
 void scriptDisplayWindow(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	showTextbox();
-	return;
 }
 void scriptClearMessage(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	currentLine=0;
 	ClearMessageArray(1);
-	return;
 }
 void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (_passedArguments[2].variableType==NATHAN_TYPE_STRING){ // If an English adv name was passed
@@ -4125,7 +4123,6 @@ void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments,
 		OutputLine((unsigned const char*)nathanvariableToString(&_passedArguments[3]),nathanvariableToInt(&_passedArguments[4]),0);
 		outputLineWait();
 	}
-	return;
 }
 // OutputLineAll(NULL, "\n", Line_ContinueAfterTyping);
 // Null, text, line type
@@ -4137,30 +4134,25 @@ void scriptOutputLineAll(nathanscriptVariable* _passedArguments, int _numArgumen
 		OutputLine((unsigned const char*)nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),1);
 		outputLineWait();
 	}
-	return;
 }
 //
 void scriptWait(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (isSkipping!=1){
 		wait(nathanvariableToInt(&_passedArguments[0]));
 	}
-	return;
 }
 // filename, filter, unknown, unknown, time
 void scriptDrawSceneWithMask(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	DrawScene(nathanvariableToString(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[4]));
-	return;
 }
 // filename
 // fadein
 void scriptDrawScene(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	DrawScene(nathanvariableToString(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]));
-	return;
 }
 // Placeholder for unimplemented function
 void scriptNotYet(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	printf("An unimplemented Lua function was just executed.\n");
-	return;
 }
 // Fist arg seems to be a channel arg.
 	// Usually 1 for msys
@@ -4170,7 +4162,6 @@ void scriptNotYet(nathanscriptVariable* _passedArguments, int _numArguments, nat
 // Fourth arg is unknown
 void scriptPlayBGM(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	PlayBGM(nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),nathanvariableToInt(&_passedArguments[0]));
-	return;
 }
 // Some int argument
 // Maybe music slot
@@ -4180,7 +4171,6 @@ void scriptStopBGM(nathanscriptVariable* _passedArguments, int _numArguments, na
 		StopBGM(_slot);
 		FreeBGM(_slot);
 	}
-	return;
 }
 #if GBSND == GBSND_3DS
 	void nathanSetChannelVolume(unsigned char _a, float _b);
@@ -4247,7 +4237,6 @@ void scriptStopBGM(nathanscriptVariable* _passedArguments, int _numArguments, na
 	// (bool) wait for fadein? (15)
 void scriptDrawBustshotWithFiltering(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	DrawBustshot(nathanvariableToInt(&_passedArguments[0]), nathanvariableToString(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[4]), nathanvariableToInt(&_passedArguments[5]), nathanvariableToInt(&_passedArguments[12]), nathanvariableToInt(&_passedArguments[13]), nathanvariableToBool(&_passedArguments[14]), nathanvariableToInt(&_passedArguments[11]));
-	return;
 }
 // Butshot slot
 	// Filename
@@ -4276,45 +4265,37 @@ void scriptDrawBustshot(nathanscriptVariable* _passedArguments, int _numArgument
 		endDrawing();
 	}
 	DrawBustshot(nathanvariableToInt(&_passedArguments[0]), nathanvariableToString(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[2]), nathanvariableToInt(&_passedArguments[3]), nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]), nathanvariableToBool(&_passedArguments[15]), nathanvariableToInt(&_passedArguments[12]));
-	return;
 }
 void scriptSetValidityOfInput(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	inputValidity=(nathanvariableToBool(&_passedArguments[0])==1);	
-	return;
 }
 // Fadeout time
 // Wait for completely fadeout
 void scriptFadeAllBustshots(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	FadeAllBustshots(nathanvariableToInt(&_passedArguments[0]),nathanvariableToBool(&_passedArguments[1]));
-	return;
 }
 void scriptDisableWindow(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	hideTextbox();
-	return;
 }
 void scriptFadeBustshotWithFiltering(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	FadeBustshot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[6]),nathanvariableToBool(&_passedArguments[7]));
-	return;
 }
 //FadeBustshot( 2, FALSE, 0, 0, 0, 0, 0, TRUE );
 //FadeBustshot( SLOT, MOVE, X, Y, UNKNOWNA, UNKNOWNB, FADETIME, WAIT );
 void scriptFadeBustshot(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	FadeBustshot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[6]),nathanvariableToBool(&_passedArguments[7]));
-	return;
 }
 // Slot, file, volume
 void scriptPlaySE(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (isSkipping==0 && seVolume>0){
 		GenericPlayGameSound(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),PREFER_DIR_SE,seVolume);
 	}
-	return;
 }
 // PlayVoice(channel, filename, volume)
 void scriptPlayVoice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (isSkipping==0 && (hasOwnVoiceSetting==1 ? voiceVolume : seVolume)>0){
 		GenericPlayGameSound(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),PREFER_DIR_VOICE, hasOwnVoiceSetting==1 ? voiceVolume : seVolume);
 	}
-	return;
 }
 // Loads a script file
 void scriptCallScript(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -4331,12 +4312,10 @@ void scriptCallScript(nathanscriptVariable* _passedArguments, int _numArguments,
 	}else{
 		printf("Failed to find script\n");
 	}
-	return;
 }
 // "bg_166", 7, 200, 0
 void scriptChangeScene(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	DrawScene(nathanvariableToString(&_passedArguments[0]),0);
-	return;
 }
 // DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
 // x is relative to -320
@@ -4346,7 +4325,6 @@ void scriptDrawSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
 	DrawBustshot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),320+nathanvariableToInt(&_passedArguments[3]),240+nathanvariableToInt(&_passedArguments[4]),nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]),nathanvariableToBool(&_passedArguments[15]),0);
 	//DrawBustshot(nathanvariableToInt(&_passedArguments[1)-1, nathanvariableToString(&_passedArguments[2), nathanvariableToInt(&_passedArguments[3), nathanvariableToInt(&_passedArguments[4), nathanvariableToInt(&_passedArguments[14), nathanvariableToInt(&_passedArguments[15), nathanvariableToBool(&_passedArguments[16), nathanvariableToInt(&_passedArguments[13));
-	return;
 }
 //MoveSprite(slot, destinationx, destinationy, ?, ?, ?, ?, ?, timeittakes, waitforcompletion)
 	// MoveSprite(5,-320,-4500,0,0,0,0,0,101400, TRUE)
@@ -4378,7 +4356,6 @@ void scriptMoveSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 			endDrawing();
 		}
 	}
-	return;
 }
 //FadeSprite(slot, time, waitfrocompletion)
 		// FadeSprite(5,700,FALSE)
@@ -4492,7 +4469,6 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 	for (i=0;i<_totalOptions;i++){
 		free(noobOptions[i]);
 	}
-	return;
 }
 // Loads a special variable
 void scriptLoadValueFromLocalWork(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -4506,7 +4482,6 @@ void scriptLoadValueFromLocalWork(nathanscriptVariable* _passedArguments, int _n
 	}else{
 		easyMessagef(1,"Unknown LoadValueFromLocalWork, %s, please report.",_wordWant);
 	}
-	return;
 }
 // Calls a function that was made in a script
 void scriptCallSection(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
@@ -4515,7 +4490,6 @@ void scriptCallSection(nathanscriptVariable* _passedArguments, int _numArguments
 	strcat(buf,"()");
 	printf("%s\n",buf);
 	luaL_dostring(L,buf);
-	return;
 }
 // I CAN DO THIS EZ-PZ WITH DRAWING RECTANGLES OVER THE SCREEN
 // DrawFilm( 2,  0, 255, 0, 255, 0, 1000, TRUE );
@@ -4550,7 +4524,6 @@ void scriptDrawFilm(nathanscriptVariable* _passedArguments, int _numArguments, n
 		filterA = 127;
 		currentFilterType = FILTERTYPE_EFFECTCOLORMIX;
 	}
-	return;
 }
 // Seems to be very similar to using DrawFilm with type of 3
 // Negative(fadein time, wait for fadein)
@@ -4572,20 +4545,16 @@ void scriptFadeBG(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		freeTexture(currentBackground);
 		currentBackground=NULL;
 	}
-	return;
 }
 void scriptMoveBust(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	MoveBustSlot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]));
-	return;
 }
 void scriptGetScriptLine(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	makeNewReturnArray(_returnedReturnArray,_returnArraySize,1);
 	nathanvariableArraySetFloat(*_returnedReturnArray,0,currentScriptLine);
-	return;
 }
 void scriptDebugFile(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	WriteToDebugFile(nathanvariableToString(&_passedArguments[0]));
-	return;
 }
 void scriptOptionsEnableVoiceSetting(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (_numArguments==0){
@@ -4593,26 +4562,21 @@ void scriptOptionsEnableVoiceSetting(nathanscriptVariable* _passedArguments, int
 	}else{
 		hasOwnVoiceSetting = nathanvariableToBool(&_passedArguments[0]);
 	}
-	return;
 }
 void scriptOptionsSetTextMode(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	textDisplayModeOverriden=1;
 	gameTextDisplayMode = nathanvariableToInt(&_passedArguments[0]);
 	applyTextboxChanges();
-	return;
 }
 void scriptLoadADVBox(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	loadADVBox();
-	return;
 }
 void scriptOptionsSetTips(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	gameHasTips=nathanvariableToBool(&_passedArguments[0]);
-	return;
 }
 void scriptOptionsCanChangeBoxAlpha(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	canChangeBoxAlpha = nathanvariableToBool(&_passedArguments[0]);
 	currentBoxAlpha=255;
-	return;
 }
 
 // Settings menu override
@@ -4793,26 +4757,32 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 		sprintf(_numberToStringBuffer,"%d",_userChoice+1);
 		genericSetVar("selected","=",_numberToStringBuffer,&nathanscriptGamevarList,&nathanscriptTotalGamevar);
 	}
-	return;
 }
 // Sets the size of the screen that positions are relative to. For example, this would be the DS' screen resolution for vnds games. It's 640x480 for Higurashi
 // Sets scriptScreenWidth and scriptScreenHeight
 void scriptSetPositionsSize(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	scriptScreenWidth = nathanvariableToInt(&_passedArguments[0]);
 	scriptScreenHeight = nathanvariableToInt(&_passedArguments[1]);
-	return;
 }
 void scriptSetIncludedFileExtensions(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	scriptUsesFileExtensions = nathanvariableToBool(&_passedArguments[0]);
-	return;
 }
 void scriptSetForceCapFilenames(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	scriptForceResourceUppercase = nathanvariableToBool(&_passedArguments[0]);
-	return;
 }
 void scriptSetFontSize(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	reloadFont(nathanvariableToInt(&_passedArguments[0]));
-	return;
+}
+void scriptScalePixels(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	int _passed=nathanvariableToInt(&_passedArguments[0]);
+	double _newVal;
+	if (_numArguments==2 && nathanvariableToInt(&_passedArguments[1])==1){ // height
+		_newVal=(_passed/(double)scriptScreenHeight)*screenHeight;
+	}else{ // width
+		_newVal=(_passed/(double)scriptScreenWidth)*screenWidth;
+	}
+	makeNewReturnArray(_returnedReturnArray,_returnArraySize,1);
+	nathanvariableArraySetFloat(*_returnedReturnArray,0,_newVal);
 }
 #include "LuaWrapperDefinitions.h"
 //======================================================

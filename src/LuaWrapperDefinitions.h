@@ -48,6 +48,7 @@ GENERATELUAWRAPPER(scriptSetIncludedFileExtensions);
 GENERATELUAWRAPPER(scriptSetForceCapFilenames);
 GENERATELUAWRAPPER(scriptSetFontSize);
 GENERATELUAWRAPPER(scriptNegative);
+GENERATELUAWRAPPER(scriptScalePixels);
 
 //===============================================================
 //===============================================================
@@ -102,6 +103,7 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptSetIncludedFileExtensions,"OptionsSetIncludedFileExtensions")
 	PUSHLUAWRAPPER(scriptSetForceCapFilenames,"OptionsSetResourceUppercase")
 	PUSHLUAWRAPPER(scriptSetFontSize,"OptionsSetFontSize")
+	PUSHLUAWRAPPER(scriptScalePixels,"scalePixels")
 	PUSHEASYLUAINTSETFUNCTION(oMenuQuit)
 	PUSHEASYLUAINTSETFUNCTION(oMenuVNDSSettings)
 	PUSHEASYLUAINTSETFUNCTION(oMenuVNDSSave)
