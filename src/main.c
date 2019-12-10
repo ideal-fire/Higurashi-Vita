@@ -39,6 +39,7 @@
 	TODO - what is this LazyChoice nonsense?
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
+	TODO - get total text x offset macro
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -189,10 +190,10 @@ char* vitaAppId="HIGURASHI";
 #endif
 
 #define PREFERREDMINMAXLINES 10 // if we have fewer than this maxLines and in NVL mode then discard NVL bottom padding
-#define STUPIDTEXTYOFF 12
-#define totalTextYOff() (STUPIDTEXTYOFF+messageInBoxYOffset+textboxYOffset)
+#define totalTextYOff() (textboxTopPad+messageInBoxYOffset+textboxYOffset)
 #define shouldShowADVNames() (gameTextDisplayMode==TEXTMODE_ADV && (advNamesSupported==2 || (advNamesSupported && prefersADVNames)))
-#define ADVNAMEOFFSET (currentTextHeight*1.5) // Space between ADV name and rest of the text
+#define ADVNAMEOFFSET (currentTextHeight*1.5) // Space between top of ADV name and rest of the text. does not apply if adv name is an image
+#define IMADVNAMEPOSTPAD (textboxTopPad)
 
 // TODO - Proper libGeneralGood support for this
 #if GBSND == GBSND_VITA
@@ -235,6 +236,12 @@ char* vitaAppId="HIGURASHI";
 #define EASYLUAINTSETFUNCTION(scriptFunctionName,varname) \
 	int L_##scriptFunctionName(lua_State* passedState){ \
 		varname = lua_tonumber(passedState,1); \
+		return 0; \
+	}
+#define EASYLUAINTSETFUNCTIONPOSTCALL(scriptFunctionName,varname,postfunc)	\
+	int L_##scriptFunctionName(lua_State* passedState){ \
+		varname = lua_tonumber(passedState,1); \
+		postfunc \
 		return 0; \
 	}
 // Easily push stuff made with EASYLUAINTSETFUNCTION
@@ -464,6 +471,7 @@ int outputLineScreenWidth;
 int outputLineScreenHeight;
 int messageInBoxXOffset=10;
 int messageInBoxYOffset=0;
+int textboxTopPad=12; // formerly STUPIDTEXTYOFF
 // 1 by default to retain compatibility with games converted before game specific Lua 
 char gameHasTips=1;
 char textOnlyOverBackground=1;
@@ -510,7 +518,11 @@ char nextVndsBustshotSlot=0;
 signed char vndsClearAtBottom=0;
 signed char showVNDSWarnings=1;
 signed char dynamicAdvBoxHeight=0;
+crossTexture advNameImSheet=NULL;
 char* currentADVName=NULL;
+int currentADVNameIm=-1;
+int advNameImHeight=-1;
+int* advImageNamePos;
 unsigned char advNameR=255;
 unsigned char advNameG=255;
 unsigned char advNameB=255;
@@ -519,6 +531,7 @@ signed char prefersADVNames=1;
 // 2 if they're forced
 char advNamesSupported=0;
 char advNamesPersist=0;
+int advImageNameCount=0;
 // Will only be used in games it can be used in
 signed char preferredTextDisplayMode=TEXTMODE_NVL;
 signed char useSoundArchive=0;
@@ -810,8 +823,13 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 		}
 	#endif
 	*/
-	if (shouldShowADVNames() && currentADVName!=NULL){
-		drawDropshadowTextSpecific(textboxXOffset+messageInBoxXOffset,totalTextYOff()-ADVNAMEOFFSET,currentADVName,advNameR,advNameG,advNameB,0,0,0,255);
+	if (shouldShowADVNames()){
+		if (currentADVName!=NULL){
+			drawDropshadowTextSpecific(textboxXOffset+messageInBoxXOffset,totalTextYOff()-ADVNAMEOFFSET,currentADVName,advNameR,advNameG,advNameB,0,0,0,255);
+		}else if (currentADVNameIm!=-1){
+			int* _nameImageInfo = advImageNamePos+currentADVNameIm*4;
+			drawTexturePartSized(advNameImSheet,textboxXOffset+messageInBoxXOffset,totalTextYOff()-advNameImHeight-IMADVNAMEPOSTPAD,getOtherScaled(_nameImageInfo[3],advNameImHeight,_nameImageInfo[2]),advNameImHeight,_nameImageInfo[0],_nameImageInfo[1],_nameImageInfo[2],_nameImageInfo[3]);
+		}
 	}
 	for (i=0;i<_maxDrawLine;i++){
 		drawTextGame(textboxXOffset+messageInBoxXOffset,totalTextYOff()+i*currentTextHeight,(char*)currentMessages[i],_alpha);
@@ -1050,7 +1068,7 @@ void ClearMessageArray(char _doFadeTransition){
 		imageCharType[i]=-1;
 	}
 	if (advNamesPersist!=2){
-		changeMallocString(&currentADVName,NULL);
+		setADVName(NULL);
 	}
 }
 void SetAllMusicVolume(int _passedFixedVolume){
@@ -1896,7 +1914,11 @@ void applyTextboxChanges(){
 		currentBoxAlpha=preferredBoxAlpha;
 	}
 	if (shouldShowADVNames()){
-		messageInBoxYOffset = currentTextHeight*1.5;
+		if (advNameImHeight!=-1){
+			messageInBoxYOffset=advNameImHeight+IMADVNAMEPOSTPAD;
+		}else{
+			messageInBoxYOffset=ADVNAMEOFFSET;
+		}
 	}else{
 		messageInBoxYOffset=0;
 	}
@@ -4042,6 +4064,7 @@ void resetADVNameColor(){
 }
 #define COLORMARKUPSTART "<color=#"
 #define COLORMARKUPEND "</color>"
+// pass NULL to clear
 void setADVName(char* _newName){
 	resetADVNameColor();
 	if (_newName!=NULL){
@@ -4097,6 +4120,7 @@ void setADVName(char* _newName){
 		}
 		changeMallocString(&currentADVName,strlen(_actualNameBuff)!=0 ? _actualNameBuff : _newName);
 	}else{
+		currentADVNameIm=-1;
 		changeMallocString(&currentADVName,NULL);
 	}
 }
@@ -4113,6 +4137,13 @@ void scriptClearMessage(nathanscriptVariable* _passedArguments, int _numArgument
 void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (_passedArguments[2].variableType==NATHAN_TYPE_STRING){ // If an English adv name was passed
 		setADVName(nathanvariableToString(&_passedArguments[2]));
+	}else if (_passedArguments[2].variableType==NATHAN_TYPE_FLOAT){
+		int _desireIndex = nathanvariableToInt(&_passedArguments[2]);
+		if (_desireIndex<advImageNameCount){
+			currentADVNameIm=_desireIndex;
+		}else if (shouldShowWarnings()){
+			easyMessagef(1,"image adv name index bad. %d/%d",_desireIndex,advImageNameCount-1);
+		}
 	}else if (shouldShowADVNames() && advNamesPersist==0){
 		setADVName(NULL);
 	}
@@ -4597,6 +4628,9 @@ EASYLUAINTSETFUNCTION(dynamicAdvBoxHeight,dynamicAdvBoxHeight);
 EASYLUAINTSETFUNCTION(advboxHeight,advboxHeight)
 EASYLUAINTSETFUNCTION(setADVNameSupport,advNamesSupported)
 EASYLUAINTSETFUNCTION(advNamesPersist,advNamesPersist)
+// Some properties
+EASYLUAINTSETFUNCTIONPOSTCALL(setTextboxTopPad,textboxTopPad,applyTextboxChanges();)
+EASYLUAINTSETFUNCTIONPOSTCALL(setADVNameImageHeight,advNameImHeight,applyTextboxChanges(););
 
 #define MAXIMAGECHOICEW (screenWidth*.85)
 #define PREFERREDIMAGECHOICESONSCREEN 7
@@ -4783,6 +4817,28 @@ void scriptScalePixels(nathanscriptVariable* _passedArguments, int _numArguments
 	}
 	makeNewReturnArray(_returnedReturnArray,_returnArraySize,1);
 	nathanvariableArraySetFloat(*_returnedReturnArray,0,_newVal);
+}
+// x, y, w, h
+void scriptDefineImageName(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	int _slot=nathanvariableToInt(&_passedArguments[0]);
+	if (_slot>=advImageNameCount){
+		advImageNameCount=_slot+1;
+		advImageNamePos = realloc(advImageNamePos,sizeof(int)*advImageNameCount*4);
+	}
+	int i;
+	for (i=0;i<4;++i){
+		advImageNamePos[_slot*4+i]=nathanvariableToInt(&_passedArguments[1+i]);
+	}
+	// initialize adv image name height if user forgot
+	if (advNameImHeight==-1){
+		advNameImHeight=currentTextHeight;
+	}
+}
+void scriptLoadImageNameSheet(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	if (advNameImSheet!=NULL){
+		freeTexture(advNameImSheet);
+	}
+	advNameImSheet = safeLoadGameImage(nathanvariableToString(&_passedArguments[0]),LOCATION_CG,scriptUsesFileExtensions);
 }
 #include "LuaWrapperDefinitions.h"
 //======================================================
@@ -6255,6 +6311,7 @@ void initializeNathanScript(){
 		nathanscriptAddFunction(vndswrapper_ENDOF,0,"ENDSCRIPT");
 		nathanscriptAddFunction(vndswrapper_ENDOF,0,"END_OF_FILE");
 		nathanscriptAddFunction(vndswrapper_advname,0,"advname");
+		nathanscriptAddFunction(vndswrapper_advnameim,0,"advnameim");
 
 		// Load global variables
 		char _globalsSaveFilePath[strlen(saveFolder)+strlen("vndsGlobals")+1];

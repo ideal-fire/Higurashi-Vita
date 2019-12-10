@@ -49,6 +49,8 @@ GENERATELUAWRAPPER(scriptSetForceCapFilenames);
 GENERATELUAWRAPPER(scriptSetFontSize);
 GENERATELUAWRAPPER(scriptNegative);
 GENERATELUAWRAPPER(scriptScalePixels);
+GENERATELUAWRAPPER(scriptDefineImageName);
+GENERATELUAWRAPPER(scriptLoadImageNameSheet);
 
 //===============================================================
 //===============================================================
@@ -104,6 +106,8 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptSetForceCapFilenames,"OptionsSetResourceUppercase")
 	PUSHLUAWRAPPER(scriptSetFontSize,"OptionsSetFontSize")
 	PUSHLUAWRAPPER(scriptScalePixels,"scalePixels")
+	PUSHLUAWRAPPER(scriptDefineImageName,"defineImageName")
+	PUSHLUAWRAPPER(scriptLoadImageNameSheet,"loadImageNameSheet")
 	PUSHEASYLUAINTSETFUNCTION(oMenuQuit)
 	PUSHEASYLUAINTSETFUNCTION(oMenuVNDSSettings)
 	PUSHEASYLUAINTSETFUNCTION(oMenuVNDSSave)
@@ -120,6 +124,8 @@ void initLuaWrappers(){
 	PUSHEASYLUAINTSETFUNCTION(advboxHeight)
 	PUSHEASYLUAINTSETFUNCTION(setADVNameSupport)
 	PUSHEASYLUAINTSETFUNCTION(advNamesPersist)
+	PUSHEASYLUAINTSETFUNCTION(setTextboxTopPad)
+	PUSHEASYLUAINTSETFUNCTION(setADVNameImageHeight)
 
 	// Commands exclusive to my engine
 	PUSHLUAWRAPPER(scriptDebugFile,"Debugfile")

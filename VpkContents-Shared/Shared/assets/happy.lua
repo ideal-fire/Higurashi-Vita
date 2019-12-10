@@ -5,7 +5,7 @@ TEXTMODE_AVD = TEXTMODE_ADV; // Compatibility with old versions
 Line_ContinueAfterTyping=0;
 Line_WaitForInput=1;
 Line_Normal=2;
-NULL=0;
+NULL=nil;
 
 FALSE=false;
 TRUE=true;

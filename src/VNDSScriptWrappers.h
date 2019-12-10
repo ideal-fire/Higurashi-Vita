@@ -388,4 +388,15 @@ void vndswrapper_advname(nathanscriptVariable* _passedArguments, int _numArgumen
 		setADVName(nathanvariableToString(&_passedArguments[0]));
 	}
 }
+void vndswrapper_advnameim(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	setADVName(NULL);
+	if (_numArguments==1){
+		int _desireIndex = nathanvariableToInt(&_passedArguments[0]);
+		if (_desireIndex<advImageNameCount){
+			currentADVNameIm=_desireIndex;
+		}else if (shouldShowWarnings()){
+			easyMessagef(1,"invalid image adv name index: %d/%d",_desireIndex,advImageNameCount-1);
+		}
+	}
+}
 #endif
