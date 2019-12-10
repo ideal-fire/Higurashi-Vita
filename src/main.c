@@ -5060,8 +5060,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		customSettingsMenu(_shouldShowQuit,_shouldShowVNDSSettings,_shouldShowVNDSSave,_shouldShowRestartBGM,_showArtLocationSlot,_showScalingOption,_showTextBoxModeOption,_showVNDSFadeOption,_showDebugButton);
 		return;
 	#endif
-	signed char _showADVNamesOption=(gameTextDisplayMode==TEXTMODE_ADV && advNamesSupported==1);
-
 	// Allow global overide for settings
 	overrideIfSet(&_shouldShowQuit,forceShowQuit);
 	overrideIfSet(&_shouldShowVNDSSettings,forceShowVNDSSettings);
@@ -5158,7 +5156,8 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	_settingsOn[SETTING_FONTSIZE]=forceFontSizeOption;
 	_settingsOn[SETTING_BOXALPHA]=(gameTextDisplayMode==TEXTMODE_NVL || canChangeBoxAlpha);
 	_values[SETTING_BOXALPHA] = &(_tempItoaHoldBoxAlpha[0]);
-	_settingsOn[SETTING_TEXTMODE]=_showTextBoxModeOption;	
+	_settingsOn[SETTING_TEXTMODE]=_showTextBoxModeOption;
+	_settingsOn[SETTING_ADVNAMES]=(gameTextDisplayMode==TEXTMODE_ADV && advNamesSupported==1);
 	_values[SETTING_AUTOSPEED]=&(_tempAutoModeString[0]); // auto stuff
 	_values[SETTING_AUTOVOICEDSPEED]=&(_tempAutoModeVoiceString[0]);
 	_settingsOn[SETTING_BUSTLOC]=_showArtLocationSlot;
@@ -5190,7 +5189,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		if (_settingsOn[SETTING_TEXTMODE]){
 			_values[SETTING_TEXTMODE]=(preferredTextDisplayMode==TEXTMODE_ADV ? "ADV" : "NVL");
 		}
-		_settingsOn[SETTING_ADVNAMES]=(_showADVNamesOption && preferredTextDisplayMode==TEXTMODE_ADV);
 		if (_settingsOn[SETTING_ADVNAMES]){
 			_values[SETTING_ADVNAMES]=charToSwitch(prefersADVNames);
 		}
