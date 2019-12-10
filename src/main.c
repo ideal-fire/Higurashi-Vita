@@ -39,7 +39,6 @@
 	TODO - what is this LazyChoice nonsense?
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
-	TODO - get total text x offset macro
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -191,6 +190,7 @@ char* vitaAppId="HIGURASHI";
 
 #define PREFERREDMINMAXLINES 10 // if we have fewer than this maxLines and in NVL mode then discard NVL bottom padding
 #define totalTextYOff() (textboxTopPad+messageInBoxYOffset+textboxYOffset)
+#define totalTextXOff() (textboxXOffset+messageInBoxXOffset)
 #define shouldShowADVNames() (gameTextDisplayMode==TEXTMODE_ADV && (advNamesSupported==2 || (advNamesSupported && prefersADVNames)))
 #define ADVNAMEOFFSET (currentTextHeight*1.5) // Space between top of ADV name and rest of the text. does not apply if adv name is an image
 #define IMADVNAMEPOSTPAD (textboxTopPad)
@@ -825,14 +825,14 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 	*/
 	if (shouldShowADVNames()){
 		if (currentADVName!=NULL){
-			drawDropshadowTextSpecific(textboxXOffset+messageInBoxXOffset,totalTextYOff()-ADVNAMEOFFSET,currentADVName,advNameR,advNameG,advNameB,0,0,0,255);
+			drawDropshadowTextSpecific(totalTextXOff(),totalTextYOff()-ADVNAMEOFFSET,currentADVName,advNameR,advNameG,advNameB,0,0,0,255);
 		}else if (currentADVNameIm!=-1){
 			int* _nameImageInfo = advImageNamePos+currentADVNameIm*4;
-			drawTexturePartSized(advNameImSheet,textboxXOffset+messageInBoxXOffset,totalTextYOff()-advNameImHeight-IMADVNAMEPOSTPAD,getOtherScaled(_nameImageInfo[3],advNameImHeight,_nameImageInfo[2]),advNameImHeight,_nameImageInfo[0],_nameImageInfo[1],_nameImageInfo[2],_nameImageInfo[3]);
+			drawTexturePartSized(advNameImSheet,totalTextXOff(),totalTextYOff()-advNameImHeight-IMADVNAMEPOSTPAD,getOtherScaled(_nameImageInfo[3],advNameImHeight,_nameImageInfo[2]),advNameImHeight,_nameImageInfo[0],_nameImageInfo[1],_nameImageInfo[2],_nameImageInfo[3]);
 		}
 	}
 	for (i=0;i<_maxDrawLine;i++){
-		drawTextGame(textboxXOffset+messageInBoxXOffset,totalTextYOff()+i*currentTextHeight,(char*)currentMessages[i],_alpha);
+		drawTextGame(totalTextXOff(),totalTextYOff()+i*currentTextHeight,(char*)currentMessages[i],_alpha);
 	}
 	drawImageChars(_alpha,_maxDrawLine-1,_finalLineMaxChar!=-1 ? _finalLineMaxChar : INT_MAX);
 	// Fix string if we trimmed it for _finalLineMaxChar
@@ -2839,7 +2839,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 						message[i]='\0'; // So we can use textWidth
 						for (j=0;j<MAXIMAGECHAR;j++){
 							if (imageCharType[j]==-1){
-								imageCharX[j] = textWidth(normalFont,&(message[lastNewlinePosition+1]))+textboxXOffset+messageInBoxXOffset+imageCharSlotCenter;
+								imageCharX[j] = textWidth(normalFont,&(message[lastNewlinePosition+1]))+totalTextXOff()+imageCharSlotCenter;
 								imageCharY[j] = totalTextYOff()+currentLine*currentTextHeight;
 								imageCharLines[j] = currentLine;
 								imageCharCharPositions[j] = strlenNO1(&(message[lastNewlinePosition+1]));
