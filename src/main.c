@@ -1350,7 +1350,7 @@ void updateControlsGeneral(){
 	if (isSkipping==1 && !isDown(BUTTON_Y)){
 		isSkipping=0;
 	}
-	if (wasJustPressed(BUTTON_X)){
+	if (wasJustPressed(BUTTON_X) || wasJustPressed(BUTTON_BACK)){
 		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && GBPLAT != GB_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame,(strcmp(VERSIONSTRING,"forgotversionnumber")==0));
 	}
 	if (wasJustPressed(BUTTON_SELECT)){
@@ -4839,6 +4839,15 @@ void scriptLoadImageNameSheet(nathanscriptVariable* _passedArguments, int _numAr
 		freeTexture(advNameImSheet);
 	}
 	advNameImSheet = safeLoadGameImage(nathanvariableToString(&_passedArguments[0]),LOCATION_CG,scriptUsesFileExtensions);
+}
+// lua only functions
+int L_setVNDSVar(lua_State* passedState){
+	if (lua_toboolean(passedState,1)){
+		genericSetVar((char*)lua_tostring(passedState,2),(char*)lua_tostring(passedState,3),(char*)lua_tostring(passedState,4),&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
+	}else{
+		genericSetVar((char*)lua_tostring(passedState,2),(char*)lua_tostring(passedState,3),(char*)lua_tostring(passedState,4),&nathanscriptGamevarList,&nathanscriptTotalGamevar);
+	}
+	return 0;
 }
 #include "LuaWrapperDefinitions.h"
 //======================================================
