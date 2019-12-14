@@ -64,10 +64,7 @@
 #include <Lua/lauxlib.h>
 //
 #include <goodbrew/config.h>
-#ifndef GBVERSION
-	#error update libgoodbrew
-#endif
-#if GBVERSION < 3
+#if GBVERSION < 4
 	#error update libgoodbrew
 #endif
 #include <goodbrew/platform.h>
@@ -742,12 +739,15 @@ void drawTextGame(int _x, int _y, char* _message, unsigned char _alpha){
 		gbDrawTextAlpha(normalFont,_x,_y,_message,DEFAULTFONTCOLOR,_alpha);
 	}
 }
+int imageCharW(signed char _type){
+	return getOtherScaled(getTextureHeight(imageCharImages[_type]),currentTextHeight,getTextureWidth(imageCharImages[_type]));	
+}
 void drawImageChars(unsigned char _alpha, int _maxDrawLine, int _maxDrawLineChar){
 	int i;
 	for (i=0;i<MAXIMAGECHAR;++i){
 		if (imageCharType[i]!=-1){
 			if ((imageCharLines[i]<_maxDrawLine) || (imageCharLines[i]==_maxDrawLine && imageCharCharPositions[i]<=_maxDrawLineChar)){
-				drawTextureSizedAlpha(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],currentTextHeight,currentTextHeight,_alpha);
+				drawTextureSizedAlpha(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],imageCharW(imageCharType[i]),currentTextHeight,_alpha);
 			}
 		}
 	}
@@ -1289,47 +1289,58 @@ void changeIfLazyLastLineFix(int* _line, int* _toChange){
 		(*_toChange)-=1;
 	}
 }
+void updateBust(bust* _target, u64 _curTime){
+	switch(_target->bustStatus){
+		case BUST_STATUS_FADEIN:
+		case BUST_STATUS_TRANSFORM_FADEIN:
+			if (_curTime>_target->fadeStartTime){
+				if (_curTime>=_target->fadeEndTime){
+					if (_target->bustStatus == BUST_STATUS_TRANSFORM_FADEIN){
+						freeTexture(_target->transformTexture);
+						_target->transformTexture=NULL;
+					}
+					_target->alpha=255;
+					_target->bustStatus = BUST_STATUS_NORMAL;
+				}else{
+					_target->alpha=partMoveFills(_curTime,_target->fadeStartTime,_target->fadeEndTime-_target->fadeStartTime,255);
+				}
+			}
+			break;
+		case BUST_STATUS_FADEOUT:
+			if (_curTime>_target->fadeEndTime){
+				ResetBustStruct(_target,1);
+				RecalculateBustOrder();
+			}else{
+				_target->alpha=partMoveEmptys(_curTime,_target->fadeStartTime,_target->fadeEndTime-_target->fadeStartTime, 255);
+			}
+			break;
+		case BUST_STATUS_SPRITE_MOVE:
+			if (_curTime>_target->startMoveTime+_target->diffMoveTime){
+				_target->bustStatus = BUST_STATUS_NORMAL;
+				_target->xOffset=_target->startXMove+_target->diffXMove;
+				_target->yOffset=_target->startYMove+_target->diffYMove;
+			}else{
+				_target->xOffset=_target->startXMove+partMoveFills(_curTime,_target->startMoveTime,_target->diffMoveTime,_target->diffXMove);
+				_target->yOffset=_target->startYMove+partMoveFills(_curTime,_target->startMoveTime,_target->diffMoveTime,_target->diffYMove);
+			}
+			break;
+	}
+}
 // Update what bustshots are doing depending on their bustStatus
 void Update(){
-	u64 _curTime=getMilli();
+	u64 _curTime=getMilli();	
 	int i;
 	for (i=0;i<maxBusts;i++){
-		switch(Busts[i].bustStatus){
-			case BUST_STATUS_FADEIN:
-			case BUST_STATUS_TRANSFORM_FADEIN:
-				if (_curTime>Busts[i].fadeStartTime){
-					if (_curTime>=Busts[i].fadeEndTime){
-						if (Busts[i].bustStatus == BUST_STATUS_TRANSFORM_FADEIN){
-							freeTexture(Busts[i].transformTexture);
-							Busts[i].transformTexture=NULL;
-						}
-						Busts[i].alpha=255;
-						Busts[i].bustStatus = BUST_STATUS_NORMAL;
-					}else{
-						Busts[i].alpha=partMoveFills(_curTime,Busts[i].fadeStartTime,Busts[i].fadeEndTime-Busts[i].fadeStartTime,255);
-					}
-				}
-				break;
-			case BUST_STATUS_FADEOUT:
-				if (_curTime>Busts[i].fadeEndTime){
-					ResetBustStruct(&(Busts[i]),1);
-					RecalculateBustOrder();
-				}else{
-					Busts[i].alpha=partMoveEmptys(_curTime, Busts[i].fadeStartTime, Busts[i].fadeEndTime-Busts[i].fadeStartTime, 255);
-				}
-				break;
-			case BUST_STATUS_SPRITE_MOVE:
-				if (_curTime>Busts[i].startMoveTime+Busts[i].diffMoveTime){
-					Busts[i].bustStatus = BUST_STATUS_NORMAL;
-					Busts[i].xOffset=Busts[i].startXMove+Busts[i].diffXMove;
-					Busts[i].yOffset=Busts[i].startYMove+Busts[i].diffYMove;
-				}else{
-					Busts[i].xOffset=Busts[i].startXMove+partMoveFills(_curTime,Busts[i].startMoveTime,Busts[i].diffMoveTime,Busts[i].diffXMove);
-					Busts[i].yOffset=Busts[i].startYMove+partMoveFills(_curTime,Busts[i].startMoveTime,Busts[i].diffMoveTime,Busts[i].diffYMove);
-				}
-				break;
-		}
+		updateBust(&(Busts[i]),_curTime);
 	}
+}
+// prepare a bust to be settled upon the next update
+void settleBust(bust* _target){
+	_target->fadeStartTime=0;
+	_target->fadeEndTime=0;
+	_target->startMoveTime=0;
+	_target->diffMoveTime=0;
+	updateBust(_target,1);
 }
 // the history array wraps. This fixes the array index.
 int FixHistoryOldSub(int _val, int _scroll){
@@ -1784,6 +1795,11 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 	free(_workable);
 }
 void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
+	int _tR,_tG,_tB;
+	getClearColor(&_tR,&_tG,&_tB);
+	_tR=255-_tR;
+	_tG=255-_tG;
+	_tB=255-_tB;
 	controlsReset();
 	do{
 		controlsStart();
@@ -1797,11 +1813,10 @@ void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
 
 		int i;
 		for (i=0;i<_numLines;++i){
-			drawText(32,5+currentTextHeight*(i+2),_passedMessage[i]);
+			gbDrawText(normalFont,32,5+currentTextHeight*(i+2),_passedMessage[i],_tR,_tG,_tB);
 		}
-
 		if (_doWait){
-			drawText(32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.");
+			gbDrawText(normalFont,32,screenHeight-32-currentTextHeight,SELECTBUTTONNAME" to continue.",_tR,_tG,_tB);
 		}
 		endDrawing();
 	}while (currentGameStatus!=GAMESTATUS_QUIT && _doWait);
@@ -4048,7 +4063,7 @@ char lazyLuaError(int _loadResult){
 	return 0;
 }
 void safeVNDSSaveMenu(){
-	int _chosenSlot = vndsSaveSelector();
+	int _chosenSlot = vndsSaveSelector(1);
 	if (_chosenSlot!=-1){
 		char* _savedPath = easyVNDSSaveName(_chosenSlot);
 		if (vndsNormalSave(_savedPath,1,1)){
@@ -4846,6 +4861,13 @@ int L_setVNDSVar(lua_State* passedState){
 		genericSetVar((char*)lua_tostring(passedState,2),(char*)lua_tostring(passedState,3),(char*)lua_tostring(passedState,4),&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar);
 	}else{
 		genericSetVar((char*)lua_tostring(passedState,2),(char*)lua_tostring(passedState,3),(char*)lua_tostring(passedState,4),&nathanscriptGamevarList,&nathanscriptTotalGamevar);
+	}
+	return 0;
+}
+int L_settleBust(lua_State* passedState){
+	int _slot = lua_tonumber(passedState,1);
+	if (_slot<maxBusts){
+		settleBust(&(Busts[_slot]));
 	}
 	return 0;
 }
@@ -5910,9 +5932,9 @@ void NewGameMenu(){
 	}
 }
 // Returns selected slot or -1
-int vndsSaveSelector(){
+int vndsSaveSelector(char _isSave){
 	#ifdef OVERRIDE_VNDSSAVEMENU
-		return customVNDSSaveSelector();
+		return customVNDSSaveSelector(_isSave);
 	#endif
 	controlsReset();
 	// screenWidth/3/2 free space for each text
@@ -6201,7 +6223,7 @@ void VNDSNavigationMenu(){
 				forceResettingsButton=0;
 				forceFontSizeOption=0;
 				if (_choice==0){
-					int _chosenSlot = vndsSaveSelector();
+					int _chosenSlot = vndsSaveSelector(0);
 					if (_chosenSlot!=-1){
 						char* _loadPath = easyVNDSSaveName(_chosenSlot);
 						if (checkFileExist(_loadPath)){
