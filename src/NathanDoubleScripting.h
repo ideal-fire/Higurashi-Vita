@@ -511,7 +511,6 @@ void trimStart(char* _toTrim){
 	}
 }
 
-#define MAXNATHANARGUMENTS 20
 void nathanscriptParseString(char* _tempReadLine, int* _storeCommandIndex, nathanscriptVariable** _storeArguments, int* _storeNumArguments){
 	char* _tempSingleElementBuffer;
 	_tempSingleElementBuffer = malloc(strlen(_tempReadLine)+1);
@@ -995,7 +994,11 @@ void scriptGoto(nathanscriptVariable* _argumentList, int _totalArguments, nathan
 }
 
 void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	luaL_dostring(L,nathanvariableToString(&_madeArgs[0]));
+	if (luaL_dostring(L,nathanvariableToString(&_madeArgs[0]))){
+		if (shouldShowWarnings()){
+			easyMessagef(1,lua_tostring(L,-1));
+		}
+	}
 	return;
 }
 

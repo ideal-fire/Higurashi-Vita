@@ -407,8 +407,6 @@ unsigned short imageCharCharPositions[MAXIMAGECHAR] = {0};
 #define IMAGECHARNOTE 2
 #define IMAGECHARUNKNOWN 0
 crossTexture imageCharImages[3]; // PLEASE DON'T FORGET TO CHANGE THIS IF ANOTHER IMAGE CHAR IS ADDED
-int numImageCharSpaceEquivalent;
-int imageCharSlotCenter;
 
 #define FILTERTYPE_INACTIVE 0 // This one is different from Higurashi, in Higurashi it defaults to FILTERTYPE_EFFECTCOLORMIX
 #define FILTERTYPE_EFFECTCOLORMIX 1
@@ -902,13 +900,6 @@ void reloadFont(double _passedSize){
 	if (singleSpaceWidth==0){
 		singleSpaceWidth=1;
 	}
-	numImageCharSpaceEquivalent=currentTextHeight/singleSpaceWidth;
-
-	char _tempBuffer[numImageCharSpaceEquivalent+1];
-	memset(_tempBuffer,' ',numImageCharSpaceEquivalent);
-	_tempBuffer[numImageCharSpaceEquivalent]='\0';
-	imageCharSlotCenter=(textWidth(normalFont,_tempBuffer)-currentTextHeight)/2;
-
 	recalculateMaxLines();
 }
 void globalLoadFont(const char* _filename){
@@ -2759,7 +2750,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (strlen(_tempMsg)==0){
 		return;
 	}
-
 	// 1 when finished displaying the text
 	char _isDone=0;
 	if (isSkipping==1 || _autoskip==1 || textSpeed==TEXTSPEED_INSTANT){
@@ -2768,18 +2758,12 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (!MessageBoxEnabled){
 		showTextbox();
 	}
-
-	unsigned char message[strlen(_tempMsg)+1+strlen(currentMessages[currentLine])];
+	unsigned char* message = malloc(strlen(_tempMsg)+strlen(currentMessages[currentLine])+1);	
 	// This will make the start of the message have whatever the start of the line says.
 	// For example, if the line we're writing to already has "Keiichi is an idiot" written on it, that will be copied to the start of this message.
 	strcpy(message,currentMessages[currentLine]);
 	strcat(message,_tempMsg);
 	int totalMessageLength=strlen(message);
-	//printf("Total assembled: (START)%s(END)\n",message);
-	if (totalMessageLength==0){
-		endType = _endtypetemp;
-		return;
-	}
 	// These are used when we're displaying the message to the user
 	// Refer to the while loop near the end of this function.
 	int _currentDrawLine = currentLine;
@@ -2788,7 +2772,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	// This will loop through the entire message, looking for where I need to add new lines. When it finds a spot that
 	// needs a new line, that spot in the message will become 0. So, when looking for the place to 
 	int lastNewlinePosition=-1; // If this doesn't start at -1, the first character will be cut off. lastNewlinePosition+1 is always used, so a negative index won't be a problem.
-	for (i = strlen(currentMessages[currentLine]); i < totalMessageLength; i++){
+	for (i=strlen(currentMessages[currentLine]);i<totalMessageLength;i++){
 		if (message[i]==32){ // Only check when we meet a space. 32 is a space in ASCII
 			message[i]='\0';
 			// Check if the text has gone past the end of the screen OR we're out of array space for this line
@@ -2824,17 +2808,11 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			// Here we have special checks for stuff like image characters and new lines.
 			if (message[i]<65 || message[i]>122){
 				if (message[i]=='<'){
-					// TODO - Won't work if only a less than sign and not a tag
-					int k;
-					// Loop and look for the end
-					for (k=i+1;k<i+100;k++){
-						if (message[k]=='>'){
-							break;
-						}
-					}
-					if (k!=i+100){
-						memset(&(message[i]),1,k-i+1); // Because this starts at i, k being 11 with i as 10 would just write 1 byte, therefor missing the end '>'. THe fix is to add one.
-						i+=(k-i-1);
+					char* _endPos = strchr(&(message[i]),'>');
+					if (_endPos!=NULL){
+						int _deltaChars = (_endPos-(char*)&(message[i]));
+						memset(&(message[i]),1,_deltaChars+1); // Because this starts at i, k being 11 with i as 10 would just write 1 byte, therefor missing the end '>'. THe fix is to add one.
+						i+=(_deltaChars-1);
 					}
 				}else if (message[i]==226 && message[i+1]==128 && message[i+2]==148){ // Weird hyphen replace
 					memset(&(message[i]),45,1); // Replace it with a normal hyphen
@@ -2851,19 +2829,32 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 						_imagechartype = IMAGECHARUNKNOWN;
 					}
 					if (_imagechartype != IMAGECHARUNKNOWN){
-						message[i]='\0'; // So we can use textWidth
+						// find open image char slot
 						for (j=0;j<MAXIMAGECHAR;j++){
 							if (imageCharType[j]==-1){
-								imageCharX[j] = textWidth(normalFont,&(message[lastNewlinePosition+1]))+totalTextXOff()+imageCharSlotCenter;
+								message[i]='\0'; // So we can use textWidth
+								int _cachedW = imageCharW(_imagechartype);
+								int _numSpaces = ceil(_cachedW/(double)singleSpaceWidth);
+								imageCharX[j] = textWidth(normalFont,&(message[lastNewlinePosition+1]))+totalTextXOff()+easyCenter(_cachedW,_numSpaces*singleSpaceWidth);
 								imageCharY[j] = totalTextYOff()+currentLine*currentTextHeight;
 								imageCharLines[j] = currentLine;
 								imageCharCharPositions[j] = strlenNO1(&(message[lastNewlinePosition+1]));
 								imageCharType[j] = _imagechartype;
+								// set all these 3 image char bytes to be skipped
+								memset(&(message[i]),1,3);
+								if (_numSpaces<=3){
+									memset(&(message[i]),' ',_numSpaces);
+								}else{
+									int _numAdded = (_numSpaces-3);
+									totalMessageLength+=_numAdded;
+									message = realloc(message,totalMessageLength+1);
+									memmove(&message[i+_numAdded],&message[i],totalMessageLength-i-_numAdded+1); // move the null char also
+									memset(&message[i],' ',_numSpaces);
+								}
+								i+=(_numSpaces-1);
 								break;
 							}
 						}
-						memset(&(message[i]),32,numImageCharSpaceEquivalent);
-						i+=(numImageCharSpaceEquivalent-1);
 					}
 				}else if (message[i]=='\n'){
 					message[i]='\0';
@@ -2915,7 +2906,6 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				}
 			}
 		}
-
 		changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
 	}
 	// This code will make a new line if there needs to be one because of the last word
@@ -3049,6 +3039,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		}
 	#endif
 	// End of function
+	free(message);
 	endType = _endtypetemp;
 }
 #if GBPLAT == GB_3DS

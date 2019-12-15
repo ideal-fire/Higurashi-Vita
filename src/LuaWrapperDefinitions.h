@@ -131,7 +131,10 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptDebugFile,"Debugfile")
 	PUSHLUAWRAPPER(scriptMoveBust,"MoveBust")
 	PUSHLUAWRAPPER(scriptImageChoice,"ImageChoice")
-
+	// Exclusive lua only vnds interaction commands
+	LUAREGISTER(L_setVNDSVar,"setVNDSVar")
+	LUAREGISTER(L_settleBust,"settleBust")
+		
 	// Functions that intentionally do nothing
 	PUSHLUAWRAPPER(scriptNotYet,"SetFontId")
 	PUSHLUAWRAPPER(scriptNotYet,"SetCharSpacing")

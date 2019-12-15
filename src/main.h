@@ -30,7 +30,7 @@ int inBetweenVNDSLines(int _aboutToCommandIndex);
 char lazyLuaError(int _loadResult);
 char* easyVNDSSaveName(int _slot);
 char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb);
-int vndsSaveSelector();
+int vndsSaveSelector(char _isSave);
 void drawHallowRect(int _x, int _y, int _w, int _h, int _thick, int _r, int _g, int _b, int _a);
 void safeVNDSSaveMenu();
 int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _options, char _canQuit);
