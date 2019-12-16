@@ -85,6 +85,9 @@
 	#include <psp2/power.h> // overclock
 	#include <psp2/ctrl.h> // sound protect thread
 #endif
+#if GBPLAT == GB_ANDROID
+	#include "SDLLuaDoFile.h"
+#endif
 #include "legarchive.h"
 
 #define LOCATION_UNDEFINED 0
@@ -562,7 +565,7 @@ signed char forceDropshadowOption=1;
 /*
 ====================================================
 */
-#if SUBPLATFORM == SUB_UNIX
+#if GBPLAT == GB_LINUX
 	char* itoa(int value, char* _buffer, int _uselessBase){
 		sprintf(_buffer,"%d",value);
 		return _buffer;
@@ -941,12 +944,11 @@ int menuControls(int _choice,int _menuMin,int _menuMax){
 	menuControlsLow(&_choice,1,1,0,0,_menuMin,_menuMax);
 	return _choice;
 }
-char SafeLuaDoFile(lua_State* passedState, char* passedPath, char showMessage){
-	if (checkFileExist(passedPath)==0){
-		if (showMessage==1){
-			easyMessagef(1,"The LUA file %s does not exist!",passedPath);
-		}
-		return 0;
+// returns 1 on error. shows messages.
+char SafeLuaDoFile(lua_State* passedState, char* passedPath){
+	if (!checkFileExist(passedPath)){
+		easyMessagef(1,"The LUA file %s does not exist!",passedPath);
+		return 1;
 	}
 	return lazyLuaError(luaL_dofile(passedState,passedPath));
 }
@@ -1239,11 +1241,6 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 		currentGameStatus=GAMESTATUS_TITLE;
 		return 0;
 	}
-
-	//if (SafeLuaDoFile(L,tempstringconcat)==0){
-	//	printf("Failed to load\n");
-	//}
-
 	// Adds function to stack
 	lua_getglobal(L,"main");
 	// Call funciton. Removes function from stack.
@@ -4049,11 +4046,8 @@ char lazyLuaError(int _loadResult){
 			case LUA_ERRERR:
 				easyMessagef(1,"LUA_ERRERR");
 			break;
-			case 1:
-				easyMessagef(1,"Lua error.");
-			break;
 			default:
-				easyMessagef(1,"UNKNOWN ERROR!");
+				easyMessagef(1,"lua error %d",_loadResult);
 			break;
 		}
 		return 1;
@@ -6302,17 +6296,10 @@ char initializeLua(){
 		
 		// happy.lua contains functions that both Higurashi script files use and my C code
 		char* _fixedPath = fixPathAlloc("assets/happy.lua",TYPE_EMBEDDED);
-		char _didLoadHappyLua = SafeLuaDoFile(L,_fixedPath,0);
+		char _didFailLoad = SafeLuaDoFile(L,_fixedPath);
 		free(_fixedPath);
 		lua_sethook(L, incrementScriptLineVariable, LUA_MASKLINE, 5);
-		if (_didLoadHappyLua==1){
-			#if GBPLAT == GB_VITA
-				easyMessagef(1,"happy.lua is missing for some reason. Redownload the VPK. If that doesn't fix it, report the problem to MyLegGuy.");
-			#else
-				easyMessagef(1,"happy.lua missing.");
-			#endif
-			return 2;
-		}
+		return _didFailLoad ? 2 : 0;
 	}
 	return 0;
 }
