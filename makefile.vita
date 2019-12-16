@@ -2,7 +2,7 @@ PSVITAIP=$(VITAIP)
 
 TITLE_ID = HIGURASHI
 TARGET   = Higurashi
-OBJS     = ./src/main.o ./src/legarchive.o ./stolenCode/qdbmp.o ./stolenCode/customgetline.o
+OBJS     = ./src/main.o ./src/legarchive.o ./stolenCode/qdbmp.o
 
 LIBS = -lgoodbrewvita \
 	-lvorbisfile \

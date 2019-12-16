@@ -7,8 +7,6 @@
 #include <string.h>
 #include <math.h>
 
-#include "../stolenCode/customgetline.h"
-
 #include <Lua/lua.h>
 #include <Lua/lualib.h>
 #include <Lua/lauxlib.h>
@@ -585,7 +583,7 @@ void nathanscriptParseSingleLine(crossFile fp, int* _storeCommandIndex, nathansc
 	char* _tempReadLine = calloc(1,512);
 	// Will be changed if the buffer isn't big enough
 	size_t _readLineBufferSize = 512;
-	custom_getline(&_tempReadLine,&_readLineBufferSize,fp);
+	crossgetline(&_tempReadLine,&_readLineBufferSize,fp);
 	// getline function includes the new line character in the string
 	removeNewline(_tempReadLine);
 	// If it's just an empty line,

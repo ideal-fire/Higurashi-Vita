@@ -86,7 +86,6 @@
 	#include <psp2/ctrl.h> // sound protect thread
 #endif
 #include "legarchive.h"
-#include "../stolenCode/customgetline.h"
 
 #define LOCATION_UNDEFINED 0
 #define LOCATION_CG 1
@@ -1636,7 +1635,7 @@ void moveFilePointerPastNewline(crossFile fp){
 char* easygetline(crossFile fp){
 	char* _tempReadLine=NULL;
 	size_t _readLength=0;
-	custom_getline(&_tempReadLine,&_readLength,fp);
+	crossgetline(&_tempReadLine,&_readLength,fp);
 	removeNewline(_tempReadLine);
 	return _tempReadLine;
 }
