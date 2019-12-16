@@ -103,8 +103,13 @@
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
 // Specific constants
 #if GBPLAT != GB_3DS
-	#define SELECTBUTTONNAME "X"
-	#define BACKBUTTONNAME "O"
+	#if GBPLAT == GB_ANDROID
+		#define SELECTBUTTONNAME "TOUCH"
+		#define BACKBUTTONNAME "BACK"
+	#else
+		#define SELECTBUTTONNAME "X"
+		#define BACKBUTTONNAME "O"
+	#endif
 	int advboxHeight = 181;
 #else
 	#define SELECTBUTTONNAME "A"
@@ -907,23 +912,26 @@ void globalLoadFont(const char* _filename){
 	reloadFont(fontSize);
 }
 char menuControlsLow(int* _choice, char _canWrapUpDown, int _upDownChange, char _canWrapLeftRight, int _leftRightChange, int _menuMin, int _menuMax){
-	int _oldValue = *_choice;
+	int _play = *_choice;
 	if (_leftRightChange!=0){
 		if (wasJustPressed(BUTTON_LEFT)){
-			*_choice-=_leftRightChange;
+			_play-=_leftRightChange;
 		}else if (wasJustPressed(BUTTON_RIGHT)){
-			*_choice+=_leftRightChange;
+			_play+=_leftRightChange;
 		}
-		*_choice = _canWrapLeftRight ? wrapNum(*_choice,_menuMin,_menuMax) : limitNum(*_choice,_menuMin,_menuMax);
+		_play = _canWrapLeftRight ? wrapNum(_play,_menuMin,_menuMax) : limitNum(_play,_menuMin,_menuMax);
 	}
 	if (wasJustPressed(BUTTON_UP)){
-		*_choice-=_upDownChange;
+		_play-=_upDownChange;
 	}
 	if (wasJustPressed(BUTTON_DOWN)){
-		*_choice+=_upDownChange;
+		_play+=_upDownChange;
 	}
-	*_choice = _canWrapUpDown ? wrapNum(*_choice,_menuMin,_menuMax) : limitNum(*_choice,_menuMin,_menuMax);
-	return _oldValue!=*_choice;
+	if (_play!=*_choice){
+		*_choice = _canWrapUpDown ? wrapNum(_play,_menuMin,_menuMax) : limitNum(_play,_menuMin,_menuMax);
+		return 1;
+	}
+	return 0;
 }
 int retMenuControlsLow(int _choice, char _canWrapUpDown, int _upDownChange, char _canWrapLeftRight, int _leftRightChange, int _menuMin, int _menuMax){
 	int _fakeRet=_choice;
@@ -6354,7 +6362,7 @@ void initializeNathanScript(){
 void hVitaCrutialInit(){
 	srand(time(NULL));
 	generalGoodInit();
-	initGraphics(960,544,0);
+	initGraphics(960,544,WINDOWFLAG_EXTRAFEATURES);
 	screenWidth = getScreenWidth();
 	screenHeight = getScreenHeight();
 	initImages();
