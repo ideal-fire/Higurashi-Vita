@@ -1,5 +1,5 @@
-src = ./src/main.c ./src/legarchive.o ./stolenCode/qdbmp.o
-obj = ./src/main.o ./src/legarchive.o ./stolenCode/qdbmp.o
+src = ./src/main.c ./src/legarchive.o
+obj = ./src/main.o ./src/legarchive.o
 
 LDFLAGS = -lgoodbrew -lSDLFontCacheLinux -lm -lpthread -lSDL2_image -lSDL2_ttf -lSDL2_mixer `sdl2-config --cflags --libs` -Llib -lluaLinux -ldl
 CFLAGS = -g -Wall -Wno-pointer-sign -Wno-char-subscripts -IInclude -Llib
@@ -16,8 +16,3 @@ clean:
 depend:
 	makedepend -Y $(src) -fmakefile.general
 
-# DO NOT DELETE
-
-./src/main.o: ./src/main.h ./src/legarchive.h ./src/specialEditionHeader.h ./src/specialEditionFooter.h
-./src/main.o: ./stolenCode/qdbmp.h ./src/NathanDoubleScripting.h
-./src/main.o: ./src/LuaWrapperDefinitions.h ./src/VNDSScriptWrappers.h
