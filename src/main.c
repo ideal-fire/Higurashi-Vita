@@ -39,6 +39,7 @@
 	TODO - what is this LazyChoice nonsense?
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
+	TODO - apply my WrapText function changes to the OutputLine function too
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -1718,7 +1719,9 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 	int _cachedStrlen = strlen(_workable);
 	if (_cachedStrlen==0){
 		*_numLines=0;
-		*_realLines=NULL;
+		if (_realLines!=NULL){
+			*_realLines=NULL;
+		}
 		free(_workable);
 		return;
 	}
@@ -1729,7 +1732,7 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 			_workable[i]='\0';
 			_lastNewline=i;
 		}else if (_workable[i]==' ' || i==_cachedStrlen-1){
-			if (_workable[i]==' '){ // Because alt condition
+			if (_workable[i]==' '){ // Because alt condition				
 				_workable[i]='\0'; // Chop the string for textWidth function
 			}
 			if (textWidth(normalFont,&(_workable[_lastNewline+1]))>_maxWidth){ // If at this spot the string is too long for the screen
@@ -1745,27 +1748,27 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 					for (j=i-1;j>_lastNewline;--j){
 						char _cacheChar = _workable[j];
 						_workable[j]='\0';
-						
 						char _canSplit = (textWidth(normalFont,&(_workable[_lastNewline+1]))<=_maxWidth);
 						_workable[j]=_cacheChar;
 						if (_canSplit){
-							// The character we're at right now, that's where the split needs to be because it's acting as the null terminator right now
-							// In this code, j will represent the last real character from the string
-							j-=2; // Minus one to make room for the dash, minus another because we're making the break at original j value minus one
-							char* _newBuffer = malloc(_cachedStrlen+2+1);
-							memcpy(_newBuffer,_workable,j+1);
-							_newBuffer[j+1]='-';
-							_newBuffer[j+2]='\0';
-							_lastNewline=j+2;
-							memcpy(&(_newBuffer[j+3]),&(_workable[j+1]),_cachedStrlen-(j)); // Should also copy null
-							free(_workable);
-							_workable = _newBuffer;
-
-							// Account for new 2 bytes
-							_cachedStrlen+=2;
-							i+=2;
-							if (_workable[i]=='\0'){ // Fix chop if happened
-								_workable[i]=' ';
+							if (j==i-1){ // if we're about to put the line break right before the space, don't. the space is already a null byte. just use that.
+								_lastNewline=i;
+							}else{
+								// The character we're at right now, that's where the split needs to be because it's acting as the null terminator right now
+								// In this code, j will represent the last real character from the string
+								char* _newBuffer = malloc(_cachedStrlen+2);
+								memcpy(_newBuffer,_workable,j+1);
+								_newBuffer[j+1]='\0';
+								_lastNewline=j+1;
+								memcpy(&(_newBuffer[j+2]),&(_workable[j+1]),_cachedStrlen-(j)); // Should also copy null
+								free(_workable);
+								_workable = _newBuffer;
+								// Account for new byte
+								_cachedStrlen++;
+								i++;
+								if (_workable[i]=='\0'){ // Fix chop if happened
+									_workable[i]=' ';
+								}
 							}
 							break;
 						}
@@ -1798,11 +1801,13 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 			*_numLines=(*_numLines)+1;
 		}
 	}
-	*_realLines = malloc(sizeof(char*)*(*_numLines));
-	int _nextCopyIndex=0;
-	for (i=0;i<*_numLines;++i){
-		(*_realLines)[i] = strdup(&(_workable[_nextCopyIndex]));
-		_nextCopyIndex += 1+strlen(&(_workable[_nextCopyIndex]));
+	if (_realLines!=NULL){
+		*_realLines = malloc(sizeof(char*)*(*_numLines));
+		int _nextCopyIndex=0;
+		for (i=0;i<*_numLines;++i){
+			(*_realLines)[i] = strdup(&(_workable[_nextCopyIndex]));
+			_nextCopyIndex += 1+strlen(&(_workable[_nextCopyIndex]));
+		}
 	}
 
 	free(_workable);
@@ -5478,6 +5483,7 @@ int getNumShownOptions(char* _showMap, int _mapSize){
 	}
 	return _mapSize;
 }
+// will be bad if option number zero is a left right option
 int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
 	// all four of these are passed. 
 	int _passedOptionXOff=100;
@@ -5507,6 +5513,16 @@ int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** 
 	}
 	// This is it. Menu is confirmed.
 	int _ret=-1;
+	// control info
+	char _isDrag=0;
+	int _startTx=-1;
+	int _startTy=-1;
+	int _holdSelect=-1;
+	char _isLeftRightMode=0;
+	// store the old wrapped text before we chose an option for editing
+	char** _preChoseWrapped=NULL;
+	int _preChoseLen;
+	//
 	char*** _wrappedOptions = malloc(sizeof(char**)*_numOptions);
 	int* _wrappedLen = malloc(sizeof(int)*_numOptions);
 	int* _optionY = malloc(sizeof(int)*_numOptions);
@@ -5520,9 +5536,7 @@ int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** 
 		_optionY[i]=_totalHeight;
 		_loopRealIndex=getNextEnabled(_showMap,_loopRealIndex+1);
 		if (_optionValues && _optionValues[_loopRealIndex]){
-			char* _withValue=malloc(strlen(_options[_loopRealIndex])+strlen(_optionValues[_loopRealIndex])+1);
-			strcpy(_withValue,_options[_loopRealIndex]);
-			strcat(_withValue,_optionValues[_loopRealIndex]);
+			char* _withValue=easyCombineStrings(2,_options[_loopRealIndex],_optionValues[_loopRealIndex]);
 			wrapText(_withValue,&(_wrappedLen[i]),&(_wrappedOptions[i]),_menuW);
 			free(_withValue);
 		}else{
@@ -5531,6 +5545,8 @@ int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** 
 		_totalHeight+=_wrappedLen[i]*currentTextHeight;
 	}
 	// draw info
+recalcMaxDrawY:
+	;
 	int _minStartDrawY;
 	int _maxStartDrawY;
 	int _startDrawY;
@@ -5546,69 +5562,112 @@ int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** 
 	if (lastTouchMenuOptions==_options){
 		_startDrawY=limitNum(lastTouchMenuRetYPos-_optionY[_choice],_minStartDrawY,_maxStartDrawY);
 	}
-	// control info
-	char _isDrag=0;
-	int _startTx=-1;
-	int _startTy=-1;
-	int _holdSelect=-1;
 	while(1){
 		controlsStart();
 		if ((_menuProp & MENUPROP_CANQUIT) && (wasJustPressed(BUTTON_B) || wasJustPressed(BUTTON_BACK))){
 			_ret=-1;
 			break;
 		}
-		if (wasJustPressed(BUTTON_TOUCH)){
-			int _fTouchX = fixTouchX(touchX);
-			int _fTouchY = fixTouchY(touchY);
+		if (!_isLeftRightMode){
+			if (wasJustPressed(BUTTON_TOUCH)){
+				int _fTouchX = fixTouchX(touchX);
+				int _fTouchY = fixTouchY(touchY);
 
-			_isDrag=!pointInBox(_fTouchX,_fTouchY,_passedOptionXOff,_passedOptionYOff,_menuW,_menuH);
-			if (!_isDrag){
-				int i;
-				int _fakeTouchY=_fTouchY-_startDrawY-_passedOptionYOff;
-				for (i=0;i<_numOptions;++i){
-					if (_fakeTouchY<_optionY[i]){
-						if (i!=0 && _optionY[i]-_fakeTouchY>_optionPad){
-							_holdSelect=i-1;
+				_isDrag=!pointInBox(_fTouchX,_fTouchY,_passedOptionXOff,_passedOptionYOff,_menuW,_menuH);
+				if (!_isDrag){
+					int i;
+					int _fakeTouchY=_fTouchY-_startDrawY-_passedOptionYOff;
+					for (i=0;i<_numOptions;++i){
+						if (_fakeTouchY<_optionY[i]){
+							if (i!=0 && _optionY[i]-_fakeTouchY>_optionPad){
+								_holdSelect=i-1;
+							}
+							break;
 						}
+					}
+				}
+				_startTx=touchX;
+				_startTy=touchY;
+			}else if (isDown(BUTTON_TOUCH)){
+				if (!_isDrag){
+					if (abs(touchX-_startTx)>(screenWidth*MINDRAGRATIO) || abs(touchY-_startTy)>(screenHeight*MINDRAGRATIO)){
+						_isDrag=1;
+						_holdSelect=-1;
+						_startTy=touchY;
+					}
+				}else{
+					_startDrawY=limitNum(_startDrawY+(touchY-_startTy),_minStartDrawY,_maxStartDrawY);
+					_startTy=touchY;
+				}
+			}else if (wasJustReleased(BUTTON_TOUCH)){
+				if (_holdSelect!=-1){
+					_ret = menuIndexToReal(_holdSelect,_showMap);
+					if (_optionProp[_ret] & OPTIONPROP_LEFTRIGHT){
+						_isLeftRightMode=1;
+						_choice=_holdSelect;
+						_holdSelect=-1;
+						// rewrap this line because we now need button space
+						_preChoseWrapped=_wrappedOptions[_choice];
+						_preChoseLen=_wrappedLen[_choice];
+						if (_optionValues && _optionValues[_ret]){
+							char* _withValue=easyCombineStrings(2,_options[_ret],_optionValues[_ret]);
+							wrapText(_withValue,&(_wrappedLen[_choice]),&(_wrappedOptions[_choice]),32);
+							free(_withValue);
+						}else{
+							wrapText(_options[_ret],&(_wrappedLen[_choice]),&(_wrappedOptions[_choice]),_menuW);
+						}
+						int _addHeight = (_wrappedLen[_choice]-_preChoseLen)*currentTextHeight;
+						for (i=_choice+1;i<_numOptions;++i){
+							_totalHeight+=_addHeight;
+							_optionY[i]+=_addHeight;
+						}
+						lastTouchMenuOptions=NULL;
+						controlsEnd();
+						goto recalcMaxDrawY;
+					}else{
 						break;
 					}
 				}
 			}
-			_startTx=touchX;
-			_startTy=touchY;
-		}else if (isDown(BUTTON_TOUCH)){
-			if (!_isDrag){
-				if (abs(touchX-_startTx)>(screenWidth*MINDRAGRATIO) || abs(touchY-_startTy)>(screenHeight*MINDRAGRATIO)){
-					_isDrag=1;
-					_holdSelect=-1;
-					_startTy=touchY;
+		}else{
+			if (wasJustPressed(BUTTON_TOUCH)){
+				int _fTouchX = fixTouchX(touchX);
+				int _fTouchY = fixTouchY(touchY);
+				if (!pointInBox(_fTouchX,_fTouchY,_passedOptionXOff,_passedOptionYOff+_startDrawY+_optionY[_choice],_menuW,_wrappedLen[_choice]*currentTextHeight)){
+					_isLeftRightMode=0;
+					int _minusHeight = (_wrappedLen[_choice]-_preChoseLen)*currentTextHeight;
+					freeWrappedText(_wrappedLen[_choice],_wrappedOptions[_choice]);
+					_wrappedLen[_choice]=_preChoseLen;
+					_wrappedOptions[_choice]=_preChoseWrapped;
+					for (i=_choice+1;i<_numOptions;++i){
+						_optionY[i]-=_minusHeight;
+						_totalHeight-=_minusHeight;
+					}
+					controlsEnd();
+					_preChoseWrapped=NULL;
+					goto recalcMaxDrawY;
 				}
-			}else{
-				_startDrawY=limitNum(_startDrawY+(touchY-_startTy),_minStartDrawY,_maxStartDrawY);
-				_startTy=touchY;
-			}
-		}else if (wasJustReleased(BUTTON_TOUCH)){
-			if (_holdSelect!=-1){
-				_ret=_holdSelect;
-				break;
 			}
 		}
-		
 		controlsEnd();
 		startDrawing();
 		drawHallowRect(_passedOptionXOff-3,_passedOptionYOff-3,_menuW+3,_menuH+3,3,100,0,100,255);
 		//enableClipping(_passedOptionXOff,_passedOptionYOff,_menuW,_menuH);
-		gbSetDrawOffY(_passedOptionYOff+_startDrawY);
 		gbSetDrawOffX(_passedOptionXOff);
+		gbSetDrawOffY(_passedOptionYOff+_startDrawY);
 		for (i=0;i<_numOptions;++i){
 			if (i&1){
 				drawRectangle(0,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,100,100,100,255);
 			}else{
 				drawRectangle(0,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,75,75,75,255);
 			}
-			drawWrappedText(0,_optionY[i],_wrappedOptions[i],_wrappedLen[i],255,255,255,255);
+			int _offX=0;
+			if (_isLeftRightMode && i==_choice){
+				_offX+=100;
+			}
+			drawWrappedText(_offX,_optionY[i],_wrappedOptions[i],_wrappedLen[i],255,255,255,255);
 			if (i==_holdSelect){
-				drawRectangle(0,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,255,0,0,255);
+				drawRectangle(_offX,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,255,0,0,255);
 			}
 		}
 		gbSetDrawOffX(0);
@@ -5619,13 +5678,14 @@ int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** 
 	if (_ret!=-1){
 		lastTouchMenuRetYPos=_startDrawY+_optionY[_holdSelect];
 		lastTouchMenuOptions=_options;
-		// convert to real index
-		_ret = menuIndexToReal(_ret,_showMap);
 	}else{
 		lastTouchMenuOptions=NULL;
 	}
 	for (i=0;i<_numOptions;++i){
 		freeWrappedText(_wrappedLen[i],_wrappedOptions[i]);
+	}
+	if (_preChoseWrapped!=NULL){
+		freeWrappedText(_preChoseLen,_preChoseWrapped);
 	}
 	free(_wrappedLen);
 	free(_wrappedOptions);
