@@ -542,7 +542,11 @@ signed char lastVoiceSlot=-1;
 int foundSetImgIndex = -1;
 signed char vndsSpritesFade=1;
 char textDisplayModeOverriden=0; // If the text display mode has been changed manually by the script
-
+//
+// showMenuAdvancedTouch info - there's no way UI functions need to be thread safe
+//
+char** lastTouchMenuOptions=NULL;
+int lastTouchMenuRetYPos=-1;
 //
 signed char forceShowQuit=-1;
 signed char forceShowVNDSSettings=-1;
@@ -571,6 +575,12 @@ signed char forceDropshadowOption=1;
 		return _buffer;
 	}
 #endif
+void getInverseBGCol(unsigned char* r, unsigned char* g, unsigned char* b){
+	getClearColor(r,g,b);
+	*r=255-*r;
+	*g=255-*g;
+	*b=255-*b;
+}
 char proceedPressed(){
 	return wasJustPressed(BUTTON_A) || (touchProceed && wasJustPressed(BUTTON_TOUCH));
 }
@@ -974,6 +984,8 @@ void WriteToDebugFile(const char* stuff){
 // Returns zero if they chose no
 int LazyChoice(const char* stra, const char* strb, const char* strc, const char* strd){
 	int _choice=0;
+	unsigned char _tR, _tG, _tB;
+	getInverseBGCol(&_tR,&_tG,&_tB);
 	controlsReset();
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
@@ -986,20 +998,20 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 		controlsEnd();
 		startDrawing();
 		if (stra!=NULL){
-			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),stra);
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(0+2),stra,_tR,_tG,_tB);
 		}
 		if (strb!=NULL){
-			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),strb);
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(1+2),strb,_tR,_tG,_tB);
 		}
 		if (strc!=NULL){
-			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),strc);
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(2+2),strc,_tR,_tG,_tB);
 		}
 		if (strd!=NULL){
-			drawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),strd);
+			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(3+2),strd,_tR,_tG,_tB);
 		}
-		drawText(0,screenHeight-32-currentTextHeight*(_choice+1),MENUCURSOR);
-		drawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight*2,"Yes");
-		drawText(MENUOPTIONOFFSET,screenHeight-32-currentTextHeight,"No");
+		gbDrawText(normalFont,0,screenHeight-32-currentTextHeight*(_choice+1),MENUCURSOR,_tR,_tG,_tB);
+		gbDrawText(normalFont,MENUOPTIONOFFSET,screenHeight-32-currentTextHeight*2,"Yes",_tR,_tG,_tB);
+		gbDrawText(normalFont,MENUOPTIONOFFSET,screenHeight-32-currentTextHeight,"No",_tR,_tG,_tB);
 		endDrawing();
 	}
 	return 0;
@@ -1686,6 +1698,12 @@ void LoadPreset(char* filename){
 	free(_lastReadLine);
 	crossfclose(fp);
 }
+void drawWrappedText(int _x, int _y, char** _passedLines, int _numLines, unsigned char r, unsigned char g, unsigned char b, unsigned char a){
+	int i;
+	for (i=0;i<_numLines;++i){
+		gbDrawTextAlpha(normalFont,_x,_y+currentTextHeight*i,_passedLines[i],r,g,b,a);
+	}
+}
 void freeWrappedText(int _numLines, char** _passedLines){
 	int i;
 	for (i=0;i<_numLines;++i){
@@ -1790,11 +1808,8 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 	free(_workable);
 }
 void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
-	int _tR,_tG,_tB;
-	getClearColor(&_tR,&_tG,&_tB);
-	_tR=255-_tR;
-	_tG=255-_tG;
-	_tB=255-_tB;
+	unsigned char _tR, _tG, _tB;
+	getInverseBGCol(&_tR,&_tG,&_tB);
 	controlsReset();
 	do{
 		controlsStart();
@@ -5437,15 +5452,187 @@ int getNextEnabled(char* _searchThis, int _startIndex){
 	for (i=_startIndex;_searchThis[i]!=1;++i);
 	return i;
 }
+int menuIndexToReal(int _fakeIndex, char* _showMap){
+	int _ret=-1;
+	int i;
+	for (i=0;i<=_fakeIndex;++i){
+		_ret=getNextEnabled(_showMap,_ret+1);
+	}
+	return _ret;
+}
 char* newShowMap(int _numElements){
 	char* _ret = malloc(sizeof(char)*_numElements);
 	memset(_ret,1,sizeof(char)*_numElements);
 	return _ret;
 }
-// returns -1 if user quit, otherwise returns chosen index
-// pass the real _choice index
-// does not support horizontal scrolling for options with _optionValues
-int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
+int getNumShownOptions(char* _showMap, int _mapSize){
+	if (_showMap){
+		int _numOptions=0;
+		int i;
+		for (i=0;i<_mapSize;++i){
+			if (_showMap[i]){
+				++_numOptions;
+			}
+		}
+		return _numOptions;
+	}
+	return _mapSize;
+}
+int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
+	// all four of these are passed. 
+	int _passedOptionXOff=100;
+	int _passedOptionYOff=50;
+	int _menuW=screenWidth-_passedOptionXOff;
+	int _menuH=screenHeight-_passedOptionYOff;
+	//
+	int _optionPad=screenHeight/80;
+	controlsReset();
+	if (_returnInfo){
+		*_returnInfo=0;
+	}
+	int i;
+	// convert the passed _choice from real index in _options to fake index
+	if (_showMap){
+		int _realIndex=_choice;
+		for (i=0;i<_realIndex;++i){
+			if (!_showMap[i]){
+				--_choice;
+			}
+		}
+	}
+	// calculate the number of shown options
+	int _numOptions = getNumShownOptions(_showMap,_mapSize);
+	if (_numOptions==0){
+		return -1;
+	}
+	// This is it. Menu is confirmed.
+	int _ret=-1;
+	char*** _wrappedOptions = malloc(sizeof(char**)*_numOptions);
+	int* _wrappedLen = malloc(sizeof(int)*_numOptions);
+	int* _optionY = malloc(sizeof(int)*_numOptions);
+	// Wrap and calculate positions
+	int _totalHeight=0;
+	int _loopRealIndex=-1;
+	for (i=0;i<_numOptions;++i){
+		if (i!=0){
+			_totalHeight+=_optionPad;
+		}
+		_optionY[i]=_totalHeight;
+		_loopRealIndex=getNextEnabled(_showMap,_loopRealIndex+1);
+		if (_optionValues && _optionValues[_loopRealIndex]){
+			char* _withValue=malloc(strlen(_options[_loopRealIndex])+strlen(_optionValues[_loopRealIndex])+1);
+			strcpy(_withValue,_options[_loopRealIndex]);
+			strcat(_withValue,_optionValues[_loopRealIndex]);
+			wrapText(_withValue,&(_wrappedLen[i]),&(_wrappedOptions[i]),_menuW);
+			free(_withValue);
+		}else{
+			wrapText(_options[_loopRealIndex],&(_wrappedLen[i]),&(_wrappedOptions[i]),_menuW);
+		}
+		_totalHeight+=_wrappedLen[i]*currentTextHeight;
+	}
+	// draw info
+	int _minStartDrawY;
+	int _maxStartDrawY;
+	int _startDrawY;
+	if (_totalHeight>=_menuH){
+		_startDrawY=_optionPad/2;
+		_minStartDrawY=_totalHeight*-1+screenHeight;
+	}else{
+		_startDrawY=easyCenter(_totalHeight,_menuH);
+		_minStartDrawY=_startDrawY;
+	}
+	_maxStartDrawY=_startDrawY;
+	// if this is the same menu again, restore the old scroll position
+	if (lastTouchMenuOptions==_options){
+		_startDrawY=limitNum(lastTouchMenuRetYPos-_optionY[_choice],_minStartDrawY,_maxStartDrawY);
+	}
+	// control info
+	char _isDrag=0;
+	int _startTx=-1;
+	int _startTy=-1;
+	int _holdSelect=-1;
+	while(1){
+		controlsStart();
+		if ((_menuProp & MENUPROP_CANQUIT) && (wasJustPressed(BUTTON_B) || wasJustPressed(BUTTON_BACK))){
+			_ret=-1;
+			break;
+		}
+		if (wasJustPressed(BUTTON_TOUCH)){
+			int _fTouchX = fixTouchX(touchX);
+			int _fTouchY = fixTouchY(touchY);
+
+			_isDrag=!pointInBox(_fTouchX,_fTouchY,_passedOptionXOff,_passedOptionYOff,_menuW,_menuH);
+			if (!_isDrag){
+				int i;
+				int _fakeTouchY=_fTouchY-_startDrawY-_passedOptionYOff;
+				for (i=0;i<_numOptions;++i){
+					if (_fakeTouchY<_optionY[i]){
+						if (i!=0 && _optionY[i]-_fakeTouchY>_optionPad){
+							_holdSelect=i-1;
+						}
+						break;
+					}
+				}
+			}
+			_startTx=touchX;
+			_startTy=touchY;
+		}else if (isDown(BUTTON_TOUCH)){
+			if (!_isDrag){
+				if (abs(touchX-_startTx)>(screenWidth*MINDRAGRATIO) || abs(touchY-_startTy)>(screenHeight*MINDRAGRATIO)){
+					_isDrag=1;
+					_holdSelect=-1;
+					_startTy=touchY;
+				}
+			}else{
+				_startDrawY=limitNum(_startDrawY+(touchY-_startTy),_minStartDrawY,_maxStartDrawY);
+				_startTy=touchY;
+			}
+		}else if (wasJustReleased(BUTTON_TOUCH)){
+			if (_holdSelect!=-1){
+				_ret=_holdSelect;
+				break;
+			}
+		}
+		
+		controlsEnd();
+		startDrawing();
+		drawHallowRect(_passedOptionXOff-3,_passedOptionYOff-3,_menuW+3,_menuH+3,3,100,0,100,255);
+		//enableClipping(_passedOptionXOff,_passedOptionYOff,_menuW,_menuH);
+		gbSetDrawOffY(_passedOptionYOff+_startDrawY);
+		gbSetDrawOffX(_passedOptionXOff);
+		for (i=0;i<_numOptions;++i){
+			if (i&1){
+				drawRectangle(0,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,100,100,100,255);
+			}else{
+				drawRectangle(0,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,75,75,75,255);
+			}
+			drawWrappedText(0,_optionY[i],_wrappedOptions[i],_wrappedLen[i],255,255,255,255);
+			if (i==_holdSelect){
+				drawRectangle(0,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,255,0,0,255);
+			}
+		}
+		gbSetDrawOffX(0);
+		gbSetDrawOffY(0);
+		disableClipping();
+		endDrawing();
+	}
+	if (_ret!=-1){
+		lastTouchMenuRetYPos=_startDrawY+_optionY[_holdSelect];
+		lastTouchMenuOptions=_options;
+		// convert to real index
+		_ret = menuIndexToReal(_ret,_showMap);
+	}else{
+		lastTouchMenuOptions=NULL;
+	}
+	for (i=0;i<_numOptions;++i){
+		freeWrappedText(_wrappedLen[i],_wrappedOptions[i]);
+	}
+	free(_wrappedLen);
+	free(_wrappedOptions);
+	free(_optionY);
+	return _ret;
+}
+int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
 	controlsReset();
 	if (_returnInfo){
 		*_returnInfo=0;
@@ -5461,7 +5648,7 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 		}
 	}
 	int _ret=-1;
-	int _numOptions;
+	int _numOptions = getNumShownOptions(_showMap,_mapSize);
 	if (_showMap){
 		_numOptions=0;
 		for (i=0;i<_mapSize;++i){
@@ -5534,11 +5721,7 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 			}
 		}
 		if (_didPress){
-			// Get the real index and set _ret to it
-			_ret=-1;
-			for (i=0;i<=_choice;++i){
-				_ret=getNextEnabled(_showMap,_ret+1);
-			}
+			_ret=menuIndexToReal(_choice,_showMap);
 			// set the flag if the user pressed right to select this entry
 			if (_returnInfo){
 				if (_didPress==1){
@@ -5626,6 +5809,12 @@ int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _opti
 	}
 	controlsEnd();
 	return _ret;
+}
+// returns -1 if user quit, otherwise returns chosen index
+// pass the real _choice index
+// does not support horizontal scrolling for options with _optionValues
+int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
+	return gbHasButtons()==GBPREFERRED ? showMenuAdvancedButton(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp) : showMenuAdvancedTouch(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp);
 }
 int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _options, char _canQuit){
 	char _menuProps=MENUPROP_CANPAGEUPDOWN;
