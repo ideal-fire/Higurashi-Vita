@@ -37,6 +37,7 @@ int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _op
 int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp);
 char* newShowMap(int _numElements);
 void setADVName(char* _newName);
+void saveGlobalVNDSVars();
 typedef struct{
 	char** theArray;
 	unsigned char length;

@@ -1705,6 +1705,12 @@ void drawWrappedText(int _x, int _y, char** _passedLines, int _numLines, unsigne
 		gbDrawTextAlpha(normalFont,_x,_y+currentTextHeight*i,_passedLines[i],r,g,b,a);
 	}
 }
+void drawWrappedTextCentered(int _x, int _y, char** _passedLines, int _numLines, int _boxWidth, unsigned char r, unsigned char g, unsigned char b, unsigned char a){
+	int i;
+	for (i=0;i<_numLines;++i){
+		gbDrawTextAlpha(normalFont,_x+easyCenter(textWidth(normalFont,_passedLines[i]),_boxWidth),_y+currentTextHeight*i,_passedLines[i],r,g,b,a);
+	}
+}
 void freeWrappedText(int _numLines, char** _passedLines){
 	int i;
 	for (i=0;i<_numLines;++i){
@@ -3622,6 +3628,16 @@ void saveVariableList(FILE* fp, nathanscriptGameVariable* _listToSave, int _tota
 		free(_tempAsString);
 	}
 }
+void saveGlobalVNDSVars(){
+	// Resave the global variable file
+	char* _globalsSaveFilePath = easyCombineStrings(2,saveFolder,"vndsGlobals");
+	FILE* fp = fopen(_globalsSaveFilePath,"wb");
+	unsigned char _tempFileFormat = VNDSGLOBALSSAVEFORMAT;
+	fwrite(&_tempFileFormat,sizeof(unsigned char),1,fp);
+	saveVariableList(fp,nathanscriptGlobalvarList,nathanscriptTotalGlobalvar);
+	fclose(fp);
+	free(_globalsSaveFilePath);
+}
 void skipLengthStringInFile(FILE* fp){
 	short _tempFoundStrlen;
 	fread(&_tempFoundStrlen,sizeof(short),1,fp);
@@ -5483,13 +5499,30 @@ int getNumShownOptions(char* _showMap, int _mapSize){
 	}
 	return _mapSize;
 }
+char* getFullMenuOptionStr(int _realIndex, char** _options, char** _optionValues){
+	if (_optionValues && _optionValues[_realIndex]){
+		return easyCombineStrings(2,_options[_realIndex],_optionValues[_realIndex]);
+	}else{
+		return strdup(_options[_realIndex]);
+	}
+}
+void wrapOption(int _realIndex, char** _options, char** _optionValues, int _fakeIndex, char*** _wrappedOptions, int* _wrappedLen, int _wrapW, char _freeOld){
+	if (_freeOld){
+		if (_wrappedOptions[_fakeIndex]){
+			freeWrappedText(_wrappedLen[_fakeIndex],_wrappedOptions[_fakeIndex]);
+		}
+	}
+	char* _withValue = getFullMenuOptionStr(_realIndex,_options,_optionValues);
+	wrapText(_withValue,&(_wrappedLen[_fakeIndex]),&(_wrappedOptions[_fakeIndex]),_wrapW);
+	free(_withValue);
+}
+#define TOUCHOPTIONCOLORA 100,100,100
+#define TOUCHOPTIONCOLORB 75,75,75
+#define TOUCHARROWCOLOR 255,0,255
 // will be bad if option number zero is a left right option
-int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
-	// all four of these are passed. 
-	int _passedOptionXOff=100;
-	int _passedOptionYOff=50;
-	int _menuW=screenWidth-_passedOptionXOff;
-	int _menuH=screenHeight-_passedOptionYOff;
+int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, int _passedOptionXOff, int _passedOptionYOff, int _menuW, int _menuH){
+	int _ret=_choice;
+	int _changeArrowW = _menuW*(1/(double)6);
 	//
 	int _optionPad=screenHeight/80;
 	controlsReset();
@@ -5512,55 +5545,55 @@ int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** 
 		return -1;
 	}
 	// This is it. Menu is confirmed.
-	int _ret=-1;
 	// control info
 	char _isDrag=0;
 	int _startTx=-1;
 	int _startTy=-1;
 	int _holdSelect=-1;
 	char _isLeftRightMode=0;
-	// store the old wrapped text before we chose an option for editing
-	char** _preChoseWrapped=NULL;
-	int _preChoseLen;
 	//
 	char*** _wrappedOptions = malloc(sizeof(char**)*_numOptions);
 	int* _wrappedLen = malloc(sizeof(int)*_numOptions);
 	int* _optionY = malloc(sizeof(int)*_numOptions);
-	// Wrap and calculate positions
-	int _totalHeight=0;
+	// Wrap	
 	int _loopRealIndex=-1;
 	for (i=0;i<_numOptions;++i){
-		if (i!=0){
-			_totalHeight+=_optionPad;
-		}
-		_optionY[i]=_totalHeight;
 		_loopRealIndex=getNextEnabled(_showMap,_loopRealIndex+1);
-		if (_optionValues && _optionValues[_loopRealIndex]){
-			char* _withValue=easyCombineStrings(2,_options[_loopRealIndex],_optionValues[_loopRealIndex]);
-			wrapText(_withValue,&(_wrappedLen[i]),&(_wrappedOptions[i]),_menuW);
-			free(_withValue);
-		}else{
-			wrapText(_options[_loopRealIndex],&(_wrappedLen[i]),&(_wrappedOptions[i]),_menuW);
+		int _wrapW=_menuW;
+		// do small wrap if this option needs space for the arrows
+		if (_choice==i && _optionProp && (_optionProp[_loopRealIndex] & OPTIONPROP_LEFTRIGHT)){
+			_isLeftRightMode=1;
+			_wrapW-=_changeArrowW*2;
 		}
-		_totalHeight+=_wrappedLen[i]*currentTextHeight;
+		wrapOption(_loopRealIndex,_options,_optionValues,i,_wrappedOptions,_wrappedLen,_wrapW,0);
 	}
 	// draw info
-recalcMaxDrawY:
+	int _startDrawY=-1;
+recalcPositions:
 	;
+	// calculate positions
+	int _totalHeight=_optionPad*-1;
+	for (i=0;i<_numOptions;++i){
+		_totalHeight+=_optionPad;
+		_optionY[i]=_totalHeight;
+		_totalHeight+=_wrappedLen[i]*currentTextHeight;
+	}
 	int _minStartDrawY;
 	int _maxStartDrawY;
-	int _startDrawY;
 	if (_totalHeight>=_menuH){
-		_startDrawY=_optionPad/2;
+		_maxStartDrawY=_optionPad/2;
 		_minStartDrawY=_totalHeight*-1+screenHeight;
 	}else{
-		_startDrawY=easyCenter(_totalHeight,_menuH);
-		_minStartDrawY=_startDrawY;
+		_maxStartDrawY=easyCenter(_totalHeight,_menuH);
+		_minStartDrawY=_maxStartDrawY;
 	}
-	_maxStartDrawY=_startDrawY;
-	// if this is the same menu again, restore the old scroll position
-	if (lastTouchMenuOptions==_options){
-		_startDrawY=limitNum(lastTouchMenuRetYPos-_optionY[_choice],_minStartDrawY,_maxStartDrawY);
+	if (_startDrawY==-1){ // initialize if required
+		// if this is the same menu again, restore the old scroll position
+		if (lastTouchMenuOptions==_options){
+			_startDrawY=limitNum(lastTouchMenuRetYPos-_optionY[_choice],_minStartDrawY,_maxStartDrawY);
+		}else{
+			_startDrawY=_maxStartDrawY;
+		}
 	}
 	while(1){
 		controlsStart();
@@ -5572,15 +5605,14 @@ recalcMaxDrawY:
 			if (wasJustPressed(BUTTON_TOUCH)){
 				int _fTouchX = fixTouchX(touchX);
 				int _fTouchY = fixTouchY(touchY);
-
 				_isDrag=!pointInBox(_fTouchX,_fTouchY,_passedOptionXOff,_passedOptionYOff,_menuW,_menuH);
 				if (!_isDrag){
 					int i;
 					int _fakeTouchY=_fTouchY-_startDrawY-_passedOptionYOff;
-					for (i=0;i<_numOptions;++i){
-						if (_fakeTouchY<_optionY[i]){
-							if (i!=0 && _optionY[i]-_fakeTouchY>_optionPad){
-								_holdSelect=i-1;
+					for (i=_numOptions-1;i>=0;--i){
+						if (_fakeTouchY>=_optionY[i]){
+							if (_fakeTouchY-_optionY[i]<=_wrappedLen[i]*currentTextHeight){
+								_holdSelect=i;
 							}
 							break;
 						}
@@ -5601,29 +5633,15 @@ recalcMaxDrawY:
 				}
 			}else if (wasJustReleased(BUTTON_TOUCH)){
 				if (_holdSelect!=-1){
+					_choice=_holdSelect;
 					_ret = menuIndexToReal(_holdSelect,_showMap);
-					if (_optionProp[_ret] & OPTIONPROP_LEFTRIGHT){
-						_isLeftRightMode=1;
-						_choice=_holdSelect;
+					if (_optionProp && (_optionProp[_ret] & OPTIONPROP_LEFTRIGHT)){
+						_isLeftRightMode=1;;
 						_holdSelect=-1;
 						// rewrap this line because we now need button space
-						_preChoseWrapped=_wrappedOptions[_choice];
-						_preChoseLen=_wrappedLen[_choice];
-						if (_optionValues && _optionValues[_ret]){
-							char* _withValue=easyCombineStrings(2,_options[_ret],_optionValues[_ret]);
-							wrapText(_withValue,&(_wrappedLen[_choice]),&(_wrappedOptions[_choice]),32);
-							free(_withValue);
-						}else{
-							wrapText(_options[_ret],&(_wrappedLen[_choice]),&(_wrappedOptions[_choice]),_menuW);
-						}
-						int _addHeight = (_wrappedLen[_choice]-_preChoseLen)*currentTextHeight;
-						for (i=_choice+1;i<_numOptions;++i){
-							_totalHeight+=_addHeight;
-							_optionY[i]+=_addHeight;
-						}
-						lastTouchMenuOptions=NULL;
+						wrapOption(_ret,_options,_optionValues,_choice,_wrappedOptions,_wrappedLen,_menuW-_changeArrowW*2,1);
 						controlsEnd();
-						goto recalcMaxDrawY;
+						goto recalcPositions;
 					}else{
 						break;
 					}
@@ -5635,17 +5653,22 @@ recalcMaxDrawY:
 				int _fTouchY = fixTouchY(touchY);
 				if (!pointInBox(_fTouchX,_fTouchY,_passedOptionXOff,_passedOptionYOff+_startDrawY+_optionY[_choice],_menuW,_wrappedLen[_choice]*currentTextHeight)){
 					_isLeftRightMode=0;
-					int _minusHeight = (_wrappedLen[_choice]-_preChoseLen)*currentTextHeight;
-					freeWrappedText(_wrappedLen[_choice],_wrappedOptions[_choice]);
-					_wrappedLen[_choice]=_preChoseLen;
-					_wrappedOptions[_choice]=_preChoseWrapped;
-					for (i=_choice+1;i<_numOptions;++i){
-						_optionY[i]-=_minusHeight;
-						_totalHeight-=_minusHeight;
-					}
+					// rewrap because we may not need as much space anymore
+					wrapOption(_ret,_options,_optionValues,_choice,_wrappedOptions,_wrappedLen,_menuW,1);
 					controlsEnd();
-					_preChoseWrapped=NULL;
-					goto recalcMaxDrawY;
+					goto recalcPositions;
+				}else{
+					_fTouchX-=_passedOptionXOff;
+					// at this point, _ret is already set to the real index of the choice
+					if (_fTouchX>=0 && _fTouchX<=_changeArrowW){
+						// by default, _returnInfo says that you pushed left. do not set anything
+						break;
+					}else if (_fTouchX>=_menuW-_changeArrowW && _fTouchX<=_menuW){
+						if (_returnInfo){
+							*_returnInfo|=MENURET_RIGHT;
+						}
+						break;
+					}
 				}
 			}
 		}
@@ -5657,17 +5680,19 @@ recalcMaxDrawY:
 		gbSetDrawOffY(_passedOptionYOff+_startDrawY);
 		for (i=0;i<_numOptions;++i){
 			if (i&1){
-				drawRectangle(0,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,100,100,100,255);
+				drawRectangle(0,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,TOUCHOPTIONCOLORA,255);
 			}else{
-				drawRectangle(0,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,75,75,75,255);
+				drawRectangle(0,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,TOUCHOPTIONCOLORB,255);
 			}
-			int _offX=0;
 			if (_isLeftRightMode && i==_choice){
-				_offX+=100;
-			}
-			drawWrappedText(_offX,_optionY[i],_wrappedOptions[i],_wrappedLen[i],255,255,255,255);
-			if (i==_holdSelect){
-				drawRectangle(_offX,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,255,0,0,255);
+				drawRectangle(0,_optionY[i],_changeArrowW,_wrappedLen[i]*currentTextHeight,TOUCHARROWCOLOR,255);
+				drawRectangle(_menuW-_changeArrowW,_optionY[i],_changeArrowW,_wrappedLen[i]*currentTextHeight,TOUCHARROWCOLOR,255);
+				drawWrappedTextCentered(_changeArrowW,_optionY[i],_wrappedOptions[i],_wrappedLen[i],_menuW-_changeArrowW*2,255,255,255,255);
+			}else{
+				drawWrappedText(0,_optionY[i],_wrappedOptions[i],_wrappedLen[i],255,255,255,255);
+				if (i==_holdSelect){
+					drawRectangle(0,_optionY[i],_menuW,_wrappedLen[i]*currentTextHeight,255,0,0,255);
+				}
 			}
 		}
 		gbSetDrawOffX(0);
@@ -5676,16 +5701,13 @@ recalcMaxDrawY:
 		endDrawing();
 	}
 	if (_ret!=-1){
-		lastTouchMenuRetYPos=_startDrawY+_optionY[_holdSelect];
+		lastTouchMenuRetYPos=_startDrawY+_optionY[_choice];
 		lastTouchMenuOptions=_options;
 	}else{
 		lastTouchMenuOptions=NULL;
 	}
 	for (i=0;i<_numOptions;++i){
 		freeWrappedText(_wrappedLen[i],_wrappedOptions[i]);
-	}
-	if (_preChoseWrapped!=NULL){
-		freeWrappedText(_preChoseLen,_preChoseWrapped);
 	}
 	free(_wrappedLen);
 	free(_wrappedOptions);
@@ -5874,7 +5896,7 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 // pass the real _choice index
 // does not support horizontal scrolling for options with _optionValues
 int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
-	return gbHasButtons()==GBPREFERRED ? showMenuAdvancedButton(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp) : showMenuAdvancedTouch(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp);
+	return gbHasButtons()==GBPREFERRED ? showMenuAdvancedButton(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp) : showMenuAdvancedTouch(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp,0,0,screenWidth,screenHeight);
 }
 int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _options, char _canQuit){
 	char _menuProps=MENUPROP_CANPAGEUPDOWN;

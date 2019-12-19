@@ -341,16 +341,7 @@ void vndswrapper_ENDOF(nathanscriptVariable* _passedArguments, int _numArguments
 // Same as setvar
 void vndswrapper_gsetvar(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	genericSetVarCommand(_argumentList, _totalArguments, _returnedReturnArray, _returnArraySize,&nathanscriptGlobalvarList,&nathanscriptTotalGlobalvar,0);
-
-	// Resave the global variable file
-	char _globalsSaveFilePath[strlen(saveFolder)+strlen("vndsGlobals")+1];
-	strcpy(_globalsSaveFilePath,saveFolder);
-	strcat(_globalsSaveFilePath,"vndsGlobals");
-	FILE* fp = fopen(_globalsSaveFilePath,"w");
-	unsigned char _tempFileFormat = VNDSGLOBALSSAVEFORMAT;
-	fwrite(&_tempFileFormat,sizeof(unsigned char),1,fp);
-	saveVariableList(fp,nathanscriptGlobalvarList,nathanscriptTotalGlobalvar);
-	fclose(fp);
+	saveGlobalVNDSVars();
 }
 // music file
 // music ~
