@@ -36,7 +36,6 @@
 				}
 	TODO - add veritcal das to showMenu
 	TODO - textbox alpha should change with background alpha
-	TODO - what is this LazyChoice nonsense?
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 	TODO - apply my WrapText function changes to the OutputLine function too
@@ -983,7 +982,16 @@ void WriteToDebugFile(const char* stuff){
 }
 // Returns one if they chose yes
 // Returns zero if they chose no
-int LazyChoice(const char* stra, const char* strb, const char* strc, const char* strd){
+int LazyChoicef(const char* _formatString, ...){
+	char** _wrappedLines;
+	int _numLines;
+	//
+	va_list _tempArgs;
+	va_start(_tempArgs, _formatString);
+	char* _completeString = formatf(_tempArgs,_formatString);
+	wrapText(_completeString,&_numLines,&_wrappedLines,screenWidth);
+	free(_completeString);
+	//
 	int _choice=0;
 	unsigned char _tR, _tG, _tB;
 	getInverseBGCol(&_tR,&_tG,&_tB);
@@ -991,31 +999,20 @@ int LazyChoice(const char* stra, const char* strb, const char* strc, const char*
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
 		if (wasJustPressed(BUTTON_A)){
-			PlayMenuSound();
-			controlsReset();
-			return _choice;
+			controlsEnd();
+			break;
 		}
 		_choice = menuControls(_choice,0,1);
 		controlsEnd();
 		startDrawing();
-		if (stra!=NULL){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(0+2),stra,_tR,_tG,_tB);
-		}
-		if (strb!=NULL){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(1+2),strb,_tR,_tG,_tB);
-		}
-		if (strc!=NULL){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(2+2),strc,_tR,_tG,_tB);
-		}
-		if (strd!=NULL){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(3+2),strd,_tR,_tG,_tB);
-		}
+		drawWrappedText(0,0,_wrappedLines,_numLines,_tR,_tG,_tB,255);
 		gbDrawText(normalFont,0,screenHeight-32-currentTextHeight*(_choice+1),MENUCURSOR,_tR,_tG,_tB);
 		gbDrawText(normalFont,MENUOPTIONOFFSET,screenHeight-32-currentTextHeight*2,"Yes",_tR,_tG,_tB);
 		gbDrawText(normalFont,MENUOPTIONOFFSET,screenHeight-32-currentTextHeight,"No",_tR,_tG,_tB);
 		endDrawing();
 	}
-	return 0;
+	freeWrappedText(_numLines,_wrappedLines);
+	return _choice;
 }
 int FixVolumeArg(int _val){
 	if (floor(_val/(float)2)>128){
@@ -4946,10 +4943,10 @@ char upgradeToGameFolder(){
 				break;
 			}
 			UpdatePresetStreamingAssetsDir(_tempChosenFile);
-			if (LazyChoice("Add the preset file",_tempChosenFile,"to",streamingAssets)){
+			if (LazyChoicef("Add the preset file %s to %s ?",_tempChosenFile,streamingAssets)){
 				addGamePresetToLegacyFolder(streamingAssets,_tempChosenFile);\
 				_didUpgradeOne=1;
-				if (!LazyChoice("Done.","Upgrade another folder?",NULL,NULL)){
+				if (!LazyChoicef("Done. Upgrade another folder?")){
 					free(_tempChosenFile);
 					break;
 				}
@@ -5329,7 +5326,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				FontSizeSetup();
 				break;
 			case SETTING_DEFAULT:
-				if (LazyChoice("This will reset your settings.","Is this okay?",NULL,NULL)==1){
+				if (LazyChoicef("This will reset your settings. Is this okay?")==1){
 					resetSettings();
 					easyMessagef(1,"Restart for the changes to take effect.");
 				}
@@ -6018,7 +6015,7 @@ void TitleScreen(){
 						endDrawing();
 						controlsStart();
 					}
-					if (LazyChoice("Upgrade to game folder mode?",NULL,NULL,NULL)){
+					if (LazyChoicef("Upgrade to game folder mode?")){
 						if (upgradeToGameFolder()){
 							currentGameStatus=GAMESTATUS_QUIT;
 							break;
@@ -6132,7 +6129,7 @@ void SaveGameEditor(){
 }
 void controls_setDefaultGame(){
 	if (wasJustPressed(BUTTON_X)){
-		if (isGameFolderMode && !isEmbedMode && LazyChoice(defaultGameIsSet ? "Unset this game as the default?" : "Set this game as the default game?",NULL,NULL,NULL)){
+		if (isGameFolderMode && !isEmbedMode && LazyChoicef(defaultGameIsSet ? "Unset this game as the default?" : "Set this game as the default game?")){
 			defaultGameIsSet = !defaultGameIsSet;
 			setDefaultGame(defaultGameIsSet ? currentGameFolderName : "NONE");
 		}
@@ -6517,7 +6514,7 @@ void VNDSNavigationMenu(){
 		}
 
 		if (wasJustPressed(BUTTON_SELECT) && isDown(BUTTON_L) && isDown(BUTTON_R)){
-			if (LazyChoice("Make thumbnails from old saves?",NULL,NULL,NULL)){
+			if (LazyChoicef("Make thumbnails from old saves?")){
 				// Before thumbnails, 255 was the max slot
 				int i;
 				for (i=0;i<=255;++i){
