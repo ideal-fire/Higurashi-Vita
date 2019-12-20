@@ -1,14 +1,8 @@
 /*
 	(OPTIONAL TODO)
-		TODO - (Optional) Italics
+		TODO - text property - italics
 			OutputLine(NULL, "　……知レバ、…巻キ込マレテシマウ…。",
 			   NULL, "...<i>If she found out... she would become involved</i>...", Line_Normal);
-
-			(Here's the problem, It'll be hard to draw non italics text and italics in the same line)
-			(A possible solution is to store x cordinates to start italics text)
-				// Here's the plan.
-				// Make another message array, but store text that is in italics in it
-				// Can I combine color with this?
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 		TODO - Remove scriptFolder variable
@@ -17,8 +11,7 @@
 			Inspect what the max line I can use in it is.
 			Think about how I could implement this command if the value given is bigger than the total number of lines
 				Change the actual text box X and text box Y and use the input arg as a percentage of the screen?
-			How does this work in ADV mode?
-				Actually, the command is removed in ADV mode.
+			Actually, the command is removed in ADV mode.
 		TODO - Allow VNDS sound command to stop all sounds
 		TODO - SetSpeedOfMessage
 		TODO - Sort files in file browser
@@ -26,7 +19,6 @@
 	TODO - is entire font in memory nonsense still needed
 	TODO - Fix this text speed setting nonsense
 	TODO - Game specific settings files
-	TODO - Draw text with color properties. to allow having colors for every individual character, make a duplicate array, type uint64_t, first three bytes for color, last byte for text property flags
 	TODO - in manual mode, running _GameSpecific.lua first won't keep the settings from being reset by activeVNDSSettings called before manual script.s
 	TODO - i removed the secret save file editor code
 				if (_codeProgress==4){
@@ -40,6 +32,7 @@
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 	TODO - apply my WrapText function changes to the OutputLine function too
 	TODO - Remove limit on chars on one line
+	TODO - do all android devices have the back button
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -197,6 +190,7 @@ char* vitaAppId="HIGURASHI";
 #define totalTextYOff() (textboxTopPad+messageInBoxYOffset+textboxYOffset)
 #define totalTextXOff() (textboxXOffset+messageInBoxXOffset)
 #define shouldShowADVNames() (gameTextDisplayMode==TEXTMODE_ADV && (advNamesSupported==2 || (advNamesSupported && prefersADVNames)))
+#define shouldClearHitBottom() (currentlyVNDSGame && clearAtBottom)
 #define ADVNAMEOFFSET (currentTextHeight*1.5) // Space between top of ADV name and rest of the text. does not apply if adv name is an image
 #define IMADVNAMEPOSTPAD (textboxTopPad)
 
@@ -214,7 +208,7 @@ char* vitaAppId="HIGURASHI";
 // 3 adds voice volume
 // 4 adds preferredBoxAlpha and textOnlyOverBackground
 // 5 adds textSpeed
-// 6 adds vndsClearAtBottom
+// 6 adds clearAtBottom
 // 7 adds showVNDSWarnings
 // 8 adds higurashiUsesDynamicScale
 // 9 adds preferredTextDisplayMode
@@ -309,6 +303,11 @@ typedef struct{
 	char* filename;
 }cachedImage;
 
+// text properties is stored in int32_t with four bytes
+// first three bytes are color
+// lsat byte is a bitmap of the following properties:
+#define TEXTPROP_COLORED 1
+
 /*
 Can cache up to MAXBUSTCACHE busts
 
@@ -337,6 +336,7 @@ lua_State* L = NULL;
 int endType;
 int maxLines=0;
 char** currentMessages;
+int32_t** messageProps;
 int currentLine=0;
 int place=0;
 
@@ -444,7 +444,7 @@ char hasOwnVoiceSetting=0;
 
 unsigned char graphicsLocation = LOCATION_CGALT;
 
-unsigned char messageHistory[MAXMESSAGEHISTORY][SINGLELINEARRAYSIZE];
+char* messageHistory[MAXMESSAGEHISTORY] = {NULL};
 unsigned char oldestMessage=0;
 
 char presetsAreInStreamingAssets=1;
@@ -518,7 +518,7 @@ char* currentFontFilename=NULL;
 char currentlyVNDSGame=0;
 char nextVndsBustshotSlot=0;
 // If all the text should be cleared when the text reached the bottom of the screen when playing a VNDS game
-signed char vndsClearAtBottom=0;
+signed char clearAtBottom=0;
 signed char showVNDSWarnings=1;
 signed char dynamicAdvBoxHeight=0;
 crossTexture advNameImSheet=NULL;
@@ -637,8 +637,11 @@ void fitInBox(int _imgW, int _imgH, int _boxW, int _boxH, int* _retW, int* _retH
 int easyCenter(int _smallSize, int _bigSize){
 	return (_bigSize-_smallSize)/2;
 }
+double partMoveFillsEndTime(u64 _curTicks, u64 _endTime, int _totalDifference, double _max){
+	return ((_totalDifference-(_endTime-_curTicks))*_max)/(double)_totalDifference;
+}
 double partMoveFills(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
-	return ((_totalDifference-(_startTime+_totalDifference-_curTicks))*_max)/(double)_totalDifference;
+	return partMoveFillsEndTime(_curTicks,_startTime+_totalDifference,_totalDifference,_max);
 }
 double partMoveFillsCapped(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
 	if (_curTicks>=_startTime+_totalDifference){
@@ -774,12 +777,47 @@ void drawDropshadowText(int _x, int _y, char* _message, int _a){
 	drawDropshadowTextSpecific(_x,_y,_message,DEFAULTFONTCOLOR,0,0,0,_a);
 }
 // Draw text intended to be used for the game, respects dropshadow setting
-void drawTextGame(int _x, int _y, char* _message, unsigned char _alpha){
+void drawTextGame(int _x, int _y, char* _message, unsigned char r, unsigned char g, unsigned char b, unsigned char _alpha){
 	if (dropshadowOn){
-		drawDropshadowTextSpecific(_x,_y,_message,DEFAULTFONTCOLOR,0,0,0,_alpha);
+		drawDropshadowTextSpecific(_x,_y,_message,r,g,b,0,0,0,_alpha);
 	}else{
-		gbDrawTextAlpha(normalFont,_x,_y,_message,DEFAULTFONTCOLOR,_alpha);
+		gbDrawTextAlpha(normalFont,_x,_y,_message,r,g,b,_alpha);
 	}
+}
+void drawPropertyStreakText(int _x, int _y, char* _message, int32_t _prop, unsigned char _alpha){
+	unsigned char _propBitmap = (unsigned char)(((char*)&_prop)[3]);
+	unsigned char r;
+	unsigned char g;
+	unsigned char b;
+	if (_propBitmap & TEXTPROP_COLORED){
+		r = (unsigned char)(((char*)&_prop)[0]);
+		g = (unsigned char)(((char*)&_prop)[1]);
+		b = (unsigned char)(((char*)&_prop)[2]);
+	}else{
+		r=DEFAULTFONTCOLORR;
+		g=DEFAULTFONTCOLORG;
+		b=DEFAULTFONTCOLORB;
+	}
+	drawTextGame(_x,_y,_message,r,g,b,_alpha);	
+}
+// _message must be writeable
+void drawPropertyGameText(int _x, int _y, char* _message, int32_t* _props, unsigned char _alpha){
+	int32_t _curProps = _props[0];
+	int _cachedStrlen = strlen(_message);
+	int _lastStrEnd=0;
+	int i;
+	for (i=0;i<_cachedStrlen;++i){
+		if (_props[i]!=_curProps){
+			char _cachedChar=_message[i];
+			_message[i]='\0';
+			drawPropertyStreakText(_x,_y,&_message[_lastStrEnd],_curProps,_alpha);
+			_x+=textWidth(normalFont,&_message[_lastStrEnd]);
+			_lastStrEnd+=strlen(&_message[_lastStrEnd]);
+			_message[i]=_cachedChar;
+			_curProps=_props[i];
+		}
+	}
+	drawPropertyStreakText(_x,_y,&_message[_lastStrEnd],_curProps,_alpha);
 }
 int imageCharW(signed char _type){
 	return getOtherScaled(getTextureHeight(imageCharImages[_type]),currentTextHeight,getTextureWidth(imageCharImages[_type]));	
@@ -799,30 +837,37 @@ void changeMaxLines(int _newMax){
 		return;
 	}
 	char** _newCurrentMessages = malloc(sizeof(char*)*_newMax);
+	int32_t** _newMessageProps = malloc(sizeof(int32_t*)*_newMax);
 	if (_newMax<maxLines){
 		int _diff = maxLines-_newMax;
 		// Copy the latest lines that can fit
-		memcpy(_newCurrentMessages,&(currentMessages[_diff]),_newMax*sizeof(char*));
+		memcpy(_newCurrentMessages,&currentMessages[_diff],_newMax*sizeof(char*));
+		memcpy(_newMessageProps,&messageProps[_diff],_newMax*sizeof(int32_t*));
 		// free the lines that are gone
 		int i;
 		for (i=0;i<_diff;++i){
 			free(currentMessages[i]);
+			free(messageProps[i]);
 		}
 	}else{
 		if (maxLines!=0 && currentMessages){
 			// Copy all the old lines
 			memcpy(_newCurrentMessages,currentMessages,sizeof(char*)*maxLines);
+			memcpy(_newMessageProps,messageProps,sizeof(int32_t*)*maxLines);
 		}
 		// alloc new ones
 		int i;
 		for (i=maxLines;i<_newMax;++i){
 			_newCurrentMessages[i]=malloc(SINGLELINEARRAYSIZE);
 			_newCurrentMessages[i][0]='\0';
+			_newMessageProps[i]=malloc(SINGLELINEARRAYSIZE*sizeof(int32_t));
 		}
 	}
 	free(currentMessages);
+	free(messageProps);
 	maxLines=_newMax;
 	currentMessages=_newCurrentMessages;
+	messageProps=_newMessageProps;
 }
 void recalculateMaxLines(){
 	int _usableHeight;
@@ -874,7 +919,7 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 		}
 	}
 	for (i=0;i<_maxDrawLine;i++){
-		drawTextGame(totalTextXOff(),totalTextYOff()+i*currentTextHeight,(char*)currentMessages[i],_alpha);
+		drawPropertyGameText(totalTextXOff(),totalTextYOff()+i*currentTextHeight,currentMessages[i],messageProps[i],_alpha);
 	}
 	drawImageChars(_alpha,_maxDrawLine-1,_finalLineMaxChar!=-1 ? _finalLineMaxChar : INT_MAX);
 	// Fix string if we trimmed it for _finalLineMaxChar
@@ -908,7 +953,7 @@ void WaitWithCodeEnd(int amount){
 		wait(waitwithCodeTarget-getMilli());
 	}
 }
-void reloadFont(double _passedSize){
+void reloadFont(double _passedSize, char _recalcMaxLines){
 	#if GBPLAT != GB_VITA
 		if (normalFont!=NULL){
 			freeFont(normalFont);
@@ -944,11 +989,13 @@ void reloadFont(double _passedSize){
 	if (singleSpaceWidth==0){
 		singleSpaceWidth=1;
 	}
-	recalculateMaxLines();
+	if (_recalcMaxLines){
+		recalculateMaxLines();
+	}
 }
 void globalLoadFont(const char* _filename){
 	changeMallocString(&currentFontFilename,_filename);
-	reloadFont(fontSize);
+	reloadFont(fontSize,1);
 }
 char menuControlsLow(int* _choice, char _canWrapUpDown, int _upDownChange, char _canWrapLeftRight, int _leftRightChange, int _menuMin, int _menuMax){
 	int _play = *_choice;
@@ -1063,7 +1110,8 @@ int FixVoiceVolume(int _val){
 	return FixVolumeArg(_val)*voiceVolume;
 }
 void addToMessageHistory(const char* _newWords){
-	strcpy((char*)messageHistory[oldestMessage],_newWords);
+	free(messageHistory[oldestMessage]);
+	messageHistory[oldestMessage] = strdup(_newWords);
 	oldestMessage++;
 	if (oldestMessage==MAXMESSAGEHISTORY){
 		oldestMessage=0;
@@ -1290,24 +1338,29 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 // If the passed line index is too far down (>= maxLines), shift everything up to make room for a new line
 void LastLineLazyFix(int* _line){
 	if (*_line>=maxLines){
-		if (*_line>maxLines){
-			*_line=maxLines;
-		}
-		int i;
-		addToMessageHistory(currentMessages[0]);
-		for (i=1;i<maxLines;i++){
-			strcpy(currentMessages[i-1],currentMessages[i]);
-		}
-		currentMessages[maxLines-1][0]=0;
-		(*_line)--;
+		if (clearAtBottom){
+			ClearMessageArray(1);
+			*_line=0;
+		}else{
+			if (*_line>maxLines){
+				*_line=maxLines;
+			}
+			int i;
+			addToMessageHistory(currentMessages[0]);
+			for (i=1;i<maxLines;i++){
+				strcpy(currentMessages[i-1],currentMessages[i]);
+			}
+			currentMessages[maxLines-1][0]=0;
+			(*_line)--;
 
-		for (i=0;i<MAXIMAGECHAR;i++){
-			if (imageCharType[i]!=-1){
-				imageCharY[i]-=currentTextHeight;
-				// Delete image char if it goes offscreen
-				if (imageCharY[i]<0){
-					if (imageCharY[i]<(screenHeight*.20)*-1){
-						imageCharType[i]=-1;
+			for (i=0;i<MAXIMAGECHAR;i++){
+				if (imageCharType[i]!=-1){
+					imageCharY[i]-=currentTextHeight;
+					// Delete image char if it goes offscreen
+					if (imageCharY[i]<0){
+						if (imageCharY[i]<(screenHeight*.20)*-1){
+							imageCharType[i]=-1;
+						}
 					}
 				}
 			}
@@ -1318,7 +1371,7 @@ void changeIfLazyLastLineFix(int* _line, int* _toChange){
 	int _cacheLine = *_line;
 	LastLineLazyFix(_line);
 	if (*_line!=_cacheLine){
-		(*_toChange)-=1;
+		(*_toChange)-=(_cacheLine-*_line);
 	}
 }
 void updateBust(bust* _target, u64 _curTime){
@@ -1502,11 +1555,11 @@ void outputLineWait(){
 			if (currentlyVNDSGame){
 				safeVNDSSaveMenu();
 			}else{
-				DrawHistory(messageHistory);
+				historyMenu();
 			}
 		}
 		if (wasJustPressed(BUTTON_UP)){
-			DrawHistory(messageHistory);
+			historyMenu();
 		}
 		controlsEnd();
 		if (autoModeOn==1 && _toggledTextboxTime==0){
@@ -3074,7 +3127,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // preferredBoxAlpha, 1 byte
 // textOnlyOverBackground, 1 byte
 // textSpeed, 1 byte
-// vndsClearAtBottom, 1 byte
+// clearAtBottom, 1 byte
 // showVNDSWarnings, 1 byte
 // higurashiUsesDynamicScale, 1 byte
 // preferredTextDisplayMode, 1 byte
@@ -3100,7 +3153,7 @@ void SaveSettings(){
 	fwrite(&preferredBoxAlpha,1,1,fp);
 	fwrite(&textOnlyOverBackground,1,1,fp);
 	fwrite(&textSpeed,1,1,fp);
-	fwrite(&vndsClearAtBottom,sizeof(signed char),1,fp);
+	fwrite(&clearAtBottom,sizeof(signed char),1,fp);
 	fwrite(&showVNDSWarnings,sizeof(signed char),1,fp);
 	fwrite(&higurashiUsesDynamicScale,sizeof(signed char),1,fp);
 	fwrite(&preferredTextDisplayMode,sizeof(signed char),1,fp);
@@ -3148,7 +3201,7 @@ void LoadSettings(){
 			fread(&textSpeed,1,1,fp);
 		}
 		if (_tempOptionsFormat>=6){
-			fread(&vndsClearAtBottom,sizeof(signed char),1,fp);
+			fread(&clearAtBottom,sizeof(signed char),1,fp);
 		}
 		if (_tempOptionsFormat>=7){
 			fread(&showVNDSWarnings,sizeof(signed char),1,fp);
@@ -3196,7 +3249,7 @@ void LoadSettings(){
 #define HISTORYSCROLLBARHEIGHT (((double)HISTORYONONESCREEN/(double)MAXMESSAGEHISTORY)*screenHeight)
 //#define HISTORYSCROLLRATE (floor((double)MAXMESSAGEHISTORY/15))
 #define HISTORYSCROLLRATE 1
-void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
+void historyMenu(){
 	controlsReset();
 	int _maxScroll = MAXMESSAGEHISTORY-HISTORYONONESCREEN;
 	int _scrollOffset=_maxScroll;
@@ -3213,7 +3266,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 		drawRectangle(textboxXOffset,0,outputLineScreenWidth,screenHeight,0,0,0,150);
 		int i;
 		for (i = 0; i < HISTORYONONESCREEN; i++){
-			gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*currentTextHeight,(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],255,255,255);
+			gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*currentTextHeight,messageHistory[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],255,255,255);
 		}
 		if (outputLineScreenWidth == screenWidth){
 			gbDrawText(normalFont,3,screenHeight-currentTextHeight-5,"TEXTLOG",0,0,0);
@@ -4760,7 +4813,7 @@ void scriptSetForceCapFilenames(nathanscriptVariable* _passedArguments, int _num
 	scriptForceResourceUppercase = nathanvariableToBool(&_passedArguments[0]);
 }
 void scriptSetFontSize(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	reloadFont(nathanvariableToInt(&_passedArguments[0]));
+	reloadFont(nathanvariableToInt(&_passedArguments[0]),1);
 }
 void scriptScalePixels(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	int _passed=nathanvariableToInt(&_passedArguments[0]);
@@ -4828,7 +4881,7 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 	if (_shouldDrawFilter){
 		DrawCurrentFilter();
 	}
-	if (_shouldDrawMessageBox==1){
+	if (_shouldDrawMessageBox){
 		DrawMessageBox(gameTextDisplayMode,currentBoxAlpha);
 	}
 	if (_shouldDrawHighBusts){
@@ -4838,7 +4891,7 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 			}
 		}
 	}
-	if (_shouldDrawMessageText==1){
+	if (_shouldDrawMessageText){
 		DrawMessageText(255,-1,-1);
 	}
 }
@@ -4921,17 +4974,74 @@ char FileSelector(char* _dirPath, char** _retChosen, char* _promptMessage){
 	freeAllocdStrList(_foundFiles,_nFiles);
 	return _ret;
 }
-void FontSizeSetup(){
+void getFontSetupText(int* _numLines, char*** _realLines, int _maxWidth){
+	if (*_realLines!=NULL){
+		freeWrappedText(*_numLines,*_realLines);
+	}
+	char* _finalMessage = easySprintf("Font size is %f. note to self, replace this with a line.",fontSize);
+	wrapText(_finalMessage,_numLines,_realLines,_maxWidth);
+	free(_finalMessage);
+}
+#define FONTSIZETOUCHSETUPRATIO (1/(double)5)
+#define FONTSIZERELOADTIME 300
+#define FONTRELOADBARRATIOH (1/(double)20)
+void fontSizeSetupTouch(){
+	unsigned char _tR, _tG, _tB;
+	getInverseBGCol(&_tR,&_tG,&_tB);
+	int _buttonW = screenWidth*FONTSIZETOUCHSETUPRATIO;
+	char _fontReloadQueued=0;
+	u64 _nextFontReloadTime=0;
+	int _numLines;
+	char** _wrappedLines=NULL;
+	int _wrapW = screenWidth-_buttonW*2;
+	getFontSetupText(&_numLines,&_wrappedLines,_wrapW);
+	while(1){
+		u64 _sTime=getMilli();
+		controlsStart();
+		if (wasJustPressed(BUTTON_TOUCH)){
+			if (touchX<=_buttonW || touchX>screenWidth-_buttonW){
+				fontSize+=(touchX<=_buttonW ? -2 : 2);
+				if (_sTime>=_nextFontReloadTime){
+					reloadFont(fontSize,0);
+					getFontSetupText(&_numLines,&_wrappedLines,_wrapW);
+				}else{
+					_fontReloadQueued=1;
+				}
+				_nextFontReloadTime=_sTime+FONTSIZERELOADTIME;
+			}
+		}
+		if (_fontReloadQueued && _sTime>=_nextFontReloadTime){
+			_fontReloadQueued=0;
+			reloadFont(fontSize,0);
+			getFontSetupText(&_numLines,&_wrappedLines,_wrapW);
+		}
+		controlsEnd();
+		startDrawing();
+		Draw(1);
+		if (_sTime<_nextFontReloadTime){
+			int _reloadBarH = screenHeight*FONTRELOADBARRATIOH;
+			drawRectangle(0,screenHeight-_reloadBarH,screenWidth-partMoveFillsEndTime(_sTime,_nextFontReloadTime,FONTSIZERELOADTIME,screenWidth),_reloadBarH,255,0,0,255);
+		}
+		endDrawing();
+		/*startDrawing();
+		drawWrappedText(_buttonW,0,_wrappedLines,_numLines,_tR,_tG,_tB,255);
+		
+		endDrawing();*/
+	}
+	freeWrappedText(_numLines,_wrappedLines);
+	recalculateMaxLines(); // need to do this manually because it's not done by the reloadFont
+}
+void fontSizeSetupButton(){
 	char _choice=0;
 	while (1){
 		controlsStart();
 		_choice = menuControls(_choice,0,2);
-		fontSize=retMenuControlsLow(fontSize,0,0,0,1,8,70);;
+		fontSize=retMenuControlsLow(fontSize,0,0,0,1,8,70);
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice==1){
-				reloadFont(fontSize);
+				reloadFont(fontSize,0);
 			}else if (_choice==2){
-				reloadFont(fontSize);
+				reloadFont(fontSize,1);
 				break;
 			}
 		}
@@ -4947,6 +5057,13 @@ void FontSizeSetup(){
 		drawText(MENUOPTIONOFFSET,currentTextHeight*6,"The font must be reloaded for you to see the changes.");
 		drawText(MENUOPTIONOFFSET,currentTextHeight*7,"Select the \"Test\" option to do so.");
 		endDrawing();
+	}
+}
+void FontSizeSetup(){
+	if (gbHasTouch()==GBPREFERRED){
+		fontSizeSetupTouch();
+	}else{
+		fontSizeSetupButton();
 	}
 }
 void debugMenuOption(){
@@ -5144,6 +5261,8 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	int _choice=0;
 	char _shouldExit=0;
 	while(!_shouldExit){
+		char _showNVLOptions = (gameTextDisplayMode==TEXTMODE_NVL);
+		//char _showADVOptions = (gameTextDisplayMode==TEXTMODE_ADV);
 		// text
 		#if GBPLAT == GB_3DS
 			_values[SETTING_TEXTSCREEN] = textIsBottomScreen ? "Bottom Screen" : "Top Screen";
@@ -5153,7 +5272,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		if (_settingsOn[SETTING_DROPSHADOW]){
 			_values[SETTING_DROPSHADOW] = charToSwitch(dropshadowOn);
 		}
-		_settingsOn[SETTING_TEXTBOXW]=(forceTextOverBGOption && preferredTextDisplayMode==TEXTMODE_NVL);
+		_settingsOn[SETTING_TEXTBOXW]=(forceTextOverBGOption && _showNVLOptions);
 		if (_settingsOn[SETTING_TEXTBOXW]){
 			_values[SETTING_TEXTBOXW] = textOnlyOverBackground ? "Small" : "Full";
 		}
@@ -5163,9 +5282,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		if (_settingsOn[SETTING_ADVNAMES]){
 			_values[SETTING_ADVNAMES]=charToSwitch(prefersADVNames);
 		}
-		_settingsOn[SETTING_HITBOTTOMCLEAR]=(_shouldShowVNDSSettings && preferredTextDisplayMode==TEXTMODE_NVL);
+		_settingsOn[SETTING_HITBOTTOMCLEAR]=(_showNVLOptions);
 		if (_settingsOn[SETTING_HITBOTTOMCLEAR]){
-			_values[SETTING_HITBOTTOMCLEAR] = charToBoolString(vndsClearAtBottom);
+			_values[SETTING_HITBOTTOMCLEAR] = charToBoolString(clearAtBottom);
 		}
 		// graphics stuff
 		if (_settingsOn[SETTING_BUSTLOC]){
@@ -5205,7 +5324,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		if (preferredBoxAlpha>=230){
 			_settingsProp[SETTING_BOXALPHA]|=OPTIONPROP_BADCOLOR;
 		}
-
 		char _selectionInfo;
 		_choice=showMenuAdvanced(_choice,"Settings",SETTINGS_MAX,_settings,_values,_settingsOn,_settingsProp,&_selectionInfo,0);
 		signed char _directionMultiplier = (_selectionInfo & MENURET_RIGHT) ? 1 : -1;
@@ -5301,7 +5419,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				safeVNDSSaveMenu();
 				break;
 			case SETTING_HITBOTTOMCLEAR:
-				vndsClearAtBottom = !vndsClearAtBottom;
+				clearAtBottom = !clearAtBottom;
 				break;
 			case SETTING_VNDSWAR:
 				showVNDSWarnings = !showVNDSWarnings;
@@ -6304,10 +6422,6 @@ void VNDSNavigationMenu(){
 	if (!textDisplayModeOverriden){
 		switchTextDisplayMode(preferredTextDisplayMode);
 	}
-	// If the ADV box height won't change make sure the user doesn't make the font size huge
-	if (dynamicAdvBoxHeight==0){
-		forceFontSizeOption=0;
-	}
 	controlsStart();
 	signed char _choice=0;
 	char* _loadedNovelName=NULL;
@@ -6396,7 +6510,6 @@ void VNDSNavigationMenu(){
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice<=1){
 				forceResettingsButton=0;
-				forceFontSizeOption=0;
 				if (_choice==0){
 					int _chosenSlot = vndsSaveSelector(0);
 					if (_chosenSlot!=-1){
