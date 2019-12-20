@@ -31,6 +31,7 @@
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 	TODO - apply my WrapText function changes to the OutputLine function too
+	TODO - do all android devices have the back button
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -609,8 +610,11 @@ void fitInBox(int _imgW, int _imgH, int _boxW, int _boxH, int* _retW, int* _retH
 int easyCenter(int _smallSize, int _bigSize){
 	return (_bigSize-_smallSize)/2;
 }
+double partMoveFillsEndTime(u64 _curTicks, u64 _endTime, int _totalDifference, double _max){
+	return ((_totalDifference-(_endTime-_curTicks))*_max)/(double)_totalDifference;
+}
 double partMoveFills(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
-	return ((_totalDifference-(_startTime+_totalDifference-_curTicks))*_max)/(double)_totalDifference;
+	return partMoveFillsEndTime(_curTicks,_startTime+_totalDifference,_totalDifference,_max);
 }
 double partMoveFillsCapped(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
 	if (_curTicks>=_startTime+_totalDifference){
@@ -922,7 +926,7 @@ void WaitWithCodeEnd(int amount){
 		wait(waitwithCodeTarget-getMilli());
 	}
 }
-void reloadFont(double _passedSize){
+void reloadFont(double _passedSize, char _recalcMaxLines){
 	#if GBPLAT != GB_VITA
 		if (normalFont!=NULL){
 			freeFont(normalFont);
@@ -958,11 +962,13 @@ void reloadFont(double _passedSize){
 	if (singleSpaceWidth==0){
 		singleSpaceWidth=1;
 	}
-	recalculateMaxLines();
+	if (_recalcMaxLines){
+		recalculateMaxLines();
+	}
 }
 void globalLoadFont(const char* _filename){
 	changeMallocString(&currentFontFilename,_filename);
-	reloadFont(fontSize);
+	reloadFont(fontSize,1);
 }
 char menuControlsLow(int* _choice, char _canWrapUpDown, int _upDownChange, char _canWrapLeftRight, int _leftRightChange, int _menuMin, int _menuMax){
 	int _play = *_choice;
@@ -4892,7 +4898,7 @@ void scriptSetForceCapFilenames(nathanscriptVariable* _passedArguments, int _num
 	scriptForceResourceUppercase = nathanvariableToBool(&_passedArguments[0]);
 }
 void scriptSetFontSize(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	reloadFont(nathanvariableToInt(&_passedArguments[0]));
+	reloadFont(nathanvariableToInt(&_passedArguments[0]),1);
 }
 void scriptScalePixels(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	int _passed=nathanvariableToInt(&_passedArguments[0]);
@@ -4960,7 +4966,7 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 	if (_shouldDrawFilter){
 		DrawCurrentFilter();
 	}
-	if (_shouldDrawMessageBox==1){
+	if (_shouldDrawMessageBox){
 		DrawMessageBox(gameTextDisplayMode,currentBoxAlpha);
 	}
 	if (_shouldDrawHighBusts){
@@ -4970,7 +4976,7 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 			}
 		}
 	}
-	if (_shouldDrawMessageText==1){
+	if (_shouldDrawMessageText){
 		DrawMessageText(255,-1,-1);
 	}
 }
@@ -5053,17 +5059,74 @@ char FileSelector(char* _dirPath, char** _retChosen, char* _promptMessage){
 	freeAllocdStrList(_foundFiles,_nFiles);
 	return _ret;
 }
-void FontSizeSetup(){
+void getFontSetupText(int* _numLines, char*** _realLines, int _maxWidth){
+	if (*_realLines!=NULL){
+		freeWrappedText(*_numLines,*_realLines);
+	}
+	char* _finalMessage = easySprintf("Font size is %f. note to self, replace this with a line.",fontSize);
+	wrapText(_finalMessage,_numLines,_realLines,_maxWidth);
+	free(_finalMessage);
+}
+#define FONTSIZETOUCHSETUPRATIO (1/(double)5)
+#define FONTSIZERELOADTIME 300
+#define FONTRELOADBARRATIOH (1/(double)20)
+void fontSizeSetupTouch(){
+	unsigned char _tR, _tG, _tB;
+	getInverseBGCol(&_tR,&_tG,&_tB);
+	int _buttonW = screenWidth*FONTSIZETOUCHSETUPRATIO;
+	char _fontReloadQueued=0;
+	u64 _nextFontReloadTime=0;
+	int _numLines;
+	char** _wrappedLines=NULL;
+	int _wrapW = screenWidth-_buttonW*2;
+	getFontSetupText(&_numLines,&_wrappedLines,_wrapW);
+	while(1){
+		u64 _sTime=getMilli();
+		controlsStart();
+		if (wasJustPressed(BUTTON_TOUCH)){
+			if (touchX<=_buttonW || touchX>screenWidth-_buttonW){
+				fontSize+=(touchX<=_buttonW ? -2 : 2);
+				if (_sTime>=_nextFontReloadTime){
+					reloadFont(fontSize,0);
+					getFontSetupText(&_numLines,&_wrappedLines,_wrapW);
+				}else{
+					_fontReloadQueued=1;
+				}
+				_nextFontReloadTime=_sTime+FONTSIZERELOADTIME;
+			}
+		}
+		if (_fontReloadQueued && _sTime>=_nextFontReloadTime){
+			_fontReloadQueued=0;
+			reloadFont(fontSize,0);
+			getFontSetupText(&_numLines,&_wrappedLines,_wrapW);
+		}
+		controlsEnd();
+		startDrawing();
+		Draw(1);
+		if (_sTime<_nextFontReloadTime){
+			int _reloadBarH = screenHeight*FONTRELOADBARRATIOH;
+			drawRectangle(0,screenHeight-_reloadBarH,screenWidth-partMoveFillsEndTime(_sTime,_nextFontReloadTime,FONTSIZERELOADTIME,screenWidth),_reloadBarH,255,0,0,255);
+		}
+		endDrawing();
+		/*startDrawing();
+		drawWrappedText(_buttonW,0,_wrappedLines,_numLines,_tR,_tG,_tB,255);
+		
+		endDrawing();*/
+	}
+	freeWrappedText(_numLines,_wrappedLines);
+	recalculateMaxLines(); // need to do this manually because it's not done by the reloadFont
+}
+void fontSizeSetupButton(){
 	char _choice=0;
 	while (1){
 		controlsStart();
 		_choice = menuControls(_choice,0,2);
-		fontSize=retMenuControlsLow(fontSize,0,0,0,1,8,70);;
+		fontSize=retMenuControlsLow(fontSize,0,0,0,1,8,70);
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice==1){
-				reloadFont(fontSize);
+				reloadFont(fontSize,0);
 			}else if (_choice==2){
-				reloadFont(fontSize);
+				reloadFont(fontSize,1);
 				break;
 			}
 		}
@@ -5079,6 +5142,13 @@ void FontSizeSetup(){
 		drawText(MENUOPTIONOFFSET,currentTextHeight*6,"The font must be reloaded for you to see the changes.");
 		drawText(MENUOPTIONOFFSET,currentTextHeight*7,"Select the \"Test\" option to do so.");
 		endDrawing();
+	}
+}
+void FontSizeSetup(){
+	if (gbHasTouch()==GBPREFERRED){
+		fontSizeSetupTouch();
+	}else{
+		fontSizeSetupButton();
 	}
 }
 void debugMenuOption(){
@@ -6437,10 +6507,6 @@ void VNDSNavigationMenu(){
 	if (!textDisplayModeOverriden){
 		switchTextDisplayMode(preferredTextDisplayMode);
 	}
-	// If the ADV box height won't change make sure the user doesn't make the font size huge
-	if (dynamicAdvBoxHeight==0){
-		forceFontSizeOption=0;
-	}
 	controlsStart();
 	signed char _choice=0;
 	char* _loadedNovelName=NULL;
@@ -6529,7 +6595,6 @@ void VNDSNavigationMenu(){
 		if (wasJustPressed(BUTTON_A)){
 			if (_choice<=1){
 				forceResettingsButton=0;
-				forceFontSizeOption=0;
 				if (_choice==0){
 					int _chosenSlot = vndsSaveSelector(0);
 					if (_chosenSlot!=-1){
