@@ -39,6 +39,7 @@
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 	TODO - apply my WrapText function changes to the OutputLine function too
+	TODO - Remove limit on chars on one line
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -583,6 +584,32 @@ void getInverseBGCol(unsigned char* r, unsigned char* g, unsigned char* b){
 }
 char proceedPressed(){
 	return wasJustPressed(BUTTON_A) || (touchProceed && wasJustPressed(BUTTON_TOUCH));
+}
+// strcpy, but it won't copy from src to dest if the value is 1.
+// You can use this to exclude certian spots
+void strcpyNO1(char* dest, const char* src){
+	int i;
+	int _destCopyOffset=0;
+	int _srcStrlen = strlen(src);
+	for (i=0;i<_srcStrlen;i++){
+		if (src[i]!=1){
+			dest[_destCopyOffset++]=src[i];
+		}
+	}
+	dest[_destCopyOffset++]=0;
+}
+// Same as strlen, but doesn't count any places with the value of 1 as a character.
+int strlenNO1(char* src){
+	int len=0;
+	int i;
+	for (i=0;;i++){
+		if (src[i]=='\0'){
+			break;
+		}else if (src[i]!=1){
+			len++;
+		}
+	}
+	return len;
 }
 // the list itself must also be allocated
 void freeAllocdStrList(char** _passedList, int _passedLen){
@@ -1715,10 +1742,9 @@ void freeWrappedText(int _numLines, char** _passedLines){
 	}
 	free(_passedLines);
 }
-void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, int _maxWidth){
-	*_numLines=-1;
-	char* _workable = strdup(_passedMessage);
-
+// _workable must be made with malloc. its buffer may be changed
+void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines, int _maxWidth, char _isStoryText){
+	unsigned char* _workable = (unsigned char*)(*_passedMessage);
 	int _cachedStrlen = strlen(_workable);
 	if (_cachedStrlen==0){
 		*_numLines=0;
@@ -1794,9 +1820,110 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 					_workable[i]=' ';
 				}
 			}
+		}else if (_isStoryText){
+			// Don't do special checks if it is a normal English ASCII character
+			// Here we have special checks for stuff like image characters and new lines.
+			if (_workable[i]<65 || _workable[i]>122){
+				if (_workable[i]=='<'){
+					char* _endPos = strchr(&(_workable[i]),'>');
+					if (_endPos!=NULL){
+						int _deltaChars = (_endPos-(char*)&(_workable[i]));
+						memset(&(_workable[i]),1,_deltaChars+1); // Because this starts at i, k being 11 with i as 10 would just write 1 byte, therefor missing the end '>'. THe fix is to add one.
+						i+=(_deltaChars-1);
+					}
+				}else if (_workable[i]==226 && _workable[i+1]==128 && _workable[i+2]==148){ // Weird hyphen replace
+					memset(&(_workable[i]),45,1); // Replace it with a normal hyphen
+					memset(&(_workable[i+1]),1,2); // Replace these with value 1
+					i=i+2;
+				}else if (_workable[i]==226){ // COde for special image character
+					unsigned char _imagechartype;
+					if (_workable[i+1]==153 && _workable[i+2]==170){ // ♪
+						_imagechartype = IMAGECHARNOTE;
+					}else if (_workable[i+1]==152 && _workable[i+2]==134){ // ☆
+						_imagechartype = IMAGECHARSTAR;
+					}else{
+						printf("Unknown image char! %d;%d\n",_workable[i+1],_workable[i+2]);
+						_imagechartype = IMAGECHARUNKNOWN;
+					}
+					if (_imagechartype != IMAGECHARUNKNOWN){
+						// find open image char slot
+						int j;
+						for (j=0;j<MAXIMAGECHAR;j++){
+							if (imageCharType[j]==-1){
+								_workable[i]='\0'; // So we can use textWidth
+								int _cachedW = imageCharW(_imagechartype);
+								int _numSpaces = ceil(_cachedW/(double)singleSpaceWidth);
+								imageCharX[j] = textWidth(normalFont,&(_workable[_lastNewline+1]))+totalTextXOff()+easyCenter(_cachedW,_numSpaces*singleSpaceWidth);
+								imageCharY[j] = totalTextYOff()+currentLine*currentTextHeight;
+								imageCharLines[j] = currentLine;
+								imageCharCharPositions[j] = strlenNO1(&(_workable[_lastNewline+1]));
+								imageCharType[j] = _imagechartype;
+								// set all these 3 image char bytes to be skipped
+								memset(&(_workable[i]),1,3);
+								if (_numSpaces<=3){
+									memset(&(_workable[i]),' ',_numSpaces);
+								}else{
+									int _numAdded = (_numSpaces-3);
+									_cachedStrlen+=_numAdded;
+									_workable = realloc(_workable,_cachedStrlen+1);
+									memmove(&_workable[i+_numAdded],&_workable[i],_cachedStrlen-i-_numAdded+1); // move the null char also
+									memset(&_workable[i],' ',_numSpaces);
+								}
+								i+=(_numSpaces-1);
+								break;
+							}
+						}
+					}
+				}else if (_workable[i]=='\n'){
+					_workable[i]='\0';
+					_lastNewline=i;
+				}
+			}else{
+				//http://jafrog.com/2013/11/23/colors-in-terminal.html
+				if (_workable[i]=='\\' || _workable[i]=='x'){ // I saw that Umineko VNDS doesn't use a backslash before
+					if (_cachedStrlen-i>=strlen("x1b[0m")+(_workable[i]=='\\')){
+						if (strncmp(&(_workable[i+(_workable[i]=='\\')]),"x1b[",strlen("x1b["))==0){
+							int _oldIndex=i;
+							// Advance to the x character if we chose to use backslash
+							if (_workable[i]=='\\'){
+								i++;
+							}
+							i+=4; // We're now in the parameters
+							int _mSearchIndex;
+							for (_mSearchIndex=i;_mSearchIndex<_cachedStrlen;++_mSearchIndex){
+								if (_workable[_mSearchIndex]=='m'){
+									break;
+								}
+							}
+							// If found the ending
+							if (_workable[_mSearchIndex]=='m'){
+								// TODO - Do stuff with the found color code
+								if (_workable[i]=='0'){ // If we're resetting the color
+	
+								}else{
+									int _semiColonSearchIndex;
+									for (_semiColonSearchIndex=i;_semiColonSearchIndex<_mSearchIndex;++_semiColonSearchIndex){
+										if (_workable[_semiColonSearchIndex]==';'){
+											break;
+										}
+									}
+									_workable[_semiColonSearchIndex]=0;
+									printf("the number is %s\n",&(_workable[i]));
+									_workable[_semiColonSearchIndex]=';';
+								}
+								i=_oldIndex;
+								memset(&(_workable[i]),1,_mSearchIndex-i+1);
+							}else{
+								printf("Failed to parse color markup");
+								i=_oldIndex; // Must be invalid otherwise
+							}
+						}
+					}
+				}
+			}
 		}
 	}
-
+	*_passedMessage = _workable;
 	// fheuwfhuew (\0) ffhuehfu (\0) fheuhfueiwf (\0)
 	*_numLines=1;
 	for (i=0;i<_cachedStrlen;++i){
@@ -1812,7 +1939,10 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 			_nextCopyIndex += 1+strlen(&(_workable[_nextCopyIndex]));
 		}
 	}
-
+}
+void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, int _maxWidth){
+	char* _workable = strdup(_passedMessage);
+	wrapTextAdvanced(&_workable,_numLines,_realLines,_maxWidth,0);
 	free(_workable);
 }
 void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
@@ -1935,7 +2065,7 @@ void updateGraphicsScale(){
 		graphicsScale=1;
 	}
 }
-void applyTextboxChanges(){
+void applyTextboxChanges(char _doRecalcMaxLines){
 	if (gameTextDisplayMode==TEXTMODE_ADV){
 		textboxYOffset=screenHeight-advboxHeight;
 	}else{
@@ -1961,6 +2091,9 @@ void applyTextboxChanges(){
 		outputLineScreenWidth = screenWidth;
 	}else{
 		updateTextPositions();
+	}
+	if (_doRecalcMaxLines){
+		recalculateMaxLines();
 	}
 }
 // Returns the folder for CG or CGAlt depending on the user's settings
@@ -2156,7 +2289,7 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLi
 					break;
 				}
 			}
-			applyTextboxChanges();
+			applyTextboxChanges(0);
 			// Draw the changes
 			startDrawing();
 			drawAdvanced(1,1,1,1,1,0); // Don't draw message text during transitions
@@ -2167,7 +2300,7 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLi
 		}
 	}
 	advboxHeight=_newHeight;
-	applyTextboxChanges();
+	applyTextboxChanges(1);
 }
 // _overrideNewHeight is in lines
 void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
@@ -2194,22 +2327,20 @@ void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
 		smoothADVBoxHeightTransition(advboxHeight,_newAdvBoxHeight,_maxDrawLine);
 	}else{
 		advboxHeight=_newAdvBoxHeight;
-		applyTextboxChanges();
+		applyTextboxChanges(1);
 	}
 }
 void enableVNDSADVMode(){
 	gameTextDisplayMode=TEXTMODE_ADV;
 	dynamicAdvBoxHeight=1;
-	applyTextboxChanges();
 	loadADVBox();
 	updateDynamicADVBox(0,-1);
-	recalculateMaxLines();
+	applyTextboxChanges(1);
 }
 void disableVNDSADVMode(){
 	gameTextDisplayMode=TEXTMODE_NVL;
 	dynamicAdvBoxHeight=0;
-	applyTextboxChanges();
-	recalculateMaxLines();
+	applyTextboxChanges(1);
 }
 char* getFileExtension(char* _passedFilename){
 	return &(_passedFilename[strlen(_passedFilename)-3]);
@@ -2516,33 +2647,6 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 	}
 	return 0;
 }
-// strcpy, but it won't copy from src to dest if the value is 1.
-// You can use this to exclude certian spots
-// I do not mean the ASCII character 1, which is 49.
-void strcpyNO1(char* dest, const char* src){
-	int i;
-	int _destCopyOffset=0;
-	int _srcStrlen = strlen(src);
-	for (i=0;i<_srcStrlen;i++){
-		if (src[i]!=1){
-			dest[_destCopyOffset++]=src[i];
-		}
-	}
-	dest[_destCopyOffset++]=0;
-}
-// Same as strlen, but doesn't count any places with the value of 1 as a character.
-int strlenNO1(char* src){
-	int len=0;
-	int i;
-	for (i=0;;i++){
-		if (src[i]=='\0'){
-			break;
-		}else if (src[i]!=1){
-			len++;
-		}
-	}
-	return len;
-}
 char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName){
 	char* tempstringconcat = malloc(strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)+1+4);
 	strcpy(tempstringconcat,streamingAssets);
@@ -2785,219 +2889,31 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (!MessageBoxEnabled){
 		showTextbox();
 	}
-	unsigned char* message = malloc(strlen(_tempMsg)+strlen(currentMessages[currentLine])+1);	
+	int _currentDrawChar = strlen(currentMessages[currentLine]);
+	int _currentDrawLine=currentLine;
+	char* message = malloc(strlen(_tempMsg)+strlen(currentMessages[currentLine])+1);	
 	// This will make the start of the message have whatever the start of the line says.
 	// For example, if the line we're writing to already has "Keiichi is an idiot" written on it, that will be copied to the start of this message.
 	strcpy(message,currentMessages[currentLine]);
 	strcat(message,_tempMsg);
-	int totalMessageLength=strlen(message);
-	// These are used when we're displaying the message to the user
-	// Refer to the while loop near the end of this function.
-	int _currentDrawLine = currentLine;
-	int _currentDrawChar = GetNextCharOnLine(currentLine);
-	int i, j;
-	// This will loop through the entire message, looking for where I need to add new lines. When it finds a spot that
-	// needs a new line, that spot in the message will become 0. So, when looking for the place to 
-	int lastNewlinePosition=-1; // If this doesn't start at -1, the first character will be cut off. lastNewlinePosition+1 is always used, so a negative index won't be a problem.
-	for (i=strlen(currentMessages[currentLine]);i<totalMessageLength;i++){
-		if (message[i]==32){ // Only check when we meet a space. 32 is a space in ASCII
-			message[i]='\0';
-			// Check if the text has gone past the end of the screen OR we're out of array space for this line
-			if (textWidth(normalFont,&(message[lastNewlinePosition+1]))>=outputLineScreenWidth-MESSAGEEDGEOFFSET-messageInBoxXOffset || i-lastNewlinePosition>=SINGLELINEARRAYSIZE-1){
-				char _didWork=0;
-				for (j=i-1;j>lastNewlinePosition+1;j--){
-					//printf("J:%d, M:%c\n",j,message[j]);
-					if (message[j]==32){
-						// j in message will now be the end point
-						message[j]='\0';
-						_didWork=1;
-						// Fix the thing we messed up, i is no longer the end point
-						message[i]=32;
-						// This code would copy 
-						strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
-						lastNewlinePosition=j;
-						currentLine++;
-						break;
-					}
-				}
-				if (_didWork==0){
-					//oh well. That's fine. We'll just copy it anyway.
-					strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
-					lastNewlinePosition=i;
-					currentLine++;
-				}
-				changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
-			}else{
-				message[i]=32;
-			}
-		}else{
-			// Don't do special checks if it is a normal English ASCII character
-			// Here we have special checks for stuff like image characters and new lines.
-			if (message[i]<65 || message[i]>122){
-				if (message[i]=='<'){
-					char* _endPos = strchr(&(message[i]),'>');
-					if (_endPos!=NULL){
-						int _deltaChars = (_endPos-(char*)&(message[i]));
-						memset(&(message[i]),1,_deltaChars+1); // Because this starts at i, k being 11 with i as 10 would just write 1 byte, therefor missing the end '>'. THe fix is to add one.
-						i+=(_deltaChars-1);
-					}
-				}else if (message[i]==226 && message[i+1]==128 && message[i+2]==148){ // Weird hyphen replace
-					memset(&(message[i]),45,1); // Replace it with a normal hyphen
-					memset(&(message[i+1]),1,2); // Replace these with value 1
-					i=i+2;
-				}else if (message[i]==226){ // COde for special image character
-					unsigned char _imagechartype;
-					if (message[i+1]==153 && message[i+2]==170){ // ♪
-						_imagechartype = IMAGECHARNOTE;
-					}else if (message[i+1]==152 && message[i+2]==134){ // ☆
-						_imagechartype = IMAGECHARSTAR;
-					}else{
-						printf("Unknown image char! %d;%d\n",message[i+1],message[i+2]);
-						_imagechartype = IMAGECHARUNKNOWN;
-					}
-					if (_imagechartype != IMAGECHARUNKNOWN){
-						// find open image char slot
-						for (j=0;j<MAXIMAGECHAR;j++){
-							if (imageCharType[j]==-1){
-								message[i]='\0'; // So we can use textWidth
-								int _cachedW = imageCharW(_imagechartype);
-								int _numSpaces = ceil(_cachedW/(double)singleSpaceWidth);
-								imageCharX[j] = textWidth(normalFont,&(message[lastNewlinePosition+1]))+totalTextXOff()+easyCenter(_cachedW,_numSpaces*singleSpaceWidth);
-								imageCharY[j] = totalTextYOff()+currentLine*currentTextHeight;
-								imageCharLines[j] = currentLine;
-								imageCharCharPositions[j] = strlenNO1(&(message[lastNewlinePosition+1]));
-								imageCharType[j] = _imagechartype;
-								// set all these 3 image char bytes to be skipped
-								memset(&(message[i]),1,3);
-								if (_numSpaces<=3){
-									memset(&(message[i]),' ',_numSpaces);
-								}else{
-									int _numAdded = (_numSpaces-3);
-									totalMessageLength+=_numAdded;
-									message = realloc(message,totalMessageLength+1);
-									memmove(&message[i+_numAdded],&message[i],totalMessageLength-i-_numAdded+1); // move the null char also
-									memset(&message[i],' ',_numSpaces);
-								}
-								i+=(_numSpaces-1);
-								break;
-							}
-						}
-					}
-				}else if (message[i]=='\n'){
-					message[i]='\0';
-					strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
-					currentLine++;
-					lastNewlinePosition=i;
-				}
-			}else{
-				//http://jafrog.com/2013/11/23/colors-in-terminal.html
-				if (message[i]=='\\' || message[i]=='x'){ // I saw that Umineko VNDS doesn't use a backslash before
-					if (totalMessageLength-i>=strlen("x1b[0m")+(message[i]=='\\')){
-						if (strncmp(&(message[i+(message[i]=='\\')]),"x1b[",strlen("x1b["))==0){
-							int _oldIndex=i;
-							// Advance to the x character if we chose to use backslash
-							if (message[i]=='\\'){
-								i++;
-							}
-							i+=4; // We're now in the parameters
-							int _mSearchIndex;
-							for (_mSearchIndex=i;_mSearchIndex<totalMessageLength;++_mSearchIndex){
-								if (message[_mSearchIndex]=='m'){
-									break;
-								}
-							}
-							// If found the ending
-							if (message[_mSearchIndex]=='m'){
-								// TODO - Do stuff with the found color code
-								if (message[i]=='0'){ // If we're resetting the color
-	
-								}else{
-									int _semiColonSearchIndex;
-									for (_semiColonSearchIndex=i;_semiColonSearchIndex<_mSearchIndex;++_semiColonSearchIndex){
-										if (message[_semiColonSearchIndex]==';'){
-											break;
-										}
-									}
-									message[_semiColonSearchIndex]=0;
-									printf("the number is %s\n",&(message[i]));
-									message[_semiColonSearchIndex]=';';
-								}
-								i=_oldIndex;
-								memset(&(message[i]),1,_mSearchIndex-i+1);
-							}else{
-								printf("Failed to parse color markup");
-								i=_oldIndex; // Must be invalid otherwise
-							}
-						}
-					}
-				}
-			}
-		}
-		changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
+
+	int _numLines;
+	wrapTextAdvanced(&message,&_numLines,NULL,outputLineScreenWidth-MESSAGEEDGEOFFSET-messageInBoxXOffset,1);
+	if (_numLines==0){
+		goto cleanup;
 	}
-	// This code will make a new line if there needs to be one because of the last word
-	if (textWidth(normalFont,&(message[lastNewlinePosition+1]))>=outputLineScreenWidth-MESSAGEEDGEOFFSET-messageInBoxXOffset){
-		char _didWork=0;
-		for (j=totalMessageLength-1;j>lastNewlinePosition+1;j--){
-			if (message[j]==32){
-				// WWWWWWWWWWWWWWWWWWWWWWWW MION
-				message[j]='\0';
-				// Copy stuff before the split, this would copy the W characters
-				strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
-				currentLine++;
-				changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
-				lastNewlinePosition=j;
-				_didWork=1;
-				// Copy stuff after the split, this would copy the MION
-				strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
-				break;
-			}
-		}
-		// Were we able to find a place to put a new line? If not, do this.
-		if (_didWork==0){
-			printf("did not work.\n");
-			// Just put as much as possible on one line.
-			for (i=lastNewlinePosition+1;i<totalMessageLength;i++){
-				char _tempCharCache = message[i];
-				message[i]='\0';
-				if (textWidth(normalFont,&(message[lastNewlinePosition+1]))>outputLineScreenWidth-MESSAGEEDGEOFFSET-messageInBoxXOffset){
-					// What this means is that when only the string UP TO the last character was small enough. Now we have to replicate the behavior of the previous loop to get the shorter string.
-					char _tempCharCache2 = message[i-1];
-					message[i-1]='\0';
-					strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
-					message[i-1]=_tempCharCache2;
-					currentLine++;
-					changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
-					lastNewlinePosition=i-2;
-				}else{
-					//printf("%d;%s\n",textWidth(normalFont,&(message[lastNewlinePosition+1])));
-				}
-				message[i] = _tempCharCache;
-			}
-			// Copy whatever remains
-			strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
-		}
-	}else{
-		// Copy whatever is left. In a
-		// WWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWWW(\n)NOOB
-		// example, NOOB will be copied. This is seperate from the code above. NOOB by itself does not need a new line.
-		strcpyNO1(currentMessages[currentLine],&(message[lastNewlinePosition+1]));
-	}
-	changeIfLazyLastLineFix(&currentLine, &_currentDrawLine);
-	if (_currentDrawLine<0){
-		_currentDrawLine=0;
+	int _nextCopyIndex=0;
+	int i;
+	for (i=0;i<_numLines;++i){
+		strcpy(currentMessages[currentLine++],&(message[_nextCopyIndex]));
+		_nextCopyIndex += 1+strlen(&(message[_nextCopyIndex]));
 	}
 	if (dynamicAdvBoxHeight){
-		if (0){
-			// Don't add 1 to this value. For VNDS games, this always represents the next line.
-			updateDynamicADVBox(_currentDrawLine,-1);
-		}else{
-			// If not VNDS, there is a chance _currentDrawLine won't represent the next line, so we need to make sure we're actually drawing the _currentDrawLine and that it doesn't draw newly added text.
-			char _archivedCharacter = currentMessages[_currentDrawLine][_currentDrawChar];
-			currentMessages[_currentDrawLine][_currentDrawChar] = '\0';
-			updateDynamicADVBox(_currentDrawLine+1,currentLine+2);
-			currentMessages[_currentDrawLine][_currentDrawChar] = _archivedCharacter;
-		}
+		// If not VNDS, there is a chance _currentDrawLine won't represent the next line, so we need to make sure we're actually drawing the _currentDrawLine and that it doesn't draw newly added text.
+		char _archivedCharacter = currentMessages[_currentDrawLine][_currentDrawChar];
+		currentMessages[_currentDrawLine][_currentDrawChar] = '\0';
+		updateDynamicADVBox(_currentDrawLine+1,currentLine+2);
+		currentMessages[_currentDrawLine][_currentDrawChar] = _archivedCharacter;
 	}
 	#if GBPLAT == GB_3DS
 		int _oldMessageXOffset=textboxXOffset;
@@ -3065,6 +2981,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			messageInBoxYOffset=_oldMessageInBoxYOffset;
 		}
 	#endif
+cleanup:
 	// End of function
 	free(message);
 	endType = _endtypetemp;
@@ -3271,7 +3188,7 @@ void LoadSettings(){
 				outputLineScreenHeight = 240;
 			#endif
 		}
-		applyTextboxChanges();
+		applyTextboxChanges(0); // max lines will be calculated later by the font loading
 		printf("Loaded settings file.\n");
 	}
 	free(_fixedFilename);
@@ -3366,7 +3283,7 @@ void RunGameSpecificLua(){
 		}
 	}
 	// Just in case
-	applyTextboxChanges();
+	applyTextboxChanges(1);
 }
 void generateADVBoxPath(char* _passedStringBuffer, char* _passedSystemString){
 	strcpy(_passedStringBuffer,streamingAssets);
@@ -3393,8 +3310,7 @@ void loadADVBox(){
 			currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBoxLowRes.png");
 		#endif
 	}
-	applyTextboxChanges();
-	recalculateMaxLines();
+	applyTextboxChanges(1);
 }
 void LoadGameSpecificStupidity(){
 	TryLoadMenuSoundEffect(NULL);
@@ -3514,8 +3430,7 @@ void activateHigurashiSettings(){
 		advNamesSupported=1;
 	}
 	//shouldUseBustCache=0;
-	applyTextboxChanges();
-	recalculateMaxLines();
+	applyTextboxChanges(1);
 }
 #if GBPLAT == GB_VITA
 	char wasJustPressedSpecific(SceCtrlData _currentPad, SceCtrlData _lastPad, int _button){
@@ -4110,7 +4025,7 @@ void setADVName(char* _newName){
 	if (_newName!=NULL){
 		if (!advNamesSupported){
 			advNamesSupported=1;
-			applyTextboxChanges();
+			applyTextboxChanges(1);
 		}
 		int _cachedStrlen=strlen(_newName);
 		char _actualNameBuff[strlen(_newName)+1];
@@ -4637,7 +4552,7 @@ void scriptOptionsEnableVoiceSetting(nathanscriptVariable* _passedArguments, int
 void scriptOptionsSetTextMode(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	textDisplayModeOverriden=1;
 	gameTextDisplayMode = nathanvariableToInt(&_passedArguments[0]);
-	applyTextboxChanges();
+	applyTextboxChanges(1);
 }
 void scriptLoadADVBox(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	loadADVBox();
@@ -4665,12 +4580,12 @@ EASYLUAINTSETFUNCTION(oMenuFontSize,forceFontSizeOption)
 // Manually set the options if you've chosen to disable the menu option
 EASYLUAINTSETFUNCTION(textOnlyOverBackground,textOnlyOverBackground);
 EASYLUAINTSETFUNCTION(dynamicAdvBoxHeight,dynamicAdvBoxHeight);
-EASYLUAINTSETFUNCTION(advboxHeight,advboxHeight)
+EASYLUAINTSETFUNCTIONPOSTCALL(advboxHeight,advboxHeight,applyTextboxChanges(1);)
 EASYLUAINTSETFUNCTION(setADVNameSupport,advNamesSupported)
 EASYLUAINTSETFUNCTION(advNamesPersist,advNamesPersist)
 // Some properties
-EASYLUAINTSETFUNCTIONPOSTCALL(setTextboxTopPad,textboxTopPad,applyTextboxChanges();)
-EASYLUAINTSETFUNCTIONPOSTCALL(setADVNameImageHeight,advNameImHeight,applyTextboxChanges(););
+EASYLUAINTSETFUNCTIONPOSTCALL(setTextboxTopPad,textboxTopPad,applyTextboxChanges(1);)
+EASYLUAINTSETFUNCTIONPOSTCALL(setADVNameImageHeight,advNameImHeight,applyTextboxChanges(1);)
 
 #define MAXIMAGECHOICEW (screenWidth*.85)
 #define PREFERREDIMAGECHOICESONSCREEN 7
@@ -5434,7 +5349,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}
 	//////////////////////////
 	free(_settingsOn);
-	applyTextboxChanges();
+	applyTextboxChanges(1);
 	controlsEnd();
 	SaveSettings();
 	if (currentGameStatus!=GAMESTATUS_TITLE){

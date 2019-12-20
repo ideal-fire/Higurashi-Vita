@@ -161,14 +161,7 @@ void _vndsChangeScriptFiles(const char* _newFilename){
 }
 // Will always start on an avalible line
 void vndswrapper_text(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	if (currentLine>=maxLines){
-		if (vndsClearAtBottom){
-			ClearMessageArray(1);
-			currentLine=0;
-		}else{
-			LastLineLazyFix(&currentLine);
-		}
-	}
+	LastLineLazyFix(&currentLine);
 	char* _gottenMessageString = nathanvariableToString(&_passedArguments[0]);
 
 	// If there's no point in adding a blank line because we have an empty ADV box.
