@@ -444,7 +444,7 @@ char hasOwnVoiceSetting=0;
 
 unsigned char graphicsLocation = LOCATION_CGALT;
 
-unsigned char messageHistory[MAXMESSAGEHISTORY][SINGLELINEARRAYSIZE];
+char* messageHistory[MAXMESSAGEHISTORY] = {NULL};
 unsigned char oldestMessage=0;
 
 char presetsAreInStreamingAssets=1;
@@ -1037,7 +1037,8 @@ int FixVoiceVolume(int _val){
 	return FixVolumeArg(_val)*voiceVolume;
 }
 void addToMessageHistory(const char* _newWords){
-	strcpy((char*)messageHistory[oldestMessage],_newWords);
+	free(messageHistory[oldestMessage]);
+	messageHistory[oldestMessage] = strdup(_newWords);
 	oldestMessage++;
 	if (oldestMessage==MAXMESSAGEHISTORY){
 		oldestMessage=0;
@@ -1481,11 +1482,11 @@ void outputLineWait(){
 			if (currentlyVNDSGame){
 				safeVNDSSaveMenu();
 			}else{
-				DrawHistory(messageHistory);
+				historyMenu();
 			}
 		}
 		if (wasJustPressed(BUTTON_UP)){
-			DrawHistory(messageHistory);
+			historyMenu();
 		}
 		controlsEnd();
 		if (autoModeOn==1 && _toggledTextboxTime==0){
@@ -3285,7 +3286,7 @@ void LoadSettings(){
 #define HISTORYSCROLLBARHEIGHT (((double)HISTORYONONESCREEN/(double)MAXMESSAGEHISTORY)*screenHeight)
 //#define HISTORYSCROLLRATE (floor((double)MAXMESSAGEHISTORY/15))
 #define HISTORYSCROLLRATE 1
-void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
+void historyMenu(){
 	controlsReset();
 	int _maxScroll = MAXMESSAGEHISTORY-HISTORYONONESCREEN;
 	int _scrollOffset=_maxScroll;
@@ -3302,7 +3303,7 @@ void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]){
 		drawRectangle(textboxXOffset,0,outputLineScreenWidth,screenHeight,0,0,0,150);
 		int i;
 		for (i = 0; i < HISTORYONONESCREEN; i++){
-			gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*currentTextHeight,(const char*)_textStuffToDraw[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],255,255,255);
+			gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*currentTextHeight,messageHistory[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],255,255,255);
 		}
 		if (outputLineScreenWidth == screenWidth){
 			gbDrawText(normalFont,3,screenHeight-currentTextHeight-5,"TEXTLOG",0,0,0);
@@ -5235,7 +5236,8 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	int _choice=0;
 	char _shouldExit=0;
 	while(!_shouldExit){
-		char _showADVOptions = (gameTextDisplayMode==TEXTMODE_ADV);
+		char _showNVLOptions = (gameTextDisplayMode==TEXTMODE_NVL);
+		//char _showADVOptions = (gameTextDisplayMode==TEXTMODE_ADV);
 		// text
 		#if GBPLAT == GB_3DS
 			_values[SETTING_TEXTSCREEN] = textIsBottomScreen ? "Bottom Screen" : "Top Screen";

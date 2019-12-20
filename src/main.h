@@ -13,7 +13,7 @@ void PlayBGM(const char* filename, int _volume, int _slot);
 void easyMessagef(char _doWait, const char* _formatString, ...);
 void SaveSettings();
 void XOutFunction();
-void DrawHistory(unsigned char _textStuffToDraw[][SINGLELINEARRAYSIZE]);
+void historyMenu();
 void SaveGameEditor();
 void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption, signed char _showVNDSFadeOption, signed char _showDebugButton);
 char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage);
