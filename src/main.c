@@ -1,14 +1,8 @@
 /*
 	(OPTIONAL TODO)
-		TODO - (Optional) Italics
+		TODO - text property - italics
 			OutputLine(NULL, "　……知レバ、…巻キ込マレテシマウ…。",
 			   NULL, "...<i>If she found out... she would become involved</i>...", Line_Normal);
-
-			(Here's the problem, It'll be hard to draw non italics text and italics in the same line)
-			(A possible solution is to store x cordinates to start italics text)
-				// Here's the plan.
-				// Make another message array, but store text that is in italics in it
-				// Can I combine color with this?
 		TODO - Position markup
 			At the very end of Onikakushi, I think that there's a markup that looks something like this <pos=36>Keechi</pos>
 		TODO - Remove scriptFolder variable
@@ -17,8 +11,7 @@
 			Inspect what the max line I can use in it is.
 			Think about how I could implement this command if the value given is bigger than the total number of lines
 				Change the actual text box X and text box Y and use the input arg as a percentage of the screen?
-			How does this work in ADV mode?
-				Actually, the command is removed in ADV mode.
+			Actually, the command is removed in ADV mode.
 		TODO - Allow VNDS sound command to stop all sounds
 		TODO - SetSpeedOfMessage
 		TODO - Sort files in file browser
@@ -26,7 +19,6 @@
 	TODO - is entire font in memory nonsense still needed
 	TODO - Fix this text speed setting nonsense
 	TODO - Game specific settings files
-	TODO - Draw text with color properties. to allow having colors for every individual character, make a duplicate array, type uint64_t, first three bytes for color, last byte for text property flags
 	TODO - in manual mode, running _GameSpecific.lua first won't keep the settings from being reset by activeVNDSSettings called before manual script.s
 	TODO - i removed the secret save file editor code
 				if (_codeProgress==4){
@@ -309,6 +301,11 @@ typedef struct{
 	char* filename;
 }cachedImage;
 
+// text properties is stored in int32_t with four bytes
+// first three bytes are color
+// lsat byte is a bitmap of the following properties:
+#define TEXTPROP_COLORED 1
+
 /*
 Can cache up to MAXBUSTCACHE busts
 
@@ -337,6 +334,7 @@ lua_State* L = NULL;
 int endType;
 int maxLines=0;
 char** currentMessages;
+int32_t** messageProps;
 int currentLine=0;
 int place=0;
 
@@ -748,12 +746,47 @@ void drawDropshadowText(int _x, int _y, char* _message, int _a){
 	drawDropshadowTextSpecific(_x,_y,_message,DEFAULTFONTCOLOR,0,0,0,_a);
 }
 // Draw text intended to be used for the game, respects dropshadow setting
-void drawTextGame(int _x, int _y, char* _message, unsigned char _alpha){
+void drawTextGame(int _x, int _y, char* _message, unsigned char r, unsigned char g, unsigned char b, unsigned char _alpha){
 	if (dropshadowOn){
-		drawDropshadowTextSpecific(_x,_y,_message,DEFAULTFONTCOLOR,0,0,0,_alpha);
+		drawDropshadowTextSpecific(_x,_y,_message,r,g,b,0,0,0,_alpha);
 	}else{
-		gbDrawTextAlpha(normalFont,_x,_y,_message,DEFAULTFONTCOLOR,_alpha);
+		gbDrawTextAlpha(normalFont,_x,_y,_message,r,g,b,_alpha);
 	}
+}
+void drawPropertyStreakText(int _x, int _y, char* _message, int32_t _prop, unsigned char _alpha){
+	unsigned char _propBitmap = (unsigned char)(((char*)&_prop)[3]);
+	unsigned char r;
+	unsigned char g;
+	unsigned char b;
+	if (_propBitmap & TEXTPROP_COLORED){
+		r = (unsigned char)(((char*)&_prop)[0]);
+		g = (unsigned char)(((char*)&_prop)[1]);
+		b = (unsigned char)(((char*)&_prop)[2]);
+	}else{
+		r=DEFAULTFONTCOLORR;
+		g=DEFAULTFONTCOLORG;
+		b=DEFAULTFONTCOLORB;
+	}
+	drawTextGame(_x,_y,_message,r,g,b,_alpha);	
+}
+// _message must be writeable
+void drawPropertyGameText(int _x, int _y, char* _message, int32_t* _props, unsigned char _alpha){
+	int32_t _curProps = _props[0];
+	int _cachedStrlen = strlen(_message);
+	int _lastStrEnd=0;
+	int i;
+	for (i=0;i<_cachedStrlen;++i){
+		if (_props[i]!=_curProps){
+			char _cachedChar=_message[i];
+			_message[i]='\0';
+			drawPropertyStreakText(_x,_y,&_message[_lastStrEnd],_curProps,_alpha);
+			_x+=textWidth(normalFont,&_message[_lastStrEnd]);
+			_lastStrEnd+=strlen(&_message[_lastStrEnd]);
+			_message[i]=_cachedChar;
+			_curProps=_props[i];
+		}
+	}
+	drawPropertyStreakText(_x,_y,&_message[_lastStrEnd],_curProps,_alpha);
 }
 int imageCharW(signed char _type){
 	return getOtherScaled(getTextureHeight(imageCharImages[_type]),currentTextHeight,getTextureWidth(imageCharImages[_type]));	
@@ -773,30 +806,37 @@ void changeMaxLines(int _newMax){
 		return;
 	}
 	char** _newCurrentMessages = malloc(sizeof(char*)*_newMax);
+	int32_t** _newMessageProps = malloc(sizeof(int32_t*)*_newMax);
 	if (_newMax<maxLines){
 		int _diff = maxLines-_newMax;
 		// Copy the latest lines that can fit
-		memcpy(_newCurrentMessages,&(currentMessages[_diff]),_newMax*sizeof(char*));
+		memcpy(_newCurrentMessages,&currentMessages[_diff],_newMax*sizeof(char*));
+		memcpy(_newMessageProps,&messageProps[_diff],_newMax*sizeof(int32_t*));
 		// free the lines that are gone
 		int i;
 		for (i=0;i<_diff;++i){
 			free(currentMessages[i]);
+			free(messageProps[i]);
 		}
 	}else{
 		if (maxLines!=0 && currentMessages){
 			// Copy all the old lines
 			memcpy(_newCurrentMessages,currentMessages,sizeof(char*)*maxLines);
+			memcpy(_newMessageProps,messageProps,sizeof(int32_t*)*maxLines);
 		}
 		// alloc new ones
 		int i;
 		for (i=maxLines;i<_newMax;++i){
 			_newCurrentMessages[i]=malloc(SINGLELINEARRAYSIZE);
 			_newCurrentMessages[i][0]='\0';
+			_newMessageProps[i]=malloc(SINGLELINEARRAYSIZE*sizeof(int32_t));
 		}
 	}
 	free(currentMessages);
+	free(messageProps);
 	maxLines=_newMax;
 	currentMessages=_newCurrentMessages;
+	messageProps=_newMessageProps;
 }
 void recalculateMaxLines(){
 	int _usableHeight;
@@ -848,7 +888,7 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 		}
 	}
 	for (i=0;i<_maxDrawLine;i++){
-		drawTextGame(totalTextXOff(),totalTextYOff()+i*currentTextHeight,(char*)currentMessages[i],_alpha);
+		drawPropertyGameText(totalTextXOff(),totalTextYOff()+i*currentTextHeight,currentMessages[i],messageProps[i],_alpha);
 	}
 	drawImageChars(_alpha,_maxDrawLine-1,_finalLineMaxChar!=-1 ? _finalLineMaxChar : INT_MAX);
 	// Fix string if we trimmed it for _finalLineMaxChar
