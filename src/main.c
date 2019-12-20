@@ -196,6 +196,7 @@ char* vitaAppId="HIGURASHI";
 #define totalTextYOff() (textboxTopPad+messageInBoxYOffset+textboxYOffset)
 #define totalTextXOff() (textboxXOffset+messageInBoxXOffset)
 #define shouldShowADVNames() (gameTextDisplayMode==TEXTMODE_ADV && (advNamesSupported==2 || (advNamesSupported && prefersADVNames)))
+#define shouldClearHitBottom() (currentlyVNDSGame && clearAtBottom)
 #define ADVNAMEOFFSET (currentTextHeight*1.5) // Space between top of ADV name and rest of the text. does not apply if adv name is an image
 #define IMADVNAMEPOSTPAD (textboxTopPad)
 
@@ -213,7 +214,7 @@ char* vitaAppId="HIGURASHI";
 // 3 adds voice volume
 // 4 adds preferredBoxAlpha and textOnlyOverBackground
 // 5 adds textSpeed
-// 6 adds vndsClearAtBottom
+// 6 adds clearAtBottom
 // 7 adds showVNDSWarnings
 // 8 adds higurashiUsesDynamicScale
 // 9 adds preferredTextDisplayMode
@@ -517,7 +518,7 @@ char* currentFontFilename=NULL;
 char currentlyVNDSGame=0;
 char nextVndsBustshotSlot=0;
 // If all the text should be cleared when the text reached the bottom of the screen when playing a VNDS game
-signed char vndsClearAtBottom=0;
+signed char clearAtBottom=0;
 signed char showVNDSWarnings=1;
 signed char dynamicAdvBoxHeight=0;
 crossTexture advNameImSheet=NULL;
@@ -1263,24 +1264,29 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 // If the passed line index is too far down (>= maxLines), shift everything up to make room for a new line
 void LastLineLazyFix(int* _line){
 	if (*_line>=maxLines){
-		if (*_line>maxLines){
-			*_line=maxLines;
-		}
-		int i;
-		addToMessageHistory(currentMessages[0]);
-		for (i=1;i<maxLines;i++){
-			strcpy(currentMessages[i-1],currentMessages[i]);
-		}
-		currentMessages[maxLines-1][0]=0;
-		(*_line)--;
+		if (clearAtBottom){
+			ClearMessageArray(1);
+			*_line=0;
+		}else{
+			if (*_line>maxLines){
+				*_line=maxLines;
+			}
+			int i;
+			addToMessageHistory(currentMessages[0]);
+			for (i=1;i<maxLines;i++){
+				strcpy(currentMessages[i-1],currentMessages[i]);
+			}
+			currentMessages[maxLines-1][0]=0;
+			(*_line)--;
 
-		for (i=0;i<MAXIMAGECHAR;i++){
-			if (imageCharType[i]!=-1){
-				imageCharY[i]-=currentTextHeight;
-				// Delete image char if it goes offscreen
-				if (imageCharY[i]<0){
-					if (imageCharY[i]<(screenHeight*.20)*-1){
-						imageCharType[i]=-1;
+			for (i=0;i<MAXIMAGECHAR;i++){
+				if (imageCharType[i]!=-1){
+					imageCharY[i]-=currentTextHeight;
+					// Delete image char if it goes offscreen
+					if (imageCharY[i]<0){
+						if (imageCharY[i]<(screenHeight*.20)*-1){
+							imageCharType[i]=-1;
+						}
 					}
 				}
 			}
@@ -1291,7 +1297,7 @@ void changeIfLazyLastLineFix(int* _line, int* _toChange){
 	int _cacheLine = *_line;
 	LastLineLazyFix(_line);
 	if (*_line!=_cacheLine){
-		(*_toChange)-=1;
+		(*_toChange)-=(_cacheLine-*_line);
 	}
 }
 void updateBust(bust* _target, u64 _curTime){
@@ -3157,7 +3163,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // preferredBoxAlpha, 1 byte
 // textOnlyOverBackground, 1 byte
 // textSpeed, 1 byte
-// vndsClearAtBottom, 1 byte
+// clearAtBottom, 1 byte
 // showVNDSWarnings, 1 byte
 // higurashiUsesDynamicScale, 1 byte
 // preferredTextDisplayMode, 1 byte
@@ -3183,7 +3189,7 @@ void SaveSettings(){
 	fwrite(&preferredBoxAlpha,1,1,fp);
 	fwrite(&textOnlyOverBackground,1,1,fp);
 	fwrite(&textSpeed,1,1,fp);
-	fwrite(&vndsClearAtBottom,sizeof(signed char),1,fp);
+	fwrite(&clearAtBottom,sizeof(signed char),1,fp);
 	fwrite(&showVNDSWarnings,sizeof(signed char),1,fp);
 	fwrite(&higurashiUsesDynamicScale,sizeof(signed char),1,fp);
 	fwrite(&preferredTextDisplayMode,sizeof(signed char),1,fp);
@@ -3231,7 +3237,7 @@ void LoadSettings(){
 			fread(&textSpeed,1,1,fp);
 		}
 		if (_tempOptionsFormat>=6){
-			fread(&vndsClearAtBottom,sizeof(signed char),1,fp);
+			fread(&clearAtBottom,sizeof(signed char),1,fp);
 		}
 		if (_tempOptionsFormat>=7){
 			fread(&showVNDSWarnings,sizeof(signed char),1,fp);
@@ -5229,6 +5235,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	int _choice=0;
 	char _shouldExit=0;
 	while(!_shouldExit){
+		char _showADVOptions = (gameTextDisplayMode==TEXTMODE_ADV);
 		// text
 		#if GBPLAT == GB_3DS
 			_values[SETTING_TEXTSCREEN] = textIsBottomScreen ? "Bottom Screen" : "Top Screen";
@@ -5238,7 +5245,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		if (_settingsOn[SETTING_DROPSHADOW]){
 			_values[SETTING_DROPSHADOW] = charToSwitch(dropshadowOn);
 		}
-		_settingsOn[SETTING_TEXTBOXW]=(forceTextOverBGOption && preferredTextDisplayMode==TEXTMODE_NVL);
+		_settingsOn[SETTING_TEXTBOXW]=(forceTextOverBGOption && _showNVLOptions);
 		if (_settingsOn[SETTING_TEXTBOXW]){
 			_values[SETTING_TEXTBOXW] = textOnlyOverBackground ? "Small" : "Full";
 		}
@@ -5248,9 +5255,9 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		if (_settingsOn[SETTING_ADVNAMES]){
 			_values[SETTING_ADVNAMES]=charToSwitch(prefersADVNames);
 		}
-		_settingsOn[SETTING_HITBOTTOMCLEAR]=(_shouldShowVNDSSettings && preferredTextDisplayMode==TEXTMODE_NVL);
+		_settingsOn[SETTING_HITBOTTOMCLEAR]=(_showNVLOptions);
 		if (_settingsOn[SETTING_HITBOTTOMCLEAR]){
-			_values[SETTING_HITBOTTOMCLEAR] = charToBoolString(vndsClearAtBottom);
+			_values[SETTING_HITBOTTOMCLEAR] = charToBoolString(clearAtBottom);
 		}
 		// graphics stuff
 		if (_settingsOn[SETTING_BUSTLOC]){
@@ -5290,7 +5297,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		if (preferredBoxAlpha>=230){
 			_settingsProp[SETTING_BOXALPHA]|=OPTIONPROP_BADCOLOR;
 		}
-
 		char _selectionInfo;
 		_choice=showMenuAdvanced(_choice,"Settings",SETTINGS_MAX,_settings,_values,_settingsOn,_settingsProp,&_selectionInfo,0);
 		signed char _directionMultiplier = (_selectionInfo & MENURET_RIGHT) ? 1 : -1;
@@ -5386,7 +5392,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				safeVNDSSaveMenu();
 				break;
 			case SETTING_HITBOTTOMCLEAR:
-				vndsClearAtBottom = !vndsClearAtBottom;
+				clearAtBottom = !clearAtBottom;
 				break;
 			case SETTING_VNDSWAR:
 				showVNDSWarnings = !showVNDSWarnings;
