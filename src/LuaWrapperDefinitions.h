@@ -108,6 +108,7 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptScalePixels,"scalePixels")
 	PUSHLUAWRAPPER(scriptDefineImageName,"defineImageName")
 	PUSHLUAWRAPPER(scriptLoadImageNameSheet,"loadImageNameSheet")
+	// set
 	PUSHEASYLUAINTSETFUNCTION(oMenuQuit)
 	PUSHEASYLUAINTSETFUNCTION(oMenuVNDSSettings)
 	PUSHEASYLUAINTSETFUNCTION(oMenuVNDSSave)
@@ -126,6 +127,8 @@ void initLuaWrappers(){
 	PUSHEASYLUAINTSETFUNCTION(advNamesPersist)
 	PUSHEASYLUAINTSETFUNCTION(setTextboxTopPad)
 	PUSHEASYLUAINTSETFUNCTION(setADVNameImageHeight)
+	// get
+	PUSHEASYLUAINTSETFUNCTION(getTextDisplayMode)
 
 	// Commands exclusive to my engine
 	PUSHLUAWRAPPER(scriptDebugFile,"Debugfile")

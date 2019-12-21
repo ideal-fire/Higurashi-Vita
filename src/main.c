@@ -39,8 +39,6 @@
 		text x1b[<colorID>;1m<restoftext>
 		text x1b[0m
 */
-// This is pretty long because foreign characters can take two bytes
-#define SINGLELINEARRAYSIZE 300
 #define PLAYTIPMUSIC 0
 
 // Libraries all need
@@ -243,6 +241,12 @@ char* vitaAppId="HIGURASHI";
 		varname = lua_tonumber(passedState,1); \
 		postfunc \
 		return 0; \
+	}
+// Make a lua function and all it does it return a variable
+#define EASYLUAINTGETFUNCTION(scriptFunctionName,varname) \
+	int L_##scriptFunctionName(lua_State* passedState){ \
+		lua_pushnumber(passedState,varname);			\
+		return 1; \
 	}
 // Easily push stuff made with EASYLUAINTSETFUNCTION
 #define PUSHEASYLUAINTSETFUNCTION(scriptFunctionName) \
@@ -2937,10 +2941,8 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (strlen(_tempMsg)==0){
 		return;
 	}
-	// 1 when finished displaying the text
-	char _isDone=0;
-	if (isSkipping==1 || _autoskip==1 || textSpeed==TEXTSPEED_INSTANT){
-		_isDone=1;
+	if (isSkipping || textSpeed==TEXTSPEED_INSTANT){
+		_autoskip=1;
 	}
 	if (!MessageBoxEnabled){
 		showTextbox();
@@ -2961,34 +2963,45 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (_numLines==0){
 		goto cleanup;
 	}
-	int _destCurLine = currentLine+(_numLines-1);
-	if (dynamicAdvBoxHeight){
+	int _linesCopied;
+	// if we're not displaying interactively, skip the lines that overflow.
+	if (_autoskip && _numLines>maxLines){
+		_linesCopied=_numLines-maxLines;
+	}else{
+		_linesCopied=0;
+	}
+	int _nextCopyIndex=0;
+transferMoreLines:
+	;
+	// the dynamic ADV box will become as big as required for all the lines. pray there isn't a message that takes the entire screen at once.
+	int _destCurLine = currentLine+(_numLines-_linesCopied-1);
+	if (dynamicAdvBoxHeight){ // we should never use the goto if we're in dynamic adv box mode btw
 		updateDynamicADVBox(-1,_destCurLine+1);
 	}
 	// fix if we're going to overflow maxLines
 	if (_destCurLine>=maxLines){
-		if (clearAtBottom){
+		if (clearAtBottom || (_numLines-_linesCopied)>=maxLines){ // clearAtBottom is a condition, but also if we have no hope of upshifting enough then clear entire message. more code to handle this situation down below.
 			ClearMessageArray(1);
 			currentLine=0;
-		}else{
-			int _delLines = maxLines-_destCurLine+1;
+		}else{ // because of above condition, upshifting means that we won't need to copy text twice. this allows the assumption that, if we need to copy more lines later, we last copied `maxLines` lines.
+			int _delLines = _destCurLine-maxLines+1;
 			upshiftText(_delLines);
 			currentLine-=_delLines;
 		}
 	}
-	//
+	// free the first line first because we're redoing it
+	if (currentMessages[currentLine]){
+		free(currentMessages[currentLine]);
+		free(messageProps[currentLine]);
+	}
 	int _currentDrawLine=currentLine;
-	int _nextCopyIndex=0;
 	int i;
-	for (i=0;i<_numLines;++i){
-		if (i==0){
-			// free the first line first because we're redoing it
-			if (currentMessages[currentLine]){
-				free(currentMessages[currentLine]);
-				free(messageProps[currentLine]);
-			}
-		}else{
+	for (i=0;_linesCopied<_numLines;++_linesCopied,++i){
+		if (i!=0){
 			currentLine++;
+		}
+		if (currentLine==maxLines){ // don't overflow if we have too many lines.
+			break;
 		}
 		int _lineLen = strlen(&(message[_nextCopyIndex]));
 		messageProps[currentLine] = malloc(sizeof(int32_t)*_lineLen);
@@ -2997,18 +3010,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		memcpy(currentMessages[currentLine],&(message[_nextCopyIndex]),_lineLen+1);
 		_nextCopyIndex += 1+_lineLen;
 	}
-	#if GBPLAT == GB_3DS
-		int _oldMessageXOffset=textboxXOffset;
-		int _oldMessageInBoxXOffset=messageInBoxXOffset;
-		int _oldMessageYOffset=textboxYOffset;
-		int _oldMessageInBoxYOffset=messageInBoxYOffset;
-		if (textIsBottomScreen==1){
-			textboxXOffset=0;
-			messageInBoxXOffset=0;
-			textboxYOffset=0;
-			messageInBoxYOffset=0;
-		}
-	#endif
+	char _isDone=_autoskip;
 	char _slowTextSpeed=0;
 	while(!_isDone){
 		controlsStart();
@@ -3025,12 +3027,13 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				startDrawingBottom();
 			}
 		#endif
-		if (MessageBoxEnabled==1){
+		if (MessageBoxEnabled){
 			DrawMessageText(255,_currentDrawLine,_currentDrawChar);
 		}
 		endDrawing();
 		if (_isDone==0 && ( (textSpeed>0) || (_slowTextSpeed++ == abs(textSpeed)) )){
 			_slowTextSpeed=0;
+			int i;
 			for (i=0;i<(textSpeed>0 ? textSpeed : 1);i++){
 				_currentDrawChar++;
 				// if it's not ASCII, skip to end of UTF-8 character
@@ -3048,10 +3051,8 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 				}else if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){ // If the next char we're about to display is the end of the line
 					_currentDrawLine++;
 					// If we just passed the line we'll be writing to next time then we're done
-					if (_currentDrawLine==currentLine+1){
-						_isDone=1; // We will no longer increment the current character
-						_currentDrawLine-=1; // Fix this variable as we passed where we wanted to be
-						_currentDrawChar=strlen(currentMessages[_currentDrawLine]); // The character we're displaying is at the end
+					if (_currentDrawLine==currentLine+1 || _currentDrawLine==maxLines){
+						_isDone=1;
 						break;
 					}else{ // Otherwise, start displaying at the start of the next line
 						_currentDrawChar=0;
@@ -3060,14 +3061,12 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			}
 		}
 	}
-	#if GBPLAT == GB_3DS
-		if (textIsBottomScreen==1){
-			textboxXOffset=_oldMessageXOffset;
-			messageInBoxXOffset=_oldMessageInBoxXOffset;
-			textboxYOffset=_oldMessageYOffset;
-			messageInBoxYOffset=_oldMessageInBoxYOffset;
-		}
-	#endif
+	if (_linesCopied!=_numLines){
+		_currentDrawChar=0; // if we're putting up brand new text, we're definetly starting at the start of the line again.
+		endType = Line_WaitForInput;
+		outputLineWait();
+		goto transferMoreLines;
+	}
 cleanup:
 	// End of function
 	free(message);
@@ -3836,8 +3835,11 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 		_readMaxLines=maxLines;
 	}else{ // Zero the extra space lines
 		for (i=_readMaxLines;i<maxLines;++i){
-			free(currentMessages[i]);
-			currentMessages[i]=NULL;
+			if (currentMessages[i]){
+				free(currentMessages[i]);
+				currentMessages[i]=NULL;
+				free(messageProps[i]);
+			}
 		}
 	}
 	// Read the lines
@@ -3847,7 +3849,7 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 			free(currentMessages[i]);
 			currentMessages[i]=NULL;
 		}else{
-			messageProps[i] = malloc(strlen(currentMessages[i])*sizeof(int32_t));
+			messageProps[i] = calloc(1,strlen(currentMessages[i])*sizeof(int32_t));
 		}
 	}
 	char* _foundBackgroundFilename;
@@ -4682,7 +4684,9 @@ EASYLUAINTSETFUNCTION(advNamesPersist,advNamesPersist)
 // Some properties
 EASYLUAINTSETFUNCTIONPOSTCALL(setTextboxTopPad,textboxTopPad,applyTextboxChanges(1);)
 EASYLUAINTSETFUNCTIONPOSTCALL(setADVNameImageHeight,advNameImHeight,applyTextboxChanges(1);)
-
+// get
+EASYLUAINTGETFUNCTION(getTextDisplayMode,gameTextDisplayMode)
+	
 #define MAXIMAGECHOICEW (screenWidth*.85)
 #define PREFERREDIMAGECHOICESONSCREEN 7
 #define MAXIMAGECHOICEH (screenHeight*(1/(double)PREFERREDIMAGECHOICESONSCREEN))
@@ -5053,6 +5057,9 @@ void fontSizeSetupTouch(){
 				_nextFontReloadTime=_sTime+FONTSIZERELOADTIME;
 			}
 		}
+		if (wasJustPressed(BUTTON_BACK)){
+			break;
+		}
 		if (_fontReloadQueued && _sTime>=_nextFontReloadTime){
 			_fontReloadQueued=0;
 			reloadFont(fontSize,0);
@@ -5071,6 +5078,7 @@ void fontSizeSetupTouch(){
 		
 		endDrawing();*/
 	}
+	controlsEnd();
 	freeWrappedText(_numLines,_wrappedLines);
 	recalculateMaxLines(); // need to do this manually because it's not done by the reloadFont
 }
