@@ -161,30 +161,24 @@ void _vndsChangeScriptFiles(const char* _newFilename){
 }
 // Will always start on an avalible line
 void vndswrapper_text(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	LastLineLazyFix(&currentLine);
 	char* _gottenMessageString = nathanvariableToString(&_passedArguments[0]);
-
 	// If there's no point in adding a blank line because we have an empty ADV box.
 	char _shouldSkipSymbolLines=0;
 	if (strlen(_gottenMessageString)<=1 && currentLine==0 && gameTextDisplayMode==TEXTMODE_ADV){
 		_shouldSkipSymbolLines=1;
 	}
-
 	if (_gottenMessageString[0]=='@'){ // Line that doesn't wait for input
 		if (!_shouldSkipSymbolLines){
 			OutputLine(&(_gottenMessageString[1]),Line_ContinueAfterTyping,isSkipping);
 			currentLine++;
 			outputLineWait();
 		}
-	}else if (_gottenMessageString[0]=='!'){ // Blank line that requires button push
+	}else if (_gottenMessageString[0]=='!' || _gottenMessageString[0]=='~'){ // Blank line that does (!) or doesn't (~) require button push
 		if (!_shouldSkipSymbolLines){
 			OutputLine("\n",Line_WaitForInput,isSkipping);
 		}
-		outputLineWait();
-	}else if (_gottenMessageString[0]=='~'){ // I guess insert a blank line, don't wait for input.
-		if (!_shouldSkipSymbolLines){
-			currentMessages[currentLine][0]=0;
-			currentLine++;
+		if (_gottenMessageString[0]=='!'){ // out of the two conditions, this is the wait one
+			outputLineWait();
 		}
 	}else{ // Normal line
 		OutputLine(_gottenMessageString,Line_WaitForInput,isSkipping);

@@ -33,6 +33,7 @@
 	TODO - apply my WrapText function changes to the OutputLine function too
 	TODO - Remove limit on chars on one line
 	TODO - do all android devices have the back button
+	TODO - touch lazychoice
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -336,7 +337,7 @@ lua_State* L = NULL;
 int endType;
 int maxLines=0;
 char** currentMessages;
-int32_t** messageProps;
+int32_t** messageProps; // a line in messageProps can only be valid if its corresponding currentMessages line isn't NULLn
 int currentLine=0;
 int place=0;
 
@@ -846,8 +847,10 @@ void changeMaxLines(int _newMax){
 		// free the lines that are gone
 		int i;
 		for (i=0;i<_diff;++i){
-			free(currentMessages[i]);
-			free(messageProps[i]);
+			if (currentMessages[i]){
+				free(currentMessages[i]);
+				free(messageProps[i]);
+			}
 		}
 	}else{
 		if (maxLines!=0 && currentMessages){
@@ -855,12 +858,11 @@ void changeMaxLines(int _newMax){
 			memcpy(_newCurrentMessages,currentMessages,sizeof(char*)*maxLines);
 			memcpy(_newMessageProps,messageProps,sizeof(int32_t*)*maxLines);
 		}
-		// alloc new ones
+		// intialize new ones
 		int i;
 		for (i=maxLines;i<_newMax;++i){
-			_newCurrentMessages[i]=malloc(SINGLELINEARRAYSIZE);
-			_newCurrentMessages[i][0]='\0';
-			_newMessageProps[i]=malloc(SINGLELINEARRAYSIZE*sizeof(int32_t));
+			_newCurrentMessages[i]=NULL;
+			_newMessageProps[i]=NULL;
 		}
 	}
 	free(currentMessages);
@@ -868,6 +870,16 @@ void changeMaxLines(int _newMax){
 	maxLines=_newMax;
 	currentMessages=_newCurrentMessages;
 	messageProps=_newMessageProps;
+}
+int getADVNameYSpace(){
+	if (shouldShowADVNames()){
+		if (advNameImHeight!=-1){
+			return advNameImHeight+IMADVNAMEPOSTPAD;
+		}else{
+			return ADVNAMEOFFSET;
+		}
+	}
+	return 0;
 }
 void recalculateMaxLines(){
 	int _usableHeight;
@@ -882,14 +894,14 @@ void recalculateMaxLines(){
 // _finalLineMaxChar is the last char on the last line to draw. Must be a position inside the string, 
 void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxChar){
 	if (_maxDrawLine==-1){
-		_maxDrawLine=maxLines;
+		_maxDrawLine=maxLines-1;
 	}
 	char _oldFinalChar;
 	if (_finalLineMaxChar!=-1){
-		if (_finalLineMaxChar<strlen(currentMessages[_maxDrawLine-1])){ // Bounds check
+		if (_finalLineMaxChar<strlen(currentMessages[_maxDrawLine])){ // Bounds check
 			// Temporarily trim the string
-			_oldFinalChar = currentMessages[_maxDrawLine-1][_finalLineMaxChar+1];
-			currentMessages[_maxDrawLine-1][_finalLineMaxChar+1]='\0';
+			_oldFinalChar = currentMessages[_maxDrawLine][_finalLineMaxChar+1];
+			currentMessages[_maxDrawLine][_finalLineMaxChar+1]='\0';
 		}else{
 			_finalLineMaxChar=-1;
 		}
@@ -918,13 +930,15 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 			drawTexturePartSized(advNameImSheet,totalTextXOff(),totalTextYOff()-advNameImHeight-IMADVNAMEPOSTPAD,getOtherScaled(_nameImageInfo[3],advNameImHeight,_nameImageInfo[2]),advNameImHeight,_nameImageInfo[0],_nameImageInfo[1],_nameImageInfo[2],_nameImageInfo[3]);
 		}
 	}
-	for (i=0;i<_maxDrawLine;i++){
-		drawPropertyGameText(totalTextXOff(),totalTextYOff()+i*currentTextHeight,currentMessages[i],messageProps[i],_alpha);
+	for (i=0;i<=_maxDrawLine;i++){
+		if (currentMessages[i]){
+			drawPropertyGameText(totalTextXOff(),totalTextYOff()+i*currentTextHeight,currentMessages[i],messageProps[i],_alpha);
+		}
 	}
-	drawImageChars(_alpha,_maxDrawLine-1,_finalLineMaxChar!=-1 ? _finalLineMaxChar : INT_MAX);
+	drawImageChars(_alpha,_maxDrawLine,_finalLineMaxChar!=-1 ? _finalLineMaxChar : INT_MAX);
 	// Fix string if we trimmed it for _finalLineMaxChar
 	if (_finalLineMaxChar!=-1){
-		currentMessages[_maxDrawLine-1][_finalLineMaxChar+1]=_oldFinalChar;
+		currentMessages[_maxDrawLine][_finalLineMaxChar+1]=_oldFinalChar;
 	}
 }
 void DrawMessageBox(char _textmodeToDraw, unsigned char _targetAlpha){
@@ -1109,9 +1123,13 @@ int GenericFixSpecificVolume(int _val, double _scale){
 int FixVoiceVolume(int _val){
 	return FixVolumeArg(_val)*voiceVolume;
 }
-void addToMessageHistory(const char* _newWords){
+// must be malloc'd memory
+void addToMessageHistoryOwned(char* _newWords){
+	if (_newWords==NULL){
+		return;
+	}
 	free(messageHistory[oldestMessage]);
-	messageHistory[oldestMessage] = strdup(_newWords);
+	messageHistory[oldestMessage] = _newWords;
 	oldestMessage++;
 	if (oldestMessage==MAXMESSAGEHISTORY){
 		oldestMessage=0;
@@ -1120,23 +1138,24 @@ void addToMessageHistory(const char* _newWords){
 void clearHistory(){
 	int i;
 	for (i=0;i<MAXMESSAGEHISTORY;i++){
-		messageHistory[i][0]='\0';
+		if (messageHistory[i]){
+			messageHistory[i][0]='\0';
+		}
 	}
 }
 void ClearMessageArray(char _doFadeTransition){
 	if (textSpeed==TEXTSPEED_INSTANT){
 		_doFadeTransition=0;
 	}
-	currentLine=0;
+	// check if there are lines to clear
 	int i;
-	int _totalAddedToHistory=0;
 	for (i=0;i<maxLines;i++){
-		if (currentMessages[i][0]!='\0'){
-			addToMessageHistory(currentMessages[i]);
-			_totalAddedToHistory++;
+		if (currentMessages[i]!=NULL){
+			break;
 		}
 	}
-	if (_totalAddedToHistory!=0 && MessageBoxEnabled && !isSkipping && _doFadeTransition){ // If we actually added stuff
+	// fadeout transition if we are going to remove text
+	if (i!=maxLines && MessageBoxEnabled && !isSkipping && _doFadeTransition){
 		u64 _startTime=getMilli();
 		u64 _currentTime;
 		while ((_currentTime=getMilli())<_startTime+CLEARMESSAGEFADEOUTTIME){
@@ -1146,9 +1165,16 @@ void ClearMessageArray(char _doFadeTransition){
 			endDrawing();
 		}
 	}
-	for (i=0;i<maxLines;++i){
-		currentMessages[i][0]='\0';
+	currentLine=0;
+	// add to history. the history will free this memory later
+	for (i=0;i<maxLines;i++){
+		if (currentMessages[i]!=NULL){
+			addToMessageHistoryOwned(currentMessages[i]);
+			currentMessages[i]=NULL;
+			free(messageProps[i]);
+		}
 	}
+	//
 	for (i=0;i<MAXIMAGECHAR;i++){
 		imageCharType[i]=-1;
 	}
@@ -1163,9 +1189,6 @@ void SetAllMusicVolume(int _passedFixedVolume){
 			setMusicVolume(currentMusicHandle[i],_passedFixedVolume);
 		}
 	}
-}
-int GetNextCharOnLine(int _linenum){
-	return (const size_t)strlen((const char*)currentMessages[_linenum]);
 }
 int Password(int val, int _shouldHave){
 	if (val==_shouldHave){
@@ -1335,43 +1358,31 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	}
 	return 1;
 }
-// If the passed line index is too far down (>= maxLines), shift everything up to make room for a new line
-void LastLineLazyFix(int* _line){
-	if (*_line>=maxLines){
-		if (clearAtBottom){
-			ClearMessageArray(1);
-			*_line=0;
-		}else{
-			if (*_line>maxLines){
-				*_line=maxLines;
-			}
-			int i;
-			addToMessageHistory(currentMessages[0]);
-			for (i=1;i<maxLines;i++){
-				strcpy(currentMessages[i-1],currentMessages[i]);
-			}
-			currentMessages[maxLines-1][0]=0;
-			(*_line)--;
-
-			for (i=0;i<MAXIMAGECHAR;i++){
-				if (imageCharType[i]!=-1){
-					imageCharY[i]-=currentTextHeight;
-					// Delete image char if it goes offscreen
-					if (imageCharY[i]<0){
-						if (imageCharY[i]<(screenHeight*.20)*-1){
-							imageCharType[i]=-1;
-						}
-					}
-				}
+// _desiredLines is some 0 based index for the line you want to draw on
+// returns 0 based line index for where you can use
+void upshiftText(int _numDelLines){
+	int i;
+	int _numLeftLines = maxLines-_numDelLines;
+	// delete old lines to make room
+	for(i=0;i<_numDelLines;++i){
+		addToMessageHistoryOwned(currentMessages[i]);
+		free(messageProps[i]);
+	}
+	memmove(currentMessages,&currentMessages[_numDelLines],sizeof(char*)*_numLeftLines);
+	memmove(messageProps,&messageProps[_numDelLines],sizeof(int32_t*)*_numLeftLines);
+	// initialize the freed spaces
+	for (i=_numLeftLines;i<maxLines;++i){
+		currentMessages[i]=NULL;		
+	}
+	// shift image chars up
+	for (i=0;i<MAXIMAGECHAR;i++){
+		if (imageCharType[i]!=-1){
+			imageCharY[i]-=currentTextHeight*_numDelLines;
+			imageCharLines[i]-=_numDelLines;
+			if (imageCharLines[i]<0){
+				imageCharType[i]=-1;
 			}
 		}
-	}
-}
-void changeIfLazyLastLineFix(int* _line, int* _toChange){
-	int _cacheLine = *_line;
-	LastLineLazyFix(_line);
-	if (*_line!=_cacheLine){
-		(*_toChange)-=(_cacheLine-*_line);
 	}
 }
 void updateBust(bust* _target, u64 _curTime){
@@ -1804,7 +1815,6 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 		if (_realLines!=NULL){
 			*_realLines=NULL;
 		}
-		free(_workable);
 		return;
 	}
 	int _lastNewline = -1; // Index
@@ -2129,15 +2139,7 @@ void applyTextboxChanges(char _doRecalcMaxLines){
 	}else{
 		currentBoxAlpha=preferredBoxAlpha;
 	}
-	if (shouldShowADVNames()){
-		if (advNameImHeight!=-1){
-			messageInBoxYOffset=advNameImHeight+IMADVNAMEPOSTPAD;
-		}else{
-			messageInBoxYOffset=ADVNAMEOFFSET;
-		}
-	}else{
-		messageInBoxYOffset=0;
-	}
+	messageInBoxYOffset=getADVNameYSpace();
 	// Apply textOnlyOverBackground setting
 	if (textOnlyOverBackground==0){
 		textboxXOffset=0;
@@ -2346,7 +2348,7 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLi
 			// Draw the changes
 			startDrawing();
 			drawAdvanced(1,1,1,1,1,0); // Don't draw message text during transitions
-			if (_maxDrawLine!=0){
+			if (_maxDrawLine>=0){
 				DrawMessageText(255,_maxDrawLine,-1);
 			}
 			endDrawing();
@@ -2356,27 +2358,28 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLi
 	applyTextboxChanges(1);
 }
 // _overrideNewHeight is in lines
+// pass a negative number other than -1 to not do fancy transition
 void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
 	if (_maxDrawLine==-1){
-		_maxDrawLine=maxLines;
+		_maxDrawLine=maxLines-1;
 	}
 	int _newAdvBoxHeight;
 	if (_overrideNewHeight==-1){
-		_newAdvBoxHeight=1; // One extra line to be safe
-		short i;
+		// find the number of used lines
+		_newAdvBoxHeight=1; // By default one
+		int i;
 		for (i=0;i<maxLines;++i){
-			if (currentMessages[i][0]!='\0'){
-				_newAdvBoxHeight=i+2; // Last non-empty line. Adding 1 is for the free line, adding another 1 is because line index is 0 based.
+			if (currentMessages[i]){
+				_newAdvBoxHeight=i+2; // Last non-empty line. Adding 1 is for one-based number, adding the other 1 is for safety line
 			}
 		}		
 		_newAdvBoxHeight*=currentTextHeight;
 	}else{
 		_newAdvBoxHeight = _overrideNewHeight*currentTextHeight;
 	}
-	if (shouldShowADVNames()){
-		_newAdvBoxHeight+=ADVNAMEOFFSET;
-	}
-	if (_maxDrawLine!=0){
+	_newAdvBoxHeight+=getADVNameYSpace();
+	_newAdvBoxHeight+=textboxTopPad;
+	if (_maxDrawLine>=0){
 		smoothADVBoxHeightTransition(advboxHeight,_newAdvBoxHeight,_maxDrawLine);
 	}else{
 		advboxHeight=_newAdvBoxHeight;
@@ -2387,7 +2390,7 @@ void enableVNDSADVMode(){
 	gameTextDisplayMode=TEXTMODE_ADV;
 	dynamicAdvBoxHeight=1;
 	loadADVBox();
-	updateDynamicADVBox(0,-1);
+	updateDynamicADVBox(-2,-1);
 	applyTextboxChanges(1);
 }
 void disableVNDSADVMode(){
@@ -2942,31 +2945,57 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (!MessageBoxEnabled){
 		showTextbox();
 	}
-	int _currentDrawChar = strlen(currentMessages[currentLine]);
-	int _currentDrawLine=currentLine;
-	char* message = malloc(strlen(_tempMsg)+strlen(currentMessages[currentLine])+1);	
-	// This will make the start of the message have whatever the start of the line says.
-	// For example, if the line we're writing to already has "Keiichi is an idiot" written on it, that will be copied to the start of this message.
-	strcpy(message,currentMessages[currentLine]);
-	strcat(message,_tempMsg);
-
+	int _currentDrawChar;
+	char* message;
+	if (currentLine<maxLines && currentMessages[currentLine]!=NULL){ // if required, prepend what was already on the line
+		_currentDrawChar=strlen(currentMessages[currentLine]);
+		message = malloc(strlen(_tempMsg)+strlen(currentMessages[currentLine])+1);
+		strcpy(message,currentMessages[currentLine]);
+		strcat(message,_tempMsg);
+	}else{
+		_currentDrawChar=0;
+		message = strdup(_tempMsg);
+	}
 	int _numLines;
 	wrapTextAdvanced(&message,&_numLines,NULL,outputLineScreenWidth-MESSAGEEDGEOFFSET-messageInBoxXOffset,1);
 	if (_numLines==0){
 		goto cleanup;
 	}
+	int _destCurLine = currentLine+(_numLines-1);
+	if (dynamicAdvBoxHeight){
+		updateDynamicADVBox(-1,_destCurLine+1);
+	}
+	// fix if we're going to overflow maxLines
+	if (_destCurLine>=maxLines){
+		if (clearAtBottom){
+			ClearMessageArray(1);
+			currentLine=0;
+		}else{
+			int _delLines = maxLines-_destCurLine+1;
+			upshiftText(_delLines);
+			currentLine-=_delLines;
+		}
+	}
+	//
+	int _currentDrawLine=currentLine;
 	int _nextCopyIndex=0;
 	int i;
 	for (i=0;i<_numLines;++i){
-		strcpy(currentMessages[currentLine++],&(message[_nextCopyIndex]));
-		_nextCopyIndex += 1+strlen(&(message[_nextCopyIndex]));
-	}
-	if (dynamicAdvBoxHeight){
-		// If not VNDS, there is a chance _currentDrawLine won't represent the next line, so we need to make sure we're actually drawing the _currentDrawLine and that it doesn't draw newly added text.
-		char _archivedCharacter = currentMessages[_currentDrawLine][_currentDrawChar];
-		currentMessages[_currentDrawLine][_currentDrawChar] = '\0';
-		updateDynamicADVBox(_currentDrawLine+1,currentLine+2);
-		currentMessages[_currentDrawLine][_currentDrawChar] = _archivedCharacter;
+		if (i==0){
+			// free the first line first because we're redoing it
+			if (currentMessages[currentLine]){
+				free(currentMessages[currentLine]);
+				free(messageProps[currentLine]);
+			}
+		}else{
+			currentLine++;
+		}
+		int _lineLen = strlen(&(message[_nextCopyIndex]));
+		messageProps[currentLine] = malloc(sizeof(int32_t)*_lineLen);
+		memset(messageProps[currentLine],0,_lineLen*sizeof(int32_t));
+		currentMessages[currentLine] = malloc(_lineLen+1);
+		memcpy(currentMessages[currentLine],&(message[_nextCopyIndex]),_lineLen+1);
+		_nextCopyIndex += 1+_lineLen;
 	}
 	#if GBPLAT == GB_3DS
 		int _oldMessageXOffset=textboxXOffset;
@@ -2981,13 +3010,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		}
 	#endif
 	char _slowTextSpeed=0;
-	while(_isDone==0){
-		// The first one that takes two bytes is U+0080, or 0xC2 0x80
-		// If it is a two byte character, we don't want to try and draw when there's only one byte. Skip to include the next one.
-		if (currentMessages[_currentDrawLine][_currentDrawChar]>=0xC2){
-			_currentDrawChar++;
-		}
-
+	while(!_isDone){
 		controlsStart();
 		if (proceedPressed()){
 			_isDone=1;
@@ -3003,15 +3026,26 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 			}
 		#endif
 		if (MessageBoxEnabled==1){
-			DrawMessageText(255,_currentDrawLine+1,_currentDrawChar);
+			DrawMessageText(255,_currentDrawLine,_currentDrawChar);
 		}
 		endDrawing();
 		if (_isDone==0 && ( (textSpeed>0) || (_slowTextSpeed++ == abs(textSpeed)) )){
 			_slowTextSpeed=0;
 			for (i=0;i<(textSpeed>0 ? textSpeed : 1);i++){
 				_currentDrawChar++;
-				// If the next char we're about to display is the end of the line
-				if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){
+				// if it's not ASCII, skip to end of UTF-8 character
+				if ((unsigned char)(currentMessages[_currentDrawLine][_currentDrawChar])>0x7F){ // this is same as checking if last bit is on
+					// https://tools.ietf.org/html/rfc3629
+					// the number of bits on the left set to 1 determintes number of bytes
+					unsigned char _firstByte = currentMessages[_currentDrawLine][_currentDrawChar];
+					if ((_firstByte & 0xF0) == 0xF0){
+						_currentDrawChar+=3;
+					}else if ((_firstByte & 0xE0) == 0xE0){
+						_currentDrawChar+=2;
+					}else if ((_firstByte & 0xC0) == 0xC0){
+						_currentDrawChar++;
+					}
+				}else if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){ // If the next char we're about to display is the end of the line
 					_currentDrawLine++;
 					// If we just passed the line we'll be writing to next time then we're done
 					if (_currentDrawLine==currentLine+1){
@@ -3265,8 +3299,11 @@ void historyMenu(){
 		Draw(0);
 		drawRectangle(textboxXOffset,0,outputLineScreenWidth,screenHeight,0,0,0,150);
 		int i;
-		for (i = 0; i < HISTORYONONESCREEN; i++){
-			gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*currentTextHeight,messageHistory[FixHistoryOldSub(i+_scrollOffset,oldestMessage)],255,255,255);
+		for (i=0;i<HISTORYONONESCREEN;i++){
+			int _arrIndex = FixHistoryOldSub(i+_scrollOffset,oldestMessage);
+			if (messageHistory[_arrIndex]){
+				gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*currentTextHeight,messageHistory[_arrIndex],255,255,255);
+			}
 		}
 		if (outputLineScreenWidth == screenWidth){
 			gbDrawText(normalFont,3,screenHeight-currentTextHeight-5,"TEXTLOG",0,0,0);
@@ -3799,14 +3836,19 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 		_readMaxLines=maxLines;
 	}else{ // Zero the extra space lines
 		for (i=_readMaxLines;i<maxLines;++i){
-			currentMessages[i][0]='\0';
+			free(currentMessages[i]);
+			currentMessages[i]=NULL;
 		}
 	}
 	// Read the lines
 	for (i=0;i<_readMaxLines;i++){
-		char* _tempReadLine = readLengthStringFromFile(fp); //
-		strcpy(&(currentMessages[i][0]),_tempReadLine);
-		free(_tempReadLine);
+		currentMessages[i] = readLengthStringFromFile(fp);
+		if (currentMessages[i][0]=='\0'){
+			free(currentMessages[i]);
+			currentMessages[i]=NULL;
+		}else{
+			messageProps[i] = malloc(strlen(currentMessages[i])*sizeof(int32_t));
+		}
 	}
 	char* _foundBackgroundFilename;
 	_foundBackgroundFilename = readLengthStringFromFile(fp); //
@@ -3868,7 +3910,7 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 	controlsReset();
 
 	if (gameTextDisplayMode==TEXTMODE_ADV && dynamicAdvBoxHeight){
-		updateDynamicADVBox(0,-1);
+		updateDynamicADVBox(-2,-1);
 	}
 
 	// Open
@@ -4412,6 +4454,7 @@ void scriptFadeSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 //			Choice result is zero based
 //				First choice is zero, second is one
 void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	controlsReset();
 	int _totalOptions = nathanvariableToInt(&_passedArguments[0]);
 	char* noobOptions[_totalOptions];
 	int i;
