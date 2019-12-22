@@ -33,7 +33,6 @@
 	TODO - apply my WrapText function changes to the OutputLine function too
 	TODO - Remove limit on chars on one line
 	TODO - do all android devices have the back button
-	TODO - touch lazychoice
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -144,9 +143,6 @@ char* vitaAppId="HIGURASHI";
 #define SAVEMENUPAGESIZE (SAVEMENUPAGEW*SAVEMENUPAGEH)
 #define MAXSAVESLOT 258 // Divisible by 6
 #define VNDSSAVESELSLOTPREFIX "Slot "
-
-#define DROPSHADOWOFFX 1
-#define DROPSHADOWOFFY 1
 
 // showMenu
 // ratio of screen width that the text will scroll in one second
@@ -462,6 +458,8 @@ crossFont normalFont=NULL;
 double fontSize=-10; // default value < 0
 int currentTextHeight;
 int singleSpaceWidth;
+int dropshadowOffX; // calculated by reloadFont
+int dropshadowOffY;
 #if GBPLAT == GB_VITA
 	pthread_t soundProtectThreadId;
 	void* _loadedFontBuffer=NULL;
@@ -772,9 +770,9 @@ crossTexture LoadEmbeddedPNG(const char* path){
 void drawDropshadowTextSpecific(int _x, int _y, const char* _message, int _r, int _g, int _b, int _dropshadowR, int _dropshadowG, int _dropshadowB, int _a){
 	#if GBPLAT == GB_VITA
 		struct goodbrewfont* _realFont = (struct goodbrewfont*)normalFont;
-		vita2d_font_draw_text_dropshadow(_realFont->data,_x,_y+textHeight(normalFont),RGBA8(_r,_g,_b,_a),_realFont->size,_message,DROPSHADOWOFFX,DROPSHADOWOFFY,RGBA8(_dropshadowR,_dropshadowG,_dropshadowB,_a));
+		vita2d_font_draw_text_dropshadow(_realFont->data,_x,_y+textHeight(normalFont),RGBA8(_r,_g,_b,_a),_realFont->size,_message,dropshadowOffX,dropshadowOffY,RGBA8(_dropshadowR,_dropshadowG,_dropshadowB,_a));
 	#else
-		gbDrawTextAlpha(normalFont,_x+DROPSHADOWOFFX,_y+DROPSHADOWOFFY,_message,_dropshadowR,_dropshadowG,_dropshadowB,_a);
+		gbDrawTextAlpha(normalFont,_x+dropshadowOffX,_y+dropshadowOffY,_message,_dropshadowR,_dropshadowG,_dropshadowB,_a);
 		gbDrawTextAlpha(normalFont,_x,_y,_message,_r,_g,_b,_a);
 	#endif
 }
@@ -1010,6 +1008,13 @@ void reloadFont(double _passedSize, char _recalcMaxLines){
 	if (_recalcMaxLines){
 		recalculateMaxLines();
 	}
+	if (_passedSize>=33){
+		dropshadowOffX=2;
+		dropshadowOffY=2;
+	}else{
+		dropshadowOffX=1;
+		dropshadowOffY=1;
+	}
 }
 void globalLoadFont(const char* _filename){
 	changeMallocString(&currentFontFilename,_filename);
@@ -1106,6 +1111,10 @@ int LazyChoicef(const char* _formatString, ...){
 				_choice = (_tx>=screenWidth/2);
 				break;
 			}
+		}
+		if (wasJustPressed(BUTTON_BACK)){ // auto "no" if press back
+			_choice=1;
+			break;
 		}
 		_choice = retMenuControlsLow(_choice,0,0,1,1,0,1);
 		controlsEnd();
