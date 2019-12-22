@@ -127,6 +127,9 @@ char* vitaAppId="HIGURASHI";
 #define TEXTBOXFADEOUTTIME 200 // In milliseconds
 #define TEXTBOXFADEINTIME 150
 ////////////////////////////////////
+#define COLORMARKUPSTART "<color=#"
+#define COLORMARKUPEND "</color>"
+////////////////////////////////////
 #define MAXMUSICARRAY 10
 #define MAXSOUNDEFFECTARRAY 10
 #define MESSAGEEDGEOFFSET 10
@@ -1817,6 +1820,28 @@ void LoadPreset(char* filename){
 	free(_lastReadLine);
 	crossfclose(fp);
 }
+void readRGBString(char* _message, unsigned char* r, unsigned char* g, unsigned char* b){
+	char _tempNumBuffer[3];
+	_tempNumBuffer[2]='\0';
+	int i=0;
+	char j;
+	for (j=0;j<3;++j){
+		_tempNumBuffer[0]=_message[i++];
+		_tempNumBuffer[1]=_message[i++];
+		int _parsedValue = strtol(_tempNumBuffer,NULL,16);
+		switch(j){
+			case 0:
+				*r=_parsedValue;
+				break;
+			case 1:
+				*g=_parsedValue;
+				break;
+			case 2:
+				*b=_parsedValue;
+				break;
+		}
+	}
+}
 void drawWrappedText(int _x, int _y, char** _passedLines, int _numLines, unsigned char r, unsigned char g, unsigned char b, unsigned char a){
 	int i;
 	for (i=0;i<_numLines;++i){
@@ -1837,7 +1862,7 @@ void freeWrappedText(int _numLines, char** _passedLines){
 	free(_passedLines);
 }
 // _workable must be made with malloc. its buffer may be changed
-void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines, int _maxWidth, char _isStoryText){
+void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines, int _maxWidth, int32_t* _propBuff){
 	unsigned char* _workable = (unsigned char*)(*_passedMessage);
 	int _cachedStrlen = strlen(_workable);
 	if (_cachedStrlen==0){
@@ -1847,7 +1872,9 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 		}
 		return;
 	}
+	int _lastPropSet=-1; // only set properties if at index greater than this one
 	int _lastNewline = -1; // Index
+	int32_t _curProp=0;
 	int i;
 	for (i=0;i<_cachedStrlen;++i){
 		if (_workable[i]=='\n'){
@@ -1907,27 +1934,53 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 					_lastNewline=j;
 				}
 				// No matter what we did, we'll still need to start our check from the last new line
+				// _lastPropSet keeps properties from being overwritten
 				i=_lastNewline;
 			}else{
 				if (_workable[i]=='\0'){ // Fix chop if happened
 					_workable[i]=' ';
 				}
 			}
-		}else if (_isStoryText){
+		}else if (_propBuff!=NULL){
 			// Don't do special checks if it is a normal English ASCII character
 			// Here we have special checks for stuff like image characters and new lines.
 			if (_workable[i]<65 || _workable[i]>122){
 				if (_workable[i]=='<'){
-					char* _endPos = strchr(&(_workable[i]),'>');
-					if (_endPos!=NULL){
-						int _deltaChars = (_endPos-(char*)&(_workable[i]));
-						memset(&(_workable[i]),1,_deltaChars+1); // Because this starts at i, k being 11 with i as 10 would just write 1 byte, therefor missing the end '>'. THe fix is to add one.
-						i+=(_deltaChars-1);
+					char _foundMarkup=0;
+					if (strncmp(&_workable[i],COLORMARKUPSTART,strlen(COLORMARKUPSTART))==0){
+						int _startI=i;
+						i+=strlen(COLORMARKUPSTART);
+						if (i+6+strlen(COLORMARKUPEND)<_cachedStrlen){
+							_curProp=0;
+							readRGBString(&_workable[i],(char*)&_curProp,((char*)&_curProp)+1,((char*)&_curProp)+2);
+							i+=6;
+							if (_workable[i]!='>'){
+								puts("parsing color markup failed");
+								i-=6;
+								_curProp=0;
+							}else{
+								*(((char*)&_curProp)+3)=TEXTPROP_COLORED;
+								_foundMarkup=1;
+								memset(&_workable[_startI],1,strlen(COLORMARKUPSTART)+6+1);
+								i=_startI;
+							}
+						}
+					}else if (strncmp(&_workable[i],COLORMARKUPEND,strlen(COLORMARKUPEND))==0){
+						memset(&_workable[i],1,strlen(COLORMARKUPEND));
+						_curProp=0;
+						_foundMarkup=1;
+					}
+					//_propBuff
+					if (!_foundMarkup){
+						char* _endPos = strchr(&(_workable[i]),'>');
+						if (_endPos!=NULL){
+							int _deltaChars = (_endPos-(char*)&(_workable[i]));
+							memset(&(_workable[i]),1,_deltaChars+1); // Because this starts at i, k being 11 with i as 10 would just write 1 byte, therefor missing the end '>'. THe fix is to add one.
+						}
 					}
 				}else if (_workable[i]==226 && _workable[i+1]==128 && _workable[i+2]==148){ // Weird hyphen replace
-					memset(&(_workable[i]),45,1); // Replace it with a normal hyphen
+					_workable[i]='-'; // Replace it with a normal hyphen
 					memset(&(_workable[i+1]),1,2); // Replace these with value 1
-					i=i+2;
 				}else if (_workable[i]==226){ // COde for special image character
 					unsigned char _imagechartype;
 					if (_workable[i+1]==153 && _workable[i+2]==170){ // ♪
@@ -1955,14 +2008,19 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 								memset(&(_workable[i]),1,3);
 								if (_numSpaces<=3){
 									memset(&(_workable[i]),' ',_numSpaces);
-								}else{
+								}else{ // realloc for extra space for spaces
 									int _numAdded = (_numSpaces-3);
 									_cachedStrlen+=_numAdded;
 									_workable = realloc(_workable,_cachedStrlen+1);
+									_propBuff = realloc(_propBuff,(_cachedStrlen+1)*sizeof(int32_t));
 									memmove(&_workable[i+_numAdded],&_workable[i],_cachedStrlen-i-_numAdded+1); // move the null char also
-									memset(&_workable[i],' ',_numSpaces);
+									// put spaces into the new memory
+									int k;
+									for (k=0;k<_numSpaces;++k){
+										_workable[i]=' ';
+										_propBuff[i]=_curProp;
+									}
 								}
-								i+=(_numSpaces-1);
 								break;
 							}
 						}
@@ -2015,6 +2073,10 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 				}
 			}
 		}
+		if (_propBuff && i>_lastPropSet){
+			_lastPropSet=i;
+			_propBuff[i]=_curProp;
+		}
 	}
 	*_passedMessage = _workable;
 	// fheuwfhuew (\0) ffhuehfu (\0) fheuhfueiwf (\0)
@@ -2035,7 +2097,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 }
 void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, int _maxWidth){
 	char* _workable = strdup(_passedMessage);
-	wrapTextAdvanced(&_workable,_numLines,_realLines,_maxWidth,0);
+	wrapTextAdvanced(&_workable,_numLines,_realLines,_maxWidth,NULL);
 	free(_workable);
 }
 void easyMessage(const char** _passedMessage, int _numLines, char _doWait){
@@ -2959,6 +3021,18 @@ void GenericPlayGameSound(int passedSlot, const char* filename, int unfixedVolum
 		lastVoiceSlot=passedSlot;
 	}
 }
+void strcpyNO1WithProps(char* dest, const char* src, int32_t* _destmap, int32_t* _srcmap){
+	int i;
+	int _destCopyOffset=0;
+	int _srcStrlen = strlen(src);
+	for (i=0;i<_srcStrlen;i++){
+		if (src[i]!=1){
+			_destmap[_destCopyOffset]=_srcmap[i];
+			dest[_destCopyOffset++]=src[i];
+		}
+	}
+	dest[_destCopyOffset++]=0;
+}
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
 	if (strlen(_tempMsg)==0){
 		return;
@@ -2981,7 +3055,8 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		message = strdup(_tempMsg);
 	}
 	int _numLines;
-	wrapTextAdvanced(&message,&_numLines,NULL,getOutputLineScreenWidth(),1);
+	int32_t* _wrappedProps = malloc(strlen(message)*sizeof(int32_t));
+	wrapTextAdvanced(&message,&_numLines,NULL,getOutputLineScreenWidth(),_wrappedProps);
 	if (_numLines==0){
 		goto cleanup;
 	}
@@ -3025,12 +3100,11 @@ transferMoreLines:
 		if (currentLine==maxLines){ // don't overflow if we have too many lines.
 			break;
 		}
-		int _lineLen = strlen(&(message[_nextCopyIndex]));
+		int _lineLen = strlenNO1(&(message[_nextCopyIndex]));
 		messageProps[currentLine] = malloc(sizeof(int32_t)*_lineLen);
-		memset(messageProps[currentLine],0,_lineLen*sizeof(int32_t));
 		currentMessages[currentLine] = malloc(_lineLen+1);
-		memcpy(currentMessages[currentLine],&(message[_nextCopyIndex]),_lineLen+1);
-		_nextCopyIndex += 1+_lineLen;
+		strcpyNO1WithProps(currentMessages[currentLine],&(message[_nextCopyIndex]),messageProps[currentLine],&(_wrappedProps[_nextCopyIndex]));
+		_nextCopyIndex += 1+strlen(&(message[_nextCopyIndex]));
 	}
 	char _isDone=_autoskip;
 	char _slowTextSpeed=0;
@@ -3090,8 +3164,8 @@ transferMoreLines:
 		goto transferMoreLines;
 	}
 cleanup:
-	// End of function
 	free(message);
+	free(_wrappedProps);
 	endType = _endtypetemp;
 }
 #if GBPLAT == GB_3DS
@@ -4136,8 +4210,6 @@ void resetADVNameColor(){
 	advNameG=255;
 	advNameB=255;
 }
-#define COLORMARKUPSTART "<color=#"
-#define COLORMARKUPEND "</color>"
 // pass NULL to clear
 void setADVName(char* _newName){
 	resetADVNameColor();
@@ -4156,27 +4228,9 @@ void setADVName(char* _newName){
 			if (_newName[i]=='<'){
 				if (strncmp(&(_newName[i]),COLORMARKUPSTART,strlen(COLORMARKUPSTART))==0){
 					i+=strlen(COLORMARKUPSTART);
-					if (i+8+strlen(COLORMARKUPEND)<_cachedStrlen){
-						// Load RGB
-						char _tempNumBuffer[3];
-						_tempNumBuffer[2]='\0';
-						char j;
-						for (j=0;j<3;++j){
-							_tempNumBuffer[0]=_newName[i++];
-							_tempNumBuffer[1]=_newName[i++];
-							int _parsedValue = strtol(_tempNumBuffer,NULL,16);
-							switch(j){
-								case 0:
-									advNameR=_parsedValue;
-									break;
-								case 1:
-									advNameG=_parsedValue;
-									break;
-								case 2:
-									advNameB=_parsedValue;
-									break;
-							}
-						}
+					if (i+6+strlen(COLORMARKUPEND)<_cachedStrlen){
+						readRGBString(&_newName[i],&advNameR,&advNameG,&advNameB);
+						i+=6;
 						char* _endPos = strstr(_newName,COLORMARKUPEND);
 						if (_newName[i]=='>' && _endPos!=NULL){ 
 							_endPos[0]='\0';
