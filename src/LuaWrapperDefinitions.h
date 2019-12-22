@@ -126,6 +126,7 @@ void initLuaWrappers(){
 	PUSHEASYLUAINTSETFUNCTION(setADVNameSupport)
 	PUSHEASYLUAINTSETFUNCTION(advNamesPersist)
 	PUSHEASYLUAINTSETFUNCTION(setTextboxTopPad)
+	PUSHEASYLUAINTSETFUNCTION(setTextboxBottomPad)
 	PUSHEASYLUAINTSETFUNCTION(setADVNameImageHeight)
 	// get
 	PUSHEASYLUAINTSETFUNCTION(getTextDisplayMode)
@@ -134,6 +135,7 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptDebugFile,"Debugfile")
 	PUSHLUAWRAPPER(scriptMoveBust,"MoveBust")
 	PUSHLUAWRAPPER(scriptImageChoice,"ImageChoice")
+	LUAREGISTER(L_setDropshadowColor,"setDropshadowColor")
 	// Exclusive lua only vnds interaction commands
 	LUAREGISTER(L_setVNDSVar,"setVNDSVar")
 	LUAREGISTER(L_settleBust,"settleBust")

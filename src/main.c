@@ -30,6 +30,9 @@
 	TODO - textbox alpha should change with background alpha
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
+	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
+	TODO - image char positioning is bad
+		if image char is found before line break everything is ruined
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -461,6 +464,9 @@ int currentTextHeight;
 int singleSpaceWidth;
 int dropshadowOffX; // calculated by reloadFont
 int dropshadowOffY;
+unsigned char dropshadowR=0;
+unsigned char dropshadowG=0;
+unsigned char dropshadowB=0;
 #if GBPLAT == GB_VITA
 	pthread_t soundProtectThreadId;
 	void* _loadedFontBuffer=NULL;
@@ -479,6 +485,7 @@ int outputLineScreenHeight;
 int messageInBoxXOffset=10;
 int messageInBoxYOffset=0;
 int textboxTopPad=12; // formerly STUPIDTEXTYOFF
+int textboxBottomPad=0;
 // 1 by default to retain compatibility with games converted before game specific Lua 
 char gameHasTips=1;
 char textOnlyOverBackground=1;
@@ -783,7 +790,7 @@ void drawDropshadowText(int _x, int _y, char* _message, int _a){
 // Draw text intended to be used for the game, respects dropshadow setting
 void drawTextGame(int _x, int _y, char* _message, unsigned char r, unsigned char g, unsigned char b, unsigned char _alpha){
 	if (dropshadowOn){
-		drawDropshadowTextSpecific(_x,_y,_message,r,g,b,0,0,0,_alpha);
+		drawDropshadowTextSpecific(_x,_y,_message,r,g,b,dropshadowR,dropshadowG,dropshadowB,_alpha);
 	}else{
 		gbDrawTextAlpha(normalFont,_x,_y,_message,r,g,b,_alpha);
 	}
@@ -824,7 +831,7 @@ void drawPropertyGameText(int _x, int _y, char* _message, int32_t* _props, unsig
 	drawPropertyStreakText(_x,_y,&_message[_lastStrEnd],_curProps,_alpha);
 }
 int imageCharW(signed char _type){
-	return getOtherScaled(getTextureHeight(imageCharImages[_type]),currentTextHeight,getTextureWidth(imageCharImages[_type]));	
+	return getOtherScaled(getTextureHeight(imageCharImages[_type]),currentTextHeight,getTextureWidth(imageCharImages[_type]));
 }
 void drawImageChars(unsigned char _alpha, int _maxDrawLine, int _maxDrawLineChar){
 	int i;
@@ -885,13 +892,7 @@ int getADVNameYSpace(){
 	return 0;
 }
 void recalculateMaxLines(){
-	int _usableHeight;
-	if (gameTextDisplayMode==TEXTMODE_ADV){
-		// TODO - look here this is importnat right here
-		_usableHeight=outputLineScreenHeight-totalTextYOff();
-	}else{ // for nvl mode, apply the same bottom padding as we have top padding
-		_usableHeight=outputLineScreenHeight-totalTextYOff()*2;
-	}
+	int _usableHeight = outputLineScreenHeight-totalTextYOff()-textboxBottomPad;
 	changeMaxLines(_usableHeight/currentTextHeight);
 }
 // Number of lines to draw is not zero based
@@ -1862,7 +1863,8 @@ void freeWrappedText(int _numLines, char** _passedLines){
 	free(_passedLines);
 }
 // _workable must be made with malloc. its buffer may be changed
-void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines, int _maxWidth, int32_t* _propBuff){
+void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines, int _maxWidth, int32_t** _propRet){
+	int32_t* _propBuff = (_propRet!=NULL ? *_propRet : NULL);
 	unsigned char* _workable = (unsigned char*)(*_passedMessage);
 	int _cachedStrlen = strlen(_workable);
 	if (_cachedStrlen==0){
@@ -1872,6 +1874,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 		}
 		return;
 	}
+	int _internalNewLines=0;
 	int _lastPropSet=-1; // only set properties if at index greater than this one
 	int _lastNewline = -1; // Index
 	int32_t _curProp=0;
@@ -1880,6 +1883,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 		if (_workable[i]=='\n'){
 			_workable[i]='\0';
 			_lastNewline=i;
+			_internalNewLines++;
 		}else if (_workable[i]==' ' || i==_cachedStrlen-1){
 			if (_workable[i]==' '){ // Because alt condition				
 				_workable[i]='\0'; // Chop the string for textWidth function
@@ -1936,6 +1940,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 				// No matter what we did, we'll still need to start our check from the last new line
 				// _lastPropSet keeps properties from being overwritten
 				i=_lastNewline;
+				_internalNewLines++;
 			}else{
 				if (_workable[i]=='\0'){ // Fix chop if happened
 					_workable[i]=' ';
@@ -1999,35 +2004,30 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 								_workable[i]='\0'; // So we can use textWidth
 								int _cachedW = imageCharW(_imagechartype);
 								int _numSpaces = ceil(_cachedW/(double)singleSpaceWidth);
-								imageCharX[j] = textWidth(normalFont,&(_workable[_lastNewline+1]))+totalTextXOff()+easyCenter(_cachedW,_numSpaces*singleSpaceWidth);
-								imageCharY[j] = totalTextYOff()+currentLine*currentTextHeight;
+								imageCharX[j] = totalTextXOff()+textWidth(normalFont,&(_workable[_lastNewline+1]))+easyCenter(_cachedW,_numSpaces*singleSpaceWidth);
+								imageCharY[j] = totalTextYOff()+(currentLine+_internalNewLines)*currentTextHeight;
 								imageCharLines[j] = currentLine;
 								imageCharCharPositions[j] = strlenNO1(&(_workable[_lastNewline+1]));
 								imageCharType[j] = _imagechartype;
 								// set all these 3 image char bytes to be skipped
 								memset(&(_workable[i]),1,3);
-								if (_numSpaces<=3){
-									memset(&(_workable[i]),' ',_numSpaces);
-								}else{ // realloc for extra space for spaces
+								if (_numSpaces>3){ // realloc for extra space for spaces
 									int _numAdded = (_numSpaces-3);
 									_cachedStrlen+=_numAdded;
 									_workable = realloc(_workable,_cachedStrlen+1);
 									_propBuff = realloc(_propBuff,(_cachedStrlen+1)*sizeof(int32_t));
-									memmove(&_workable[i+_numAdded],&_workable[i],_cachedStrlen-i-_numAdded+1); // move the null char also
-									// put spaces into the new memory
-									int k;
-									for (k=0;k<_numSpaces;++k){
-										_workable[i]=' ';
-										_propBuff[i]=_curProp;
-									}
+									memmove(&_workable[i+_numAdded],&_workable[i],_cachedStrlen-i-_numAdded+1); // move the null char also	
+								}
+								// put the number of spaces we need
+								int k;
+								for (k=0;k<_numSpaces;++k){
+									_workable[i+k]=' ';
+									_propBuff[i+k]=_curProp;
 								}
 								break;
 							}
 						}
 					}
-				}else if (_workable[i]=='\n'){
-					_workable[i]='\0';
-					_lastNewline=i;
 				}
 			}else{
 				//http://jafrog.com/2013/11/23/colors-in-terminal.html
@@ -2077,6 +2077,9 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 			_lastPropSet=i;
 			_propBuff[i]=_curProp;
 		}
+	}
+	if (_propRet){
+		*_propRet=_propBuff;
 	}
 	*_passedMessage = _workable;
 	// fheuwfhuew (\0) ffhuehfu (\0) fheuhfueiwf (\0)
@@ -2467,6 +2470,7 @@ void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
 	}
 	_newAdvBoxHeight+=getADVNameYSpace();
 	_newAdvBoxHeight+=textboxTopPad;
+	_newAdvBoxHeight+=textboxBottomPad;
 	if (_maxDrawLine>=0){
 		smoothADVBoxHeightTransition(advboxHeight,_newAdvBoxHeight,_maxDrawLine);
 	}else{
@@ -3056,7 +3060,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	}
 	int _numLines;
 	int32_t* _wrappedProps = malloc(strlen(message)*sizeof(int32_t));
-	wrapTextAdvanced(&message,&_numLines,NULL,getOutputLineScreenWidth(),_wrappedProps);
+	wrapTextAdvanced(&message,&_numLines,NULL,getOutputLineScreenWidth(),&_wrappedProps);
 	if (_numLines==0){
 		goto cleanup;
 	}
@@ -3476,6 +3480,13 @@ void generateADVBoxPath(char* _passedStringBuffer, char* _passedSystemString){
 	strcat(_passedStringBuffer,_passedSystemString);
 	strcat(_passedStringBuffer,".png");
 }
+void _loadDefaultADVBox(){
+	#if GBPLAT != GB_3DS
+		currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBox.png");
+	#else
+		currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBoxLowRes.png");
+	#endif
+}
 void loadADVBox(){
 	if (currentCustomTextbox!=NULL){
 		freeTexture(currentCustomTextbox);
@@ -3489,11 +3500,7 @@ void loadADVBox(){
 	if (checkFileExist(_tempFilepathBuffer)){
 		currentCustomTextbox = loadImage(_tempFilepathBuffer);
 	}else{
-		#if GBPLAT != GB_3DS
-			currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBox.png");
-		#else
-			currentCustomTextbox = LoadEmbeddedPNG("assets/DefaultAdvBoxLowRes.png");
-		#endif
+		_loadDefaultADVBox();
 	}
 	applyTextboxChanges(1);
 }
@@ -4759,6 +4766,7 @@ EASYLUAINTSETFUNCTION(setADVNameSupport,advNamesSupported)
 EASYLUAINTSETFUNCTION(advNamesPersist,advNamesPersist)
 // Some properties
 EASYLUAINTSETFUNCTIONPOSTCALL(setTextboxTopPad,textboxTopPad,applyTextboxChanges(1);)
+EASYLUAINTSETFUNCTIONPOSTCALL(setTextboxBottomPad,textboxBottomPad,applyTextboxChanges(1);)
 EASYLUAINTSETFUNCTIONPOSTCALL(setADVNameImageHeight,advNameImHeight,applyTextboxChanges(1);)
 // get
 EASYLUAINTGETFUNCTION(getTextDisplayMode,gameTextDisplayMode)
@@ -4985,6 +4993,12 @@ int L_settleBust(lua_State* passedState){
 	if (_slot<maxBusts){
 		settleBust(&(Busts[_slot]));
 	}
+	return 0;
+}
+int L_setDropshadowColor(lua_State* passedState){
+	dropshadowR=lua_tonumber(passedState,1);
+	dropshadowG=lua_tonumber(passedState,1);
+	dropshadowB=lua_tonumber(passedState,1);
 	return 0;
 }
 #include "LuaWrapperDefinitions.h"
