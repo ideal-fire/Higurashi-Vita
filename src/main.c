@@ -1072,6 +1072,7 @@ void WriteToDebugFile(const char* stuff){
 	}
 	free(_tempDebugFileLocationBuffer);
 }
+#define LAZYCHOICEFYESNOHEIGHTRATIO (1/(double)10)
 // Returns one if they chose yes
 // Returns zero if they chose no
 int LazyChoicef(const char* _formatString, ...){
@@ -1085,26 +1086,43 @@ int LazyChoicef(const char* _formatString, ...){
 	free(_completeString);
 	//
 	int _choice=0;
+	int _buttonH = screenHeight*LAZYCHOICEFYESNOHEIGHTRATIO;
+	int _yesX=easyCenter(textWidth(normalFont,"Yes"),screenWidth/2);
+	int _noX=screenWidth/2+easyCenter(textWidth(normalFont,"No"),screenWidth/2);
+	int _labelY = screenHeight-_buttonH+easyCenter(currentTextHeight,_buttonH);
+	int _buttonY=screenHeight-_buttonH;
 	unsigned char _tR, _tG, _tB;
 	getInverseBGCol(&_tR,&_tG,&_tB);
 	controlsReset();
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
 		if (wasJustPressed(BUTTON_A)){
-			controlsEnd();
 			break;
 		}
-		_choice = menuControls(_choice,0,1);
+		if (wasJustPressed(BUTTON_TOUCH)){
+			int _ty = fixTouchY(touchY);
+			int _tx = fixTouchX(touchX);
+			if (pointInBox(_tx,_ty,0,_buttonY,screenWidth,_buttonH)){
+				_choice = (_tx>=screenWidth/2);
+				break;
+			}
+		}
+		_choice = retMenuControlsLow(_choice,0,0,1,1,0,1);
 		controlsEnd();
 		startDrawing();
 		drawWrappedText(0,0,_wrappedLines,_numLines,_tR,_tG,_tB,255);
-		gbDrawText(normalFont,0,screenHeight-32-currentTextHeight*(_choice+1),MENUCURSOR,_tR,_tG,_tB);
-		gbDrawText(normalFont,MENUOPTIONOFFSET,screenHeight-32-currentTextHeight*2,"Yes",_tR,_tG,_tB);
-		gbDrawText(normalFont,MENUOPTIONOFFSET,screenHeight-32-currentTextHeight,"No",_tR,_tG,_tB);
+		if (gbHasButtons() & GBYES){
+			gbDrawText(normalFont,(_choice==0 ? _yesX : _noX)-MENUOPTIONOFFSET,_labelY,MENUCURSOR,_tR,_tG,_tB);
+		}
+		gbDrawText(normalFont,_yesX,_labelY,"Yes",_tR,_tG,_tB);
+		gbDrawText(normalFont,_noX,_labelY,"No",_tR,_tG,_tB);
+		drawHallowRect(0,_buttonY,screenWidth/2,_buttonH,5,_tR,_tG,_tB,255);
+		drawHallowRect(screenWidth/2,_buttonY,screenWidth/2,_buttonH,5,_tR,_tG,_tB,255);
 		endDrawing();
 	}
+	controlsEnd();
 	freeWrappedText(_numLines,_wrappedLines);
-	return _choice;
+	return _choice==0;
 }
 int FixVolumeArg(int _val){
 	if (floor(_val/(float)2)>128){
@@ -1909,7 +1927,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 					}else if (_workable[i+1]==152 && _workable[i+2]==134){ // ☆
 						_imagechartype = IMAGECHARSTAR;
 					}else{
-						printf("Unknown image char! %d;%d\n",_workable[i+1],_workable[i+2]);
+						printf("Unknown image char at %d! %d;%d\n",i,_workable[i+1],_workable[i+2]);
 						_imagechartype = IMAGECHARUNKNOWN;
 					}
 					if (_imagechartype != IMAGECHARUNKNOWN){
