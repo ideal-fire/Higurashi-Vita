@@ -30,9 +30,6 @@
 	TODO - textbox alpha should change with background alpha
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
-	TODO - apply my WrapText function changes to the OutputLine function too
-	TODO - Remove limit on chars on one line
-	TODO - do all android devices have the back button
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -186,6 +183,7 @@ char* vitaAppId="HIGURASHI";
 #define totalTextXOff() (textboxXOffset+messageInBoxXOffset)
 #define shouldShowADVNames() (gameTextDisplayMode==TEXTMODE_ADV && (advNamesSupported==2 || (advNamesSupported && prefersADVNames)))
 #define shouldClearHitBottom() (currentlyVNDSGame && clearAtBottom)
+#define getOutputLineScreenWidth() (textboxWidth-textboxXOffset*2-messageInBoxXOffset*2)
 #define ADVNAMEOFFSET (currentTextHeight*1.5) // Space between top of ADV name and rest of the text. does not apply if adv name is an image
 #define IMADVNAMEPOSTPAD (textboxTopPad)
 
@@ -473,7 +471,7 @@ int maxBusts = 9;
 short textboxYOffset=0;
 short textboxXOffset=0;
 crossTexture currentCustomTextbox=NULL;
-int outputLineScreenWidth;
+int textboxWidth;
 int outputLineScreenHeight;
 int messageInBoxXOffset=10;
 int messageInBoxYOffset=0;
@@ -886,6 +884,7 @@ int getADVNameYSpace(){
 void recalculateMaxLines(){
 	int _usableHeight;
 	if (gameTextDisplayMode==TEXTMODE_ADV){
+		// TODO - look here this is importnat right here
 		_usableHeight=outputLineScreenHeight-totalTextYOff();
 	}else{ // for nvl mode, apply the same bottom padding as we have top padding
 		_usableHeight=outputLineScreenHeight-totalTextYOff()*2;
@@ -950,14 +949,14 @@ void DrawMessageBox(char _textmodeToDraw, unsigned char _targetAlpha){
 		}
 	#endif
 	if (_textmodeToDraw == TEXTMODE_NVL || currentCustomTextbox==NULL){
-		drawRectangle(textboxXOffset,0,outputLineScreenWidth,outputLineScreenHeight,0,0,0,_targetAlpha);
+		drawRectangle(textboxXOffset,0,textboxWidth,outputLineScreenHeight,0,0,0,_targetAlpha);
 	}else{
-		drawTextureSizedAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset,outputLineScreenWidth,advboxHeight,_targetAlpha);
+		drawTextureSizedAlpha(currentCustomTextbox,textboxXOffset,textboxYOffset,textboxWidth,advboxHeight,_targetAlpha);
 	}
 }
 void DrawCurrentFilter(){
 	if (currentFilterType==FILTERTYPE_EFFECTCOLORMIX){
-		drawRectangle(textboxXOffset,0,outputLineScreenWidth,outputLineScreenHeight,filterR,filterG,filterB,filterA);
+		drawRectangle(textboxXOffset,0,textboxWidth,outputLineScreenHeight,filterR,filterG,filterB,filterA);
 	}	
 }
 u64 waitwithCodeTarget;
@@ -2137,11 +2136,12 @@ void* recalloc(void* _oldBuffer, int _newSize, int _oldSize){
 void updateTextPositions(){
 	if (textOnlyOverBackground){
 		textboxXOffset = floor((float)(screenWidth-applyGraphicsScale(actualBackgroundWidth))/2);
-		outputLineScreenWidth = screenWidth - textboxXOffset*2;
+	}else{
+		textboxXOffset=0;
 	}
 	#if GBPLAT == GB_3DS
 		if (textIsBottomScreen==1){
-			outputLineScreenWidth=320;
+			textboxWidth=320;
 			outputLineScreenHeight=240;
 		}
 	#endif
@@ -2172,12 +2172,7 @@ void applyTextboxChanges(char _doRecalcMaxLines){
 	}
 	messageInBoxYOffset=getADVNameYSpace();
 	// Apply textOnlyOverBackground setting
-	if (textOnlyOverBackground==0){
-		textboxXOffset=0;
-		outputLineScreenWidth = screenWidth;
-	}else{
-		updateTextPositions();
-	}
+	updateTextPositions();
 	if (_doRecalcMaxLines){
 		recalculateMaxLines();
 	}
@@ -2986,7 +2981,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 		message = strdup(_tempMsg);
 	}
 	int _numLines;
-	wrapTextAdvanced(&message,&_numLines,NULL,outputLineScreenWidth-MESSAGEEDGEOFFSET-messageInBoxXOffset,1);
+	wrapTextAdvanced(&message,&_numLines,NULL,getOutputLineScreenWidth(),1);
 	if (_numLines==0){
 		goto cleanup;
 	}
@@ -3297,7 +3292,7 @@ void LoadSettings(){
 				scePowerSetArmClockFrequency(444);
 			#endif
 			#if GBPLAT == GB_3DS
-				outputLineScreenWidth = 320;
+				textboxWidth = 320;
 				outputLineScreenHeight = 240;
 			#endif
 		}
@@ -3323,7 +3318,7 @@ void historyMenu(){
 		controlsEnd();
 		startDrawing();
 		Draw(0);
-		drawRectangle(textboxXOffset,0,outputLineScreenWidth,screenHeight,0,0,0,150);
+		drawRectangle(textboxXOffset,0,textboxWidth,screenHeight,0,0,0,150);
 		int i;
 		for (i=0;i<HISTORYONONESCREEN;i++){
 			int _arrIndex = FixHistoryOldSub(i+_scrollOffset,oldestMessage);
@@ -3331,7 +3326,7 @@ void historyMenu(){
 				gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*currentTextHeight,messageHistory[_arrIndex],255,255,255);
 			}
 		}
-		if (outputLineScreenWidth == screenWidth){
+		if (textboxWidth == screenWidth){
 			gbDrawText(normalFont,3,screenHeight-currentTextHeight-5,"TEXTLOG",0,0,0);
 		}
 		drawRectangle((screenWidth-5),0,5,screenHeight,0,0,0,255);
@@ -5052,9 +5047,19 @@ void getFontSetupText(int* _numLines, char*** _realLines, int _maxWidth){
 	if (*_realLines!=NULL){
 		freeWrappedText(*_numLines,*_realLines);
 	}
-	char* _finalMessage = easySprintf("Font size is %f. note to self, replace this with a line.",fontSize);
-	wrapText(_finalMessage,_numLines,_realLines,_maxWidth);
-	free(_finalMessage);
+	wrapText("This is some test text for you to look at while adjusting the font size. I wonder if it'll wrap as you change the size. If I'm not lazy, I'll make it so it does.",_numLines,_realLines,_maxWidth);
+}
+void drawTextfCenterBG(crossFont _passedFont, int _x, int _y, unsigned char r, unsigned char g, unsigned char b, unsigned char a, unsigned char _bgR, unsigned char _bgG, unsigned char _bgB, int _containerW, double _boxExtraPad, const char* _formatString, ...){
+	va_list _tempArgs;
+	va_start(_tempArgs, _formatString);
+	char* _completeString = formatf(_tempArgs,_formatString);
+	int _textW = textWidth(_passedFont,_completeString);
+	_x+=easyCenter(_textW,_containerW);
+	int _bgW=_textW*_boxExtraPad;
+	int _bgH=currentTextHeight*_boxExtraPad;
+	drawRectangle(_x+easyCenter(_bgW,_textW),_y+easyCenter(_bgH,currentTextHeight),_bgW,_bgH,_bgR,_bgG,_bgB,255);
+	gbDrawTextAlpha(_passedFont,_x,_y,_completeString,r,g,b,a);
+	free(_completeString);
 }
 #define FONTSIZETOUCHSETUPRATIO (1/(double)5)
 #define FONTSIZERELOADTIME 300
@@ -5062,22 +5067,24 @@ void getFontSetupText(int* _numLines, char*** _realLines, int _maxWidth){
 void fontSizeSetupTouch(){
 	unsigned char _tR, _tG, _tB;
 	getInverseBGCol(&_tR,&_tG,&_tB);
+	unsigned char _bR, _bG, _bB;
+	getClearColor(&_bR,&_bG,&_bB);
 	int _buttonW = screenWidth*FONTSIZETOUCHSETUPRATIO;
 	char _fontReloadQueued=0;
 	u64 _nextFontReloadTime=0;
 	int _numLines;
 	char** _wrappedLines=NULL;
-	int _wrapW = screenWidth-_buttonW*2;
-	getFontSetupText(&_numLines,&_wrappedLines,_wrapW);
+	getFontSetupText(&_numLines,&_wrappedLines,getOutputLineScreenWidth());
 	while(1){
 		u64 _sTime=getMilli();
 		controlsStart();
 		if (wasJustPressed(BUTTON_TOUCH)){
-			if (touchX<=_buttonW || touchX>screenWidth-_buttonW){
-				fontSize+=(touchX<=_buttonW ? -2 : 2);
+			int _tx = fixTouchX(touchX);
+			if ((_tx>=0 && _tx<=_buttonW) || (_tx>screenWidth-_buttonW && _tx<=screenWidth)){
+				fontSize+=(_tx<=_buttonW ? -2 : 2);
 				if (_sTime>=_nextFontReloadTime){
 					reloadFont(fontSize,0);
-					getFontSetupText(&_numLines,&_wrappedLines,_wrapW);
+					getFontSetupText(&_numLines,&_wrappedLines,getOutputLineScreenWidth());
 				}else{
 					_fontReloadQueued=1;
 				}
@@ -5090,20 +5097,20 @@ void fontSizeSetupTouch(){
 		if (_fontReloadQueued && _sTime>=_nextFontReloadTime){
 			_fontReloadQueued=0;
 			reloadFont(fontSize,0);
-			getFontSetupText(&_numLines,&_wrappedLines,_wrapW);
+			getFontSetupText(&_numLines,&_wrappedLines,getOutputLineScreenWidth());
 		}
 		controlsEnd();
 		startDrawing();
-		Draw(1);
+		drawAdvanced(1,1,1,1,1,0);
 		if (_sTime<_nextFontReloadTime){
 			int _reloadBarH = screenHeight*FONTRELOADBARRATIOH;
 			drawRectangle(0,screenHeight-_reloadBarH,screenWidth-partMoveFillsEndTime(_sTime,_nextFontReloadTime,FONTSIZERELOADTIME,screenWidth),_reloadBarH,255,0,0,255);
 		}
+		drawTextfCenterBG(normalFont,0,0,_tR,_tG,_tB,255,_bR,_bG,_bB,screenWidth,1.2,"Size: %f",fontSize);
+		drawTextfCenterBG(normalFont,0,easyCenter(currentTextHeight,screenHeight),_tR,_tG,_tB,255,_bR,_bG,_bB,_buttonW,1.2,"Size down",fontSize);
+		drawTextfCenterBG(normalFont,screenWidth-_buttonW,easyCenter(currentTextHeight,screenHeight),_tR,_tG,_tB,255,_bR,_bG,_bB,_buttonW,1.2,"Size up",fontSize);
+		drawWrappedText(totalTextXOff(),totalTextYOff(),_wrappedLines,_numLines,_tR,_tG,_tB,255);
 		endDrawing();
-		/*startDrawing();
-		drawWrappedText(_buttonW,0,_wrappedLines,_numLines,_tR,_tG,_tB,255);
-		
-		endDrawing();*/
 	}
 	controlsEnd();
 	freeWrappedText(_numLines,_wrappedLines);
@@ -5562,10 +5569,10 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	}
 	#if GBPLAT == GB_3DS
 		if (textIsBottomScreen==1){
-			outputLineScreenWidth = 320;
+			textboxWidth = 320;
 			outputLineScreenHeight = 240;
 		}else{
-			outputLineScreenWidth = 400;
+			textboxWidth = 400;
 			outputLineScreenHeight = 240;
 		}
 	#endif
@@ -5690,7 +5697,7 @@ recalcPositions:
 	int _maxStartDrawY;
 	if (_totalHeight>=_menuH){
 		_maxStartDrawY=_optionPad/2;
-		_minStartDrawY=_totalHeight*-1+screenHeight;
+		_minStartDrawY=_totalHeight*-1+_menuH;
 	}else{
 		_maxStartDrawY=easyCenter(_totalHeight,_menuH);
 		_minStartDrawY=_maxStartDrawY;
@@ -6860,7 +6867,7 @@ void hVitaInitMisc(){
 		bustCache[i].image=NULL;
 	}
 	//
-	outputLineScreenWidth = screenWidth;
+	textboxWidth = screenWidth;
 	outputLineScreenHeight = screenHeight;
 	// Guess the graphic sizes
 	actualBackgroundWidth = screenWidth;
