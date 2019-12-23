@@ -133,6 +133,12 @@ char* vitaAppId="HIGURASHI";
 #define COLORMARKUPSTART "<color=#"
 #define COLORMARKUPEND "</color>"
 ////////////////////////////////////
+#if GBTXT==GBTXT_BITMAP
+	#define DEFAULTEMBEDDEDFONT "assets/Bitmap-LiberationSans-Regular"
+#else
+	#define DEFAULTEMBEDDEDFONT "assets/LiberationSans-Regular.ttf"
+#endif //loadFont("sa0:data/font/pvf/ltn4.pvf");
+
 #define MAXMUSICARRAY 10
 #define MAXSOUNDEFFECTARRAY 10
 #define MESSAGEEDGEOFFSET 10
@@ -972,7 +978,26 @@ void WaitWithCodeEnd(int amount){
 		wait(waitwithCodeTarget-getMilli());
 	}
 }
+void _postFontReload(double _passedSize){
+	currentTextHeight = textHeight(normalFont);
+	singleSpaceWidth = textWidth(normalFont," ");
+	menuCursorSpaceWidth = textWidth(normalFont,MENUCURSOR" ");
+	if (singleSpaceWidth==0){
+		singleSpaceWidth=1;
+	}
+	if (_passedSize>=33){
+		dropshadowOffX=2;
+		dropshadowOffY=2;
+	}else{
+		dropshadowOffX=1;
+		dropshadowOffY=1;
+	}
+}
 void reloadFont(double _passedSize, char _recalcMaxLines){
+	#ifdef OVERRIDE_LOADFONT
+	customReloadFont(_passedSize,_recalcMaxLines);
+	return;
+	#endif
 	#if GBPLAT != GB_VITA
 		if (normalFont!=NULL){
 			freeFont(normalFont);
@@ -1003,20 +1028,9 @@ void reloadFont(double _passedSize, char _recalcMaxLines){
 		fclose(fp);
 		_realFont->data = vita2d_load_font_mem(_loadedFontBuffer,_foundFilesize);
 	#endif
-	currentTextHeight = textHeight(normalFont);
-	singleSpaceWidth = textWidth(normalFont," ");
-	if (singleSpaceWidth==0){
-		singleSpaceWidth=1;
-	}
+	_postFontReload(_passedSize);
 	if (_recalcMaxLines){
 		recalculateMaxLines();
-	}
-	if (_passedSize>=33){
-		dropshadowOffX=2;
-		dropshadowOffY=2;
-	}else{
-		dropshadowOffX=1;
-		dropshadowOffY=1;
 	}
 }
 void globalLoadFont(const char* _filename){
@@ -3355,6 +3369,10 @@ void SaveSettings(){
 	fwrite(&fontSize,sizeof(double),1,fp);
 	fwrite(&prefersADVNames,sizeof(signed char),1,fp);
 
+	#ifdef CUSTOM_SAVED_SETTINGS
+		customSettingsSave(fp);
+	#endif
+	
 	fclose(fp);
 	printf("SAved settings file.\n");
 }
@@ -3421,6 +3439,9 @@ void LoadSettings(){
 		if (_tempOptionsFormat>=15){
 			fread(&prefersADVNames,sizeof(signed char),1,fp);
 		}
+		#ifdef CUSTOM_SAVED_SETTINGS
+			customSettingsLoad(fp);
+		#endif
 		fclose(fp);
 
 		if (cpuOverclocked==1){
@@ -6929,22 +6950,20 @@ void hVitaInitSettings(){
 	}
 	free(_fixedPath);
 }
+void _initImageChars(){
+	// Needed for any advanced message display
+	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("assets/unknown.png");
+	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
+	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("assets/star.png");
+}
 void hVitaInitFont(){
 	// Load default font
 	if (fontSize<0){
 		fontSize = getResonableFontSize(GBTXT);
 	}
-	#if GBTXT==GBTXT_BITMAP
-		currentFontFilename = fixPathAlloc("assets/Bitmap-LiberationSans-Regular",TYPE_EMBEDDED);
-	#else
-		currentFontFilename = fixPathAlloc("assets/LiberationSans-Regular.ttf",TYPE_EMBEDDED);
-	#endif //loadFont("sa0:data/font/pvf/ltn4.pvf");
-	globalLoadFont(currentFontFilename);
-	menuCursorSpaceWidth = textWidth(normalFont,MENUCURSOR" ");
-	// Needed for any advanced message display
-	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("assets/unknown.png");
-	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
-	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("assets/star.png");
+	currentFontFilename = fixPathAlloc(DEFAULTEMBEDDEDFONT,TYPE_EMBEDDED);
+	reloadFont(fontSize,1);
+	_initImageChars();
 }
 // relies on font for error messages
 void hVitaInitSound(){
