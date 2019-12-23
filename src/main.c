@@ -31,8 +31,6 @@
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
-	TODO - image char positioning is bad
-		if image char is found before line break everything is ruined
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -613,7 +611,7 @@ void strcpyNO1(char* dest, const char* src){
 			dest[_destCopyOffset++]=src[i];
 		}
 	}
-	dest[_destCopyOffset++]=0;
+	dest[_destCopyOffset]=0;
 }
 // Same as strlen, but doesn't count any places with the value of 1 as a character.
 int strlenNO1(char* src){
@@ -3107,7 +3105,7 @@ void strcpyNO1WithProps(char* dest, const char* src, int32_t* _destmap, int32_t*
 			dest[_destCopyOffset++]=src[i];
 		}
 	}
-	dest[_destCopyOffset++]=0;
+	dest[_destCopyOffset]=0;
 }
 void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip){
 	if (strlen(_tempMsg)==0){
