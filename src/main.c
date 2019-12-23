@@ -1921,11 +1921,12 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 	int32_t _curProp=0;
 	int i;
 	for (i=0;i<_cachedStrlen;++i){
-		if (_workable[i]=='\n'){
-			_workable[i]='\0';
-			_lastNewline=i;
-		}else if (_workable[i]==' ' || i==_cachedStrlen-1){
-			if (_workable[i]==' '){ // Because alt condition				
+		if (_workable[i]=='\n' || _workable[i]==' ' || i==_cachedStrlen-1){
+			char _didChop=0;
+			char _oldChar;
+			if (i!=_cachedStrlen-1){
+				_didChop=1;
+				_oldChar = _workable[i];
 				_workable[i]='\0'; // Chop the string for textWidth function
 			}
 			if (textWidth(normalFont,&(_workable[_lastNewline+1]))>_maxWidth){ // If at this spot the string is too long for the screen
@@ -1959,9 +1960,6 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 								// Account for new byte
 								_cachedStrlen++;
 								i++;
-								if (_workable[i]=='\0'){ // Fix chop if happened
-									_workable[i]=' ';
-								}
 							}
 							break;
 						}
@@ -1977,12 +1975,20 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 					}
 					_lastNewline=j;
 				}
+				// if we were doing this stuff at an explicit line break spot, put the line break back if we didn't use it
+				if (_didChop && _oldChar=='\n' && _lastNewline!=i){
+					_workable[i]='\n';
+				}
 				// No matter what we did, we'll still need to start our check from the last new line
 				// _lastPropSet keeps properties from being overwritten
 				i=_lastNewline;
 			}else{
-				if (_workable[i]=='\0'){ // Fix chop if happened
-					_workable[i]=' ';
+				if (_didChop){
+					if (_oldChar=='\n'){ // we're okay to put the line break here. also it's already chopped.
+						_lastNewline=i;
+					}else{ // Fix chop if happened
+						_workable[i]=_oldChar;
+					}
 				}
 			}
 		}else if (_propBuff!=NULL){
