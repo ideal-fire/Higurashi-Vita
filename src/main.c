@@ -3965,9 +3965,13 @@ char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 			
 			freeTexture(_smallTexture);
 		#elif GBREND==GBREND_SDL
-			startDrawing();
-			Draw(0);
-			endDrawing();
+			// Draw the game a few times to ensure that SDL_RenderReadPixels gets the right screen
+			int k;
+			for (k=0;k<3;++k){
+				startDrawing();
+				Draw(0);
+				endDrawing();
+			}
 			SDL_Surface* _saveSurface;
 			#if SDL_BYTEORDER == SDL_BIG_ENDIAN
 				_saveSurface=SDL_CreateRGBSurface(0,screenWidth,screenHeight,32,0xff000000,0x00ff0000,0x0000ff00,0x000000ff);
@@ -5198,7 +5202,7 @@ void getFontSetupText(int* _numLines, char*** _realLines, int _maxWidth){
 	if (*_realLines!=NULL){
 		freeWrappedText(*_numLines,*_realLines);
 	}
-	wrapText("This is some test text for you to look at while adjusting the font size. I wonder if it'll wrap as you change the size. If I'm not lazy, I'll make it so it does.",_numLines,_realLines,_maxWidth);
+	wrapText("Tap the labeled regions to change the font size. When the red bar on the bottom of the screen runs out, the font size change is applied. This minimizes freezing.",_numLines,_realLines,_maxWidth);
 }
 void drawTextfCenterBG(crossFont _passedFont, int _x, int _y, unsigned char r, unsigned char g, unsigned char b, unsigned char a, unsigned char _bgR, unsigned char _bgG, unsigned char _bgB, int _containerW, double _boxExtraPad, const char* _formatString, ...){
 	va_list _tempArgs;
@@ -5213,7 +5217,7 @@ void drawTextfCenterBG(crossFont _passedFont, int _x, int _y, unsigned char r, u
 	free(_completeString);
 }
 #define FONTSIZETOUCHSETUPRATIO (1/(double)5)
-#define FONTSIZERELOADTIME 300
+#define FONTSIZERELOADTIME 400
 #define FONTRELOADBARRATIOH (1/(double)20)
 void fontSizeSetupTouch(){
 	unsigned char _tR, _tG, _tB;
@@ -5226,29 +5230,24 @@ void fontSizeSetupTouch(){
 	int _numLines;
 	char** _wrappedLines=NULL;
 	getFontSetupText(&_numLines,&_wrappedLines,getOutputLineScreenWidth());
-	while(1){
+	char _isDone=0;
+	while(!_isDone){
 		u64 _sTime=getMilli();
 		controlsStart();
 		if (wasJustPressed(BUTTON_TOUCH)){
 			int _tx = fixTouchX(touchX);
 			if ((_tx>=0 && _tx<=_buttonW) || (_tx>screenWidth-_buttonW && _tx<=screenWidth)){
 				fontSize+=(_tx<=_buttonW ? -2 : 2);
-				if (_sTime>=_nextFontReloadTime){
-					reloadFont(fontSize,0);
-					getFontSetupText(&_numLines,&_wrappedLines,getOutputLineScreenWidth());
-				}else{
-					_fontReloadQueued=1;
-				}
+				_fontReloadQueued=1;
 				_nextFontReloadTime=_sTime+FONTSIZERELOADTIME;
 			}
 		}
 		if (wasJustPressed(BUTTON_BACK)){
-			break;
-		}
-		if (_fontReloadQueued && _sTime>=_nextFontReloadTime){
-			_fontReloadQueued=0;
-			reloadFont(fontSize,0);
-			getFontSetupText(&_numLines,&_wrappedLines,getOutputLineScreenWidth());
+			if (_fontReloadQueued){
+				_sTime=_nextFontReloadTime;
+			}
+			_isDone=1;
+			goto checkFontReload;
 		}
 		controlsEnd();
 		startDrawing();
@@ -5262,6 +5261,12 @@ void fontSizeSetupTouch(){
 		drawTextfCenterBG(normalFont,screenWidth-_buttonW,easyCenter(currentTextHeight,screenHeight),_tR,_tG,_tB,255,_bR,_bG,_bB,_buttonW,1.2,"Size up",fontSize);
 		drawWrappedText(totalTextXOff(),totalTextYOff(),_wrappedLines,_numLines,_tR,_tG,_tB,255);
 		endDrawing();
+	checkFontReload:
+		if (_fontReloadQueued && _sTime>=_nextFontReloadTime){
+			_fontReloadQueued=0;
+			reloadFont(fontSize,0);
+			getFontSetupText(&_numLines,&_wrappedLines,getOutputLineScreenWidth());
+		}
 	}
 	controlsEnd();
 	freeWrappedText(_numLines,_wrappedLines);
