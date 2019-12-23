@@ -18,5 +18,11 @@ libgoodbrew
 	If you already installed this library you may need to update it if it was a long time ago.
 Everything else can be obtained with vdpm.
 	https://github.com/vitasdk/vdpm
-
 If a miracle happens and you actually get all the libraries that you need, it can be compiled by just calling `make -f makefile.vita` and then `make -f makefile.vita stuffvpk`. (p)7zip is required for the `stuffvpk` target.
+
+Compiling (Android)
+========
+Compile this with the Android NDK as you would any other SDL application written in C. You'll need to shift files around, this isn't an Android-ready project. I just shove all the source code files into the SDL Android sample project and compile it that way.
+Starting points for compiling SDL applications for Android:
+	https://wiki.libsdl.org/Android
+	https://lazyfoo.net/tutorials/SDL/52_hello_mobile/index.php
