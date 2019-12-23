@@ -1177,6 +1177,45 @@ void clearHistory(){
 		}
 	}
 }
+// make it so all the free space is at the end
+void shiftImageCharArr(){
+	int _shiftSpot=-1;
+	int i;
+	for (i=0;i<MAXIMAGECHAR;i++){
+		if (imageCharType[i]==-1){
+			if (_shiftSpot==-1){
+				_shiftSpot=i;
+			}
+		}else{
+			if (_shiftSpot!=-1){
+				imageCharX[_shiftSpot]=imageCharX[i];
+				imageCharY[_shiftSpot]=imageCharY[i];
+				imageCharType[_shiftSpot]=imageCharType[i];
+				imageCharLines[_shiftSpot]=imageCharLines[i];
+				imageCharCharPositions[_shiftSpot]=imageCharCharPositions[i];
+				imageCharType[i]=-1;
+				++_shiftSpot;
+			}
+		}
+	}
+}
+void upshiftImageChars(int _numLinesUp){
+	char _deletedAnImageChar=0;
+	int i;
+	for (i=0;i<MAXIMAGECHAR;i++){
+		if (imageCharType[i]!=-1){
+			imageCharY[i]-=currentTextHeight*_numLinesUp;
+			imageCharLines[i]-=_numLinesUp;
+			if (imageCharLines[i]<0){
+				imageCharType[i]=-1;
+				_deletedAnImageChar=1;
+			}
+		}
+	}
+	if (_deletedAnImageChar){
+		shiftImageCharArr();
+	}
+}
 void ClearMessageArray(char _doFadeTransition){
 	if (textSpeed==TEXTSPEED_INSTANT){
 		_doFadeTransition=0;
@@ -1209,9 +1248,7 @@ void ClearMessageArray(char _doFadeTransition){
 		}
 	}
 	//
-	for (i=0;i<MAXIMAGECHAR;i++){
-		imageCharType[i]=-1;
-	}
+	upshiftImageChars(maxLines);
 	if (advNamesPersist!=2){
 		setADVName(NULL);
 	}
@@ -1409,15 +1446,7 @@ void upshiftText(int _numDelLines){
 		currentMessages[i]=NULL;		
 	}
 	// shift image chars up
-	for (i=0;i<MAXIMAGECHAR;i++){
-		if (imageCharType[i]!=-1){
-			imageCharY[i]-=currentTextHeight*_numDelLines;
-			imageCharLines[i]-=_numDelLines;
-			if (imageCharLines[i]<0){
-				imageCharType[i]=-1;
-			}
-		}
-	}
+	upshiftImageChars(_numDelLines);
 }
 void updateBust(bust* _target, u64 _curTime){
 	switch(_target->bustStatus){
@@ -1874,7 +1903,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 		}
 		return;
 	}
-	int _internalNewLines=0;
+	int _firstAddedImageChar=-1;
 	int _lastPropSet=-1; // only set properties if at index greater than this one
 	int _lastNewline = -1; // Index
 	int32_t _curProp=0;
@@ -1883,7 +1912,6 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 		if (_workable[i]=='\n'){
 			_workable[i]='\0';
 			_lastNewline=i;
-			_internalNewLines++;
 		}else if (_workable[i]==' ' || i==_cachedStrlen-1){
 			if (_workable[i]==' '){ // Because alt condition				
 				_workable[i]='\0'; // Chop the string for textWidth function
@@ -1940,7 +1968,6 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 				// No matter what we did, we'll still need to start our check from the last new line
 				// _lastPropSet keeps properties from being overwritten
 				i=_lastNewline;
-				_internalNewLines++;
 			}else{
 				if (_workable[i]=='\0'){ // Fix chop if happened
 					_workable[i]=' ';
@@ -2001,13 +2028,15 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 						int j;
 						for (j=0;j<MAXIMAGECHAR;j++){
 							if (imageCharType[j]==-1){
-								_workable[i]='\0'; // So we can use textWidth
+								if (_firstAddedImageChar==-1){
+									_firstAddedImageChar=j;
+								}
+								// replace the character with spaces
 								int _cachedW = imageCharW(_imagechartype);
 								int _numSpaces = ceil(_cachedW/(double)singleSpaceWidth);
-								imageCharX[j] = totalTextXOff()+textWidth(normalFont,&(_workable[_lastNewline+1]))+easyCenter(_cachedW,_numSpaces*singleSpaceWidth);
-								imageCharY[j] = totalTextYOff()+(currentLine+_internalNewLines)*currentTextHeight;
-								imageCharLines[j] = currentLine;
-								imageCharCharPositions[j] = strlenNO1(&(_workable[_lastNewline+1]));
+								// store some info in these variables for later. these values are used for finalizing their positions and stuff
+								imageCharX[j] = i;
+								imageCharY[j]=_numSpaces;
 								imageCharType[j] = _imagechartype;
 								// set all these 3 image char bytes to be skipped
 								memset(&(_workable[i]),1,3);
@@ -2026,6 +2055,11 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 								}
 								break;
 							}
+						}
+						if (j<MAXIMAGECHAR){
+							// if we put the image char at this spot, redo this spot as a space.
+							--i;
+							continue;
 						}
 					}
 				}
@@ -2078,9 +2112,6 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 			_propBuff[i]=_curProp;
 		}
 	}
-	if (_propRet){
-		*_propRet=_propBuff;
-	}
 	*_passedMessage = _workable;
 	// fheuwfhuew (\0) ffhuehfu (\0) fheuhfueiwf (\0)
 	*_numLines=1;
@@ -2095,6 +2126,33 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 		for (i=0;i<*_numLines;++i){
 			(*_realLines)[i] = strdup(&(_workable[_nextCopyIndex]));
 			_nextCopyIndex += 1+strlen(&(_workable[_nextCopyIndex]));
+		}
+	}
+	if (_propRet){
+		*_propRet=_propBuff;
+		// finalize the image chars
+		if (_firstAddedImageChar!=-1){
+			int _loopLine=0;
+			int _curMsgIndex=0;
+			int _nextMsgIndex=strlen(_workable)+1;
+			int i;
+			for (i=_firstAddedImageChar;i<MAXIMAGECHAR && imageCharType[i]!=-1;++i){
+				// imageCharX[i] stores the position of the image char in the line passed to this message. it's like a global index or something.
+				int _charIndex = imageCharX[i];
+				// fast forward to the start of the line with this image char on it
+				while(_nextMsgIndex<_charIndex){
+					_curMsgIndex=_nextMsgIndex;
+					_nextMsgIndex=_curMsgIndex+strlen(&(_workable[_curMsgIndex]))+1;
+					++_loopLine;
+				}
+				_workable[_charIndex]='\0'; // so we can use textWidth
+				int _cachedW = imageCharW(imageCharType[i]);
+				imageCharX[i] = totalTextXOff()+textWidth(normalFont,&_workable[_curMsgIndex])+easyCenter(_cachedW,imageCharY[i]*singleSpaceWidth);
+				imageCharLines[i] = currentLine+_loopLine;
+				imageCharY[i] = totalTextYOff()+imageCharLines[i]*currentTextHeight;
+				imageCharCharPositions[i] = strlenNO1(&_workable[_curMsgIndex]);
+				_workable[_charIndex]=' ';
+			}
 		}
 	}
 }
