@@ -31,6 +31,7 @@
 	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
+	TODO - don't show "save game" option in toucb bar if save not supported. oops. looks like the function should just be passed a map of which ones to enable
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -820,8 +821,11 @@ void drawPropertyStreakText(int _x, int _y, char* _message, int32_t _prop, unsig
 }
 // _message must be writeable
 void drawPropertyGameText(int _x, int _y, char* _message, int32_t* _props, unsigned char _alpha){
-	int32_t _curProps = _props[0];
 	int _cachedStrlen = strlen(_message);
+	if (_cachedStrlen==0){
+		return;
+	}
+	int32_t _curProps = _props[0];
 	int _lastStrEnd=0;
 	int i;
 	for (i=0;i<_cachedStrlen;++i){
@@ -3297,7 +3301,10 @@ transferMoreLines:
 			_slowTextSpeed=0;
 			int i;
 			for (i=0;i<(textSpeed>0 ? textSpeed : 1);i++){
-				_currentDrawChar++;
+				if (currentMessages[_currentDrawLine][_currentDrawChar]!='\0'){ // only increment _currentDrawChar if there's still space. this is a fix for zero length lines only. the regular null termination detection is below.
+					// move to next char
+					_currentDrawChar++;
+				}
 				// if it's not ASCII, skip to end of UTF-8 character
 				if ((unsigned char)(currentMessages[_currentDrawLine][_currentDrawChar])>0x7F){ // this is same as checking if last bit is on
 					// https://tools.ietf.org/html/rfc3629
