@@ -367,6 +367,7 @@ unsigned char currentBoxAlpha=100;
 unsigned char preferredBoxAlpha=100;
 signed char MessageBoxEnabled=1;
 signed char isSkipping=0;
+signed char isTouchSkipHold=0;
 signed char inputValidity=1;
 
 unsigned int currentScriptLine=0;
@@ -1526,24 +1527,39 @@ int FixHistoryOldSub(int _val, int _scroll){
 void incrementScriptLineVariable(lua_State* L, lua_Debug* ar){
 	currentScriptLine++;
 }
+#define OUTPUTLINETOPBARH (1/(double)5)
+#define OUTPUTLINETOPBARNUM 4
+// used from inside a control loop. returns the index of the currently held button in the top UI bar for touch controls
+signed char getTouchedBarOption(){
+	if (isDown(BUTTON_TOUCH)){
+		int _tx = fixTouchX(touchX);
+		int _ty = fixTouchY(touchY);
+		if (pointInBox(_tx,_ty,0,0,screenWidth,screenHeight*OUTPUTLINETOPBARH)){
+			return _tx/(screenWidth/(double)OUTPUTLINETOPBARNUM);
+		}
+	}
+	return -1;
+}
+void openInGameSettingsMenu(){
+	SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && GBPLAT != GB_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame,(strcmp(VERSIONSTRING,"forgotversionnumber")==0));
+}
 void updateControlsGeneral(){
 	if (wasJustPressed(BUTTON_Y)){
 		isSkipping=1;
 		endType=Line_ContinueAfterTyping;
 	}
-	if (isSkipping==1 && !isDown(BUTTON_Y)){
-		isSkipping=0;
-	}
-	if (wasJustPressed(BUTTON_X) || wasJustPressed(BUTTON_BACK)){
-		SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && GBPLAT != GB_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame,(strcmp(VERSIONSTRING,"forgotversionnumber")==0));
-	}
-	if (wasJustPressed(BUTTON_SELECT)){
-		PlayMenuSound();
-		if (autoModeOn==1){
-			autoModeOn=0;
-		}else{
-			autoModeOn=1;
+	if (isSkipping){		
+		if (!((isTouchSkipHold && getTouchedBarOption()==3) || isDown(BUTTON_Y))){
+			isTouchSkipHold=0;
+			isSkipping=0;
 		}
+	}
+	if (wasJustPressed(BUTTON_X)){
+		openInGameSettingsMenu();
+	}
+	if (wasJustPressed(BUTTON_SELECT) || (wasJustPressed(BUTTON_BACK) && autoModeOn)){
+		PlayMenuSound();
+		autoModeOn = !autoModeOn;
 	}
 }
 char curVoicePlaying(){
@@ -1556,13 +1572,30 @@ char curVoicePlaying(){
 	}
 	return 0;
 }
+void drawTouchBar(){
+	int _barH=screenHeight*OUTPUTLINETOPBARH;
+	drawRectangle(0,0,screenWidth,_barH,0,0,0,255);
+	int _buttonW=screenWidth/OUTPUTLINETOPBARNUM;
+	int _buttonY=easyCenter(currentTextHeight,_barH);
+	char* _autoState = (autoModeOn ? "Auto off" : "Auto on");
+	drawText(easyCenter(textWidth(normalFont,"Settings"),_buttonW),_buttonY,"Settings");
+	drawText(_buttonW+easyCenter(textWidth(normalFont,_autoState),_buttonW),_buttonY,_autoState);
+	drawText(_buttonW*2+easyCenter(textWidth(normalFont,"Save"),_buttonW),_buttonY,"Save");
+	drawText(_buttonW*3+easyCenter(textWidth(normalFont,"Skip (hold)"),_buttonW),_buttonY,"Skip (hold)");
+}
 void outputLineWait(){
-	//if (currentGameStatus==GAMESTATUS_MAINGAME){
+	// 1 - show some touch buttons
+	// 2 - textbox hide
+	char _backPressLevel=0;
+	//
 	if (isSkipping==1){
 		controlsStart();
 		updateControlsGeneral();
 		controlsEnd();
-		if (isSkipping==1){
+		if (isSkipping){
+			if (isTouchSkipHold){
+				_backPressLevel=1;
+			}
 			endType=LINE_RESERVED;
 		}
 	}
@@ -1583,11 +1616,10 @@ void outputLineWait(){
 	}
 	// On PS Vita, prevent sleep mode if using auto mode
 	#if GBPLAT == GB_VITA
-		if (autoModeOn){
-			sceKernelPowerTick(0);
-		}
+	if (autoModeOn){
+		sceKernelPowerTick(0);
+	}
 	#endif
-	char _didPressCircle=0;
 	do{
 		controlsStart();
 		Update();
@@ -1620,25 +1652,76 @@ void outputLineWait(){
 				free(_foundPath);
 			}
 		}
+		
+		// draw the touch options
+		if (_backPressLevel==1){
+			#ifdef CUSTOM_TOUCH_BAR_DRAW
+			customDrawTouchBar();
+			#else
+			drawTouchBar();
+			#endif
+		}
 		endDrawing();
-
 		if (proceedPressed()){
-			if (_didPressCircle==1){
-				showTextbox();
+			switch(_backPressLevel){
+				case 0:
+					endType=LINE_RESERVED;
+					break;
+				case 1:
+					if (wasJustPressed(BUTTON_TOUCH)){
+						signed char _selectedChoice = getTouchedBarOption();
+						switch(_selectedChoice){
+							case 0:
+								openInGameSettingsMenu();
+								break;
+							case 1:
+								autoModeOn = !autoModeOn;
+								break;
+							case 2:
+								safeVNDSSaveMenu();
+								break;
+							case 3:
+								isTouchSkipHold=1;
+								isSkipping=1;
+								endType=Line_ContinueAfterTyping;
+								break;
+						}
+					}
+					break;
+				case 2:
+					showTextbox();
+					break;
 			}
-			endType = LINE_RESERVED;
+			_backPressLevel=0;
 		}
 		if (wasJustPressed(BUTTON_B)){
-			if (_didPressCircle==1){
+			if (_backPressLevel==0){
+				if (MessageBoxEnabled){
+					MessageBoxEnabled=0;
+					_backPressLevel=2;
+					_toggledTextboxTime=getMilli();
+				}
+			}else if (_backPressLevel==2){
 				if (_toggledTextboxTime!=0){
 					_inBetweenLinesMilisecondsStart+=getMilli()-_toggledTextboxTime;
 					_toggledTextboxTime=0;
 				}
 				MessageBoxEnabled = !MessageBoxEnabled;
-			}else if (MessageBoxEnabled==1){
-				MessageBoxEnabled=0;
-				_didPressCircle=1;
-				_toggledTextboxTime=getMilli();
+			}
+		}
+		if (wasJustPressed(BUTTON_BACK)){
+			if (autoModeOn){
+				autoModeOn=0;
+			}else{
+				if (_backPressLevel==0){
+					_backPressLevel=1;
+				}else if (_backPressLevel==1){
+					_backPressLevel=2;
+					hideTextbox();
+				}else if (_backPressLevel==2){
+					showTextbox();
+					_backPressLevel=0;
+				}
 			}
 		}
 		updateControlsGeneral();
@@ -1659,7 +1742,7 @@ void outputLineWait(){
 					endType = LINE_RESERVED;
 				}
 			}else{
-				// Check if audio has ended yet.
+				// Check if audio has ended yet. if so, start the waiting now
 				if (!curVoicePlaying()){
 					_inBetweenLinesMilisecondsStart = getMilli();
 				}
@@ -1670,7 +1753,6 @@ void outputLineWait(){
 	if (currentlyVNDSGame && gameTextDisplayMode==TEXTMODE_ADV && endType==LINE_RESERVED){
 		ClearMessageArray(1);
 	}
-
 	endType=Line_ContinueAfterTyping;
 	lastVoiceSlot=-1;
 }
