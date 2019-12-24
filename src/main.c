@@ -555,6 +555,8 @@ signed char preferredTextDisplayMode=TEXTMODE_NVL;
 signed char useSoundArchive=0;
 legArchive soundArchive;
 signed char lastVoiceSlot=-1;
+// only valid of lastVoiceSlot is not -1
+crossPlayHandle lastVoiceHandle;
 int foundSetImgIndex = -1;
 signed char vndsSpritesFade=1;
 char textDisplayModeOverriden=0; // If the text display mode has been changed manually by the script
@@ -1544,6 +1546,16 @@ void updateControlsGeneral(){
 		}
 	}
 }
+char curVoicePlaying(){
+	if (lastVoiceSlot!=-1){
+		#if GBSND == GBSND_VITA
+			return (soundEffects[lastVoiceSlot]!=NULL && mlgsndIsPlaying(soundEffects[lastVoiceSlot]));
+		#elif GBSND == GBSND_SDL
+			return Mix_Playing(lastVoiceHandle);
+		#endif
+	}
+	return 0;
+}
 void outputLineWait(){
 	//if (currentGameStatus==GAMESTATUS_MAINGAME){
 	if (isSkipping==1){
@@ -1558,24 +1570,17 @@ void outputLineWait(){
 	// 0 if we need to wait for sound to end.
 	u64 _inBetweenLinesMilisecondsStart;
 	int _chosenAutoWait;
-	#if GBSND == GBSND_VITA
-		if (lastVoiceSlot!=-1 && soundEffects[lastVoiceSlot]!=NULL && mlgsndIsPlaying(soundEffects[lastVoiceSlot])){
-			_inBetweenLinesMilisecondsStart=0;
-			_chosenAutoWait = autoModeVoicedWait;
-		}else{
-			_inBetweenLinesMilisecondsStart = getMilli();
-			if (_inBetweenLinesMilisecondsStart==0){
-				_inBetweenLinesMilisecondsStart=1;
-			}
-			_chosenAutoWait = autoModeWait;
-		}
-	#else
+	// Initial check for auto mode
+	if (curVoicePlaying()){
+		_inBetweenLinesMilisecondsStart=0;
+		_chosenAutoWait = autoModeVoicedWait;
+	}else{
 		_inBetweenLinesMilisecondsStart = getMilli();
 		_chosenAutoWait = autoModeWait;
 		if (_inBetweenLinesMilisecondsStart==0){
 			_inBetweenLinesMilisecondsStart=1;
 		}
-	#endif
+	}
 	// On PS Vita, prevent sleep mode if using auto mode
 	#if GBPLAT == GB_VITA
 		if (autoModeOn){
@@ -1654,12 +1659,10 @@ void outputLineWait(){
 					endType = LINE_RESERVED;
 				}
 			}else{
-				#if GBPLAT == GB_VITA
-					// Check if audio has ended yet.
-					if (mlgsndIsPlaying(soundEffects[lastVoiceSlot])==0){
-						_inBetweenLinesMilisecondsStart = getMilli();
-					}
-				#endif
+				// Check if audio has ended yet.
+				if (!curVoicePlaying()){
+					_inBetweenLinesMilisecondsStart = getMilli();
+				}
 			}
 		}
 	}while(endType==Line_Normal || endType == Line_WaitForInput);
@@ -3099,6 +3102,7 @@ void GenericPlayGameSound(int passedSlot, const char* filename, int unfixedVolum
 		setSFXVolume(_tempHandle,GenericFixSpecificVolume(unfixedVolume,_passedVolumeFixScale));
 		// Used for auto mode
 		lastVoiceSlot=passedSlot;
+		lastVoiceHandle=_tempHandle;
 	}
 }
 void strcpyNO1WithProps(char* dest, const char* src, int32_t* _destmap, int32_t* _srcmap){
