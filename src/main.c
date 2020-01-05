@@ -32,6 +32,7 @@
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
 	TODO - don't show "save game" option in toucb bar if save not supported. oops. looks like the function should just be passed a map of which ones to enable
+	TODO - textboxWidth bug
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -55,7 +56,7 @@
 #include <Lua/lauxlib.h>
 //
 #include <goodbrew/config.h>
-#if GBVERSION < 4
+#if GBVERSION < 6
 	#error update libgoodbrew
 #endif
 #include <goodbrew/platform.h>
@@ -673,10 +674,10 @@ double partMoveEmptys(u64 _curTicks, u64 _startTime, int _totalDifference, doubl
 	return _max-partMoveFills(_curTicks,_startTime,_totalDifference,_max);
 }
 #ifndef SPECIALEDITION
-	int fixX(int _passed){
+	float fixX(float _passed){
 		return _passed;
 	}
-	int fixY(int _passed){
+	float fixY(float _passed){
 		return _passed;
 	}
 	int fixTouchX(int _passed){
