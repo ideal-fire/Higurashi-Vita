@@ -465,7 +465,7 @@ float bgmVolume = 0.75;
 float seVolume = 1.0;
 float voiceVolume = 1.0;
 
-crossFont normalFont=NULL;
+crossFont* normalFont=NULL;
 double fontSize=-10; // default value < 0
 int currentTextHeight;
 int singleSpaceWidth;
@@ -5298,7 +5298,7 @@ void getFontSetupText(int* _numLines, char*** _realLines, int _maxWidth){
 	}
 	wrapText("Tap the labeled regions to change the font size. When the red bar on the bottom of the screen runs out, the font size change is applied. This minimizes freezing.",_numLines,_realLines,_maxWidth);
 }
-void drawTextfCenterBG(crossFont _passedFont, int _x, int _y, unsigned char r, unsigned char g, unsigned char b, unsigned char a, unsigned char _bgR, unsigned char _bgG, unsigned char _bgB, int _containerW, double _boxExtraPad, const char* _formatString, ...){
+void drawTextfCenterBG(crossFont* _passedFont, int _x, int _y, unsigned char r, unsigned char g, unsigned char b, unsigned char a, unsigned char _bgR, unsigned char _bgG, unsigned char _bgB, int _containerW, double _boxExtraPad, const char* _formatString, ...){
 	va_list _tempArgs;
 	va_start(_tempArgs, _formatString);
 	char* _completeString = formatf(_tempArgs,_formatString);
