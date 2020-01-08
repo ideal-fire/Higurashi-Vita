@@ -79,7 +79,7 @@ nathanscriptFunction* nathanFunctionList=NULL;
 char** nathanFunctionNameList=NULL;
 char* nathanFunctionPropertyList=NULL;
 
-crossFile nathanscriptCurrentOpenFile=NULL;
+crossFile* nathanscriptCurrentOpenFile=NULL;
 int nathanscriptFoundFiIndex; // Array index of the fi command from the line parser
 int nathanscriptFoundIfIndex;
 int nathanscriptFoundLabelIndex;
@@ -578,7 +578,7 @@ void nathanscriptParseString(char* _tempReadLine, int* _storeCommandIndex, natha
 	free(_tempSingleElementBuffer);
 }
 
-void nathanscriptParseSingleLine(crossFile fp, int* _storeCommandIndex, nathanscriptVariable** _storeArguments, int* _storeNumArguments){
+void nathanscriptParseSingleLine(crossFile* fp, int* _storeCommandIndex, nathanscriptVariable** _storeArguments, int* _storeNumArguments){
 	// Contains the entire line. Will be resized by getline function
 	char* _tempReadLine = calloc(1,512);
 	// Will be changed if the buffer isn't big enough
@@ -1000,7 +1000,7 @@ void scriptLuaDostring(nathanscriptVariable* _madeArgs, int _totalArguments, nat
 	return;
 }
 
-void nathanscriptLowDoFile(crossFile _passedFile, intFunction _beforeExecuteFunction){
+void nathanscriptLowDoFile(crossFile* _passedFile, intFunction _beforeExecuteFunction){
 	controlsStart();
 	controlsEnd();
 	nathanscriptCurrentOpenFile = _passedFile;
@@ -1043,7 +1043,7 @@ void nathanscriptDoScript(char* _filename, long int _startingOffset, intFunction
 	crossfclose(nathanscriptCurrentOpenFile);
 }
 
-int fpeekchar(crossFile stream){
+int fpeekchar(crossFile* stream){
 	int c;
 
 	c = crossgetc(stream);

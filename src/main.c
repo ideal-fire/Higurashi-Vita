@@ -56,7 +56,7 @@
 #include <Lua/lauxlib.h>
 //
 #include <goodbrew/config.h>
-#if GBVERSION < 6
+#if GBVERSION < 7
 	#error update libgoodbrew
 #endif
 #include <goodbrew/platform.h>
@@ -284,9 +284,9 @@ char* gamesFolder;
 #endif
 signed char touchProceed=1;
 
-void invertImage(crossTexture _passedImage, signed char _doInvertAlpha);
+void invertImage(crossTexture* _passedImage, signed char _doInvertAlpha);
 typedef struct{
-	crossTexture image;
+	crossTexture* image;
 	signed int xOffset;
 	signed int yOffset;
 	char isActive;
@@ -307,10 +307,10 @@ typedef struct{
 	int diffYMove;
 	u64 startMoveTime;
 	int diffMoveTime;
-	crossTexture transformTexture; // See BUST_STATUS_TRANSFORM_FADEIN. This is the texture that is transforming
+	crossTexture* transformTexture; // See BUST_STATUS_TRANSFORM_FADEIN. This is the texture that is transforming
 }bust;
 typedef struct{
-	crossTexture image;
+	crossTexture* image;
 	char* filename;
 }cachedImage;
 
@@ -353,15 +353,15 @@ int place=0;
 
 int lastBGMVolume = 128;
 
-crossTexture currentBackground = NULL;
-crossMusic currentMusic[MAXMUSICARRAY] = {NULL};
+crossTexture* currentBackground = NULL;
+crossMusic* currentMusic[MAXMUSICARRAY] = {NULL};
 crossPlayHandle currentMusicHandle[MAXMUSICARRAY] = {0};
 char* currentMusicFilepath[MAXMUSICARRAY]={NULL};
 short currentMusicUnfixedVolume[MAXMUSICARRAY] = {0};
-//crossMusic currentMusic = NULL;
-crossSE soundEffects[MAXSOUNDEFFECTARRAY] = {NULL};
+//crossMusic* currentMusic = NULL;
+crossSE* soundEffects[MAXSOUNDEFFECTARRAY] = {NULL};
 
-crossSE menuSound=NULL;
+crossSE* menuSound=NULL;
 signed char menuSoundLoaded=0;
 
 // Alpha of black rectangle over screen
@@ -426,7 +426,7 @@ unsigned short imageCharCharPositions[MAXIMAGECHAR] = {0};
 #define IMAGECHARSTAR 1
 #define IMAGECHARNOTE 2
 #define IMAGECHARUNKNOWN 0
-crossTexture imageCharImages[3]; // PLEASE DON'T FORGET TO CHANGE THIS IF ANOTHER IMAGE CHAR IS ADDED
+crossTexture* imageCharImages[3]; // PLEASE DON'T FORGET TO CHANGE THIS IF ANOTHER IMAGE CHAR IS ADDED
 
 #define FILTERTYPE_INACTIVE 0 // This one is different from Higurashi, in Higurashi it defaults to FILTERTYPE_EFFECTCOLORMIX
 #define FILTERTYPE_EFFECTCOLORMIX 1
@@ -486,7 +486,7 @@ char isActuallyUsingUma0=0;
 int maxBusts = 9;
 short textboxYOffset=0;
 short textboxXOffset=0;
-crossTexture currentCustomTextbox=NULL;
+crossTexture* currentCustomTextbox=NULL;
 int textboxWidth;
 int outputLineScreenHeight;
 int messageInBoxXOffset=10;
@@ -539,7 +539,7 @@ char nextVndsBustshotSlot=0;
 signed char clearAtBottom=0;
 signed char showVNDSWarnings=1;
 signed char dynamicAdvBoxHeight=0;
-crossTexture advNameImSheet=NULL;
+crossTexture* advNameImSheet=NULL;
 char* currentADVName=NULL;
 int currentADVNameIm=-1;
 int advNameImHeight=-1;
@@ -709,7 +709,7 @@ void showErrorIfNull(void* _passedImage){
 		printf("Error, showErrorIfNull.\n");
 	}
 }
-void drawTextureScaleAlphaGood(const crossTexture texture, float x, float y, double x_scale, double y_scale, unsigned char alpha){
+void drawTextureScaleAlphaGood(crossTexture* texture, float x, float y, double x_scale, double y_scale, unsigned char alpha){
 	drawTextureSizedAlpha(texture,x,y,getTextureWidth(texture)*x_scale,getTextureHeight(texture)*y_scale,alpha);
 }
 char shouldShowWarnings(){
@@ -766,17 +766,17 @@ void PlayMenuSound(){
 		playSound(menuSound,10);
 	}
 }
-crossTexture safeLoadImage(const char* path){
-	crossTexture _tempTex = loadImage((char*)path);
+crossTexture* safeLoadImage(const char* path){
+	crossTexture* _tempTex = loadImage((char*)path);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
 		easyMessagef(1,"Failed to load image %s, what will happen now?!",path);
 	}
 	return _tempTex;
 }
-crossTexture LoadEmbeddedPNG(const char* path){
+crossTexture* LoadEmbeddedPNG(const char* path){
 	char* _fixedPath = fixPathAlloc(path,TYPE_EMBEDDED);
-	crossTexture _tempTex = loadImage(_fixedPath);
+	crossTexture* _tempTex = loadImage(_fixedPath);
 	if (_tempTex==NULL){
 		showErrorIfNull(_tempTex);
 		easyMessagef(1,"Failed to load image %s.\n%s",path,GBPLAT != GB_3DS ? "This is supposed to be embedded..." : "Check you set up everything correctly.");
@@ -1764,7 +1764,7 @@ void outputLineWait(){
 // This is used in background and bust drawing
 // For Higurashi, this is used to get the center of the screen for all images.
 // For VNDS, this is just used to get the position of the background.
-void GetXAndYOffset(crossTexture _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
+void GetXAndYOffset(crossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
 	if (dynamicScaleEnabled){
 		*_tempXOffset = floor((screenWidth-applyGraphicsScale(getTextureWidth(_tempImg)))/2);
 		*_tempYOffset = floor((screenHeight-applyGraphicsScale(getTextureHeight(_tempImg)))/2);
@@ -1780,7 +1780,7 @@ void GetXAndYOffset(crossTexture _tempImg, signed int* _tempXOffset, signed int*
 		}
 	}
 }
-double GetXOffsetScale(crossTexture _tempImg){
+double GetXOffsetScale(crossTexture* _tempImg){
 	if (dynamicScaleEnabled){
 		return applyGraphicsScale(actualBackgroundWidth)/(double)scriptScreenWidth;
 	}else{
@@ -1790,7 +1790,7 @@ double GetXOffsetScale(crossTexture _tempImg){
 		return (getTextureWidth(_tempImg)/(float)scriptScreenWidth);
 	}
 }
-double GetYOffsetScale(crossTexture _tempImg){
+double GetYOffsetScale(crossTexture* _tempImg){
 	if (dynamicScaleEnabled){
 		return applyGraphicsScale(actualBackgroundHeight)/(double)scriptScreenHeight;
 	}else{
@@ -1806,7 +1806,7 @@ void drawHallowRect(int _x, int _y, int _w, int _h, int _thick, int _r, int _g, 
 	drawRectangle(_x,_y,_w,_thick,_r,_g,_b,_a);
 	drawRectangle(_x,_y+_h-_thick,_w,_thick,_r,_g,_b,_a);
 }
-void DrawBackgroundAlpha(crossTexture passedBackground, unsigned char passedAlpha){
+void DrawBackgroundAlpha(crossTexture* passedBackground, unsigned char passedAlpha){
 	if (passedBackground!=NULL){
 		signed int _tempXOffset;
 		signed int _tempYOffset;
@@ -1814,7 +1814,7 @@ void DrawBackgroundAlpha(crossTexture passedBackground, unsigned char passedAlph
 		drawTextureSizedAlpha(passedBackground,_tempXOffset,_tempYOffset, getTextureWidth(passedBackground)*graphicsScale, getTextureHeight(passedBackground)*graphicsScale, passedAlpha);
 	}
 }
-void DrawBackground(crossTexture passedBackground){
+void DrawBackground(crossTexture* passedBackground){
 	DrawBackgroundAlpha(passedBackground,255);
 }
 void DrawBust(bust* passedBust){
@@ -1887,7 +1887,7 @@ void RecalculateBustOrder(){
 	}
 }
 // seek past a windows newline or a unix newline
-void moveFilePointerPastNewline(crossFile fp){
+void moveFilePointerPastNewline(crossFile* fp){
 	unsigned char _temp;
 	crossfread(&_temp,1,1,fp);
 	if (_temp==13){
@@ -1895,20 +1895,20 @@ void moveFilePointerPastNewline(crossFile fp){
 	}
 }
 // getline but without a newline at the end
-char* easygetline(crossFile fp){
+char* easygetline(crossFile* fp){
 	char* _tempReadLine=NULL;
 	size_t _readLength=0;
 	crossgetline(&_tempReadLine,&_readLength,fp);
 	removeNewline(_tempReadLine);
 	return _tempReadLine;
 }
-int readIntLine(crossFile fp){
+int readIntLine(crossFile* fp){
 	char* _tempReadLine=easygetline(fp);
 	int _ret=atoi(_tempReadLine);
 	free(_tempReadLine);
 	return _ret;
 }
-unsigned char* ReadNumberStringList(crossFile fp, unsigned char* _outArraySize){
+unsigned char* ReadNumberStringList(crossFile* fp, unsigned char* _outArraySize){
 	*_outArraySize = readIntLine(fp);
 	unsigned char* _retList = malloc(sizeof(unsigned char)*(*_outArraySize));
 	int i;
@@ -1917,7 +1917,7 @@ unsigned char* ReadNumberStringList(crossFile fp, unsigned char* _outArraySize){
 	}
 	return _retList;
 }
-char** ReadFileStringList(crossFile fp, unsigned char* _outArraySize){
+char** ReadFileStringList(crossFile* fp, unsigned char* _outArraySize){
 	*_outArraySize = readIntLine(fp);
 	char** _retList = malloc(sizeof(char*)*(*_outArraySize));
 	int i;
@@ -1929,7 +1929,7 @@ char** ReadFileStringList(crossFile fp, unsigned char* _outArraySize){
 void LoadPreset(char* filename){
 	tipNamesLoaded=0;
 	chapterNamesLoaded=0;
-	crossFile fp;
+	crossFile* fp;
 	fp = crossfopen(filename, "r");
 	currentPresetFileList.theArray = ReadFileStringList(fp,&currentPresetFileList.length);
 	if (gameHasTips==1){
@@ -2498,7 +2498,7 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 	return _returnFoundString;
 }
 // Will load a PNG from CG or CGAlt
-crossTexture safeLoadGameImage(const char* filename, char _folderPreference, char _extensionIncluded){
+crossTexture* safeLoadGameImage(const char* filename, char _folderPreference, char _extensionIncluded){
 	char* _tempFoundFilename;
 	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extensionIncluded,scriptForceResourceUppercase);
 	if (_tempFoundFilename==NULL){
@@ -2507,7 +2507,7 @@ crossTexture safeLoadGameImage(const char* filename, char _folderPreference, cha
 		}
 		return NULL;
 	}
-	crossTexture _returnLoadedPNG = loadImage(_tempFoundFilename);
+	crossTexture* _returnLoadedPNG = loadImage(_tempFoundFilename);
 	free(_tempFoundFilename);
 	#if GBPLAT == GB_VITA
 		// Smooth scaling
@@ -2755,7 +2755,7 @@ void DrawScene(const char* _filename, int time){
 	// If we're NOT doing the VNDS easy bust reset trick
 	if (!(lastBackgroundFilename!=NULL && strcmp(lastBackgroundFilename,_filename)==0)){
 		changeMallocString(&lastBackgroundFilename,_filename);
-		crossTexture newBackground = safeLoadGameImage(_filename,graphicsLocation,scriptUsesFileExtensions);
+		crossTexture* newBackground = safeLoadGameImage(_filename,graphicsLocation,scriptUsesFileExtensions);
 		if (newBackground==NULL){
 			freeTexture(currentBackground);
 			currentBackground=NULL;
@@ -2873,7 +2873,7 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 	unsigned char skippedInitialWait=0;
 	if (Busts[passedSlot].isActive){ // Detect if we need to do a fadein transition
 		if (_fadeintime!=0){ // Only do all this fade stupidity if we're going to fade in the first place.
-			crossTexture _cachedOldTexture = Busts[passedSlot].image;
+			crossTexture* _cachedOldTexture = Busts[passedSlot].image;
 			Busts[passedSlot].image=NULL;
 			ResetBustStruct(&(Busts[passedSlot]),1);
 			Busts[passedSlot].transformTexture = _cachedOldTexture;
@@ -3398,7 +3398,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 	}else if (_slot>=MAXMUSICARRAY){
 		easyMessagef(1,"Music slot too high. No action will be taken.");
 	}else{
-		crossMusic _tempHoldSlot=loadGameAudio(filename,PREFER_DIR_BGM,0);
+		crossMusic* _tempHoldSlot=loadGameAudio(filename,PREFER_DIR_BGM,0);
 		if (_tempHoldSlot==NULL){
 			__freeBGMNoLock(_slot);
 		}else{
@@ -4260,7 +4260,7 @@ void showTextbox(){
 		}
 	}
 #else
-	void invertImage(crossTexture _passedImage, signed char _doInvertAlpha){
+	void invertImage(crossTexture* _passedImage, signed char _doInvertAlpha){
 		printf("Invert image at %p. Alpha change: %d\n",_passedImage,_doInvertAlpha);
 	}
 #endif
@@ -4960,13 +4960,13 @@ EASYLUAINTGETFUNCTION(getTextDisplayMode,gameTextDisplayMode)
 void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	int i;
 	// Load images
-	crossTexture* _normalImages;
-	crossTexture* _hoverImages;
-	crossTexture* _selectImages;
+	crossTexture** _normalImages;
+	crossTexture** _hoverImages;
+	crossTexture** _selectImages;
 	int _numChoices = _numArguments/3;
-	_normalImages = malloc(sizeof(crossTexture)*_numChoices);
-	_hoverImages = malloc(sizeof(crossTexture)*_numChoices);
-	_selectImages = malloc(sizeof(crossTexture)*_numChoices);
+	_normalImages = malloc(sizeof(crossTexture*)*_numChoices);
+	_hoverImages = malloc(sizeof(crossTexture*)*_numChoices);
+	_selectImages = malloc(sizeof(crossTexture*)*_numChoices);
 	for (i=0;i<_numChoices;i++){
 		_normalImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+1-1]),graphicsLocation,scriptUsesFileExtensions);
 		_hoverImages[i] = safeLoadGameImage(nathanvariableToString(&_passedArguments[i*3+2-1]),graphicsLocation,scriptUsesFileExtensions);
@@ -5084,7 +5084,7 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 			}else if (_curY>screenHeight){
 				break;
 			}
-			crossTexture _curImg;
+			crossTexture* _curImg;
 			if (i==_userChoice){
 				_curImg = _isHoldSelect==i ? _selectImages[i] : _hoverImages[i];
 			}else{
@@ -6569,7 +6569,7 @@ int vndsSaveSelector(char _isSave){
 	int _slotWidth = screenWidth/SAVEMENUPAGEW;
 	int _slotHeight = screenHeight/SAVEMENUPAGEH;
 
-	crossTexture _loadedThumbnail[SAVEMENUPAGESIZE]={NULL};
+	crossTexture* _loadedThumbnail[SAVEMENUPAGESIZE]={NULL};
 	char* _loadedTextThumb[SAVEMENUPAGESIZE]={NULL};
 
 	int _ret=-2;
@@ -6761,7 +6761,7 @@ void VNDSNavigationMenu(){
 	signed char _choice=0;
 	char* _loadedNovelName=NULL;
 
-	crossTexture _loadedThumbnail=NULL;
+	crossTexture* _loadedThumbnail=NULL;
 
 	//
 	char _possibleThunbnailPath[strlen(streamingAssets)+strlen("/SEArchive.legArchive.legList")+1];
