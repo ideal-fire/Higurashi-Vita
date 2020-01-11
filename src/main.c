@@ -596,6 +596,21 @@ signed char forceDropshadowOption=1;
 		return _buffer;
 	}
 #endif
+char isSpaceOrEmptyStr(const char* _check){
+	if (!_check){
+		return 1;
+	}
+	for (;;++_check){
+		unsigned char _c = *_check;
+		if (_c=='\0'){
+			break;
+		}
+		if (!isspace(_c)){
+			return 0;
+		}
+	}
+	return 1;
+}
 void getInverseBGCol(unsigned char* r, unsigned char* g, unsigned char* b){
 	getClearColor(r,g,b);
 	*r=255-*r;
@@ -1082,23 +1097,27 @@ char SafeLuaDoFile(lua_State* passedState, char* passedPath){
 	}
 	return lazyLuaError(luaL_dofile(passedState,passedPath));
 }
-void WriteToDebugFile(const char* stuff){
+void WriteToDebugFile(const char* _formatString, ...){
+	va_list _tempArgs;
+	va_start(_tempArgs, _formatString);
+	char* _completeString = formatf(_tempArgs,_formatString);
 	#if GBPLAT == GB_LINUX
-		printf("%s\n",stuff);
-		return;
+		printf("%s",_completeString);
+	#else
+		char* _tempDebugFileLocationBuffer = malloc(strlen(gbDataFolder)+strlen("log.txt")+1);
+		strcpy(_tempDebugFileLocationBuffer,gbDataFolder);
+		strcat(_tempDebugFileLocationBuffer,"log.txt");
+		FILE *fp;
+		fp = fopen(_tempDebugFileLocationBuffer, "a");
+		if (!fp){
+			easyMessagef(1,"Failed to open debug file, %s",_tempDebugFileLocationBuffer);
+		}else{
+			fwrite(_completeString,1,strlen(_completeString),fp);
+			fclose(fp);
+		}
+		free(_tempDebugFileLocationBuffer);
 	#endif
-	char* _tempDebugFileLocationBuffer = malloc(strlen(gbDataFolder)+strlen("log.txt")+1);
-	strcpy(_tempDebugFileLocationBuffer,gbDataFolder);
-	strcat(_tempDebugFileLocationBuffer,"log.txt");
-	FILE *fp;
-	fp = fopen(_tempDebugFileLocationBuffer, "a");
-	if (!fp){
-		easyMessagef(1,"Failed to open debug file, %s",_tempDebugFileLocationBuffer);
-	}else{
-		fprintf(fp,"%s\n",stuff);
-		fclose(fp);
-	}
-	free(_tempDebugFileLocationBuffer);
+	free(_completeString);
 }
 #define LAZYCHOICEFYESNOHEIGHTRATIO (1/(double)10)
 // Returns one if they chose yes

@@ -41,6 +41,7 @@ void saveGlobalVNDSVars();
 void drawWrappedText(int _x, int _y, char** _passedLines, int _numLines, unsigned char r, unsigned char g, unsigned char b, unsigned char a);
 void freeWrappedText(int _numLines, char** _passedLines);
 void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, int _maxWidth);
+char isSpaceOrEmptyStr(const char* _check);
 typedef struct{
 	char** theArray;
 	unsigned char length;

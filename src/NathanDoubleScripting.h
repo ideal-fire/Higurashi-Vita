@@ -940,7 +940,7 @@ void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nath
 */
 void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	signed char _ifStatementResult=-1;
-	if (_totalArguments==3){
+	if (_totalArguments==3 || (_totalArguments>=4 && isSpaceOrEmptyStr(nathanvariableToString(&_argumentList[3])))){
 		char* comparisonSymbol = nathanvariableToString(&_argumentList[1]);
 
 		char _firstTemporary;
@@ -959,7 +959,7 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 			free(_secondVariable);
 		}
 	}else{
-		printf("Broken if statement\n");
+		easyMessagef(1,"Broken if statement - num args is %d",_totalArguments);
 		// Not enough args, assumes false because that's what real VNDS does
 		_ifStatementResult=0;
 	}
