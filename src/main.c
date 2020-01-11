@@ -91,7 +91,8 @@
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
-#define VERSIONSTRING "forgotversionnumber" // This
+#define DEFAULTVERSION "forgotversionnumber"
+#define VERSIONSTRING DEFAULTVERSION // This
 #define VERSIONNUMBER 8 // This
 #define VERSIONSTRINGSUFFIX ""
 #define VERSIONCOLOR 255,135,53 // It's Rena colored!
@@ -1565,7 +1566,7 @@ signed char getTouchedBarOption(){
 	return -1;
 }
 void openInGameSettingsMenu(){
-	SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && GBPLAT != GB_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame,(strcmp(VERSIONSTRING,"forgotversionnumber")==0));
+	SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && GBPLAT != GB_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame,(strcmp(VERSIONSTRING,DEFAULTVERSION)==0));
 }
 void updateControlsGeneral(){
 	if (wasJustPressed(BUTTON_Y)){
