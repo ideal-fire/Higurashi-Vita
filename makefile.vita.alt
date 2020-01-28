@@ -1,6 +1,6 @@
 TITLE_ID = VNDSCLONE
 TARGET   = VNDSCLONE
-OBJS     = ./src/main.o ./src/legarchive.o ./stolenCode/qdbmp.o ./stolenCode/customgetline.o
+OBJS     = ./src/main.o ./src/legarchive.o ./stolenCode/qdbmp.o
 
 LIBS = -lgoodbrewvita \
 	-lvorbisfile \
