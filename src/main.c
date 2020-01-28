@@ -1670,11 +1670,15 @@ void outputLineWait(){
 					_selectedSlot=4;
 				}
 				char* _foundPath = easyVNDSSaveName(_selectedSlot);
-				if (!vndsNormalSave(_foundPath,1,1)){
+				endDrawing();
+				char _ret = !vndsNormalSave(_foundPath,1,1);
+				free(_foundPath);
+				controlsReset();
+				startDrawing();
+				if (_ret){
 					PlayMenuSound();
 					drawRectangle(0,0,screenWidth,screenHeight,0,255,0,255);
 				}
-				free(_foundPath);
 			}
 		}
 		
