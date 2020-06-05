@@ -26,3 +26,51 @@ Compile this with the Android NDK as you would any other SDL application written
 Starting points for compiling SDL applications for Android:
 	https://wiki.libsdl.org/Android
 	https://lazyfoo.net/tutorials/SDL/52_hello_mobile/index.php
+
+Compiling (GNU/Linux)
+========
+first, using your package manager, install the development versions of these programs: SDL2, SDL2_image SDL2_ttf, SDL2_mixer
+next, run these commands one by one and do not proceed if one fails:
+# get source code
+git clone "https://github.com/mylegguy/libgoodbrew"
+git clone "https://github.com/MyLegGuy/Higurashi-Vita"
+wget "https://www.lua.org/ftp/lua-5.3.5.tar.gz"
+# compile modified version of lua
+tar -xf lua-5.3.5.tar.gz
+cd lua-5.3.5
+cp ../Higurashi-Vita/_Notes/ModifiedLuaSourceFile/llex.c ./src/llex.c
+make generic
+cp ./src/liblua.a ../Higurashi-Vita/lib/libluaLinux.a
+# compile libgoodbrew (ps vita & pc graphics wrapper) and SDLFontCache
+cd ../libgoodbrew
+cd SDL
+./buildlinux
+sudo cp libSDLFontCacheLinux.a /usr/local/lib/
+sudo cp SDL_FontCache.h /usr/local/include/
+cd ..
+make
+sudo make install
+cd ..
+# compile Higurashi-vita now that we have the dependencies
+cd Higurashi-Vita
+mkdir build
+make -f makefile.general
+# copy all assets
+rsync -a ./VpkContents-Shared/Shared/* ./VpkContents-Shared/Vita/* ./VpkContents-Primary/Shared/* ./VpkContents-Primary/Vita/* ./build/
+
+after this, the final executable is in Higurashi-Vita/build/a.exe
+it's called "a.exe", regardless of the platform. rename it to "a.out" if that pleases you.
+if running it from the terminal, you must use 'cd' to move to the 'build' folder first. otherwise you'll get a red F.
+the "Games" and "Saves" folders are placed next to the executable.
+
+arrow keys -> dpad
+x -> cross
+z -> circle
+a -> square
+s -> triangle
+escape or enter -> start
+e -> select
+b -> android back button
+l -> l
+r -> r
+mouse -> touch screen
