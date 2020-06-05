@@ -1,7 +1,7 @@
 src = ./src/main.c ./src/legarchive.o
 obj = ./src/main.o ./src/legarchive.o
 
-LDFLAGS = -lgoodbrew -lSDLFontCacheLinux -lm -lpthread -lSDL2_image -lSDL2_ttf -lSDL2_mixer `sdl2-config --cflags --libs` -Llib -lluaLinux -ldl
+LDFLAGS = -lgoodbrew -lSDLFontCache -lm -lpthread -lSDL2_image -lSDL2_ttf -lSDL2_mixer `sdl2-config --cflags --libs` -Llib -lluaLinux -ldl
 CFLAGS = -g -Wall -Wno-pointer-sign -Wno-char-subscripts -IInclude -Llib
 OUTNAME = build/a.exe
 
