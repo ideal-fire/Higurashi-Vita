@@ -30,6 +30,8 @@ Starting points for compiling SDL applications for Android:
 Compiling (GNU/Linux)
 ========
 first, using your package manager, install the development versions of these programs: SDL2, SDL2_image SDL2_ttf, SDL2_mixer
+	(for ubuntu: libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev)
+also, install rsync. you probably already have it though.
 next, run these commands one by one and do not proceed if one fails:
 # get source code
 git clone "https://github.com/mylegguy/libgoodbrew"
@@ -50,7 +52,7 @@ cd ../..
 cd libgoodbrew
 cd SDL
 ./buildlinux
-sudo cp libSDLFontCacheLinux.a /usr/local/lib/
+sudo cp libSDLFontCacheLinux.a /usr/local/lib/libSDLFontCache.a
 sudo cp SDL_FontCache.h /usr/local/include/
 cd ..
 make
