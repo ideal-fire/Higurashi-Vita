@@ -41,8 +41,13 @@ cd lua-5.3.5
 cp ../Higurashi-Vita/_Notes/ModifiedLuaSourceFile/llex.c ./src/llex.c
 make generic
 cp ./src/liblua.a ../Higurashi-Vita/lib/libluaLinux.a
+mkdir ./../Higurashi-Vita/Include
+mkdir ./../Higurashi-Vita/Include/Lua
+cd src
+cp *.h *.hpp ../../Higurashi-Vita/Include/Lua/
+cd ../..
 # compile libgoodbrew (ps vita & pc graphics wrapper) and SDLFontCache
-cd ../libgoodbrew
+cd libgoodbrew
 cd SDL
 ./buildlinux
 sudo cp libSDLFontCacheLinux.a /usr/local/lib/
