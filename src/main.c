@@ -19,7 +19,7 @@
 	TODO - is entire font in memory nonsense still needed
 	TODO - Fix this text speed setting nonsense
 	TODO - Game specific settings files
-	TODO - in manual mode, running _GameSpecific.lua first won't keep the settings from being reset by activeVNDSSettings called before manual script.s
+	TODO - in manual mode, running _GameSpecific.lua first won't keep the settings from being reset before the next manual script you run.
 	TODO - i removed the secret save file editor code
 				if (_codeProgress==4){
 					SaveGameEditor();
@@ -1413,7 +1413,6 @@ void DisplaypcallError(int val, const char* fourthMessage){
 }
 // Returns 1 if it worked
 char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
-	activateHigurashiSettings();
 	// Hopefully, nobody tries to call a script from a script and wants to keep the current message display.
 	ClearMessageArray(0);
 	currentScriptLine=0;
@@ -6377,6 +6376,7 @@ void TitleScreen(){
 						currentGameStatus=GAMESTATUS_TITLE;
 					}else{
 						currentGameStatus=GAMESTATUS_MAINGAME;
+						activateHigurashiSettings();
 						RunScript(scriptFolder,_tempManualFileSelectionResult,0);
 						free(_tempManualFileSelectionResult);
 						currentGameStatus=GAMESTATUS_TITLE;
@@ -7224,7 +7224,7 @@ int main(int argc, char *argv[]){
 				}
 				break;
 			case GAMESTATUS_MAINGAME:
-				; // This blank statement is here to allow me to declare a variable. Variables can not be declared directly after a label.
+			{
 				char _didWork = RunScript(scriptFolder, currentPresetFileList.theArray[currentPresetChapter], 1);
 				if (currentPresetFileList.length!=0){
 					if (_didWork==0){ // If the script didn't run, don't advance the game
@@ -7245,6 +7245,7 @@ int main(int argc, char *argv[]){
 					currentGameStatus=GAMESTATUS_TITLE;
 				}
 				break;
+			}
 			case GAMESTATUS_NAVIGATIONMENU:
 				// Menu for chapter jump, tip selection, and going to the next chapter
 				NavigationMenu();
@@ -7282,6 +7283,7 @@ int main(int argc, char *argv[]){
 					LoadGameSpecificStupidity();
 					VNDSNavigationMenu();
 				}else{
+					activateHigurashiSettings();
 					if (strcmp(currentGameFolderName,"PLACEHOLDER.txt")==0){
 						strcpy(_possibleVNDSStatusFile,gamesFolder);
 						strcat(_possibleVNDSStatusFile,currentGameFolderName);
