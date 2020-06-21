@@ -3240,7 +3240,10 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	int _currentDrawChar;
 	char* message;
 	if (currentLine<maxLines && currentMessages[currentLine]!=NULL){ // if required, prepend what was already on the line
-		_currentDrawChar=strlen(currentMessages[currentLine]);
+		_currentDrawChar=strlen(currentMessages[currentLine])-1;
+		if (_currentDrawChar<0){
+			_currentDrawChar=0;
+		}
 		message = malloc(strlen(_tempMsg)+strlen(currentMessages[currentLine])+1);
 		strcpy(message,currentMessages[currentLine]);
 		strcat(message,_tempMsg);
@@ -4856,11 +4859,10 @@ void scriptLoadValueFromLocalWork(nathanscriptVariable* _passedArguments, int _n
 }
 // Calls a function that was made in a script
 void scriptCallSection(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	char buf[256];
-	strcpy(buf, nathanvariableToString(&_passedArguments[0]));
-	strcat(buf,"()");
+	char* buf = easyCombineStrings(2,nathanvariableToString(&_passedArguments[0]),"()");
 	printf("%s\n",buf);
 	luaL_dostring(L,buf);
+	free(buf);
 }
 // I CAN DO THIS EZ-PZ WITH DRAWING RECTANGLES OVER THE SCREEN
 // DrawFilm( 2,  0, 255, 0, 255, 0, 1000, TRUE );
