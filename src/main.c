@@ -33,6 +33,7 @@
 	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
 	TODO - don't show "save game" option in toucb bar if save not supported. oops. looks like the function should just be passed a map of which ones to enable
 	TODO - textboxWidth bug
+	TODO - force line break at wrong index? see TODO in the wraptextadvanced function
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -2061,6 +2062,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 							if (j==i-1){ // if we're about to put the line break right before the space, don't. the space is already a null byte. just use that.
 								_lastNewline=i;
 							}else{
+								// TODO - isn't this dumb? shouldn't i break at index j, not after it?
 								// The character we're at right now, that's where the split needs to be because it's acting as the null terminator right now
 								// In this code, j will represent the last real character from the string
 								char* _newBuffer = malloc(_cachedStrlen+2);
@@ -2070,6 +2072,14 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 								memcpy(&(_newBuffer[j+2]),&(_workable[j+1]),_cachedStrlen-(j)); // Should also copy null
 								free(_workable);
 								_workable = _newBuffer;
+								// also realloc properties
+								if (_propBuff!=NULL){
+									int32_t* _newProps = malloc((_cachedStrlen+1)*sizeof(int32_t));
+									memcpy(_newProps,_propBuff,(j+1)*sizeof(int32_t));
+									memcpy(&(_newProps[j+2]),&(_propBuff[j+1]),(_cachedStrlen-j-1)*sizeof(int32_t));
+									free(_propBuff);
+									_propBuff=_newProps;
+								}
 								// Account for new byte
 								_cachedStrlen++;
 								i++;
