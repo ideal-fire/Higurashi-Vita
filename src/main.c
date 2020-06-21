@@ -1417,6 +1417,7 @@ void DisplaypcallError(int val, const char* fourthMessage){
 		break;
 	}
 	easyMessagef(1,"lua_pcall failed with error %s, please report the bug on the thread.\n%s",_specificError,fourthMessage);
+	easyMessagef(1,"%s",lua_tostring(L,-1));
 }
 void refreshGameState(){
 	nextTextR=DEFAULTFONTCOLORR;
@@ -4568,6 +4569,13 @@ void scriptDrawScene(nathanscriptVariable* _passedArguments, int _numArguments, 
 void scriptNotYet(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	printf("An unimplemented Lua function was just executed.\n");
 }
+void scriptNotYetFlash(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	scriptNotYet(_passedArguments,_numArguments,_returnedReturnArray,_returnArraySize);
+	startDrawing();
+	drawRectangle(0,0,screenWidth,screenHeight,221,80,225,255);
+	endDrawing();
+	wait(30);
+}
 // Fist arg seems to be a channel arg.
 	// Usually 1 for msys
 	// Usually 2 for lsys
@@ -5002,7 +5010,7 @@ void scriptGetScriptLine(nathanscriptVariable* _passedArguments, int _numArgumen
 	nathanvariableArraySetFloat(*_returnedReturnArray,0,currentScriptLine);
 }
 void scriptDebugFile(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	WriteToDebugFile(nathanvariableToString(&_passedArguments[0]));
+	WriteToDebugFile("%s\n",nathanvariableToString(&_passedArguments[0]));
 }
 void scriptOptionsEnableVoiceSetting(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	if (_numArguments==0){

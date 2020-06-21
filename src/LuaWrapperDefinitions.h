@@ -11,6 +11,7 @@ GENERATELUAWRAPPER(scriptWait);
 GENERATELUAWRAPPER(scriptDrawSceneWithMask);
 GENERATELUAWRAPPER(scriptDrawScene);
 GENERATELUAWRAPPER(scriptNotYet);
+GENERATELUAWRAPPER(scriptNotYetFlash);
 GENERATELUAWRAPPER(scriptPlayBGM);
 GENERATELUAWRAPPER(scriptStopBGM);
 GENERATELUAWRAPPER(scriptFadeoutBGM);
@@ -98,6 +99,7 @@ void initLuaWrappers(){
 									// First arg is maybe time when it fades to inverted and argument is proably if it's inverted
 	PUSHLUAWRAPPER(scriptSetAllTextColor,"SetColorOfMessage")
 	PUSHLUAWRAPPER(scriptHigurashiGetRandomNumber,"GetRandomNumber")
+	// HideWindow in happy.lua
 
 	// Options changing commands
 	PUSHLUAWRAPPER(scriptOptionsEnableVoiceSetting,"OptionsEnableVoiceSetting")
@@ -137,6 +139,7 @@ void initLuaWrappers(){
 
 	// Commands exclusive to my engine
 	PUSHLUAWRAPPER(scriptDebugFile,"Debugfile")
+	PUSHLUAWRAPPER(scriptNotYetFlash,"DebugFlash");
 	PUSHLUAWRAPPER(scriptMoveBust,"MoveBust")
 	PUSHLUAWRAPPER(scriptImageChoice,"ImageChoice")
 	LUAREGISTER(L_setDropshadowColor,"setDropshadowColor")
@@ -244,6 +247,22 @@ void initLuaWrappers(){
 		PUSHLUAWRAPPER(scriptNotYet,"WaitForInput")
 		PUSHLUAWRAPPER(scriptNotYet,"WaitToFinishSEPlaying")
 		PUSHLUAWRAPPER(scriptNotYet,"WaitToFinishVoicePlaying")
+	// Not investigated yet batch #2
+		PUSHLUAWRAPPER(scriptNotYetFlash,"DrawFragment");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"DrawSpriteFixedSize");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"DrawSpriteWithFilteringFixedSize");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"FragmentListScreen");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"FragmentViewChapterScreen");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"JumpScriptSection");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"RotateBG");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"SetWindowBackground");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"ShiftSection");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"ShowChapterPreview");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"ShowChapterScreen");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"ShowExtras");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"ShowTips");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"StopFragment");
+		PUSHLUAWRAPPER(scriptNotYetFlash,"Update");
 }
 
 #endif

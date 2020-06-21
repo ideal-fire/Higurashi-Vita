@@ -50,3 +50,27 @@ function GetGlobalFlag(flag)
 	end
 	return globalFlags[flag];
 end
+
+HideWindow=DisableWindow;
+
+
+// write unimplemented
+function wu()
+DebugFlash();
+Debugfile(debug.getinfo(1, "n").name);
+end
+DrawFragment=wu
+DrawSpriteFixedSize=wu
+DrawSpriteWithFilteringFixedSize=wu
+FragmentListScreen=wu
+FragmentViewChapterScreen=wu
+JumpScriptSection=wu
+RotateBG=wu
+SetWindowBackground=wu
+ShiftSection=wu
+ShowChapterPreview=wu
+ShowChapterScreen=wu
+ShowExtras=wu
+ShowTips=wu
+StopFragment=wu
+Update=wu
