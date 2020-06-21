@@ -1612,6 +1612,7 @@ void outputLineWait(){
 	// 1 - show some touch buttons
 	// 2 - textbox hide
 	char _backPressLevel=0;
+	char _clearBeforeWeGo=(endType==Line_Normal);
 	//
 	if (isSkipping==1){
 		controlsStart();
@@ -1779,7 +1780,7 @@ void outputLineWait(){
 		}
 	}while(endType==Line_Normal || endType == Line_WaitForInput);
 	// If we pressed a button to continue the text and we're doing VNDS ADV mode
-	if (currentlyVNDSGame && gameTextDisplayMode==TEXTMODE_ADV && endType==LINE_RESERVED){
+	if (_clearBeforeWeGo || (currentlyVNDSGame && gameTextDisplayMode==TEXTMODE_ADV && endType==LINE_RESERVED)){
 		ClearMessageArray(1);
 	}
 	endType=Line_ContinueAfterTyping;
@@ -4240,7 +4241,7 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 	crossfseek(nathanscriptCurrentOpenFile,_readFilePosition,CROSSFILE_START);
 	if (_startLoadedGame){
 		// Don't instantly proceed
-		endType=Line_Normal;
+		endType=Line_WaitForInput;
 		outputLineWait();
 		// Now we can
 		nathanscriptLowDoFile(nathanscriptCurrentOpenFile,inBetweenVNDSLines);
