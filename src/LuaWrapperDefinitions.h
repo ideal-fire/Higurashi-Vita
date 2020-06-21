@@ -49,6 +49,7 @@ GENERATELUAWRAPPER(scriptSetForceCapFilenames);
 GENERATELUAWRAPPER(scriptSetFontSize);
 GENERATELUAWRAPPER(scriptNegative);
 GENERATELUAWRAPPER(scriptSetAllTextColor);
+GENERATELUAWRAPPER(scriptHigurashiGetRandomNumber);
 GENERATELUAWRAPPER(scriptScalePixels);
 GENERATELUAWRAPPER(scriptDefineImageName);
 GENERATELUAWRAPPER(scriptLoadImageNameSheet);
@@ -96,6 +97,7 @@ void initLuaWrappers(){
 									// Name provably means to negate the colors, or replace the colors with their complementary ones on the other side of the color wheel
 									// First arg is maybe time when it fades to inverted and argument is proably if it's inverted
 	PUSHLUAWRAPPER(scriptSetAllTextColor,"SetColorOfMessage")
+	PUSHLUAWRAPPER(scriptHigurashiGetRandomNumber,"GetRandomNumber")
 
 	// Options changing commands
 	PUSHLUAWRAPPER(scriptOptionsEnableVoiceSetting,"OptionsEnableVoiceSetting")

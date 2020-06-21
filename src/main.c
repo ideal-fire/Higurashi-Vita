@@ -4887,7 +4887,6 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 }
 // Loads a special variable
 void scriptLoadValueFromLocalWork(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	
 	const char* _wordWant = nathanvariableToString(&_passedArguments[0]);
 	//printf("%s\n",_wordWant);
 	if ( strcmp(_wordWant,"SelectResult")==0){
@@ -4980,6 +4979,29 @@ void scriptSetAllTextColor(nathanscriptVariable* _passedArguments, int _numArgum
 	nextTextR=_colorBuff[0];
 	nextTextG=_colorBuff[1];
 	nextTextB=_colorBuff[2];
+}
+// intended behavior in the original game: generate a whole number from [0,<passed number>-1]
+// actual behavior in the original game: generate a whole number from [0,<passedNumber>-2] with a near-zero chance of generating <passedNumber>-1
+// my behavior: like the original game, but slightly more skewed because lazy usage of C's rand()
+void scriptHigurashiGetRandomNumber(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	int _ret;
+	int _passed = nathanvariableToInt(&_passedArguments[0]);
+	if (_passed<=1){ // invalid
+		_ret=0;
+	}else{
+		int _randomGenerated = rand();
+		if (_randomGenerated==RAND_MAX){ // the super small chance of getting the passed value
+			_ret=_passed-1;
+		}else{
+			if (_passed>2){
+				_ret=rand() % (_passed-1);
+			}else{
+				_ret=0;
+			}
+		}
+	}
+	makeNewReturnArray(_returnedReturnArray,_returnArraySize,1);
+	nathanvariableArraySetFloat(*_returnedReturnArray,0,_ret);
 }
 void scriptMoveBust(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	MoveBustSlot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]));
