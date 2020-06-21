@@ -349,8 +349,11 @@ lua_State* L = NULL;
 int endType;
 int maxLines=0;
 char** currentMessages;
-int32_t** messageProps; // a line in messageProps can only be valid if its corresponding currentMessages line isn't NULLn
+int32_t** messageProps; // a line in messageProps can only be valid if its corresponding currentMessages line isn't NULL
 int currentLine=0;
+unsigned char nextTextR=DEFAULTFONTCOLORR;
+unsigned char nextTextG=DEFAULTFONTCOLORG;
+unsigned char nextTextB=DEFAULTFONTCOLORB;
 int place=0;
 
 int lastBGMVolume = 128;
@@ -647,6 +650,9 @@ int strlenNO1(char* src){
 		}
 	}
 	return len;
+}
+void setPropBit(int32_t* _dest, unsigned char _flags){
+	*(((char*)_dest)+3)|=_flags;
 }
 // the list itself must also be allocated
 void freeAllocdStrList(char** _passedList, int _passedLen){
@@ -1412,11 +1418,17 @@ void DisplaypcallError(int val, const char* fourthMessage){
 	}
 	easyMessagef(1,"lua_pcall failed with error %s, please report the bug on the thread.\n%s",_specificError,fourthMessage);
 }
+void refreshGameState(){
+	nextTextR=DEFAULTFONTCOLORR;
+	nextTextG=DEFAULTFONTCOLORG;
+	nextTextB=DEFAULTFONTCOLORB;
+}
 // Returns 1 if it worked
 char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	// Hopefully, nobody tries to call a script from a script and wants to keep the current message display.
 	ClearMessageArray(0);
 	currentScriptLine=0;
+	refreshGameState();
 	char tempstringconcat[strlen(_scriptfolderlocation)+strlen(filename)+strlen(".txt")+1];
 	strcpy(tempstringconcat,_scriptfolderlocation);
 	strcat(tempstringconcat,filename);
@@ -2133,7 +2145,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 								i-=6;
 								_curProp=0;
 							}else{
-								*(((char*)&_curProp)+3)=TEXTPROP_COLORED;
+								setPropBit(&_curProp,TEXTPROP_COLORED);
 								_foundMarkup=1;
 								memset(&_workable[_startI],1,strlen(COLORMARKUPSTART)+6+1);
 								i=_startI;
@@ -3267,6 +3279,24 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	wrapTextAdvanced(&message,&_numLines,NULL,getOutputLineScreenWidth(),&_wrappedProps);
 	if (_numLines==0){
 		goto cleanup;
+	}
+	// apply default color
+	if (nextTextR!=DEFAULTFONTCOLORR || nextTextG!=DEFAULTFONTCOLORG || nextTextB!=DEFAULTFONTCOLORB){
+		char _colorBuff[3];
+		_colorBuff[0]=nextTextR;
+		_colorBuff[1]=nextTextG;
+		_colorBuff[2]=nextTextB;
+		char _linesPassed=0;
+		int i;
+		for (i=0;;++i){
+			if (message[i]=='\0' && (++_linesPassed)==_numLines){
+				break;
+			}
+			if (!(_wrappedProps[i] & TEXTPROP_COLORED)){
+				memcpy(&_wrappedProps[i],_colorBuff,3);
+				setPropBit(&_wrappedProps[i],TEXTPROP_COLORED);
+			}
+		}
 	}
 	int _linesCopied;
 	// if we're not displaying interactively, skip the lines that overflow.
@@ -4929,6 +4959,27 @@ void scriptFadeBG(nathanscriptVariable* _passedArguments, int _numArguments, nat
 		freeTexture(currentBackground);
 		currentBackground=NULL;
 	}
+}
+void scriptSetAllTextColor(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	char _colorBuff[3];
+	_colorBuff[0]=nathanvariableToInt(&_passedArguments[1]);
+	_colorBuff[1]=nathanvariableToInt(&_passedArguments[2]);
+	_colorBuff[2]=nathanvariableToInt(&_passedArguments[3]);
+	// change color of all text on screen
+	int i;
+	for (i=0;i<maxLines;i++){
+		if (currentMessages[i]!=NULL){
+			int _len=strlen(currentMessages[i]);
+			int j;
+			for (j=0;j<_len;++j){
+				memcpy(&messageProps[i][j],_colorBuff,3);
+				setPropBit(&messageProps[i][j],TEXTPROP_COLORED);
+			}
+		}
+	}
+	nextTextR=_colorBuff[0];
+	nextTextG=_colorBuff[1];
+	nextTextB=_colorBuff[2];
 }
 void scriptMoveBust(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	MoveBustSlot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]));
@@ -7182,6 +7233,7 @@ signed char init(){
 	hVitaInitSettings();
 	hVitaInitFont();
 	hVitaInitSound();
+	refreshGameState();
 	return initializeLua();
 }
 #ifdef SPECIALEDITION
