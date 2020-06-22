@@ -51,6 +51,8 @@ GENERATELUAWRAPPER(scriptSetFontSize);
 GENERATELUAWRAPPER(scriptNegative);
 GENERATELUAWRAPPER(scriptSetAllTextColor);
 GENERATELUAWRAPPER(scriptHigurashiGetRandomNumber);
+GENERATELUAWRAPPER(scriptHideTextboxAdvanced);
+
 GENERATELUAWRAPPER(scriptScalePixels);
 GENERATELUAWRAPPER(scriptDefineImageName);
 GENERATELUAWRAPPER(scriptLoadImageNameSheet);
@@ -100,6 +102,7 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptSetAllTextColor,"SetColorOfMessage")
 	PUSHLUAWRAPPER(scriptHigurashiGetRandomNumber,"GetRandomNumber")
 	// HideWindow in happy.lua
+	PUSHLUAWRAPPER(scriptHideTextboxAdvanced,"HideWindow")
 
 	// Options changing commands
 	PUSHLUAWRAPPER(scriptOptionsEnableVoiceSetting,"OptionsEnableVoiceSetting")

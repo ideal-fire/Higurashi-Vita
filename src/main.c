@@ -4292,14 +4292,19 @@ void _textboxTransition(char _isOn, int _totalTime){
 			}
 			startDrawing();
 			drawAdvanced(1,1,1,1,1,0); // Don't draw text
+			unsigned char _curTextAlpha = partMoveFills(_curTime,_startTime,_totalTime,255);
+			DrawMessageText(_isOn ? _curTextAlpha : 255-_curTextAlpha,-1,-1);
 			endDrawing();
 		}
 		currentBoxAlpha = _oldMessageBoxAlpha;
 	}
 	MessageBoxEnabled=_isOn;
 }
+void hideTextboxTimed(int _milli){
+	_textboxTransition(0,_milli);
+}
 void hideTextbox(){
-	_textboxTransition(0,TEXTBOXFADEOUTTIME);
+	hideTextboxTimed(TEXTBOXFADEOUTTIME);
 }
 void showTextbox(){
 	_textboxTransition(1,TEXTBOXFADEINTIME);
@@ -5001,6 +5006,9 @@ void scriptHigurashiGetRandomNumber(nathanscriptVariable* _passedArguments, int 
 	}
 	makeNewReturnArray(_returnedReturnArray,_returnArraySize,1);
 	nathanvariableArraySetFloat(*_returnedReturnArray,0,_ret);
+}
+void scriptHideTextboxAdvanced(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	hideTextboxTimed(nathanvariableToInt(&_passedArguments[0]));
 }
 void scriptMoveBust(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	MoveBustSlot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]));

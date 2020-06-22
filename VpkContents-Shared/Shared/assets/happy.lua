@@ -51,9 +51,6 @@ function GetGlobalFlag(flag)
 	return globalFlags[flag];
 end
 
-HideWindow=DisableWindow;
-
-
 // write unimplemented
 function wu()
 DebugFlash();
