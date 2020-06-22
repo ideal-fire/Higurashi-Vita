@@ -33,7 +33,7 @@ LIBS = -lgoodbrewvita \
 PREFIX  = arm-vita-eabi
 CC      = $(PREFIX)-gcc
 CXX = $(PREFIX)-g++
-CFLAGS  = -Wl,-q -O3 -g -Wall -Wno-pointer-sign -Wno-char-subscripts -IInclude -Llib
+CFLAGS  = -Wl,-q -O3 -g -Wall -Wno-pointer-sign -Wno-char-subscripts -Wno-maybe-uninitialized -IInclude -Llib
 
 CXXFLAGS = $(CFLAGS)
 ASFLAGS = $(CFLAGS)

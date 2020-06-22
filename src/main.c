@@ -4942,7 +4942,14 @@ void scriptLoadValueFromLocalWork(nathanscriptVariable* _passedArguments, int _n
 void scriptCallSection(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* buf = easyCombineStrings(2,nathanvariableToString(&_passedArguments[0]),"()");
 	printf("%s\n",buf);
-	luaL_dostring(L,buf);
+	if (luaL_loadstring(L,buf)){
+		easyMessagef(1,"luaL_loadstring failed: %s",buf);
+	}else{
+		int _res = lua_pcall(L, 0, LUA_MULTRET, 0);
+		if (_res!=LUA_OK){
+			DisplaypcallError(_res,buf);
+		}
+	}
 	free(buf);
 }
 // I CAN DO THIS EZ-PZ WITH DRAWING RECTANGLES OVER THE SCREEN
