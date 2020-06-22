@@ -332,8 +332,13 @@ bustA - Loaded from bust cache and element removed, but not freed, from bust cac
 bgload - First remove bustB from bust cache and then do the same as before.
 */
 cachedImage bustCache[MAXBUSTCACHE];
-
 bust* Busts;
+
+// used in the enlargeScreen function
+double extraGameScaleX=1;
+double extraGameScaleY=1;
+int extraGameOffX=0;
+int extraGameOffY=0;
 
 lua_State* L = NULL;
 /*
@@ -867,6 +872,10 @@ void drawPropertyGameText(int _x, int _y, char* _message, int32_t* _props, unsig
 }
 int imageCharW(signed char _type){
 	return getOtherScaled(getTextureHeight(imageCharImages[_type]),currentTextHeight,getTextureWidth(imageCharImages[_type]));
+}
+void gameObjectClipOn(){
+}
+void gameObjectClipOff(){
 }
 void drawImageChars(unsigned char _alpha, int _maxDrawLine, int _maxDrawLineChar){
 	int i;
@@ -1849,7 +1858,9 @@ void DrawBackgroundAlpha(crossTexture* passedBackground, unsigned char passedAlp
 		signed int _tempXOffset;
 		signed int _tempYOffset;
 		GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
-		drawTextureSizedAlpha(passedBackground,_tempXOffset,_tempYOffset, getTextureWidth(passedBackground)*graphicsScale, getTextureHeight(passedBackground)*graphicsScale, passedAlpha);
+		_tempXOffset+=extraGameOffX;
+		_tempYOffset+=extraGameOffY;
+		drawTextureSizedAlpha(passedBackground,_tempXOffset,_tempYOffset, getTextureWidth(passedBackground)*graphicsScale*extraGameScaleX, getTextureHeight(passedBackground)*graphicsScale*extraGameScaleY, passedAlpha);
 	}
 }
 void DrawBackground(crossTexture* passedBackground){
@@ -1867,15 +1878,17 @@ void DrawBust(bust* passedBust){
 		}
 	}
 	// If the busts end one pixel off again, it may be because these are now int instead of float.
-	float _drawBustX = ceil(_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale);
-	float _drawBustY = ceil(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale);
+	float _drawBustX = ceil(_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale)+extraGameOffX;
+	float _drawBustY = ceil(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale)+extraGameOffY;
+	double _scaleX=graphicsScale*extraGameScaleX;
+	double _scaleY=graphicsScale*extraGameScaleY;
 	if (passedBust->alpha==255){
-		drawTextureScaleAlphaGood(passedBust->image,_drawBustX,_drawBustY,graphicsScale,graphicsScale,255);
+		drawTextureScaleAlphaGood(passedBust->image,_drawBustX,_drawBustY,_scaleX,_scaleY,255);
 	}else{
 		if (passedBust->bustStatus==BUST_STATUS_TRANSFORM_FADEIN){
-			drawTextureScaleAlphaGood(passedBust->transformTexture,_drawBustX,_drawBustY, graphicsScale, graphicsScale, 255-passedBust->alpha);
+			drawTextureScaleAlphaGood(passedBust->transformTexture,_drawBustX,_drawBustY, _scaleX, _scaleY, 255-passedBust->alpha);
 		}
-		drawTextureScaleAlphaGood(passedBust->image,_drawBustX,_drawBustY, graphicsScale, graphicsScale, passedBust->alpha);
+		drawTextureScaleAlphaGood(passedBust->image,_drawBustX,_drawBustY, _scaleX, _scaleY, passedBust->alpha);
 	}
 }
 void RecalculateBustOrder(){
@@ -2796,6 +2809,12 @@ void waitForBustSettle(){
 	}
 }
 void DrawScene(const char* _filename, int time){
+	// TODO - perhaps reverting this instantly is too sudden.
+	extraGameScaleX=1;
+	extraGameScaleY=1;
+	extraGameOffX=0;
+	extraGameOffY=0;
+	//
 	if (isSkipping==1){
 		time=0;
 	}
@@ -5010,6 +5029,19 @@ void scriptHigurashiGetRandomNumber(nathanscriptVariable* _passedArguments, int 
 void scriptHideTextboxAdvanced(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	hideTextboxTimed(nathanvariableToInt(&_passedArguments[0]));
 }
+// top left X, top left Y, width, height, ignored bool, int time, bool waitForCompletion
+void scriptEnlargeScreen(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	extraGameOffX=(nathanvariableToInt(&_passedArguments[0])/(double)scriptScreenWidth)*applyGraphicsScale(actualBackgroundWidth)*-1;
+	extraGameOffY=(nathanvariableToInt(&_passedArguments[1])/(double)scriptScreenHeight)*applyGraphicsScale(actualBackgroundHeight)*-1;
+	if (extraGameOffX>0){
+		extraGameOffX=0;
+	}if (extraGameOffY>0){
+		extraGameOffY=0;
+	}
+	extraGameScaleX=scriptScreenWidth/(double)nathanvariableToInt(&_passedArguments[2]);
+	extraGameScaleY=scriptScreenHeight/(double)nathanvariableToInt(&_passedArguments[3]);
+}
+//
 void scriptMoveBust(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	MoveBustSlot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]));
 }
@@ -5302,6 +5334,7 @@ int L_setDropshadowColor(lua_State* passedState){
 //======================================================
 void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _shouldDrawFilter, char _shouldDrawMessageBox, char _shouldDrawHighBusts, char _shouldDrawMessageText){
 	int i;
+	gameObjectClipOn();
 	if (currentBackground!=NULL && _shouldDrawBackground){
 		DrawBackground(currentBackground);
 	}
@@ -5315,14 +5348,23 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 	if (_shouldDrawFilter){
 		DrawCurrentFilter();
 	}
+	gameObjectClipOff();
 	if (_shouldDrawMessageBox){
 		DrawMessageBox(gameTextDisplayMode,currentBoxAlpha);
 	}
 	if (_shouldDrawHighBusts){
+		char _clipOn=0;
 		for (i = maxBusts-1; i != -1; i--){
 			if (bustOrderOverBox[i]!=255 && Busts[bustOrderOverBox[i]].isActive==1){
+				if (!_clipOn){
+					gameObjectClipOn();
+					_clipOn=1;
+				}
 				DrawBust(&(Busts[bustOrderOverBox[i]]));
 			}
+		}
+		if (_clipOn){
+			gameObjectClipOff();
 		}
 	}
 	if (_shouldDrawMessageText){

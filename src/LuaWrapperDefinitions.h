@@ -52,6 +52,7 @@ GENERATELUAWRAPPER(scriptNegative);
 GENERATELUAWRAPPER(scriptSetAllTextColor);
 GENERATELUAWRAPPER(scriptHigurashiGetRandomNumber);
 GENERATELUAWRAPPER(scriptHideTextboxAdvanced);
+GENERATELUAWRAPPER(scriptEnlargeScreen);
 
 GENERATELUAWRAPPER(scriptScalePixels);
 GENERATELUAWRAPPER(scriptDefineImageName);
@@ -101,8 +102,8 @@ void initLuaWrappers(){
 									// First arg is maybe time when it fades to inverted and argument is proably if it's inverted
 	PUSHLUAWRAPPER(scriptSetAllTextColor,"SetColorOfMessage")
 	PUSHLUAWRAPPER(scriptHigurashiGetRandomNumber,"GetRandomNumber")
-	// HideWindow in happy.lua
 	PUSHLUAWRAPPER(scriptHideTextboxAdvanced,"HideWindow")
+	PUSHLUAWRAPPER(scriptEnlargeScreen,"EnlargeScreen")
 
 	// Options changing commands
 	PUSHLUAWRAPPER(scriptOptionsEnableVoiceSetting,"OptionsEnableVoiceSetting")
@@ -199,7 +200,6 @@ void initLuaWrappers(){
 		PUSHLUAWRAPPER(scriptNotYet,"DrawStandgraphic")
 		PUSHLUAWRAPPER(scriptNotYet,"EnableBlur")
 		PUSHLUAWRAPPER(scriptNotYet,"EnableHorizontalGradation")
-		PUSHLUAWRAPPER(scriptNotYet,"EnlargeScreen")
 		PUSHLUAWRAPPER(scriptNotYet,"ExecutePlannedControl")
 		PUSHLUAWRAPPER(scriptNotYet,"FadeAllBustshots2")
 		PUSHLUAWRAPPER(scriptNotYet,"FadeAllBustshots3")
