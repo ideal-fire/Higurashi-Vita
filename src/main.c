@@ -28,7 +28,6 @@
 				}
 	TODO - add veritcal das to showMenu
 	TODO - textbox alpha should change with background alpha
-	TODO - Fix old character art peeks out the edge of textbox
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
 	TODO - don't show "save game" option in toucb bar if save not supported. oops. looks like the function should just be passed a map of which ones to enable
@@ -873,9 +872,36 @@ void drawPropertyGameText(int _x, int _y, char* _message, int32_t* _props, unsig
 int imageCharW(signed char _type){
 	return getOtherScaled(getTextureHeight(imageCharImages[_type]),currentTextHeight,getTextureWidth(imageCharImages[_type]));
 }
+// This is used in background and bust drawing
+// For Higurashi, this is used to get the center of the screen for all images.
+// For VNDS, this is just used to get the position of the background.
+void GetXAndYOffsetSize(int _width, int _height, signed int* _tempXOffset, signed int* _tempYOffset){
+	if (dynamicScaleEnabled){
+		*_tempXOffset = floor((screenWidth-applyGraphicsScale(_width))/2);
+		*_tempYOffset = floor((screenHeight-applyGraphicsScale(_height))/2);
+	}else{
+		*_tempXOffset = floor((screenWidth-_width)/2);
+		*_tempYOffset = floor((screenHeight-_height)/2);
+		// If they're bigger than the screen, assume that they're supposed to scroll or something
+		if (*_tempXOffset<0){
+			*_tempXOffset=0;
+		}
+		if (*_tempYOffset<0){
+			*_tempYOffset=0;
+		}
+	}
+}
+void GetXAndYOffset(crossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){	
+	GetXAndYOffsetSize(getTextureWidth(_tempImg),getTextureHeight(_tempImg),_tempXOffset,_tempYOffset);
+}
 void gameObjectClipOn(){
+	int _startX;
+	int _startY;
+	GetXAndYOffsetSize(actualBackgroundWidth,actualBackgroundHeight,&_startX,&_startY);
+	enableClipping(_startX,_startY,actualBackgroundWidth,actualBackgroundHeight);
 }
 void gameObjectClipOff(){
+	disableClipping();
 }
 void drawImageChars(unsigned char _alpha, int _maxDrawLine, int _maxDrawLineChar){
 	int i;
@@ -1807,25 +1833,6 @@ void outputLineWait(){
 	}
 	endType=Line_ContinueAfterTyping;
 	lastVoiceSlot=-1;
-}
-// This is used in background and bust drawing
-// For Higurashi, this is used to get the center of the screen for all images.
-// For VNDS, this is just used to get the position of the background.
-void GetXAndYOffset(crossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){
-	if (dynamicScaleEnabled){
-		*_tempXOffset = floor((screenWidth-applyGraphicsScale(getTextureWidth(_tempImg)))/2);
-		*_tempYOffset = floor((screenHeight-applyGraphicsScale(getTextureHeight(_tempImg)))/2);
-	}else{
-		*_tempXOffset = floor((screenWidth-getTextureWidth(_tempImg))/2);
-		*_tempYOffset = floor((screenHeight-getTextureHeight(_tempImg))/2);
-		// If they're bigger than the screen, assume that they're supposed to scroll or something
-		if (*_tempXOffset<0){
-			*_tempXOffset=0;
-		}
-		if (*_tempYOffset<0){
-			*_tempYOffset=0;
-		}
-	}
 }
 double GetXOffsetScale(crossTexture* _tempImg){
 	if (dynamicScaleEnabled){
@@ -2851,6 +2858,7 @@ void DrawScene(const char* _filename, int time){
 				}
 				startDrawing();
 				drawAdvanced(1,1,0,0,1,0); // Draws the old background
+				gameObjectClipOn();
 				DrawBackgroundAlpha(newBackground,_backgroundAlpha); // Draws the new background on top
 				// Draw busts created on the last line at the same alpha as the new background
 				for (i = maxBusts-1; i != -1; i--){
@@ -2858,6 +2866,7 @@ void DrawScene(const char* _filename, int time){
 						DrawBust(&(Busts[bustOrder[i]]));
 					}
 				}
+				gameObjectClipOff();
 				drawAdvanced(0,0,1,MessageBoxEnabled,0,MessageBoxEnabled);
 				endDrawing();
 	
