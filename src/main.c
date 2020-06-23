@@ -1066,7 +1066,7 @@ void DrawMessageBox(char _textmodeToDraw, unsigned char _targetAlpha){
 }
 void DrawCurrentFilter(){
 	if (currentFilterType==FILTERTYPE_EFFECTCOLORMIX){
-		drawRectangle(textboxXOffset,0,textboxWidth,outputLineScreenHeight,filterR,filterG,filterB,filterA);
+		drawRectangle(textboxXOffset,0,textboxWidth-textboxXOffset*2,outputLineScreenHeight,filterR,filterG,filterB,filterA);
 	}	
 }
 u64 waitwithCodeTarget;
@@ -5454,10 +5454,10 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 			}
 		}
 	}
+	gameObjectClipOff();
 	if (_shouldDrawFilter){
 		DrawCurrentFilter();
 	}
-	gameObjectClipOff();
 	if (_shouldDrawMessageBox){
 		DrawMessageBox(gameTextDisplayMode,currentBoxAlpha);
 	}
