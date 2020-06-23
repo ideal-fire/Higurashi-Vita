@@ -42,6 +42,7 @@ void drawWrappedText(int _x, int _y, char** _passedLines, int _numLines, unsigne
 void freeWrappedText(int _numLines, char** _passedLines);
 void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, int _maxWidth);
 char isSpaceOrEmptyStr(const char* _check);
+void enlargeScreenManual(int _destOffX, int _destOffY, double _destScaleX, double _destScaleY, int _time, char _waitForCompletion);
 typedef struct{
 	char** theArray;
 	unsigned char length;

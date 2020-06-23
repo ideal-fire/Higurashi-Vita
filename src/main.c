@@ -338,6 +338,20 @@ double extraGameScaleX=1;
 double extraGameScaleY=1;
 int extraGameOffX=0;
 int extraGameOffY=0;
+struct enlargeAnimInfo* workingEnlarge=NULL; // not NULL if we're enlarging
+struct enlargeAnimInfo{
+	u64 startTime;
+	int totalTime;
+	double destScaleX;
+	double destScaleY;
+	int destOffX;
+	int destOffY;
+	double startScaleX;
+	double startScaleY;
+	int startOffX;
+	int startOffY;
+};
+
 
 lua_State* L = NULL;
 /*
@@ -687,6 +701,9 @@ int easyCenter(int _smallSize, int _bigSize){
 double partMoveFillsEndTime(u64 _curTicks, u64 _endTime, int _totalDifference, double _max){
 	return ((_totalDifference-(_endTime-_curTicks))*_max)/(double)_totalDifference;
 }
+double partMoveValToVal(u64 _curTicks, u64 _endTime, int _totalDifference, double _startRet, double _endRet){
+	return _startRet+partMoveFillsEndTime(_curTicks,_endTime,_totalDifference,_endRet-_startRet);
+}
 double partMoveFills(u64 _curTicks, u64 _startTime, int _totalDifference, double _max){
 	return partMoveFillsEndTime(_curTicks,_startTime+_totalDifference,_totalDifference,_max);
 }
@@ -898,10 +915,29 @@ void gameObjectClipOn(){
 	int _startX;
 	int _startY;
 	GetXAndYOffsetSize(actualBackgroundWidth,actualBackgroundHeight,&_startX,&_startY);
-	enableClipping(_startX,_startY,actualBackgroundWidth,actualBackgroundHeight);
+	enableClipping(_startX,_startY,actualBackgroundWidth*graphicsScale,actualBackgroundHeight*graphicsScale);
 }
 void gameObjectClipOff(){
 	disableClipping();
+}
+void endWorkingEnlarge(){
+	if (workingEnlarge){
+		extraGameScaleX=workingEnlarge->destScaleX;
+		extraGameScaleY=workingEnlarge->destScaleY;
+		extraGameOffX=workingEnlarge->destOffX;
+		extraGameOffY=workingEnlarge->destOffY;
+		free(workingEnlarge);
+		workingEnlarge=NULL;
+	}
+}
+char enlargeActive(){
+	return workingEnlarge || extraGameScaleX!=1 || extraGameScaleY!=1 || extraGameOffX!=0 || extraGameOffY!=0;
+}
+void turnOffEnlarge(){
+	extraGameScaleX=1;
+	extraGameScaleY=1;
+	extraGameOffX=0;
+	extraGameOffY=0;
 }
 void drawImageChars(unsigned char _alpha, int _maxDrawLine, int _maxDrawLineChar){
 	int i;
@@ -1496,6 +1532,7 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 				easyMessagef(1,"luaL_loadfile failed with error UNKNOWN ERROR! This is weird and should NEVER HAPPEN! Please report the bug on the thread.");
 			break;
 		}
+		easyMessagef(1,lua_tostring(L,-1));
 		currentGameStatus=GAMESTATUS_TITLE;
 		return 0;
 	}
@@ -1579,6 +1616,17 @@ void Update(){
 	int i;
 	for (i=0;i<maxBusts;i++){
 		updateBust(&(Busts[i]),_curTime);
+	}
+	if (workingEnlarge){
+		u64 _endTime = workingEnlarge->startTime+workingEnlarge->totalTime;
+		if (_curTime>=_endTime){
+			endWorkingEnlarge();
+		}else{
+			extraGameScaleX=partMoveValToVal(_curTime,_endTime,workingEnlarge->totalTime,workingEnlarge->startScaleX,workingEnlarge->destScaleX);
+			extraGameScaleY=partMoveValToVal(_curTime,_endTime,workingEnlarge->totalTime,workingEnlarge->startScaleY,workingEnlarge->destScaleY);
+			extraGameOffX=partMoveValToVal(_curTime,_endTime,workingEnlarge->totalTime,workingEnlarge->startOffX,workingEnlarge->destOffX);
+			extraGameOffY=partMoveValToVal(_curTime,_endTime,workingEnlarge->totalTime,workingEnlarge->startOffY,workingEnlarge->destOffY);
+		}
 	}
 }
 // prepare a bust to be settled upon the next update
@@ -1885,8 +1933,8 @@ void DrawBust(bust* passedBust){
 		}
 	}
 	// If the busts end one pixel off again, it may be because these are now int instead of float.
-	float _drawBustX = ceil(_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale)+extraGameOffX;
-	float _drawBustY = ceil(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale)+extraGameOffY;
+	float _drawBustX = ceil(_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale*extraGameScaleX)+extraGameOffX;
+	float _drawBustY = ceil(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale*extraGameScaleY)+extraGameOffY;
 	double _scaleX=graphicsScale*extraGameScaleX;
 	double _scaleY=graphicsScale*extraGameScaleY;
 	if (passedBust->alpha==255){
@@ -2816,12 +2864,6 @@ void waitForBustSettle(){
 	}
 }
 void DrawScene(const char* _filename, int time){
-	// TODO - perhaps reverting this instantly is too sudden.
-	extraGameScaleX=1;
-	extraGameScaleY=1;
-	extraGameOffX=0;
-	extraGameOffY=0;
-	//
 	if (isSkipping==1){
 		time=0;
 	}
@@ -2859,6 +2901,15 @@ void DrawScene(const char* _filename, int time){
 				startDrawing();
 				drawAdvanced(1,1,0,0,1,0); // Draws the old background
 				gameObjectClipOn();
+				double _oldScaleX=extraGameScaleX; // temporarily disable any enlargeScreen if active. the new scene won't have it.
+				double _oldScaleY=extraGameScaleY;
+				int _oldOffX=extraGameOffX;
+				int _oldOffY=extraGameOffY;
+				extraGameScaleX=1;
+				extraGameScaleY=1;
+				extraGameOffX=0;
+				extraGameOffY=0;
+				// draw new stuff
 				DrawBackgroundAlpha(newBackground,_backgroundAlpha); // Draws the new background on top
 				// Draw busts created on the last line at the same alpha as the new background
 				for (i = maxBusts-1; i != -1; i--){
@@ -2867,6 +2918,10 @@ void DrawScene(const char* _filename, int time){
 					}
 				}
 				gameObjectClipOff();
+				extraGameScaleX=_oldScaleX;
+				extraGameScaleY=_oldScaleY;
+				extraGameOffX=_oldOffX;
+				extraGameOffY=_oldOffY;
 				drawAdvanced(0,0,1,MessageBoxEnabled,0,MessageBoxEnabled);
 				endDrawing();
 	
@@ -2883,6 +2938,11 @@ void DrawScene(const char* _filename, int time){
 		}
 		currentBackground=newBackground;
 	}
+	// A scene change removes any enlargeScreen active
+	extraGameScaleX=1;
+	extraGameScaleY=1;
+	extraGameOffX=0;
+	extraGameOffY=0;
 	// Fix alpha for busts created on the last line
 	int i;
 	for (i=maxBusts-1;i!=-1;i--){
@@ -2914,6 +2974,47 @@ void DrawScene(const char* _filename, int time){
 			ResetBustStruct(&Busts[i], 1); // Won't double free the busts in the cache because we set the references in the busts to NULL
 		}
 	}
+}
+void enlargeScreenManual(int _destOffX, int _destOffY, double _destScaleX, double _destScaleY, int _time, char _waitForCompletion){
+	endWorkingEnlarge(); // previous one
+	workingEnlarge = malloc(sizeof(struct enlargeAnimInfo));
+	workingEnlarge->startScaleX=extraGameScaleX;
+	workingEnlarge->startScaleY=extraGameScaleY;
+	workingEnlarge->startOffX=extraGameOffX;
+	workingEnlarge->startOffY=extraGameOffY;
+	workingEnlarge->totalTime=_time;
+	workingEnlarge->startTime=getMilli();
+	workingEnlarge->destScaleX=_destScaleX;
+	workingEnlarge->destScaleY=_destScaleY;
+	workingEnlarge->destOffX=_destOffX;
+	workingEnlarge->destOffY=_destOffY;
+	if (workingEnlarge->destOffX>0){
+		workingEnlarge->destOffX=0;
+	}if (workingEnlarge->destOffY>0){
+		workingEnlarge->destOffY=0;
+	}
+	if (_waitForCompletion){
+		while(workingEnlarge){
+			controlsStart();
+			if (proceedPressed()){
+				endWorkingEnlarge();
+			}
+			controlsEnd();
+			Update();
+			startDrawing();
+			Draw(MessageBoxEnabled);
+			endDrawing();
+		}
+	}
+}
+void enlargeScreen(int _x, int _y, int _w, int _h, int _time, char _waitForCompletion){
+	double _destScaleX=scriptScreenWidth/(double)_w;
+	double _destScaleY=scriptScreenHeight/(double)_h;
+	
+	int _destOffX=(_x/(double)scriptScreenWidth)*actualBackgroundWidth*graphicsScale*((scriptScreenWidth-_w)/(double)scriptScreenWidth)*_destScaleX*-1;
+	int _destOffY=(_y/(double)scriptScreenHeight)*actualBackgroundHeight*graphicsScale*((scriptScreenHeight-_h)/(double)scriptScreenHeight)*_destScaleY*-1;
+
+	enlargeScreenManual(_destOffX,_destOffY,_destScaleX,_destScaleY,_time,_waitForCompletion);
 }
 void MoveBustSlot(unsigned char _sourceSlot, unsigned char _destSlot){
 	if (_sourceSlot==_destSlot){
@@ -5047,15 +5148,7 @@ void scriptHideTextboxAdvanced(nathanscriptVariable* _passedArguments, int _numA
 }
 // top left X, top left Y, width, height, ignored bool, int time, bool waitForCompletion
 void scriptEnlargeScreen(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	extraGameOffX=(nathanvariableToInt(&_passedArguments[0])/(double)scriptScreenWidth)*applyGraphicsScale(actualBackgroundWidth)*-1;
-	extraGameOffY=(nathanvariableToInt(&_passedArguments[1])/(double)scriptScreenHeight)*applyGraphicsScale(actualBackgroundHeight)*-1;
-	if (extraGameOffX>0){
-		extraGameOffX=0;
-	}if (extraGameOffY>0){
-		extraGameOffY=0;
-	}
-	extraGameScaleX=scriptScreenWidth/(double)nathanvariableToInt(&_passedArguments[2]);
-	extraGameScaleY=scriptScreenHeight/(double)nathanvariableToInt(&_passedArguments[3]);
+	enlargeScreen(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),nathanvariableToInt(&_passedArguments[3]),nathanvariableToInt(&_passedArguments[5]),nathanvariableToBool(&_passedArguments[6]));
 }
 //
 void scriptMoveBust(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
