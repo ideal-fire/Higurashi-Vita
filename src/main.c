@@ -530,7 +530,6 @@ char canChangeBoxAlpha=1;
 char defaultGameIsSet;
 char nathanscriptIsInit=0;
 char scriptUsesFileExtensions=0;
-char scriptForceResourceUppercase=0;
 char bustsStartInMiddle=1;
 //char shouldUseBustCache=0;
 
@@ -2562,17 +2561,10 @@ char* _locationStringFallbackFormat(const char* filename, char _folderPreference
 	free(_returnFoundString);
 	return NULL;
 }
-char* LocationStringFallback(const char* filename, char _folderPreference, char _extensionIncluded, char _isAllCaps){
+char* LocationStringFallback(const char* filename, char _folderPreference, char _extensionIncluded){
 	char* _foundFileExtension=NULL;
 	char* _workableFilename = malloc(strlen(filename)+1);
 	strcpy(_workableFilename,filename);
-	
-	if (_isAllCaps){
-		signed short i=0;
-		for (i=0;_workableFilename[i]!='\0';i++){
-			_workableFilename[i] = toupper(_workableFilename[i]);
-		}
-	}
 
 	// Remove file extension and put it in _foundFileExtension if file extension is included
 	if (_extensionIncluded){
@@ -2592,17 +2584,14 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 		// Try the included file extension
 		_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference,_foundFileExtension);
 		if (_returnFoundString==NULL){
-			// If not, try png
-			_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference, _isAllCaps==1 ? ".PNG" : ".png");
-			if (_returnFoundString==NULL){
-				// If not, try jpg
-				_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference, _isAllCaps==1 ? ".JPG" : ".jpg");
-			}
+			// If not, try the extensions anyway.
+			goto trywithextension;
 		}
 	}else{
-		_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference, _isAllCaps==1 ? ".PNG" : ".png");
-		if (_returnFoundString==NULL && _extensionIncluded==0){
-			_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference, _isAllCaps==1 ? ".JPG" : ".jpg");
+	trywithextension:
+		_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference, ".png");
+		if (_returnFoundString==NULL){
+			_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference, ".jpg");
 		}
 	}
 
@@ -2615,7 +2604,7 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 // Will load a PNG from CG or CGAlt
 crossTexture* safeLoadGameImage(const char* filename, char _folderPreference, char _extensionIncluded){
 	char* _tempFoundFilename;
-	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extensionIncluded,scriptForceResourceUppercase);
+	_tempFoundFilename = LocationStringFallback(filename,_folderPreference,_extensionIncluded);
 	if (_tempFoundFilename==NULL){
 		if (shouldShowWarnings()){
 			easyMessagef(1,"Image not found, %s",filename);
@@ -3977,7 +3966,6 @@ void activateVNDSSettings(){
 	bustsStartInMiddle=0;
 	scriptScreenWidth=256;
 	scriptScreenHeight=192;
-	scriptForceResourceUppercase=0;
 	dynamicScaleEnabled=1;
 	advNamesPersist=0;
 	//shouldUseBustCache=1;
@@ -3989,7 +3977,6 @@ void activateHigurashiSettings(){
 	bustsStartInMiddle=1;
 	scriptScreenWidth=640;
 	scriptScreenHeight=480;
-	scriptForceResourceUppercase=0;
 	dynamicScaleEnabled=higurashiUsesDynamicScale;
 	advNamesPersist=1;
 	if (!advNamesSupported){
@@ -5377,9 +5364,6 @@ void scriptSetPositionsSize(nathanscriptVariable* _passedArguments, int _numArgu
 }
 void scriptSetIncludedFileExtensions(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	scriptUsesFileExtensions = nathanvariableToBool(&_passedArguments[0]);
-}
-void scriptSetForceCapFilenames(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	scriptForceResourceUppercase = nathanvariableToBool(&_passedArguments[0]);
 }
 void scriptSetFontSize(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	reloadFont(nathanvariableToInt(&_passedArguments[0]),1);

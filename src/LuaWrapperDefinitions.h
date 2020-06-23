@@ -46,7 +46,6 @@ GENERATELUAWRAPPER(scriptOptionsCanChangeBoxAlpha);
 GENERATELUAWRAPPER(scriptImageChoice);
 GENERATELUAWRAPPER(scriptSetPositionsSize);
 GENERATELUAWRAPPER(scriptSetIncludedFileExtensions);
-GENERATELUAWRAPPER(scriptSetForceCapFilenames);
 GENERATELUAWRAPPER(scriptSetFontSize);
 GENERATELUAWRAPPER(scriptNegative);
 GENERATELUAWRAPPER(scriptSetAllTextColor);
@@ -113,7 +112,6 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptOptionsCanChangeBoxAlpha,"OptionsCanChangeBoxAlpha")
 	PUSHLUAWRAPPER(scriptSetPositionsSize,"OptionsSetPositionSize")
 	PUSHLUAWRAPPER(scriptSetIncludedFileExtensions,"OptionsSetIncludedFileExtensions")
-	PUSHLUAWRAPPER(scriptSetForceCapFilenames,"OptionsSetResourceUppercase")
 	PUSHLUAWRAPPER(scriptSetFontSize,"OptionsSetFontSize")
 	PUSHLUAWRAPPER(scriptScalePixels,"scalePixels")
 	PUSHLUAWRAPPER(scriptDefineImageName,"defineImageName")
