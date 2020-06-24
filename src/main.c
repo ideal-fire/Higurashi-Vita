@@ -901,8 +901,10 @@ void GetXAndYOffsetSize(int _width, int _height, signed int* _tempXOffset, signe
 		*_tempXOffset = floor((screenWidth-applyGraphicsScale(_width))/2);
 		*_tempYOffset = floor((screenHeight-applyGraphicsScale(_height))/2);
 	}else{
-		*_tempXOffset = floor(screenWidth/2-_width/2);
-		*_tempYOffset = floor(screenHeight/2-_height/2);
+		*_tempXOffset = floor((screenWidth-_width)/2);
+		//*_tempYOffset = floor(screenHeight/2-_height/2);
+		// this whole "bustsStartInMiddle" nonsense is all to get ps3 busts so start in the middle of the screen. No vertical change needed.
+		*_tempYOffset = floor(screenHeight/2-(actualBackgroundHeight*graphicsScale)/2);
 		// If they're bigger than the screen, assume that they're supposed to scroll or something
 		if (*_tempXOffset<0){
 			*_tempXOffset=0;
