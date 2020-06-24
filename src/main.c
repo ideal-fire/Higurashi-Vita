@@ -290,15 +290,19 @@ typedef struct{
 	crossTexture* image;
 	signed int xOffset;
 	signed int yOffset;
+	double scaleX;
+	double scaleY;
 	char isActive;
-	char isInvisible;
 	int layer;
-	signed short alpha;
+	signed short curAlpha;
 	unsigned char bustStatus;
 	char* relativeFilename; // Filename passed by the script
 	unsigned int lineCreatedOn;
 	double cacheXOffsetScale;
 	double cacheYOffsetScale;
+	//int angle;
+	//int angleOriginX;
+	//int angleOriginY;
 	// status variables. ignore most time.
 	u64 fadeStartTime; // for BUST_STATUS_FADEIN, BUST_STATUS_TRANSFORM_FADEIN, BUST_STATUS_FADEOUT,
 	u64 fadeEndTime;
@@ -309,6 +313,7 @@ typedef struct{
 	u64 startMoveTime;
 	int diffMoveTime;
 	crossTexture* transformTexture; // See BUST_STATUS_TRANSFORM_FADEIN. This is the texture that is transforming
+	unsigned char destAlpha; // how much we want it to have after the fadein
 }bust;
 typedef struct{
 	crossTexture* image;
@@ -896,8 +901,8 @@ void GetXAndYOffsetSize(int _width, int _height, signed int* _tempXOffset, signe
 		*_tempXOffset = floor((screenWidth-applyGraphicsScale(_width))/2);
 		*_tempYOffset = floor((screenHeight-applyGraphicsScale(_height))/2);
 	}else{
-		*_tempXOffset = floor((screenWidth-_width)/2);
-		*_tempYOffset = floor((screenHeight-_height)/2);
+		*_tempXOffset = floor(screenWidth/2-_width/2);
+		*_tempYOffset = floor(screenHeight/2-_height/2);
 		// If they're bigger than the screen, assume that they're supposed to scroll or something
 		if (*_tempXOffset<0){
 			*_tempXOffset=0;
@@ -907,8 +912,8 @@ void GetXAndYOffsetSize(int _width, int _height, signed int* _tempXOffset, signe
 		}
 	}
 }
-void GetXAndYOffset(crossTexture* _tempImg, signed int* _tempXOffset, signed int* _tempYOffset){	
-	GetXAndYOffsetSize(getTextureWidth(_tempImg),getTextureHeight(_tempImg),_tempXOffset,_tempYOffset);
+void GetXAndYOffset(crossTexture* _tempImg, double _sizeScaleX, double _sizeScaleY, signed int* _tempXOffset, signed int* _tempYOffset){
+	GetXAndYOffsetSize(getTextureWidth(_tempImg)*_sizeScaleX,getTextureHeight(_tempImg)*_sizeScaleY,_tempXOffset,_tempYOffset);
 }
 void gameObjectClipOn(){
 	int _startX;
@@ -1420,9 +1425,11 @@ void ResetBustStruct(bust* passedBust, int canfree){
 	passedBust->transformTexture=NULL;
 	passedBust->xOffset=0;
 	passedBust->yOffset=0;
+	passedBust->scaleX=1;
+	passedBust->scaleY=1;
 	passedBust->isActive=0;
-	passedBust->isInvisible=0;
-	passedBust->alpha=255;
+	passedBust->curAlpha=255;
+	passedBust->destAlpha=255;
 	passedBust->bustStatus = BUST_STATUS_NORMAL;
 	passedBust->lineCreatedOn=0;
 	passedBust->relativeFilename=NULL;
@@ -1582,10 +1589,10 @@ void updateBust(bust* _target, u64 _curTime){
 						freeTexture(_target->transformTexture);
 						_target->transformTexture=NULL;
 					}
-					_target->alpha=255;
+					_target->curAlpha=_target->destAlpha;
 					_target->bustStatus = BUST_STATUS_NORMAL;
 				}else{
-					_target->alpha=partMoveFills(_curTime,_target->fadeStartTime,_target->fadeEndTime-_target->fadeStartTime,255);
+					_target->curAlpha=partMoveFills(_curTime,_target->fadeStartTime,_target->fadeEndTime-_target->fadeStartTime,_target->destAlpha);
 				}
 			}
 			break;
@@ -1594,7 +1601,7 @@ void updateBust(bust* _target, u64 _curTime){
 				ResetBustStruct(_target,1);
 				RecalculateBustOrder();
 			}else{
-				_target->alpha=partMoveEmptys(_curTime,_target->fadeStartTime,_target->fadeEndTime-_target->fadeStartTime, 255);
+				_target->curAlpha=partMoveEmptys(_curTime,_target->fadeStartTime,_target->fadeEndTime-_target->fadeStartTime,_target->destAlpha);
 			}
 			break;
 		case BUST_STATUS_SPRITE_MOVE:
@@ -1911,7 +1918,7 @@ void DrawBackgroundAlpha(crossTexture* passedBackground, unsigned char passedAlp
 	if (passedBackground!=NULL){
 		signed int _tempXOffset;
 		signed int _tempYOffset;
-		GetXAndYOffset(passedBackground,&_tempXOffset,&_tempYOffset);
+		GetXAndYOffset(passedBackground,1,1,&_tempXOffset,&_tempYOffset);
 		_tempXOffset+=extraGameOffX;
 		_tempYOffset+=extraGameOffY;
 		drawTextureSizedAlpha(passedBackground,_tempXOffset,_tempYOffset, getTextureWidth(passedBackground)*graphicsScale*extraGameScaleX, getTextureHeight(passedBackground)*graphicsScale*extraGameScaleY, passedAlpha);
@@ -1924,25 +1931,27 @@ void DrawBust(bust* passedBust){
 	signed int _tempXOffset=0;
 	signed int _tempYOffset=0;
 	if (bustsStartInMiddle){
-		GetXAndYOffset(passedBust->image,&_tempXOffset,&_tempYOffset);
+		GetXAndYOffset(passedBust->image,passedBust->scaleX,passedBust->scaleY,&_tempXOffset,&_tempYOffset);
 	}else{
 		// If busts don't start in the middle, they start at the start of the background
 		if (currentBackground!=NULL){
-			GetXAndYOffset(currentBackground,&_tempXOffset,&_tempYOffset);
+			GetXAndYOffset(currentBackground,passedBust->scaleX,passedBust->scaleY,&_tempXOffset,&_tempYOffset);
 		}
 	}
 	// If the busts end one pixel off again, it may be because these are now int instead of float.
 	float _drawBustX = ceil(_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale*extraGameScaleX)+extraGameOffX;
 	float _drawBustY = ceil(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale*extraGameScaleY)+extraGameOffY;
-	double _scaleX=graphicsScale*extraGameScaleX;
-	double _scaleY=graphicsScale*extraGameScaleY;
-	if (passedBust->alpha==255){
+	double _scaleX=graphicsScale*extraGameScaleX*passedBust->scaleX;
+	double _scaleY=graphicsScale*extraGameScaleY*passedBust->scaleY;
+	//printf("%d\n",passedBust->curAlpha);
+	if (passedBust->curAlpha==255){
+		//printf("%f;%f;%f;%f\n",_drawBustX,_drawBustY,_scaleX,_scaleY);
 		drawTextureScaleAlphaGood(passedBust->image,_drawBustX,_drawBustY,_scaleX,_scaleY,255);
 	}else{
 		if (passedBust->bustStatus==BUST_STATUS_TRANSFORM_FADEIN){
-			drawTextureScaleAlphaGood(passedBust->transformTexture,_drawBustX,_drawBustY, _scaleX, _scaleY, 255-passedBust->alpha);
+			drawTextureScaleAlphaGood(passedBust->transformTexture,_drawBustX,_drawBustY, _scaleX, _scaleY, 255-passedBust->curAlpha);
 		}
-		drawTextureScaleAlphaGood(passedBust->image,_drawBustX,_drawBustY, _scaleX, _scaleY, passedBust->alpha);
+		drawTextureScaleAlphaGood(passedBust->image,_drawBustX,_drawBustY, _scaleX, _scaleY, passedBust->curAlpha);
 	}
 }
 void RecalculateBustOrder(){
@@ -2549,15 +2558,12 @@ char* _locationStringFallbackFormat(const char* filename, char _folderPreference
 	if (checkFileExist(_returnFoundString)){
 		return _returnFoundString;
 	}
-
 	// If not exist, try the other folder.
 	free(_returnFoundString);
 	_returnFoundString = easyCombineStrings(4,streamingAssets, getUserPreferredImageDirectoryFallback(_folderPreference),filename,_fileFormat);
 	if (checkFileExist(_returnFoundString)){
 		return _returnFoundString;
 	}
-
-	// If the file still doesn't exist, return NULL
 	free(_returnFoundString);
 	return NULL;
 }
@@ -2773,7 +2779,7 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 	//Busts[passedSlot].statusVariable = 
 	Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
 	if (_time!=0){
-		Busts[passedSlot].alpha=255;
+		Busts[passedSlot].curAlpha=Busts[passedSlot].destAlpha;
 		Busts[passedSlot].fadeStartTime=getMilli();
 		Busts[passedSlot].fadeEndTime=getMilli()+_time;
 		if (_wait==1){
@@ -2784,14 +2790,14 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 				Draw(MessageBoxEnabled);
 				endDrawing();
 				if (proceedPressed()){
-					Busts[passedSlot].alpha = 1;
+					Busts[passedSlot].fadeEndTime=1;
 				}
 				controlsEnd();
 			}
 		}
 	}else{
 		// The free will happen on the next update
-		Busts[passedSlot].alpha=0;
+		Busts[passedSlot].fadeEndTime=1;
 	}
 }
 void FadeAllBustshots(int _time, char _wait){
@@ -2809,11 +2815,9 @@ void FadeAllBustshots(int _time, char _wait){
 		while (_isDone==0){
 			_isDone=1;
 			for (i=0;i<maxBusts;i++){
-				if (Busts[i].isActive==1){
-					if (Busts[i].alpha>0){
-						_isDone=0;
-						break;
-					}
+				if (Busts[i].isActive==1 && Busts[i].bustStatus==BUST_STATUS_FADEOUT){
+					_isDone=0;
+					break;
 				}
 			}
 			controlsStart();
@@ -2824,7 +2828,7 @@ void FadeAllBustshots(int _time, char _wait){
 			if (proceedPressed()){
 				for (i=0;i<maxBusts;i++){
 					if (Busts[i].isActive==1){
-						Busts[i].alpha=1;
+						Busts[i].fadeEndTime=1;
 					}
 				}
 			}
@@ -2882,9 +2886,12 @@ void DrawScene(const char* _filename, int time){
 				int _backgroundAlpha=partMoveFillsCapped(_curTime,_startTime,time,255);
 				// Change alpha of busts made on the last line
 				int i;
-				for (i=maxBusts-1;i!=-1;i--){
-					if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1 && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
-						Busts[bustOrder[i]].alpha = _backgroundAlpha;
+				{
+					double _ratio = _backgroundAlpha/(double)255;
+					for (i=maxBusts-1;i!=-1;i--){
+						if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1 && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
+							Busts[bustOrder[i]].curAlpha = Busts[bustOrder[i]].destAlpha*_ratio;
+						}
 					}
 				}
 				startDrawing();
@@ -2936,7 +2943,7 @@ void DrawScene(const char* _filename, int time){
 	int i;
 	for (i=maxBusts-1;i!=-1;i--){
 		if (bustOrder[i]!=255 && Busts[bustOrder[i]].isActive==1 && Busts[bustOrder[i]].lineCreatedOn == currentScriptLine-1){
-			Busts[bustOrder[i]].alpha = 255;
+			Busts[bustOrder[i]].curAlpha = Busts[bustOrder[i]].destAlpha;
 		}
 	}
 	// Delete old bust cache before putting new ones in it
@@ -3015,12 +3022,13 @@ void MoveBustSlot(unsigned char _sourceSlot, unsigned char _destSlot){
 	RecalculateBustOrder();
 }
 // Returns number of old bust slots if bust slots were added
-int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
+// _scriptForcedWidth and _scriptForcedHeight not used if _scriptForcedWidth is -1
+int drawBustshotAdvanced(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _destAlpha, int _scriptForcedWidth, int _scriptForcedHeight, char _coordsReferToSprMiddle){
 	if (passedSlot>=maxBusts){
 		int _oldMaxBusts = maxBusts;
 		maxBusts = passedSlot+1;
 		increaseBustArraysSize(_oldMaxBusts,maxBusts);
-		if (DrawBustshot(passedSlot,_filename,_xoffset,_yoffset,_layer,_fadeintime,_waitforfadein,_isinvisible)!=0){
+		if (drawBustshotAdvanced(passedSlot,_filename,_xoffset,_yoffset,_layer,_fadeintime,_waitforfadein,_destAlpha,_scriptForcedWidth,_scriptForcedHeight,_coordsReferToSprMiddle)!=0){
 			printf("Strange error.\n");
 		}
 		return _oldMaxBusts;
@@ -3071,15 +3079,22 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 		invertImage(Busts[passedSlot].image,0);
 	}
 
+	// apply the forced draw size
+	if (_scriptForcedWidth!=-1){
+		Busts[passedSlot].scaleX=_scriptForcedWidth/(double)getTextureWidth(Busts[passedSlot].image);
+		Busts[passedSlot].scaleY=_scriptForcedHeight/(double)getTextureHeight(Busts[passedSlot].image);
+	}
+	// adjust for _coordsReferToSprMiddle
+	if (_coordsReferToSprMiddle!=bustsStartInMiddle){
+		signed char _sign = bustsStartInMiddle ? 1 : -1;
+		_xoffset=_xoffset+(getTextureWidth(Busts[passedSlot].image)*Busts[passedSlot].scaleX)/2*_sign-scriptScreenWidth/2;
+		// y offset already refers to the top of the image
+	}
+
 	Busts[passedSlot].xOffset = _xoffset;
 	Busts[passedSlot].yOffset = _yoffset;
 	Busts[passedSlot].cacheXOffsetScale = GetXOffsetScale(Busts[passedSlot].image);
 	Busts[passedSlot].cacheYOffsetScale = GetYOffsetScale(Busts[passedSlot].image);
-	if (_isinvisible!=0){
-		Busts[passedSlot].isInvisible=1;
-	}else{
-		Busts[passedSlot].isInvisible=0;
-	}
 	Busts[passedSlot].layer = _layer;
 	// The lineCreatedOn variable is used to know if the bustshot should stay after a scene change. The bustshot can only stay after a scene change if it's created the line before the scene change AND it doesn't wait for fadein completion.
 	if (_waitforfadein==0){
@@ -3089,8 +3104,17 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 	}
 	Busts[passedSlot].isActive=1;
 	RecalculateBustOrder();
+	Busts[passedSlot].destAlpha=_destAlpha;
+	
+	{
+		int a;
+		int b;
+		GetXAndYOffset(Busts[passedSlot].image,Busts[passedSlot].scaleX,Busts[passedSlot].scaleY,&a,&b);
+		printf("%d;%d;%d;%d;%f;%f\n",a,b,Busts[passedSlot].xOffset,Busts[passedSlot].yOffset,Busts[passedSlot].cacheXOffsetScale,Busts[passedSlot].cacheYOffsetScale);
+	}
+	
 	if (_fadeintime!=0){
-		Busts[passedSlot].alpha=0;
+		Busts[passedSlot].curAlpha=0;
 		u64 _curTime = getMilli();
 		if (Busts[passedSlot].bustStatus == BUST_STATUS_TRANSFORM_FADEIN){
 			Busts[passedSlot].fadeStartTime=_curTime; // Transform fadein doesn't waste any time
@@ -3101,19 +3125,20 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 		Busts[passedSlot].fadeEndTime=_curTime+_fadeintime;		
 	}else{
 		Busts[passedSlot].bustStatus = BUST_STATUS_NORMAL;
+		Busts[passedSlot].curAlpha=_destAlpha;
 	}
 	if (_waitforfadein==1){
-		while (Busts[passedSlot].alpha<255){
+		while (Busts[passedSlot].bustStatus!=BUST_STATUS_NORMAL){
 			controlsStart();
 			Update();
-			if (Busts[passedSlot].alpha>255){
-				Busts[passedSlot].alpha=255;
+			if (Busts[passedSlot].curAlpha>Busts[passedSlot].destAlpha){
+				Busts[passedSlot].curAlpha=Busts[passedSlot].destAlpha;
 			}
 			startDrawing();
 			Draw(MessageBoxEnabled);
 			endDrawing();
 			if (proceedPressed() || skippedInitialWait==1){
-				Busts[passedSlot].alpha = 255;
+				Busts[passedSlot].curAlpha = Busts[passedSlot].destAlpha;
 				Busts[passedSlot].bustStatus = BUST_STATUS_NORMAL;
 				startDrawing();
 				Draw(MessageBoxEnabled);
@@ -3125,6 +3150,9 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 		}
 	}
 	return 0;
+}
+int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _destAlpha){
+	return drawBustshotAdvanced(passedSlot, _filename, _xoffset, _yoffset, _layer, _fadeintime, _waitforfadein, _destAlpha, -1, -1, bustsStartInMiddle);
 }
 char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName){
 	char* tempstringconcat = malloc(strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)+1+4);
@@ -3467,6 +3495,7 @@ transferMoreLines:
 	char _slowTextSpeed=0;
 	while(!_isDone){
 		controlsStart();
+		Update();
 		if (proceedPressed()){
 			_isDone=1;
 		}
@@ -4339,7 +4368,7 @@ void vndsNormalLoad(char* _filename, char _startLoadedGame){
 		_tempReadFilename = readLengthStringFromFile(fp); //
 		if (_tempReadFilename[0]!='\0'){
 			nextVndsBustshotSlot = i+1;
-			DrawBustshot(i,_tempReadFilename,_tempReadX,_tempReadY,i,0,0,0);
+			DrawBustshot(i,_tempReadFilename,_tempReadX,_tempReadY,i,0,0,255);
 		}
 		free(_tempReadFilename);
 	}
@@ -4779,7 +4808,7 @@ void scriptStopBGM(nathanscriptVariable* _passedArguments, int _numArguments, na
 	// Fadein time
 	// (bool) wait for fadein? (15)
 void scriptDrawBustshotWithFiltering(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	DrawBustshot(nathanvariableToInt(&_passedArguments[0]), nathanvariableToString(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[4]), nathanvariableToInt(&_passedArguments[5]), nathanvariableToInt(&_passedArguments[12]), nathanvariableToInt(&_passedArguments[13]), nathanvariableToBool(&_passedArguments[14]), nathanvariableToInt(&_passedArguments[11]));
+	DrawBustshot(nathanvariableToInt(&_passedArguments[0]), nathanvariableToString(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[4]), nathanvariableToInt(&_passedArguments[5]), nathanvariableToInt(&_passedArguments[12]), nathanvariableToInt(&_passedArguments[13]), nathanvariableToBool(&_passedArguments[14]), nathanvariableToInt(&_passedArguments[11]) ? 0 : 255);
 }
 // Butshot slot
 	// Filename
@@ -4807,7 +4836,7 @@ void scriptDrawBustshot(nathanscriptVariable* _passedArguments, int _numArgument
 		Draw(MessageBoxEnabled);
 		endDrawing();
 	}
-	DrawBustshot(nathanvariableToInt(&_passedArguments[0]), nathanvariableToString(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[2]), nathanvariableToInt(&_passedArguments[3]), nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]), nathanvariableToBool(&_passedArguments[15]), nathanvariableToInt(&_passedArguments[12]));
+	DrawBustshot(nathanvariableToInt(&_passedArguments[0]), nathanvariableToString(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[2]), nathanvariableToInt(&_passedArguments[3]), nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]), nathanvariableToBool(&_passedArguments[15]), nathanvariableToInt(&_passedArguments[12]) ? 0 : 255);
 }
 void scriptSetValidityOfInput(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	inputValidity=(nathanvariableToBool(&_passedArguments[0])==1);	
@@ -4866,7 +4895,7 @@ void scriptChangeScene(nathanscriptVariable* _passedArguments, int _numArguments
 	// DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
 void scriptDrawSprite(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),320+nathanvariableToInt(&_passedArguments[3]),240+nathanvariableToInt(&_passedArguments[4]),nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]),nathanvariableToBool(&_passedArguments[15]),0);
+	DrawBustshot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),320+nathanvariableToInt(&_passedArguments[3]),240+nathanvariableToInt(&_passedArguments[4]),nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]),nathanvariableToBool(&_passedArguments[15]),255);
 	//DrawBustshot(nathanvariableToInt(&_passedArguments[1)-1, nathanvariableToString(&_passedArguments[2), nathanvariableToInt(&_passedArguments[3), nathanvariableToInt(&_passedArguments[4), nathanvariableToInt(&_passedArguments[14), nathanvariableToInt(&_passedArguments[15), nathanvariableToBool(&_passedArguments[16), nathanvariableToInt(&_passedArguments[13));
 }
 //MoveSprite(slot, destinationx, destinationy, ?, ?, ?, ?, ?, timeittakes, waitforcompletion)
@@ -4906,7 +4935,50 @@ void scriptFadeSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 	FadeBustshot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]),nathanvariableToBool(&_passedArguments[2]));	
 	return;
 }
+// DrawSpriteFixedSize(slot,filename,???,x,y,z(bigger->smaller)(ignoredbyme),originx,originy,destw,desth,angle(ignoredbyme),ignored,ignored,style(???.ignored),alpha(0isopaque),layer,time,waitForCompletion)
+void scriptDrawSpriteFixedSize(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	int _slot= nathanvariableToInt(&_passedArguments[0]);
+	char* _filename = nathanvariableToString(&_passedArguments[1]);
 
+	int _destX = nathanvariableToInt(&_passedArguments[3]);
+	int _destY = nathanvariableToInt(&_passedArguments[4]);
+	int _originX = nathanvariableToInt(&_passedArguments[6]);
+	int _originY = nathanvariableToInt(&_passedArguments[7]);
+
+	int _w = nathanvariableToInt(&_passedArguments[8]);
+	int _h = nathanvariableToInt(&_passedArguments[9]);
+
+	//int _angle = nathanvariableToInt(&_passedArguments[10]);
+	
+	// the higher the alpha, he more invisible. also it's on a 256 scale.
+	int _alpha = (256-nathanvariableToInt(&_passedArguments[14]));
+	if (_alpha!=256){
+		_alpha=(_alpha/(double)256)*255;
+	}
+	_alpha=limitNum(_alpha,0,255);
+	
+	int _layer = nathanvariableToInt(&_passedArguments[15]);
+	int _time = nathanvariableToInt(&_passedArguments[16]);
+	char _waitForCompletion = nathanvariableToBool(&_passedArguments[15]);
+
+	// fix _destX and _destY so that they account for _originX and _originY and are suitable to be passed to DrawBustshot
+	if (_destX==0 && _destY==0 && _originX==0 && _originY==0){
+		// weird special case.
+		// the image should be centered in the middle of the screen. both in the x and y.
+		_destX=(_w/2)*-1;
+		_destY=(_h/2)*-1;
+	}else{
+		// if the x or y is anything but 0, the left of the image is aligned at middle of the screen, +x
+		// and the top of the image is aligned at middle of the screen, +y
+		_destX+=scriptScreenWidth/2;
+		_destY+=scriptScreenHeight/2;
+		// a positive originX of 200 shifts the image 200 left.
+		// a positive originY shifts the image up
+		_destX-=_originX;
+		_destY-=_originY;
+	}
+	drawBustshotAdvanced(_slot,_filename,_destX,_destY,_layer,_time,_waitForCompletion,_alpha,_w,_h,0);
+}
 #define CHOICESCROLLTIMEOFFSET 500 // How long you have to be on a choice before it starts scrolling
 #define CHOICESCROLLTIMEINTERVAL 100 // How often a new character
 // Select(numoptions, arrayofstring)
@@ -6062,7 +6134,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			for (i=0;i<maxBusts;++i){
 				if (Busts[i].isActive){
 					char* _cacheFilename = strdup(Busts[i].relativeFilename);
-					DrawBustshot(i,_cacheFilename,Busts[i].xOffset,Busts[i].yOffset,Busts[i].layer,0,0,Busts[i].isInvisible);
+					DrawBustshot(i,_cacheFilename,Busts[i].xOffset,Busts[i].yOffset,Busts[i].layer,0,0,Busts[i].destAlpha);
 					free(_cacheFilename);
 				}
 			}

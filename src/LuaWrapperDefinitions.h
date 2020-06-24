@@ -52,6 +52,7 @@ GENERATELUAWRAPPER(scriptSetAllTextColor);
 GENERATELUAWRAPPER(scriptHigurashiGetRandomNumber);
 GENERATELUAWRAPPER(scriptHideTextboxAdvanced);
 GENERATELUAWRAPPER(scriptEnlargeScreen);
+GENERATELUAWRAPPER(scriptDrawSpriteFixedSize);
 
 GENERATELUAWRAPPER(scriptScalePixels);
 GENERATELUAWRAPPER(scriptDefineImageName);
@@ -103,6 +104,7 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptHigurashiGetRandomNumber,"GetRandomNumber")
 	PUSHLUAWRAPPER(scriptHideTextboxAdvanced,"HideWindow")
 	PUSHLUAWRAPPER(scriptEnlargeScreen,"EnlargeScreen")
+	PUSHLUAWRAPPER(scriptDrawSpriteFixedSize,"DrawSpriteFixedSize");
 
 	// Options changing commands
 	PUSHLUAWRAPPER(scriptOptionsEnableVoiceSetting,"OptionsEnableVoiceSetting")
@@ -163,6 +165,7 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptNotYet,"SetValidityOfSaving")
 	PUSHLUAWRAPPER(scriptNotYet,"SetValidityOfLoading")
 	PUSHLUAWRAPPER(scriptNotYet,"EnableJumpingOfReturnIcon")
+	PUSHLUAWRAPPER(scriptNotYet,"RotateBG")
 
 	// Functions I should implement
 	PUSHLUAWRAPPER(scriptNotYet,"SetSpeedOfMessage")
@@ -250,8 +253,6 @@ void initLuaWrappers(){
 		PUSHLUAWRAPPER(scriptNotYet,"WaitToFinishVoicePlaying")
 	// Not investigated yet batch #2
 		PUSHLUAWRAPPER(scriptNotYetFlash,"DrawFragment");
-		PUSHLUAWRAPPER(scriptNotYetFlash,"DrawSpriteFixedSize");
-		PUSHLUAWRAPPER(scriptNotYetFlash,"DrawSpriteWithFilteringFixedSize");
 		PUSHLUAWRAPPER(scriptNotYetFlash,"FragmentListScreen");
 		PUSHLUAWRAPPER(scriptNotYetFlash,"FragmentViewChapterScreen");
 		PUSHLUAWRAPPER(scriptNotYetFlash,"JumpScriptSection");

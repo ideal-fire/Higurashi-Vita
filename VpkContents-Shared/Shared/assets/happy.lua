@@ -51,18 +51,20 @@ function GetGlobalFlag(flag)
 	return globalFlags[flag];
 end
 
+// wrappers
+function DrawSpriteWithFilteringFixedSize(_slot, _filename, _unkOne, _unkStyle, _x, _y, _w, _h, _unkThree, _unkFour, _unkFive, _unkSix, _layer, _time, _waitForComplete)
+   DrawSpriteFixedSize(_slot,_filename,_unkOne,_x,_y,0,0,0,_w,_h,0,false,false,_unkStyle,0,_layer,_time,_waitForComplete);
+end
+
 // write unimplemented
 function wu()
 DebugFlash();
 Debugfile(debug.getinfo(1, "n").name);
 end
 DrawFragment=wu
-DrawSpriteFixedSize=wu
-DrawSpriteWithFilteringFixedSize=wu
 FragmentListScreen=wu
 FragmentViewChapterScreen=wu
 JumpScriptSection=wu
-RotateBG=wu
 SetWindowBackground=wu
 ShiftSection=wu
 ShowChapterPreview=wu
