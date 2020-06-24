@@ -3087,7 +3087,7 @@ int drawBustshotAdvanced(unsigned char passedSlot, const char* _filename, int _x
 	// adjust for _coordsReferToSprMiddle
 	if (_coordsReferToSprMiddle!=bustsStartInMiddle){
 		signed char _sign = bustsStartInMiddle ? 1 : -1;
-		_xoffset=_xoffset+(getTextureWidth(Busts[passedSlot].image)*Busts[passedSlot].scaleX)/2*_sign-scriptScreenWidth/2;
+		_xoffset=_xoffset-scriptScreenWidth/2+(getTextureWidth(Busts[passedSlot].image)*Busts[passedSlot].scaleX)/2*_sign;
 		// y offset already refers to the top of the image
 	}
 
@@ -3105,14 +3105,6 @@ int drawBustshotAdvanced(unsigned char passedSlot, const char* _filename, int _x
 	Busts[passedSlot].isActive=1;
 	RecalculateBustOrder();
 	Busts[passedSlot].destAlpha=_destAlpha;
-	
-	{
-		int a;
-		int b;
-		GetXAndYOffset(Busts[passedSlot].image,Busts[passedSlot].scaleX,Busts[passedSlot].scaleY,&a,&b);
-		printf("%d;%d;%d;%d;%f;%f\n",a,b,Busts[passedSlot].xOffset,Busts[passedSlot].yOffset,Busts[passedSlot].cacheXOffsetScale,Busts[passedSlot].cacheYOffsetScale);
-	}
-	
 	if (_fadeintime!=0){
 		Busts[passedSlot].curAlpha=0;
 		u64 _curTime = getMilli();
