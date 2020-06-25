@@ -80,6 +80,7 @@
 #if GBPLAT == GB_ANDROID
 	#include "SDLLuaDoFile.h"
 #endif
+#include "insensitiveFileFinder.h"
 #include "legarchive.h"
 
 #define LOCATION_UNDEFINED 0
@@ -2554,26 +2555,28 @@ char* _locationStringFallbackFormat(const char* filename, char _folderPreference
 	if (!_fileFormat){
 		_fileFormat="";
 	}
-	char* _returnFoundString;
+	char* _sensitive;
 	// Try the user's first choice
-	_returnFoundString = easyCombineStrings(4,streamingAssets, getUserPreferredImageDirectory(_folderPreference),filename,_fileFormat);
-	if (checkFileExist(_returnFoundString)){
-		return _returnFoundString;
+	_sensitive = easyCombineStrings(4,streamingAssets, getUserPreferredImageDirectory(_folderPreference),filename,_fileFormat);
+	char* _potentialPath;
+	_potentialPath=insensitiveFileExists(_sensitive);
+	free(_sensitive);
+	if (_potentialPath){
+		return _potentialPath;
 	}
 	// If not exist, try the other folder.
-	free(_returnFoundString);
-	_returnFoundString = easyCombineStrings(4,streamingAssets, getUserPreferredImageDirectoryFallback(_folderPreference),filename,_fileFormat);
-	if (checkFileExist(_returnFoundString)){
-		return _returnFoundString;
+	_sensitive = easyCombineStrings(4,streamingAssets, getUserPreferredImageDirectoryFallback(_folderPreference),filename,_fileFormat);
+	_potentialPath=insensitiveFileExists(_sensitive);
+	free(_sensitive);
+	if (_potentialPath){
+		return _potentialPath;
 	}
-	free(_returnFoundString);
 	return NULL;
 }
 char* LocationStringFallback(const char* filename, char _folderPreference, char _extensionIncluded){
 	char* _foundFileExtension=NULL;
 	char* _workableFilename = malloc(strlen(filename)+1);
 	strcpy(_workableFilename,filename);
-
 	// Remove file extension and put it in _foundFileExtension if file extension is included
 	if (_extensionIncluded){
 		signed short i;
@@ -2602,7 +2605,6 @@ char* LocationStringFallback(const char* filename, char _folderPreference, char 
 			_returnFoundString = _locationStringFallbackFormat(_workableFilename,_folderPreference, ".jpg");
 		}
 	}
-
 	if (_foundFileExtension!=NULL){
 		free(_foundFileExtension);
 	}
@@ -3149,41 +3151,53 @@ int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, 
 	return drawBustshotAdvanced(passedSlot, _filename, _xoffset, _yoffset, _layer, _fadeintime, _waitforfadein, _destAlpha, -1, -1, bustsStartInMiddle);
 }
 char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName){
+	char* _ret=NULL;
 	char* tempstringconcat = malloc(strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)+1+4);
 	strcpy(tempstringconcat,streamingAssets);
 	strcat(tempstringconcat,_folderName);
 	strcat(tempstringconcat,_filename);
 	//
+	char* _insensitive;
+	//
 	if (scriptUsesFileExtensions){
-		if (checkFileExist(tempstringconcat)==1){
-			return tempstringconcat;
+		_insensitive=insensitiveFileExists(tempstringconcat);
+		if (_insensitive){
+			_ret=_insensitive;
+			goto foundret;
 		}
 		removeFileExtension(tempstringconcat);
 	}
 	//
 	strcat(tempstringconcat,".ogg");
-	if (checkFileExist(tempstringconcat)==1){
-		return tempstringconcat;
+	_insensitive=insensitiveFileExists(tempstringconcat);
+	if (_insensitive){
+		_ret=_insensitive;
+		goto foundret;
 	}
 	//
 	#if GBSND != GBSND_VITA
 		removeFileExtension(tempstringconcat);
 		strcat(tempstringconcat,".wav");
-		if (checkFileExist(tempstringconcat)==1){
-			return tempstringconcat;
+		_insensitive=insensitiveFileExists(tempstringconcat);
+		if (_insensitive){
+			_ret=_insensitive;
+			goto foundret;
 		}
 	#endif
 	//
 	#if GBSND == GBSND_VITA
 		removeFileExtension(tempstringconcat);
 		strcat(tempstringconcat,".mp3");
-		if (checkFileExist(tempstringconcat)==1){
-			return tempstringconcat;
+		_insensitive=insensitiveFileExists(tempstringconcat);
+		if (_insensitive){
+			_ret=_insensitive;
+			goto foundret;
 		}
 	#endif
 	//
+foundret:
 	free(tempstringconcat);
-	return NULL;
+	return _ret;
 }
 #if GBSND == GBSND_VITA
 	char getProbableSoundFormat(const char* _passedFilename){
@@ -4696,6 +4710,9 @@ void scriptOutputLineAll(nathanscriptVariable* _passedArguments, int _numArgumen
 }
 //
 void scriptWait(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	startDrawing();
+	Draw(MessageBoxEnabled);
+	endDrawing();
 	if (isSkipping!=1){
 		wait(nathanvariableToInt(&_passedArguments[0]));
 	}
@@ -4900,14 +4917,34 @@ void scriptMoveSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 	if (_totalTime!=0){
 		int _xTengoQue = nathanvariableToInt(&_passedArguments[1])-(Busts[_passedSlot].xOffset-320);
 		int _yTengoQue = nathanvariableToInt(&_passedArguments[2])-(Busts[_passedSlot].yOffset-240);
+		/*int _xTengoQue = nathanvariableToInt(&_passedArguments[1])-Busts[_passedSlot].xOffset;
+		int _yTengoQue = nathanvariableToInt(&_passedArguments[2])-Busts[_passedSlot].yOffset;
+		if (bustsStartInMiddle){ // TODO - yep, we have to fix it because of my nonsense bustsStartInMiddle variable that is a lie.
+			_xTengoQue+=scriptScreenWidth/2;
+			_yTengoQue+=scriptScreenHeight/2;
+		}
+		*/
 		Busts[_passedSlot].bustStatus = BUST_STATUS_SPRITE_MOVE;
 		Busts[_passedSlot].diffMoveTime=_totalTime;
 		Busts[_passedSlot].startMoveTime=getMilli();
 		Busts[_passedSlot].diffXMove = _xTengoQue;
 		Busts[_passedSlot].diffYMove = _yTengoQue;
+		Busts[_passedSlot].startXMove = Busts[_passedSlot].xOffset;
+		Busts[_passedSlot].startYMove = Busts[_passedSlot].yOffset;
 	}else{
+		/*Busts[_passedSlot].xOffset=nathanvariableToInt(&_passedArguments[1]);
+		Busts[_passedSlot].yOffset=nathanvariableToInt(&_passedArguments[2]);
+		if (bustsStartInMiddle){ // TODO
+			Busts[_passedSlot].xOffset+=scriptScreenWidth/2;
+			Busts[_passedSlot].yOffset+=scriptScreenHeight/2;
+		}
+		*/
 		Busts[_passedSlot].xOffset=nathanvariableToInt(&_passedArguments[1])+320;
 		Busts[_passedSlot].yOffset=nathanvariableToInt(&_passedArguments[2])+240;
+	}
+	if (Busts[_passedSlot].curAlpha!=255){
+		Busts[_passedSlot].curAlpha=255;
+		Busts[_passedSlot].destAlpha=255;
 	}
 	if (nathanvariableToBool(&_passedArguments[9])){
 		while(Busts[_passedSlot].bustStatus!=BUST_STATUS_NORMAL){
