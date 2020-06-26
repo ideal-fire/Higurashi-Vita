@@ -4990,7 +4990,7 @@ void scriptDrawSpriteFixedSize(nathanscriptVariable* _passedArguments, int _numA
 	
 	int _layer = nathanvariableToInt(&_passedArguments[15]);
 	int _time = nathanvariableToInt(&_passedArguments[16]);
-	char _waitForCompletion = nathanvariableToBool(&_passedArguments[15]);
+	char _waitForCompletion = nathanvariableToBool(&_passedArguments[17]);
 
 	// fix _destX and _destY so that they account for _originX and _originY and are suitable to be passed to DrawBustshot
 	if (_destX==0 && _destY==0 && _originX==0 && _originY==0){
