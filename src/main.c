@@ -216,7 +216,7 @@ char* vitaAppId="HIGURASHI";
 // 5 adds textSpeed
 // 6 adds clearAtBottom
 // 7 adds showVNDSWarnings
-// 8 adds higurashiUsesDynamicScale
+// 8 adds higurashiUsesDynamicScale (now ignored)
 // 9 adds preferredTextDisplayMode
 // 10 adds autoModeVoicedWait
 // 11 adds vndsSpritesFade
@@ -536,7 +536,6 @@ char defaultGameIsSet;
 char nathanscriptIsInit=0;
 char scriptUsesFileExtensions=0;
 char bustsStartInMiddle=1;
-//char shouldUseBustCache=0;
 
 // What scripts think the screen width and height is for sprite positions
 // For Higurashi, this is 640x480
@@ -547,7 +546,6 @@ int scriptScreenHeight=480;
 // X and Y scale applied to graphics size
 double graphicsScale=1.0;
 signed char dynamicScaleEnabled=1;
-signed char higurashiUsesDynamicScale=0;
 char overrideOffsetVals;
 double overrideXOffScale;
 double overrideYOffScale;
@@ -606,7 +604,6 @@ signed char forceShowVNDSSettings=-1;
 signed char forceShowVNDSSave=-1;
 signed char forceShowRestartBGM=-1;
 signed char forceArtLocationSlot=-1;
-signed char forceScalingOption=-1;
 signed char forceTextBoxModeOption=-1;
 signed char forceVNDSFadeOption=-1;
 signed char forceDebugButton=-1;
@@ -3093,8 +3090,8 @@ int drawBustshotAdvanced(unsigned char passedSlot, const char* _filename, int _x
 		invertImage(Busts[passedSlot].image,0);
 	}
 
-	Busts[passedSlot].cacheXOffsetScale = GetXOffsetScale(Busts[passedSlot].image);
-	Busts[passedSlot].cacheYOffsetScale = GetYOffsetScale(Busts[passedSlot].image);
+	Busts[passedSlot].cacheXOffsetScale = GetXOffsetScale();
+	Busts[passedSlot].cacheYOffsetScale = GetYOffsetScale();
 	// apply the forced draw size
 	if (_scriptForcedWidth!=-1){
 		Busts[passedSlot].scaleX=_scriptForcedWidth/(double)getTextureWidth(Busts[passedSlot].image);
@@ -3103,6 +3100,7 @@ int drawBustshotAdvanced(unsigned char passedSlot, const char* _filename, int _x
 	// adjust for _coordsReferToSprMiddle
 	if (_coordsReferToSprMiddle){
 		convertPosition(1,&_xoffset,&_yoffset,Busts[passedSlot].image);
+		printf("is now %d;%d\n",_xoffset,_yoffset);
 	}
 
 	Busts[passedSlot].xOffset = _xoffset;
@@ -3663,7 +3661,7 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 // textSpeed, 1 byte
 // clearAtBottom, 1 byte
 // showVNDSWarnings, 1 byte
-// higurashiUsesDynamicScale, 1 byte
+// higurashiUsesDynamicScale, 1 byte. (00 written now.)
 // preferredTextDisplayMode, 1 byte
 // autoModeVoicedWait, 4 bytes
 void SaveSettings(){
@@ -3689,7 +3687,7 @@ void SaveSettings(){
 	fwrite(&textSpeed,1,1,fp);
 	fwrite(&clearAtBottom,sizeof(signed char),1,fp);
 	fwrite(&showVNDSWarnings,sizeof(signed char),1,fp);
-	fwrite(&higurashiUsesDynamicScale,sizeof(signed char),1,fp);
+	fputc(0x00,fp);
 	fwrite(&preferredTextDisplayMode,sizeof(signed char),1,fp);
 	fwrite(&autoModeVoicedWait,sizeof(int),1,fp);
 	fwrite(&vndsSpritesFade,sizeof(signed char),1,fp);
@@ -3745,7 +3743,7 @@ void LoadSettings(){
 			fread(&showVNDSWarnings,sizeof(signed char),1,fp);
 		}
 		if (_tempOptionsFormat>=8){
-			fread(&higurashiUsesDynamicScale,sizeof(signed char),1,fp);
+			fgetc(fp); // ignore higurashiUsesDynamicScale
 		}
 		if (_tempOptionsFormat>=9){
 			fread(&preferredTextDisplayMode,sizeof(signed char),1,fp);
@@ -4013,7 +4011,6 @@ void activateVNDSSettings(){
 	scriptScreenHeight=192;
 	dynamicScaleEnabled=1;
 	advNamesPersist=0;
-	//shouldUseBustCache=1;
 	recalculateMaxLines();
 }
 void activateHigurashiSettings(){
@@ -4022,7 +4019,7 @@ void activateHigurashiSettings(){
 	bustsStartInMiddle=1;
 	scriptScreenWidth=640;
 	scriptScreenHeight=480;
-	dynamicScaleEnabled=higurashiUsesDynamicScale;
+	dynamicScaleEnabled=1;
 	advNamesPersist=1;
 	if (!advNamesSupported){
 		advNamesSupported=1;
@@ -4038,7 +4035,6 @@ void activateHigurashiSettings(){
 		overrideBustOffX=easyCenter(_positionBoxW,screenWidth);
 		overrideBustOffY=easyCenter(_positionBoxH,screenHeight);
 	}
-	//shouldUseBustCache=0;
 	applyTextboxChanges(1);
 }
 #if GBPLAT == GB_VITA
@@ -5297,7 +5293,6 @@ EASYLUAINTSETFUNCTION(oMenuVNDSSettings,forceShowVNDSSettings)
 EASYLUAINTSETFUNCTION(oMenuVNDSSave,forceShowVNDSSave)
 EASYLUAINTSETFUNCTION(oMenuRestartBGM,forceShowRestartBGM)
 EASYLUAINTSETFUNCTION(oMenuArtLocations,forceArtLocationSlot)
-EASYLUAINTSETFUNCTION(oMenuScalingOption,forceScalingOption)
 EASYLUAINTSETFUNCTION(oMenuVNDSBustFade,forceVNDSFadeOption)
 EASYLUAINTSETFUNCTION(oMenuDebugButton,forceDebugButton)
 EASYLUAINTSETFUNCTION(oMenuTextboxMode,forceTextBoxModeOption) // ADV or NVL
@@ -5864,7 +5859,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	overrideIfSet(&_shouldShowVNDSSave,forceShowVNDSSave);
 	overrideIfSet(&_shouldShowRestartBGM,forceShowRestartBGM);
 	overrideIfSet(&_showArtLocationSlot,forceArtLocationSlot);
-	overrideIfSet(&_showScalingOption,forceScalingOption);
 	overrideIfSet(&_showTextBoxModeOption,forceTextBoxModeOption);
 	overrideIfSet(&_showVNDSFadeOption,forceVNDSFadeOption);
 	overrideIfSet(&_showDebugButton,forceDebugButton);
@@ -5961,7 +5955,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	_settingsOn[SETTING_BUSTLOC]=_showArtLocationSlot;
 	_settingsOn[SETTING_VNDSWAR]=_shouldShowVNDSSettings;
 	_settingsOn[SETTING_VNDSFADE]=_showVNDSFadeOption;
-	_settingsOn[SETTING_DYNAMICSCAL]=_showScalingOption;
 	#if GBPLAT != GB_VITA
 		_settingsOn[SETTING_OVERCLOCK]=0;
 	#endif
@@ -6006,9 +5999,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		}
 		if (_settingsOn[SETTING_VNDSFADE]){
 			_values[SETTING_VNDSFADE]=charToSwitch(vndsSpritesFade);
-		}
-		if (_settingsOn[SETTING_DYNAMICSCAL]){
-			_values[SETTING_DYNAMICSCAL]=charToSwitch(higurashiUsesDynamicScale);
 		}
 		// controls
 		if (gbHasTouch()==GBYES){ // do not allow turning off touch if it's the preferred method
@@ -6133,18 +6123,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 				break;
 			case SETTING_VNDSWAR:
 				showVNDSWarnings = !showVNDSWarnings;
-				break;
-			case SETTING_DYNAMICSCAL:
-				higurashiUsesDynamicScale=!higurashiUsesDynamicScale;
-				dynamicScaleEnabled=higurashiUsesDynamicScale;
-				updateGraphicsScale();
-				updateTextPositions();
-				for (i=0;i<maxBusts;++i){
-					if (Busts[i].isActive){
-						Busts[i].cacheXOffsetScale = GetXOffsetScale(Busts[i].image);
-						Busts[i].cacheYOffsetScale = GetYOffsetScale(Busts[i].image);
-					}
-				}
 				break;
 			case SETTING_TEXTMODE:
 				preferredTextDisplayMode = (preferredTextDisplayMode==TEXTMODE_ADV ? TEXTMODE_NVL : TEXTMODE_ADV);
@@ -7352,10 +7330,21 @@ void initializeNathanScript(){
 	}
 }
 // All init after this assumes this is avalible
-void hVitaCrutialInit(){
+void hVitaCrutialInit(int argc, char** argv){
 	srand(time(NULL));
 	generalGoodInit();
-	initGraphics(960,544,WINDOWFLAG_EXTRAFEATURES);
+	{
+		int _widthRequest=960;
+		int _heightRequest=480;
+		for (int i=0;i<argc;++i){
+			if (strcmp(argv[i],"--size")==0){
+				_widthRequest=atoi(argv[i+1]);
+				_heightRequest=atoi(argv[i+2]);
+				i+=2;
+			}
+		}
+		initGraphics(_widthRequest,_heightRequest,WINDOWFLAG_EXTRAFEATURES);
+	}
 	screenWidth = getScreenWidth();
 	screenHeight = getScreenHeight();
 	initImages();
@@ -7511,11 +7500,11 @@ void hVitaInitMisc(){
 	//
 	ClearDebugFile();
 }
-signed char init(){
+signed char init(int argc, char** argv){
 	#ifdef OVERRIDE_INIT
 		return customInit();
 	#endif
-	hVitaCrutialInit();
+	hVitaCrutialInit(argc, argv);
 	hVitaCheckVpk();
 	hVitaInitMisc();
 	hVitaInitSettings();
@@ -7529,7 +7518,7 @@ signed char init(){
 #endif
 int main(int argc, char *argv[]){
 	/* code */
-	if (init()==2){
+	if (init(argc,argv)==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
 	while (currentGameStatus!=GAMESTATUS_QUIT){
