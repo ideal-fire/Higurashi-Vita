@@ -300,6 +300,8 @@ typedef struct{
 	unsigned int lineCreatedOn;
 	double cacheXOffsetScale;
 	double cacheYOffsetScale;
+	int originXForAdjust; // originX and originY sets a custom point to be the center of the screen. your position is relative to that.
+	int originYForAdjust;
 	//int angle;
 	//int angleOriginX;
 	//int angleOriginY;
@@ -952,6 +954,11 @@ void convertPosition(char _inDoesReferToMiddle, int* x, int* y, crossTexture* _t
 	*x=*x+_freeX;
 	*y=*y+_freeY;
 }
+// originX and originY sets a custom point to be the center of the screen. your position is relative to that.
+void adjustForOriginPos(int* x, int* y, int _originX, int _originY){
+	*x=*x-_originX;
+	*y=*y-_originY;
+}
 void gameObjectClipOn(){
 	int _startX;
 	int _startY;
@@ -1462,6 +1469,8 @@ void ResetBustStruct(bust* passedBust, int canfree){
 	passedBust->transformTexture=NULL;
 	passedBust->xOffset=0;
 	passedBust->yOffset=0;
+	passedBust->originXForAdjust=0;
+	passedBust->originYForAdjust=0;
 	passedBust->scaleX=1;
 	passedBust->scaleY=1;
 	passedBust->isActive=0;
@@ -3100,7 +3109,6 @@ int drawBustshotAdvanced(unsigned char passedSlot, const char* _filename, int _x
 	// adjust for _coordsReferToSprMiddle
 	if (_coordsReferToSprMiddle){
 		convertPosition(1,&_xoffset,&_yoffset,Busts[passedSlot].image);
-		printf("is now %d;%d\n",_xoffset,_yoffset);
 	}
 
 	Busts[passedSlot].xOffset = _xoffset;
@@ -4919,31 +4927,32 @@ void scriptChangeScene(nathanscriptVariable* _passedArguments, int _numArguments
 // x is relative to -320
 	// y is relative to -240???
 	// DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
+// DrawSprite(slot, filename, ?, x, y, z, originx, originy, angle, ignored, ignored, style(???,ignored), alpha, layer, wait, waitForcompletion)
 void scriptDrawSprite(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
 	int _x=nathanvariableToInt(&_passedArguments[3]);
 	int _y=nathanvariableToInt(&_passedArguments[4]);
-	char _posRefersToCenter=0;
-	if (_x==0 && _y==0){
-		_posRefersToCenter=1;
-	}else{
-		fixScriptSpritePos(&_x,&_y);
-	}
-	drawBustshotAdvanced(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),_x,_y,nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]),nathanvariableToBool(&_passedArguments[15]),255,-1,-1,_posRefersToCenter);
+	int _originX=nathanvariableToInt(&_passedArguments[6]);
+	int _originY=nathanvariableToInt(&_passedArguments[7]);
+	adjustForOriginPos(&_x,&_y,_originX,_originY);
+	fixScriptSpritePos(&_x,&_y);
+	int _slot=nathanvariableToInt(&_passedArguments[0]);
+	drawBustshotAdvanced(_slot,nathanvariableToString(&_passedArguments[1]),_x,_y,nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]),nathanvariableToBool(&_passedArguments[15]),255,-1,-1,0);
+	Busts[_slot].originXForAdjust=_originX;
+	Busts[_slot].originYForAdjust=_originY;
 }
 //MoveSprite(slot, destinationx, destinationy, ?, ?, ?, ?, ?, timeittakes, waitforcompletion)
 	// MoveSprite(5,-320,-4500,0,0,0,0,0,101400, TRUE)
+// MoveSprite(slot,x,y,z,angle,alpha(?),type(?),time,waitforcompeltion)
 void scriptMoveSprite(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	int _totalTime = nathanvariableToInt(&_passedArguments[8]);
 	int _passedSlot = nathanvariableToInt(&_passedArguments[0]);
 	int _xDest=nathanvariableToInt(&_passedArguments[1]);
 	int _yDest=nathanvariableToInt(&_passedArguments[2]);
-	if (_xDest==0 && _yDest==0){
-		convertPosition(1,&_xDest,&_yDest,Busts[_passedSlot].image);
-	}else{
-		fixScriptSpritePos(&_xDest,&_yDest);
-	}
-	printf("need to go to %d;%d from %d;%d\n",_xDest,_yDest,Busts[_passedSlot].xOffset,Busts[_passedSlot].yOffset);
+
+	adjustForOriginPos(&_xDest,&_yDest,Busts[_passedSlot].originXForAdjust,Busts[_passedSlot].originYForAdjust);
+	fixScriptSpritePos(&_xDest,&_yDest);
+	
 	if (_totalTime!=0){
 		int _xTengoQue = _xDest-Busts[_passedSlot].xOffset;
 		int _yTengoQue = _yDest-Busts[_passedSlot].yOffset;
@@ -5007,21 +5016,13 @@ void scriptDrawSpriteFixedSize(nathanscriptVariable* _passedArguments, int _numA
 	int _layer = nathanvariableToInt(&_passedArguments[15]);
 	int _time = nathanvariableToInt(&_passedArguments[16]);
 	char _waitForCompletion = nathanvariableToBool(&_passedArguments[17]);
-
-	char _coordsReferToMiddle=0;
-	// fix _destX and _destY so that they account for _originX and _originY and are suitable to be passed to DrawBustshot
-	if (_destX==0 && _destY==0 && _originX==0 && _originY==0){
-		// weird special case.
-		// the image should be centered in the middle of the screen. both in the x and y.
-		_coordsReferToMiddle=1;
-	}else{
-		fixScriptSpritePos(&_destX,&_destY);
-		// a positive originX of 200 shifts the image 200 left.
-		// a positive originY shifts the image up
-		_destX-=_originX;
-		_destY-=_originY;
-	}
-	drawBustshotAdvanced(_slot,_filename,_destX,_destY,_layer,_time,_waitForCompletion,_alpha,_w,_h,_coordsReferToMiddle);
+	
+	adjustForOriginPos(&_destX,&_destY,_originX,_originY);
+	fixScriptSpritePos(&_destX,&_destY);
+	
+	drawBustshotAdvanced(_slot,_filename,_destX,_destY,_layer,_time,_waitForCompletion,_alpha,_w,_h,0);
+	Busts[_slot].originXForAdjust=_originX;
+	Busts[_slot].originYForAdjust=_originY;
 }
 #define CHOICESCROLLTIMEOFFSET 500 // How long you have to be on a choice before it starts scrolling
 #define CHOICESCROLLTIMEINTERVAL 100 // How often a new character
@@ -7335,7 +7336,7 @@ void hVitaCrutialInit(int argc, char** argv){
 	generalGoodInit();
 	{
 		int _widthRequest=960;
-		int _heightRequest=480;
+		int _heightRequest=544;
 		for (int i=0;i<argc;++i){
 			if (strcmp(argv[i],"--size")==0){
 				_widthRequest=atoi(argv[i+1]);
