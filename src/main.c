@@ -3103,8 +3103,8 @@ int drawBustshotAdvanced(unsigned char passedSlot, const char* _filename, int _x
 	Busts[passedSlot].cacheYOffsetScale = GetYOffsetScale();
 	// apply the forced draw size
 	if (_scriptForcedWidth!=-1){
-		Busts[passedSlot].scaleX=_scriptForcedWidth/(double)getTextureWidth(Busts[passedSlot].image);
-		Busts[passedSlot].scaleY=_scriptForcedHeight/(double)getTextureHeight(Busts[passedSlot].image);
+		Busts[passedSlot].scaleX=_scriptForcedWidth/(double)getTextureWidth(Busts[passedSlot].image)*GetXOffsetScale();
+		Busts[passedSlot].scaleY=_scriptForcedHeight/(double)getTextureHeight(Busts[passedSlot].image)*GetYOffsetScale();
 	}
 	// adjust for _coordsReferToSprMiddle
 	if (_coordsReferToSprMiddle){
