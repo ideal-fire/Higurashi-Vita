@@ -14,7 +14,6 @@
 			Actually, the command is removed in ADV mode.
 		TODO - Allow VNDS sound command to stop all sounds
 		TODO - SetSpeedOfMessage
-		TODO - Sort files in file browser
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 	TODO - is entire font in memory nonsense still needed
 	TODO - Fix this text speed setting nonsense
@@ -549,6 +548,11 @@ int scriptScreenHeight=480;
 double graphicsScale=1.0;
 signed char dynamicScaleEnabled=1;
 signed char higurashiUsesDynamicScale=0;
+char overrideOffsetVals;
+double overrideXOffScale;
+double overrideYOffScale;
+int overrideBustOffX;
+int overrideBustOffY;
 
 // This assumes the background is the biggest image. These values decide how much to scale all other elements, such as characters.
 int actualBackgroundWidth;
@@ -894,34 +898,67 @@ void drawPropertyGameText(int _x, int _y, char* _message, int32_t* _props, unsig
 int imageCharW(signed char _type){
 	return getOtherScaled(getTextureHeight(imageCharImages[_type]),currentTextHeight,getTextureWidth(imageCharImages[_type]));
 }
-// This is used in background and bust drawing
-// For Higurashi, this is used to get the center of the screen for all images.
-// For VNDS, this is just used to get the position of the background.
-void GetXAndYOffsetSize(int _width, int _height, signed int* _tempXOffset, signed int* _tempYOffset){
-	if (dynamicScaleEnabled){
-		*_tempXOffset = floor((screenWidth-applyGraphicsScale(_width))/2);
-		*_tempYOffset = floor((screenHeight-applyGraphicsScale(_height))/2);
+double GetXOffsetScale(){
+	if (overrideXOffScale!=0){
+		return overrideXOffScale;
+	}
+	return applyGraphicsScale(actualBackgroundWidth)/(double)scriptScreenWidth;
+}
+double GetYOffsetScale(){
+	if (overrideYOffScale){
+		return overrideYOffScale;
+	}
+	return applyGraphicsScale(actualBackgroundHeight)/(double)scriptScreenHeight;
+}
+void centerSize(int _w, int _h, int* _retX, int* _retY){
+	*_retX=easyCenter(_w,screenWidth);
+	*_retY=easyCenter(_h,screenHeight);
+}
+// convert it to a position that refers to the left edge of the sprite from the background
+// if the x or y is anything but 0, the left of the image is aligned at middle of the screen, +x
+// and the top of the image is aligned at middle of the screen, +y
+// for higurashi only
+void fixScriptSpritePos(int* x, int* y){
+	*x+=scriptScreenWidth/2;
+	*y+=scriptScreenHeight/2;
+}
+void getBackgroundOff(int* _retX, int* _retY){
+	centerSize(actualBackgroundWidth*graphicsScale,actualBackgroundHeight*graphicsScale,_retX,_retY);
+}
+void getBustOff(int* _retX, int* _retY){
+	if (overrideOffsetVals){
+		*_retX=overrideBustOffX;
+		*_retY=overrideBustOffY;
 	}else{
-		*_tempXOffset = floor((screenWidth-_width)/2);
-		//*_tempYOffset = floor(screenHeight/2-_height/2);
-		// this whole "bustsStartInMiddle" nonsense is all to get ps3 busts so start in the middle of the screen. No vertical change needed.
-		*_tempYOffset = floor(screenHeight/2-(actualBackgroundHeight*graphicsScale)/2);
-		// If they're bigger than the screen, assume that they're supposed to scroll or something
-		if (*_tempXOffset<0){
-			*_tempXOffset=0;
-		}
-		if (*_tempYOffset<0){
-			*_tempYOffset=0;
-		}
+		getBackgroundOff(_retX,_retY);
 	}
 }
-void GetXAndYOffset(crossTexture* _tempImg, double _sizeScaleX, double _sizeScaleY, signed int* _tempXOffset, signed int* _tempYOffset){
-	GetXAndYOffsetSize(getTextureWidth(_tempImg)*_sizeScaleX,getTextureHeight(_tempImg)*_sizeScaleY,_tempXOffset,_tempYOffset);
+// higurashi positions are relative to the image centered in the middle of the screen
+// we fix that before storing the position
+void convertPosition(char _inDoesReferToMiddle, int* x, int* y, crossTexture* _texture){
+	// get the absolute starting position of the bust in screen units once it's upscaled.
+	int _startX;
+	int _startY;
+	centerSize(getTextureWidth(_texture)*graphicsScale,getTextureHeight(_texture)*graphicsScale,&_startX,&_startY);
+	// get how far that is from the initial bust draw position
+	int _usualStartX;
+	int _usualStartY;
+	getBustOff(&_usualStartX,&_usualStartY);
+
+	int _freeX = (_startX-_usualStartX)/GetXOffsetScale();
+	int _freeY = (_startY-_usualStartY)/GetYOffsetScale();
+	
+	if (!_inDoesReferToMiddle){ // convert from coords we can draw at to coords that refer to the middle
+		_freeX*=-1;
+		_freeY*=-1;
+	}
+	*x=*x+_freeX;
+	*y=*y+_freeY;
 }
 void gameObjectClipOn(){
 	int _startX;
 	int _startY;
-	GetXAndYOffsetSize(actualBackgroundWidth,actualBackgroundHeight,&_startX,&_startY);
+	getBackgroundOff(&_startX,&_startY);
 	enableClipping(_startX,_startY,actualBackgroundWidth*graphicsScale,actualBackgroundHeight*graphicsScale);
 }
 void gameObjectClipOff(){
@@ -1891,26 +1928,6 @@ void outputLineWait(){
 	endType=Line_ContinueAfterTyping;
 	lastVoiceSlot=-1;
 }
-double GetXOffsetScale(crossTexture* _tempImg){
-	if (dynamicScaleEnabled){
-		return applyGraphicsScale(actualBackgroundWidth)/(double)scriptScreenWidth;
-	}else{
-		if (getTextureWidth(_tempImg)>screenWidth){
-			return (screenWidth/scriptScreenWidth);
-		}
-		return (getTextureWidth(_tempImg)/(float)scriptScreenWidth);
-	}
-}
-double GetYOffsetScale(crossTexture* _tempImg){
-	if (dynamicScaleEnabled){
-		return applyGraphicsScale(actualBackgroundHeight)/(double)scriptScreenHeight;
-	}else{
-		if (getTextureHeight(_tempImg)>screenHeight){
-			return (screenHeight/scriptScreenHeight);
-		}
-		return ( getTextureHeight(_tempImg)/(float)scriptScreenHeight);
-	}
-}
 void drawHallowRect(int _x, int _y, int _w, int _h, int _thick, int _r, int _g, int _b, int _a){
 	drawRectangle(_x,_y,_thick,_h,_r,_g,_b,_a);
 	drawRectangle(_x+_w-_thick,_y,_thick,_h,_r,_g,_b,_a);
@@ -1919,31 +1936,24 @@ void drawHallowRect(int _x, int _y, int _w, int _h, int _thick, int _r, int _g, 
 }
 void DrawBackgroundAlpha(crossTexture* passedBackground, unsigned char passedAlpha){
 	if (passedBackground!=NULL){
-		signed int _tempXOffset;
-		signed int _tempYOffset;
-		GetXAndYOffset(passedBackground,1,1,&_tempXOffset,&_tempYOffset);
-		_tempXOffset+=extraGameOffX;
-		_tempYOffset+=extraGameOffY;
-		drawTextureSizedAlpha(passedBackground,_tempXOffset,_tempYOffset, getTextureWidth(passedBackground)*graphicsScale*extraGameScaleX, getTextureHeight(passedBackground)*graphicsScale*extraGameScaleY, passedAlpha);
+		signed int _xoff;
+		signed int _yoff;
+		getBackgroundOff(&_xoff,&_yoff);
+		_xoff+=extraGameOffX;
+		_yoff+=extraGameOffY;
+		drawTextureSizedAlpha(passedBackground,_xoff,_yoff,getTextureWidth(passedBackground)*graphicsScale*extraGameScaleX,getTextureHeight(passedBackground)*graphicsScale*extraGameScaleY,passedAlpha);
 	}
 }
 void DrawBackground(crossTexture* passedBackground){
 	DrawBackgroundAlpha(passedBackground,255);
 }
 void DrawBust(bust* passedBust){
-	signed int _tempXOffset=0;
-	signed int _tempYOffset=0;
-	if (bustsStartInMiddle){
-		GetXAndYOffset(passedBust->image,passedBust->scaleX,passedBust->scaleY,&_tempXOffset,&_tempYOffset);
-	}else{
-		// If busts don't start in the middle, they start at the start of the background
-		if (currentBackground!=NULL){
-			GetXAndYOffset(currentBackground,passedBust->scaleX,passedBust->scaleY,&_tempXOffset,&_tempYOffset);
-		}
-	}
+	int _startXOffset=0;
+	int _startYOffset=0;
+	getBustOff(&_startXOffset,&_startYOffset);
 	// If the busts end one pixel off again, it may be because these are now int instead of float.
-	float _drawBustX = ceil(_tempXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale*extraGameScaleX)+extraGameOffX;
-	float _drawBustY = ceil(_tempYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale*extraGameScaleY)+extraGameOffY;
+	float _drawBustX = ceil(_startXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale*extraGameScaleX)+extraGameOffX;
+	float _drawBustY = ceil(_startYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale*extraGameScaleY)+extraGameOffY;
 	double _scaleX=graphicsScale*extraGameScaleX*passedBust->scaleX;
 	double _scaleY=graphicsScale*extraGameScaleY*passedBust->scaleY;
 	//printf("%d\n",passedBust->curAlpha);
@@ -3083,22 +3093,20 @@ int drawBustshotAdvanced(unsigned char passedSlot, const char* _filename, int _x
 		invertImage(Busts[passedSlot].image,0);
 	}
 
+	Busts[passedSlot].cacheXOffsetScale = GetXOffsetScale(Busts[passedSlot].image);
+	Busts[passedSlot].cacheYOffsetScale = GetYOffsetScale(Busts[passedSlot].image);
 	// apply the forced draw size
 	if (_scriptForcedWidth!=-1){
 		Busts[passedSlot].scaleX=_scriptForcedWidth/(double)getTextureWidth(Busts[passedSlot].image);
 		Busts[passedSlot].scaleY=_scriptForcedHeight/(double)getTextureHeight(Busts[passedSlot].image);
 	}
 	// adjust for _coordsReferToSprMiddle
-	if (_coordsReferToSprMiddle!=bustsStartInMiddle){
-		signed char _sign = bustsStartInMiddle ? 1 : -1;
-		_xoffset=_xoffset-scriptScreenWidth/2+(getTextureWidth(Busts[passedSlot].image)*Busts[passedSlot].scaleX)/2*_sign;
-		// y offset already refers to the top of the image
+	if (_coordsReferToSprMiddle){
+		convertPosition(1,&_xoffset,&_yoffset,Busts[passedSlot].image);
 	}
 
 	Busts[passedSlot].xOffset = _xoffset;
 	Busts[passedSlot].yOffset = _yoffset;
-	Busts[passedSlot].cacheXOffsetScale = GetXOffsetScale(Busts[passedSlot].image);
-	Busts[passedSlot].cacheYOffsetScale = GetYOffsetScale(Busts[passedSlot].image);
 	Busts[passedSlot].layer = _layer;
 	// The lineCreatedOn variable is used to know if the bustshot should stay after a scene change. The bustshot can only stay after a scene change if it's created the line before the scene change AND it doesn't wait for fadein completion.
 	if (_waitforfadein==0){
@@ -4019,6 +4027,17 @@ void activateHigurashiSettings(){
 	if (!advNamesSupported){
 		advNamesSupported=1;
 	}
+	// regardless of the background, the busts act as if it's a 640x480 box chilling in the center
+	{
+		int _positionBoxW;
+		int _positionBoxH;
+		fitInBox(640,480,screenWidth,screenHeight,&_positionBoxW,&_positionBoxH);
+		overrideOffsetVals=1;
+		overrideXOffScale=_positionBoxW/(double)scriptScreenWidth;
+		overrideYOffScale=_positionBoxH/(double)scriptScreenHeight;
+		overrideBustOffX=easyCenter(_positionBoxW,screenWidth);
+		overrideBustOffY=easyCenter(_positionBoxH,screenHeight);
+	}
 	//shouldUseBustCache=0;
 	applyTextboxChanges(1);
 }
@@ -4906,24 +4925,32 @@ void scriptChangeScene(nathanscriptVariable* _passedArguments, int _numArguments
 	// DrawSprite(slot, filename, ?, x, y, ?, ?, ?, ?, ?, ?, ?, ?, LAYER, FADEINTIME, WAITFORFADEIN)
 void scriptDrawSprite(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	//void DrawBustshot(unsigned char passedSlot, char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _isinvisible){
-	DrawBustshot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),320+nathanvariableToInt(&_passedArguments[3]),240+nathanvariableToInt(&_passedArguments[4]),nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]),nathanvariableToBool(&_passedArguments[15]),255);
-	//DrawBustshot(nathanvariableToInt(&_passedArguments[1)-1, nathanvariableToString(&_passedArguments[2), nathanvariableToInt(&_passedArguments[3), nathanvariableToInt(&_passedArguments[4), nathanvariableToInt(&_passedArguments[14), nathanvariableToInt(&_passedArguments[15), nathanvariableToBool(&_passedArguments[16), nathanvariableToInt(&_passedArguments[13));
+	int _x=nathanvariableToInt(&_passedArguments[3]);
+	int _y=nathanvariableToInt(&_passedArguments[4]);
+	char _posRefersToCenter=0;
+	if (_x==0 && _y==0){
+		_posRefersToCenter=1;
+	}else{
+		fixScriptSpritePos(&_x,&_y);
+	}
+	drawBustshotAdvanced(nathanvariableToInt(&_passedArguments[0]),nathanvariableToString(&_passedArguments[1]),_x,_y,nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]),nathanvariableToBool(&_passedArguments[15]),255,-1,-1,_posRefersToCenter);
 }
 //MoveSprite(slot, destinationx, destinationy, ?, ?, ?, ?, ?, timeittakes, waitforcompletion)
 	// MoveSprite(5,-320,-4500,0,0,0,0,0,101400, TRUE)
 void scriptMoveSprite(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	int _totalTime = nathanvariableToInt(&_passedArguments[8]);
 	int _passedSlot = nathanvariableToInt(&_passedArguments[0]);
+	int _xDest=nathanvariableToInt(&_passedArguments[1]);
+	int _yDest=nathanvariableToInt(&_passedArguments[2]);
+	if (_xDest==0 && _yDest==0){
+		convertPosition(1,&_xDest,&_yDest,Busts[_passedSlot].image);
+	}else{
+		fixScriptSpritePos(&_xDest,&_yDest);
+	}
+	printf("need to go to %d;%d from %d;%d\n",_xDest,_yDest,Busts[_passedSlot].xOffset,Busts[_passedSlot].yOffset);
 	if (_totalTime!=0){
-		int _xTengoQue = nathanvariableToInt(&_passedArguments[1])-(Busts[_passedSlot].xOffset-320);
-		int _yTengoQue = nathanvariableToInt(&_passedArguments[2])-(Busts[_passedSlot].yOffset-240);
-		/*int _xTengoQue = nathanvariableToInt(&_passedArguments[1])-Busts[_passedSlot].xOffset;
-		int _yTengoQue = nathanvariableToInt(&_passedArguments[2])-Busts[_passedSlot].yOffset;
-		if (bustsStartInMiddle){ // TODO - yep, we have to fix it because of my nonsense bustsStartInMiddle variable that is a lie.
-			_xTengoQue+=scriptScreenWidth/2;
-			_yTengoQue+=scriptScreenHeight/2;
-		}
-		*/
+		int _xTengoQue = _xDest-Busts[_passedSlot].xOffset;
+		int _yTengoQue = _yDest-Busts[_passedSlot].yOffset;
 		Busts[_passedSlot].bustStatus = BUST_STATUS_SPRITE_MOVE;
 		Busts[_passedSlot].diffMoveTime=_totalTime;
 		Busts[_passedSlot].startMoveTime=getMilli();
@@ -4932,15 +4959,8 @@ void scriptMoveSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 		Busts[_passedSlot].startXMove = Busts[_passedSlot].xOffset;
 		Busts[_passedSlot].startYMove = Busts[_passedSlot].yOffset;
 	}else{
-		/*Busts[_passedSlot].xOffset=nathanvariableToInt(&_passedArguments[1]);
-		Busts[_passedSlot].yOffset=nathanvariableToInt(&_passedArguments[2]);
-		if (bustsStartInMiddle){ // TODO
-			Busts[_passedSlot].xOffset+=scriptScreenWidth/2;
-			Busts[_passedSlot].yOffset+=scriptScreenHeight/2;
-		}
-		*/
-		Busts[_passedSlot].xOffset=nathanvariableToInt(&_passedArguments[1])+320;
-		Busts[_passedSlot].yOffset=nathanvariableToInt(&_passedArguments[2])+240;
+		Busts[_passedSlot].xOffset=_xDest;
+		Busts[_passedSlot].yOffset=_yDest;
 	}
 	if (Busts[_passedSlot].curAlpha!=255){
 		Busts[_passedSlot].curAlpha=255;
@@ -4992,23 +5012,20 @@ void scriptDrawSpriteFixedSize(nathanscriptVariable* _passedArguments, int _numA
 	int _time = nathanvariableToInt(&_passedArguments[16]);
 	char _waitForCompletion = nathanvariableToBool(&_passedArguments[17]);
 
+	char _coordsReferToMiddle=0;
 	// fix _destX and _destY so that they account for _originX and _originY and are suitable to be passed to DrawBustshot
 	if (_destX==0 && _destY==0 && _originX==0 && _originY==0){
 		// weird special case.
 		// the image should be centered in the middle of the screen. both in the x and y.
-		_destX=(_w/2)*-1;
-		_destY=(_h/2)*-1;
+		_coordsReferToMiddle=1;
 	}else{
-		// if the x or y is anything but 0, the left of the image is aligned at middle of the screen, +x
-		// and the top of the image is aligned at middle of the screen, +y
-		_destX+=scriptScreenWidth/2;
-		_destY+=scriptScreenHeight/2;
+		fixScriptSpritePos(&_destX,&_destY);
 		// a positive originX of 200 shifts the image 200 left.
 		// a positive originY shifts the image up
 		_destX-=_originX;
 		_destY-=_originY;
 	}
-	drawBustshotAdvanced(_slot,_filename,_destX,_destY,_layer,_time,_waitForCompletion,_alpha,_w,_h,0);
+	drawBustshotAdvanced(_slot,_filename,_destX,_destY,_layer,_time,_waitForCompletion,_alpha,_w,_h,_coordsReferToMiddle);
 }
 #define CHOICESCROLLTIMEOFFSET 500 // How long you have to be on a choice before it starts scrolling
 #define CHOICESCROLLTIMEINTERVAL 100 // How often a new character
@@ -5612,6 +5629,9 @@ char upgradeToGameFolder(){
 	}
 	return _didUpgradeOne;
 }
+int qsortStringComparer(const void* a, const void* b){
+	return strcmp(*(char**)a,*(char**)b);
+}
 char FileSelector(char* _dirPath, char** _retChosen, char* _promptMessage){
 	*_retChosen=NULL;
 	crossDir dir=openDirectory(_dirPath);
@@ -5631,6 +5651,7 @@ char FileSelector(char* _dirPath, char** _retChosen, char* _promptMessage){
 		}
 		_foundFiles[_nFiles] = strdup(getDirectoryResultName(&lastStorage));
 	}
+	qsort(_foundFiles,_nFiles,sizeof(char*),qsortStringComparer);
 	directoryClose (dir);
 	if (_nFiles==0){
 		easyMessagef(1,"No files found.");
