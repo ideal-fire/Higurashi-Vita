@@ -128,8 +128,11 @@ err:
 	return _ret;
 }
 #else
+#include <stdio.h>
+#include <string.h>
+#include <goodbrew/base.h>
 char* insensitiveFileExists(const char* _filename){
-	if (checkFileExists(_filename)){
+	if (checkFileExist(_filename)){
 		return strdup(_filename);
 	}else{
 		return NULL;
