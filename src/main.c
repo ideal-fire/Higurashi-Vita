@@ -5834,7 +5834,6 @@ typedef enum{
 	SETTING_BUSTLOC, //
 	SETTING_VNDSWAR, //
 	SETTING_VNDSFADE,
-	SETTING_DYNAMICSCAL,
 	SETTING_TOUCH, //
 	SETTING_OVERCLOCK, //
 	SETTING_DEFAULT,
@@ -5898,7 +5897,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		"Bust Location:", // graphics
 		"VNDS Warnings:", // VNDS specific
 		"VNDS Image Fade:",
-		"Dynamic Scaling:",
 		"Touch:", // controls
 		"Overclock CPU:", // misc
 		"Defaults",
@@ -5924,7 +5922,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		0,
 		OPTIONPROP_LEFTRIGHT,
 		OPTIONPROP_LEFTRIGHT,
-		0,
 		0,
 		0,
 		0,
