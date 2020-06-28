@@ -58,6 +58,9 @@ end
 function DrawSpriteWithFiltering(_slot, _filename, _filter, _unkStyle, _x, _y, _ignoredOne, _ignoredTwo, _ignoredThree, _ignoredFour, _layer, _time, _waitForCompletion)
 	DrawSprite(_slot,_filename,NULL,_x,_y,0,0,0,0,false,false,_unkStyle,256,_layer,_time,_waitForCompletion);
 end
+function MoveBustshot(_slot, _unkString, _x, _y, _z, _ignoredOne, _time, _waitForCompletion)
+   MoveSprite(_slot,_x,_y,_z,0,256,0,_time,_waitForCompletion)
+end
 
 // intentionally ignored
 function pi()
@@ -137,7 +140,6 @@ GetPositionOfSprite=pu;
 HideGallery=pu;
 JumpScript=pu;
 LanguagePrompt=pu;
-MoveBustshot=pu;
 MoveSpriteEx=pu;
 PreloadBitmap=pu;
 Return=pu;
