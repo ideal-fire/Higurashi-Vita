@@ -196,7 +196,6 @@ void initLuaWrappers(){
 		PUSHLUAWRAPPER(scriptNotYet,"DrawBGWithMask")
 		PUSHLUAWRAPPER(scriptNotYet,"DrawBustFace")
 		PUSHLUAWRAPPER(scriptNotYet,"DrawFace")
-		PUSHLUAWRAPPER(scriptNotYet,"DrawSpriteWithFiltering")
 		PUSHLUAWRAPPER(scriptNotYet,"DrawStandgraphic")
 		PUSHLUAWRAPPER(scriptNotYet,"EnableBlur")
 		PUSHLUAWRAPPER(scriptNotYet,"EnableHorizontalGradation")
