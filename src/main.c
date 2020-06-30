@@ -1630,7 +1630,7 @@ void updateBust(bust* _target, u64 _curTime){
 	switch(_target->bustStatus){
 		case BUST_STATUS_FADEIN:
 		case BUST_STATUS_TRANSFORM_FADEIN:
-			if (_curTime>_target->fadeStartTime){
+			if (_curTime>=_target->fadeStartTime){
 				if (_curTime>=_target->fadeEndTime){
 					if (_target->bustStatus == BUST_STATUS_TRANSFORM_FADEIN){
 						freeTexture(_target->transformTexture);
