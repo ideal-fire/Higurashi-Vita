@@ -16,3 +16,6 @@ clean:
 depend:
 	makedepend -Y $(src) -fmakefile.general
 
+# DO NOT DELETE
+
+./src/main.o: ./src/main.h ./src/insensitiveFileFinder.h ./src/legarchive.h ./src/NathanDoubleScripting.h ./src/LuaWrapperDefinitions.h ./src/VNDSScriptWrappers.h
