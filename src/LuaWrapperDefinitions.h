@@ -53,6 +53,7 @@ GENERATELUAWRAPPER(scriptHigurashiGetRandomNumber);
 GENERATELUAWRAPPER(scriptHideTextboxAdvanced);
 GENERATELUAWRAPPER(scriptEnlargeScreen);
 GENERATELUAWRAPPER(scriptDrawSpriteFixedSize);
+GENERATELUAWRAPPER(scriptChangeBustshot);
 
 GENERATELUAWRAPPER(scriptScalePixels);
 GENERATELUAWRAPPER(scriptDefineImageName);
@@ -105,6 +106,7 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptHideTextboxAdvanced,"HideWindow")
 	PUSHLUAWRAPPER(scriptEnlargeScreen,"EnlargeScreen")
 	PUSHLUAWRAPPER(scriptDrawSpriteFixedSize,"DrawSpriteFixedSize");
+	PUSHLUAWRAPPER(scriptChangeBustshot,"ChangeBustshot");
 
 	// Options changing commands
 	PUSHLUAWRAPPER(scriptOptionsEnableVoiceSetting,"OptionsEnableVoiceSetting")

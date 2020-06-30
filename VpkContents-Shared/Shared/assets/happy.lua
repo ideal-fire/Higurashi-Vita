@@ -111,7 +111,6 @@ SetValidityOfUserEffectSpeed=pu;
 //
 BlurOffOn=pu;
 Break=pu;
-ChangeBustshot=pu;
 ChangeVolumeOfBGM=pu;
 ChapterPreview=pu;
 CheckTipsAchievements=pu;

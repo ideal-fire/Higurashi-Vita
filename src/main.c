@@ -1453,17 +1453,18 @@ void ClearDebugFile(){
 	fclose(fp);
 	free(_tempDebugFileLocationBuffer);
 }
+void _freeBustImage(bust* passedBust){
+	if (passedBust->image!=NULL){
+		freeTexture(passedBust->image);
+	}
+	free(passedBust->relativeFilename);
+	if (passedBust->transformTexture!=NULL){
+		freeTexture(passedBust->transformTexture);
+	}
+}
 void ResetBustStruct(bust* passedBust, int canfree){
 	if (canfree==1){
-		if (passedBust->image!=NULL){
-			freeTexture(passedBust->image);
-		}
-		if (passedBust->relativeFilename!=NULL){
-			free(passedBust->relativeFilename);
-		}
-		if (passedBust->transformTexture!=NULL){
-			freeTexture(passedBust->transformTexture);
-		}
+		_freeBustImage(passedBust);
 	}
 	passedBust->image=NULL;
 	passedBust->transformTexture=NULL;
@@ -2698,6 +2699,28 @@ cachedImage* searchBustCache(const char* _passedFilename){
 	}
 	return NULL;
 }
+crossTexture* loadImageOrCache(const char* _filename, char** _relativeFilenameDest){
+	crossTexture* _ret=NULL;
+	cachedImage* _possibleCachedImage = searchBustCache(_filename);
+	if (_possibleCachedImage!=NULL){
+		_ret=_possibleCachedImage->image;
+		*_relativeFilenameDest=_possibleCachedImage->filename;
+		// Remove from cache so we don't free it early
+		_possibleCachedImage->image = NULL;
+		_possibleCachedImage->filename = NULL;
+	}else{
+		_ret=safeLoadGameImage(_filename,graphicsLocation,scriptUsesFileExtensions);
+		*_relativeFilenameDest=strdup(_filename);
+	}
+	if (_ret){
+		if (currentFilterType==FILTERTYPE_NEGATIVE){
+			invertImage(_ret,0);
+		}
+	}else{
+		*_relativeFilenameDest=NULL;
+	}
+	return _ret;
+}
 void increaseBustArraysSize(int _oldMaxBusts, int _newMaxBusts){
 	printf("Increase max bust array to %d\n",_newMaxBusts);
 	Busts = recalloc(Busts, _newMaxBusts * sizeof(bust), _oldMaxBusts * sizeof(bust));
@@ -3078,25 +3101,12 @@ int drawBustshotAdvanced(unsigned char passedSlot, const char* _filename, int _x
 		ResetBustStruct(&(Busts[passedSlot]),0); // Remove leftover data, nothing in here right now should be malloc'd
 	}
 
-	cachedImage* _possibleCachedImage = searchBustCache(_filename);
-	if (_possibleCachedImage!=NULL){
-		Busts[passedSlot].image = _possibleCachedImage->image;
-		Busts[passedSlot].relativeFilename=_possibleCachedImage->filename;
-		// Remove from cache so we don't free it early
-		_possibleCachedImage->image = NULL;
-		_possibleCachedImage->filename = NULL;
-	}else{
-		Busts[passedSlot].image = safeLoadGameImage(_filename,graphicsLocation,scriptUsesFileExtensions);
-		Busts[passedSlot].relativeFilename=strdup(_filename);
-		if (Busts[passedSlot].image==NULL){
-			free(Busts[passedSlot].relativeFilename);
-			Busts[passedSlot].relativeFilename=NULL;
-			ResetBustStruct(&(Busts[passedSlot]),0);
-			return 0;
-		}
-	}
-	if (currentFilterType==FILTERTYPE_NEGATIVE){
-		invertImage(Busts[passedSlot].image,0);
+	Busts[passedSlot].image = loadImageOrCache(_filename,&(Busts[passedSlot].relativeFilename));
+	if (Busts[passedSlot].image==NULL){
+		free(Busts[passedSlot].relativeFilename);
+		Busts[passedSlot].relativeFilename=NULL;
+		ResetBustStruct(&(Busts[passedSlot]),0);
+		return 0;
 	}
 
 	Busts[passedSlot].cacheXOffsetScale = GetXOffsetScale();
@@ -4871,6 +4881,36 @@ void scriptDrawBustshot(nathanscriptVariable* _passedArguments, int _numArgument
 		endDrawing();
 	}
 	DrawBustshot(nathanvariableToInt(&_passedArguments[0]), nathanvariableToString(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[2]), nathanvariableToInt(&_passedArguments[3]), nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]), nathanvariableToBool(&_passedArguments[15]), nathanvariableToInt(&_passedArguments[12]) ? 0 : 255);
+}
+// slot, filename, time, waitforcompletion
+void scriptChangeBustshot(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){	
+	int _slot = nathanvariableToInt(&_passedArguments[0]);
+	if (_slot>=maxBusts){
+		fprintf(stderr,"%d is greater than max busts. calling ChangeBustshot on nonexistent bustshot?",_slot);
+		return;
+	}
+	// activate a transform fadein
+	crossTexture* _oldTexture = Busts[_slot].image;
+	Busts[_slot].image=NULL;
+	_freeBustImage(&Busts[_slot]);
+	Busts[_slot].image=loadImageOrCache(nathanvariableToString(&_passedArguments[1]),&Busts[_slot].relativeFilename);
+	Busts[_slot].transformTexture = _oldTexture;
+	Busts[_slot].bustStatus = BUST_STATUS_TRANSFORM_FADEIN;
+	Busts[_slot].fadeStartTime=getMilli();
+	Busts[_slot].fadeEndTime=Busts[_slot].fadeStartTime+nathanvariableToInt(&_passedArguments[2]);
+	if (nathanvariableToBool(&_passedArguments[3])){
+		while (Busts[_slot].bustStatus!=BUST_STATUS_NORMAL){
+			controlsStart();
+			Update();
+			startDrawing();
+			Draw(MessageBoxEnabled);
+			endDrawing();
+			if (proceedPressed()){
+				Busts[_slot].fadeEndTime=Busts[_slot].fadeStartTime+1;
+			}
+			controlsEnd();
+		}
+	}
 }
 void scriptSetValidityOfInput(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	inputValidity=(nathanvariableToBool(&_passedArguments[0])==1);	
