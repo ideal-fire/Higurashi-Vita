@@ -55,6 +55,13 @@ GENERATELUAWRAPPER(scriptEnlargeScreen);
 GENERATELUAWRAPPER(scriptDrawSpriteFixedSize);
 GENERATELUAWRAPPER(scriptChangeBustshot);
 
+GENERATELUAWRAPPER(scriptTerminateShakingOfBustshot);
+GENERATELUAWRAPPER(scriptTerminateShakingOfWindow);
+GENERATELUAWRAPPER(scriptTerminateShakingOfAllObjects);
+GENERATELUAWRAPPER(scriptStartShakingOfBustshot);
+GENERATELUAWRAPPER(scriptStartShakingOfWindow);
+GENERATELUAWRAPPER(scriptStartShakingOfAllObjects);
+
 GENERATELUAWRAPPER(scriptScalePixels);
 GENERATELUAWRAPPER(scriptDefineImageName);
 GENERATELUAWRAPPER(scriptLoadImageNameSheet);
@@ -107,6 +114,12 @@ void initLuaWrappers(){
 	PUSHLUAWRAPPER(scriptEnlargeScreen,"EnlargeScreen")
 	PUSHLUAWRAPPER(scriptDrawSpriteFixedSize,"DrawSpriteFixedSize");
 	PUSHLUAWRAPPER(scriptChangeBustshot,"ChangeBustshot");
+	PUSHLUAWRAPPER(scriptStartShakingOfAllObjects,"StartShakingOfAllObjects");
+	PUSHLUAWRAPPER(scriptStartShakingOfBustshot,"StartShakingOfBustshot");
+	PUSHLUAWRAPPER(scriptStartShakingOfWindow,"StartShakingOfWindow");
+	PUSHLUAWRAPPER(scriptTerminateShakingOfAllObjects,"TerminateShakingOfAllObjects");
+	PUSHLUAWRAPPER(scriptTerminateShakingOfBustshot,"TerminateShakingOfBustshot");
+	PUSHLUAWRAPPER(scriptTerminateShakingOfWindow,"TerminateShakingOfSprite");
 
 	// Options changing commands
 	PUSHLUAWRAPPER(scriptOptionsEnableVoiceSetting,"OptionsEnableVoiceSetting")

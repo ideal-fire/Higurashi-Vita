@@ -286,6 +286,14 @@ char* gamesFolder;
 signed char touchProceed=1;
 
 void invertImage(crossTexture* _passedImage, signed char _doInvertAlpha);
+struct shakeInfo{
+	double timePerPeak;
+	double dragMultiplier;
+	int range;
+	char direction; // changed to be a bitmap. bit 1 is left and right, bit 2 is up and down.
+	u64 endTime;
+	u64 startTime;
+};
 typedef struct{
 	crossTexture* image;
 	signed int xOffset;
@@ -303,8 +311,7 @@ typedef struct{
 	int originXForAdjust; // originX and originY sets a custom point to be the center of the screen. your position is relative to that.
 	int originYForAdjust;
 	//int angle;
-	//int angleOriginX;
-	//int angleOriginY;
+	struct shakeInfo* curShake;
 	// status variables. ignore most time.
 	u64 fadeStartTime; // for BUST_STATUS_FADEIN, BUST_STATUS_TRANSFORM_FADEIN, BUST_STATUS_FADEOUT,
 	u64 fadeEndTime;
@@ -358,7 +365,8 @@ struct enlargeAnimInfo{
 	int startOffX;
 	int startOffY;
 };
-
+struct shakeInfo* curBackgroundShake;
+struct shakeInfo* curUIShake;
 
 lua_State* L = NULL;
 /*
@@ -818,6 +826,74 @@ void PlayMenuSound(){
 		playSound(menuSound,10);
 	}
 }
+void safeFreeShakeInfo(struct shakeInfo* s){
+	// if this shakeInfo is used anywhere, don't free it.
+	if (curBackgroundShake==s || curUIShake==s){
+		return;
+	}
+	for (int i=0;i<maxBusts;i++){
+		if (Busts[i].curShake==s){
+			return;
+		}
+	}
+	free(s);
+}
+void freeBustShakeInfo(int _slot){
+	if (Busts[_slot].isActive && Busts[_slot].curShake){
+		struct shakeInfo* s=Busts[_slot].curShake;
+		Busts[_slot].curShake=NULL;
+		safeFreeShakeInfo(s);
+	}
+}
+// uses new speed formula
+struct shakeInfo* makeShakeInfo(int speed, int range, int drag, int direction, int loops, u64 _startTime){
+	struct shakeInfo* _ret = malloc(sizeof(struct shakeInfo));
+	_ret->timePerPeak=((256-speed)*5)/(double)1000;
+	_ret->dragMultiplier=1-drag/(double)100;
+	if (direction==0){
+		_ret->direction=1;
+	}else if (direction==1){
+		_ret->direction=3;
+	}else if (direction==2){
+		_ret->direction=2;
+	}
+	_ret->range=range;
+	_ret->startTime=_startTime;
+	_ret->endTime=_ret->startTime+loops*_ret->timePerPeak*1000;
+	return _ret;
+}
+void waitForShakeEnd(struct shakeInfo** s){
+	while(*s){
+		controlsStart();
+		if(proceedPressed()){
+			(*s)->endTime=(*s)->startTime+1;
+		}
+		Update();
+		controlsEnd();
+		startDrawing();
+		Draw(MessageBoxEnabled);
+		endDrawing();
+	}
+}
+void offsetForShake(struct shakeInfo* s, int* x, int* y){
+	if (s){
+		double _functionX = (((SDL_GetTicks()-s->startTime)/(double)1000)/s->timePerPeak)*M_PI;
+		int _amount=(sin(_functionX)*pow(s->dragMultiplier,(_functionX-M_PI_2)/M_PI))*s->range;
+		if (s->direction & 1){
+			*x+=_amount;
+		}
+		if (s->direction & 2){
+			*y+=_amount;
+		}
+	}
+}
+void freeDoneShake(struct shakeInfo** s, u64 _sTime){
+	if (*s && _sTime>=(*s)->endTime){
+		struct shakeInfo* _hold=*s;
+		*s=NULL;
+		safeFreeShakeInfo(_hold);
+	}
+}
 crossTexture* safeLoadImage(const char* path){
 	crossTexture* _tempTex = loadImage((char*)path);
 	if (_tempTex==NULL){
@@ -1081,17 +1157,20 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 		}
 	#endif
 	*/
+	int _totalTextXOff=totalTextXOff();
+	int _totalTextYOff=totalTextYOff();
+	offsetForShake(curUIShake,&_totalTextXOff,&_totalTextYOff);
 	if (shouldShowADVNames()){
 		if (currentADVName!=NULL){
-			drawDropshadowTextSpecific(totalTextXOff(),totalTextYOff()-ADVNAMEOFFSET,currentADVName,advNameR,advNameG,advNameB,0,0,0,255);
+			drawDropshadowTextSpecific(_totalTextXOff,_totalTextYOff-ADVNAMEOFFSET,currentADVName,advNameR,advNameG,advNameB,0,0,0,255);
 		}else if (currentADVNameIm!=-1){
 			int* _nameImageInfo = advImageNamePos+currentADVNameIm*4;
-			drawTexturePartSized(advNameImSheet,totalTextXOff(),totalTextYOff()-advNameImHeight-IMADVNAMEPOSTPAD,getOtherScaled(_nameImageInfo[3],advNameImHeight,_nameImageInfo[2]),advNameImHeight,_nameImageInfo[0],_nameImageInfo[1],_nameImageInfo[2],_nameImageInfo[3]);
+			drawTexturePartSized(advNameImSheet,_totalTextXOff,_totalTextYOff-advNameImHeight-IMADVNAMEPOSTPAD,getOtherScaled(_nameImageInfo[3],advNameImHeight,_nameImageInfo[2]),advNameImHeight,_nameImageInfo[0],_nameImageInfo[1],_nameImageInfo[2],_nameImageInfo[3]);
 		}
 	}
 	for (i=0;i<=_maxDrawLine;i++){
 		if (currentMessages[i]){
-			drawPropertyGameText(totalTextXOff(),totalTextYOff()+i*currentTextHeight,currentMessages[i],messageProps[i],_alpha);
+			drawPropertyGameText(_totalTextXOff,_totalTextYOff+i*currentTextHeight,currentMessages[i],messageProps[i],_alpha);
 		}
 	}
 	drawImageChars(_alpha,_maxDrawLine,_finalLineMaxChar!=-1 ? _finalLineMaxChar : INT_MAX);
@@ -1461,6 +1540,7 @@ void _freeBustImage(bust* passedBust){
 	if (passedBust->transformTexture!=NULL){
 		freeTexture(passedBust->transformTexture);
 	}
+	free(passedBust->curShake);
 }
 void ResetBustStruct(bust* passedBust, int canfree){
 	if (canfree==1){
@@ -1480,6 +1560,7 @@ void ResetBustStruct(bust* passedBust, int canfree){
 	passedBust->bustStatus = BUST_STATUS_NORMAL;
 	passedBust->lineCreatedOn=0;
 	passedBust->relativeFilename=NULL;
+	passedBust->curShake=NULL;
 }
 void DisposeOldScript(){
 	// Frees the script main
@@ -1627,6 +1708,7 @@ void upshiftText(int _numDelLines){
 	upshiftImageChars(_numDelLines);
 }
 void updateBust(bust* _target, u64 _curTime){
+	freeDoneShake(&_target->curShake,_curTime);
 	switch(_target->bustStatus){
 		case BUST_STATUS_FADEIN:
 		case BUST_STATUS_TRANSFORM_FADEIN:
@@ -1681,6 +1763,8 @@ void Update(){
 			extraGameOffY=partMoveValToVal(_curTime,_endTime,workingEnlarge->totalTime,workingEnlarge->startOffY,workingEnlarge->destOffY);
 		}
 	}
+	freeDoneShake(&curBackgroundShake,_curTime);
+	freeDoneShake(&curUIShake,_curTime);
 }
 // prepare a bust to be settled upon the next update
 void settleBust(bust* _target){
@@ -1943,11 +2027,12 @@ void drawHallowRect(int _x, int _y, int _w, int _h, int _thick, int _r, int _g, 
 }
 void DrawBackgroundAlpha(crossTexture* passedBackground, unsigned char passedAlpha){
 	if (passedBackground!=NULL){
-		signed int _xoff;
-		signed int _yoff;
+		int _xoff;
+		int _yoff;
 		getBackgroundOff(&_xoff,&_yoff);
 		_xoff+=extraGameOffX;
 		_yoff+=extraGameOffY;
+		offsetForShake(curBackgroundShake,&_xoff,&_yoff);
 		drawTextureSizedAlpha(passedBackground,_xoff,_yoff,getTextureWidth(passedBackground)*graphicsScale*extraGameScaleX,getTextureHeight(passedBackground)*graphicsScale*extraGameScaleY,passedAlpha);
 	}
 }
@@ -1958,6 +2043,7 @@ void DrawBust(bust* passedBust){
 	int _startXOffset=0;
 	int _startYOffset=0;
 	getBustOff(&_startXOffset,&_startYOffset);
+	offsetForShake(passedBust->curShake,&_startXOffset,&_startYOffset);
 	// If the busts end one pixel off again, it may be because these are now int instead of float.
 	float _drawBustX = ceil(_startXOffset+passedBust->xOffset*passedBust->cacheXOffsetScale*extraGameScaleX)+extraGameOffX;
 	float _drawBustY = ceil(_startYOffset+passedBust->yOffset*passedBust->cacheYOffsetScale*extraGameScaleY)+extraGameOffY;
@@ -5293,6 +5379,56 @@ void scriptHideTextboxAdvanced(nathanscriptVariable* _passedArguments, int _numA
 // top left X, top left Y, width, height, ignored bool, int time, bool waitForCompletion
 void scriptEnlargeScreen(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	enlargeScreen(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),nathanvariableToInt(&_passedArguments[3]),nathanvariableToInt(&_passedArguments[5]),nathanvariableToBool(&_passedArguments[6]));
+}
+// layer,_ignored,_ignored
+void scriptTerminateShakingOfBustshot(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	freeBustShakeInfo(nathanvariableToInt(&_passedArguments[0]));
+}
+// _ignored, _ignored
+void scriptTerminateShakingOfWindow(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	struct shakeInfo* s=curUIShake;
+	curUIShake=NULL;
+	safeFreeShakeInfo(s);
+}
+// _ignored, _ignored
+void scriptTerminateShakingOfAllObjects(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	struct shakeInfo* s=curBackgroundShake;
+	curBackgroundShake=NULL;
+	safeFreeShakeInfo(s);
+	for (int i=0;i<maxBusts;++i){
+		freeBustShakeInfo(i);
+	}
+}
+// slot,speed(newformula),range,drag,direction,loops,waitforcompletion
+void scriptStartShakingOfBustshot(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	int _slot = nathanvariableToInt(&_passedArguments[0]);
+	freeBustShakeInfo(_slot);
+	Busts[_slot].curShake=makeShakeInfo(nathanvariableToInt(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),nathanvariableToInt(&_passedArguments[3]),nathanvariableToInt(&_passedArguments[4]),nathanvariableToInt(&_passedArguments[5]),getMilli());
+	if (nathanvariableToBool(&_passedArguments[6])){
+		waitForShakeEnd(&Busts[_slot].curShake);
+	}
+}
+// speed(newformula),range,drag,direction,loops,waitforcompletion
+void scriptStartShakingOfWindow(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	scriptTerminateShakingOfWindow(NULL,0,NULL,NULL);
+	curUIShake=makeShakeInfo(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),nathanvariableToInt(&_passedArguments[3]),nathanvariableToInt(&_passedArguments[4]),getMilli());
+	if (nathanvariableToBool(&_passedArguments[5])){
+		waitForShakeEnd(&curUIShake);
+	}
+}
+// speed(newformula),range,drag,direction,loops,waitforcompletion
+void scriptStartShakingOfAllObjects(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	scriptTerminateShakingOfAllObjects(NULL,0,NULL,NULL);
+	struct shakeInfo* s = makeShakeInfo(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]),nathanvariableToInt(&_passedArguments[2]),nathanvariableToInt(&_passedArguments[3]),nathanvariableToInt(&_passedArguments[4]),getMilli());
+	for (int i=0;i<maxBusts;++i){
+		if (Busts[i].isActive){
+			Busts[i].curShake=s;
+		}
+	}
+	curBackgroundShake=s;
+	if (nathanvariableToBool(&_passedArguments[5])){
+		waitForShakeEnd(&curBackgroundShake);
+	}
 }
 //
 void scriptMoveBust(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){

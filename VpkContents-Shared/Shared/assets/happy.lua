@@ -61,6 +61,8 @@ end
 function MoveBustshot(_slot, _unkString, _x, _y, _z, _ignoredOne, _time, _waitForCompletion)
    MoveSprite(_slot,_x,_y,_z,0,256,0,_time,_waitForCompletion)
 end
+TerminateShakingOfSprite=TerminateShakingOfSprite; // these two not implemented in real game?
+StartShakingOfSprite=StartShakingOfBustshot
 
 // intentionally ignored
 function pi()
@@ -96,8 +98,6 @@ function pu()
 end
 //
 SetSpeedOfMessage=pu;
-ShakeScreen=pu;
-ShakeScreenSx=pu;
 SetDrawingPointOfMessage=pu;
 SetStyleOfMessageSwinging=pu;
 SetValidityOfWindowDisablingWhenGraphicsControl=pu;
@@ -108,6 +108,8 @@ GetAchievement=pu;
 SetFontOfMessage=pu;
 ActivateScreenEffectForcedly=pu;
 SetValidityOfUserEffectSpeed=pu;
+ShakeScreen=pu;
+ShakeScreenSx=pu;
 //
 BlurOffOn=pu;
 Break=pu;
@@ -151,15 +153,7 @@ SetTextFade=pu;
 SetValidityOfFilmToFace=pu;
 SetValidityOfInterface=pu;
 SpringText=pu;
-StartShakingOfAllObjects=pu;
-StartShakingOfBustshot=pu;
-StartShakingOfSprite=pu;
-StartShakingOfWindow=pu;
 StoreValueToLocalWork=pu;
-TerminateShakingOfAllObjects=pu;
-TerminateShakingOfBustshot=pu;
-TerminateShakingOfSprite=pu;
-TerminateShakingOfWindow=pu;
 ViewChapterScreen=pu;
 ViewExtras=pu;
 ViewTips=pu;
