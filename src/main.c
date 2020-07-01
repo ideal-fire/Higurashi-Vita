@@ -877,7 +877,7 @@ void waitForShakeEnd(struct shakeInfo** s){
 }
 void offsetForShake(struct shakeInfo* s, int* x, int* y){
 	if (s){
-		double _functionX = (((SDL_GetTicks()-s->startTime)/(double)1000)/s->timePerPeak)*M_PI;
+		double _functionX = (((getMilli()-s->startTime)/(double)1000)/s->timePerPeak)*M_PI;
 		int _amount=(sin(_functionX)*pow(s->dragMultiplier,(_functionX-M_PI_2)/M_PI))*s->range;
 		if (s->direction & 1){
 			*x+=_amount;
