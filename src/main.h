@@ -44,6 +44,8 @@ void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, in
 char isSpaceOrEmptyStr(const char* _check);
 void enlargeScreenManual(int _destOffX, int _destOffY, double _destScaleX, double _destScaleY, int _time, char _waitForCompletion);
 void Update();
+char* easygetline(crossFile* fp);
+char isNumberString(char* _inputString);
 typedef struct{
 	char** theArray;
 	unsigned char length;
