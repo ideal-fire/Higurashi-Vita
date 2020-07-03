@@ -81,6 +81,7 @@
 #endif
 #include "insensitiveFileFinder.h"
 #include "legarchive.h"
+#include "fragmentMenu.h"
 
 #define LOCATION_UNDEFINED 0
 #define LOCATION_CG 1
@@ -347,6 +348,8 @@ bgload - First remove bustB from bust cache and then do the same as before.
 cachedImage bustCache[MAXBUSTCACHE];
 bust* Busts;
 
+char playerLanguage=0;
+
 // used in the enlargeScreen function
 double extraGameScaleX=1;
 double extraGameScaleY=1;
@@ -437,14 +440,6 @@ char* currentPresetFilename=NULL;
 // This may not be set because the user can choose to use the legacy preset folder mode.
 char* currentGameFolderName=NULL;
 
-#define GAMESTATUS_TITLE 0
-#define GAMESTATUS_LOADPRESET 1
-#define GAMESTATUS_PRESETSELECTION 2
-#define GAMESTATUS_MAINGAME 3
-#define GAMESTATUS_NAVIGATIONMENU 4
-#define GAMESTATUS_GAMEFOLDERSELECTION 6
-#define GAMESTATUS_LOADGAMEFOLDER 7
-#define GAMESTATUS_QUIT 99
 signed char currentGameStatus=GAMESTATUS_TITLE;
 
 signed char tipNamesLoaded=0;
@@ -1133,10 +1128,10 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 	}
 	char _oldFinalChar;
 	if (_finalLineMaxChar!=-1){
-		if (_finalLineMaxChar<strlen(currentMessages[_maxDrawLine])){ // Bounds check
+		if (_finalLineMaxChar<=strlen(currentMessages[_maxDrawLine])){ // Bounds check
 			// Temporarily trim the string
-			_oldFinalChar = currentMessages[_maxDrawLine][_finalLineMaxChar+1];
-			currentMessages[_maxDrawLine][_finalLineMaxChar+1]='\0';
+			_oldFinalChar = currentMessages[_maxDrawLine][_finalLineMaxChar];
+			currentMessages[_maxDrawLine][_finalLineMaxChar]='\0';
 		}else{
 			_finalLineMaxChar=-1;
 		}
@@ -1176,7 +1171,7 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 	drawImageChars(_alpha,_maxDrawLine,_finalLineMaxChar!=-1 ? _finalLineMaxChar : INT_MAX);
 	// Fix string if we trimmed it for _finalLineMaxChar
 	if (_finalLineMaxChar!=-1){
-		currentMessages[_maxDrawLine][_finalLineMaxChar+1]=_oldFinalChar;
+		currentMessages[_maxDrawLine][_finalLineMaxChar]=_oldFinalChar;
 	}
 }
 void DrawMessageBox(char _textmodeToDraw, unsigned char _targetAlpha){
@@ -2118,7 +2113,10 @@ void moveFilePointerPastNewline(crossFile* fp){
 char* easygetline(crossFile* fp){
 	char* _tempReadLine=NULL;
 	size_t _readLength=0;
-	crossgetline(&_tempReadLine,&_readLength,fp);
+	if (crossgetline(&_tempReadLine,&_readLength,fp)==-1){
+		free(_tempReadLine);
+		return NULL;
+	}
 	removeNewline(_tempReadLine);
 	return _tempReadLine;
 }
@@ -2231,10 +2229,11 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 	int32_t _curProp=0;
 	int i;
 	for (i=0;i<_cachedStrlen;++i){
-		if (_workable[i]=='\n' || _workable[i]==' ' || i==_cachedStrlen-1){
+		char _isBreakChar = (_workable[i]=='\n' || _workable[i]==' ');
+		if (_isBreakChar || i==_cachedStrlen-1){
 			char _didChop=0;
 			char _oldChar;
-			if (i!=_cachedStrlen-1){
+			if (_isBreakChar){
 				_didChop=1;
 				_oldChar = _workable[i];
 				_workable[i]='\0'; // Chop the string for textWidth function
@@ -3525,13 +3524,10 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (!MessageBoxEnabled){
 		showTextbox();
 	}
-	int _currentDrawChar;
+	int _currentDrawChar; // exclusive
 	char* message;
 	if (currentLine<maxLines && currentMessages[currentLine]!=NULL){ // if required, prepend what was already on the line
-		_currentDrawChar=strlen(currentMessages[currentLine])-1;
-		if (_currentDrawChar<0){
-			_currentDrawChar=0;
-		}
+		_currentDrawChar=strlen(currentMessages[currentLine]);
 		message = malloc(strlen(_tempMsg)+strlen(currentMessages[currentLine])+1);
 		strcpy(message,currentMessages[currentLine]);
 		strcat(message,_tempMsg);
@@ -3635,23 +3631,7 @@ transferMoreLines:
 			_slowTextSpeed=0;
 			int i;
 			for (i=0;i<(textSpeed>0 ? textSpeed : 1);i++){
-				if (currentMessages[_currentDrawLine][_currentDrawChar]!='\0'){ // only increment _currentDrawChar if there's still space. this is a fix for zero length lines only. the regular null termination detection is below.
-					// move to next char
-					_currentDrawChar++;
-				}
-				// if it's not ASCII, skip to end of UTF-8 character
-				if ((unsigned char)(currentMessages[_currentDrawLine][_currentDrawChar])>0x7F){ // this is same as checking if last bit is on
-					// https://tools.ietf.org/html/rfc3629
-					// the number of bits on the left set to 1 determintes number of bytes
-					unsigned char _firstByte = currentMessages[_currentDrawLine][_currentDrawChar];
-					if ((_firstByte & 0xF0) == 0xF0){
-						_currentDrawChar+=3;
-					}else if ((_firstByte & 0xE0) == 0xE0){
-						_currentDrawChar+=2;
-					}else if ((_firstByte & 0xC0) == 0xC0){
-						_currentDrawChar++;
-					}
-				}else if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){ // If the next char we're about to display is the end of the line
+				if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){ // If the next char we're about to display is the end of the line
 					_currentDrawLine++;
 					// If we just passed the line we'll be writing to next time then we're done
 					if (_currentDrawLine==currentLine+1 || _currentDrawLine==maxLines){
@@ -3660,6 +3640,21 @@ transferMoreLines:
 					}else{ // Otherwise, start displaying at the start of the next line
 						_currentDrawChar=0;
 					}
+				}else{
+					// if it's not ASCII, skip to end of UTF-8 character
+					if ((unsigned char)(currentMessages[_currentDrawLine][_currentDrawChar])>0x7F){ // this is same as checking if last bit is on
+						// https://tools.ietf.org/html/rfc3629
+						// the number of bits on the left set to 1 determintes number of bytes
+						unsigned char _firstByte = currentMessages[_currentDrawLine][_currentDrawChar];
+						if ((_firstByte & 0xF0) == 0xF0){
+							_currentDrawChar+=3;
+						}else if ((_firstByte & 0xE0) == 0xE0){
+							_currentDrawChar+=2;
+						}else if ((_firstByte & 0xC0) == 0xC0){
+							_currentDrawChar++;
+						}
+					}
+					_currentDrawChar++;
 				}
 			}
 		}
@@ -4796,10 +4791,11 @@ void scriptClearMessage(nathanscriptVariable* _passedArguments, int _numArgument
 	ClearMessageArray(1);
 }
 void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	if (_passedArguments[2].variableType==NATHAN_TYPE_STRING){ // If an English adv name was passed
-		setADVName(nathanvariableToString(&_passedArguments[2]));
-	}else if (_passedArguments[2].variableType==NATHAN_TYPE_FLOAT){
-		int _desireIndex = nathanvariableToInt(&_passedArguments[2]);
+	int _nameIndex=playerLanguage ? 2 : 0;
+	if (_passedArguments[_nameIndex].variableType==NATHAN_TYPE_STRING){ // If an English adv name was passed
+		setADVName(nathanvariableToString(&_passedArguments[_nameIndex]));
+	}else if (_passedArguments[_nameIndex].variableType==NATHAN_TYPE_FLOAT){
+		int _desireIndex = nathanvariableToInt(&_passedArguments[_nameIndex]);
 		if (_desireIndex<advImageNameCount){
 			currentADVNameIm=_desireIndex;
 		}else if (shouldShowWarnings()){
@@ -4808,11 +4804,12 @@ void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments,
 	}else if (shouldShowADVNames() && advNamesPersist==0){
 		setADVName(NULL);
 	}
-	if (_passedArguments[3].variableType!=NATHAN_TYPE_NULL){
-		if (strcmp(nathanvariableToString(&_passedArguments[3]),"0")==0){
+	int _textIndex=playerLanguage ? 3 : 1;
+	if (_passedArguments[_textIndex].variableType!=NATHAN_TYPE_NULL){
+		if (strcmp(nathanvariableToString(&_passedArguments[_textIndex]),"0")==0){
 			return;
 		}
-		OutputLine((unsigned const char*)nathanvariableToString(&_passedArguments[3]),nathanvariableToInt(&_passedArguments[4]),0);
+		OutputLine((unsigned const char*)nathanvariableToString(&_passedArguments[_textIndex]),nathanvariableToInt(&_passedArguments[4]),0);
 		outputLineWait();
 	}
 }
@@ -7598,12 +7595,17 @@ void _initImageChars(){
 	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
 	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("assets/star.png");
 }
+#define TESTJPFONT "/usr/share/fonts/OTF/ipag.ttf"
 void hVitaInitFont(){
 	// Load default font
 	if (fontSize<0){
 		fontSize = getResonableFontSize(GBTXT);
 	}
-	currentFontFilename = fixPathAlloc(DEFAULTEMBEDDEDFONT,TYPE_EMBEDDED);
+	if (GBPLAT == GB_LINUX && playerLanguage==0 && checkFileExist(TESTJPFONT)){
+		currentFontFilename = strdup(TESTJPFONT);
+	}else{
+		currentFontFilename = fixPathAlloc(DEFAULTEMBEDDEDFONT,TYPE_EMBEDDED);
+	}
 	reloadFont(fontSize,1);
 	_initImageChars();
 }
@@ -7695,6 +7697,8 @@ int main(int argc, char *argv[]){
 	if (init(argc,argv)==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
+
+	#include "secrettest.h"
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
 			case GAMESTATUS_TITLE:

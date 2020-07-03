@@ -1,10 +1,25 @@
 #ifndef GOOD_MAIN_HEADER_HAS_DOES_BEEN_INCLUDED
 #define GOOD_MAIN_HEADER_HAS_DOES_BEEN_INCLUDED
 
+#define GAMESTATUS_TITLE 0
+#define GAMESTATUS_LOADPRESET 1
+#define GAMESTATUS_PRESETSELECTION 2
+#define GAMESTATUS_MAINGAME 3
+#define GAMESTATUS_NAVIGATIONMENU 4
+#define GAMESTATUS_GAMEFOLDERSELECTION 6
+#define GAMESTATUS_LOADGAMEFOLDER 7
+#define GAMESTATUS_QUIT 99
+
 #define wasJustPressed(x) ((currentGameStatus!=GAMESTATUS_MAINGAME || inputValidity || isSkipping) && wasJustPressed(x))
 #define isDown(x) ((currentGameStatus!=GAMESTATUS_MAINGAME || inputValidity || isSkipping) && isDown(x))
 
 typedef unsigned char optionProp;
+extern char playerLanguage;
+extern char* scriptFolder;
+extern int screenWidth;
+extern int screenHeight;
+extern crossFont* normalFont;
+//extern signed char currentGameStatus;
 
 void startDrawing();
 void Draw(char _shouldDrawMessageBox);
@@ -46,6 +61,10 @@ void enlargeScreenManual(int _destOffX, int _destOffY, double _destScaleX, doubl
 void Update();
 char* easygetline(crossFile* fp);
 char isNumberString(char* _inputString);
+char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt);
+double partMoveFillsCapped(u64 _curTicks, u64 _startTime, int _totalDifference, double _max);
+int easyCenter(int _smallSize, int _bigSize);
+void PlayMenuSound();
 typedef struct{
 	char** theArray;
 	unsigned char length;
