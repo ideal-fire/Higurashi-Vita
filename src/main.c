@@ -31,7 +31,6 @@
 	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
 	TODO - don't show "save game" option in toucb bar if save not supported. oops. looks like the function should just be passed a map of which ones to enable
 	TODO - textboxWidth bug
-	TODO - force line break at wrong index? see TODO in the wraptextadvanced function
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -2204,6 +2203,25 @@ void drawWrappedTextCentered(int _x, int _y, char** _passedLines, int _numLines,
 		gbDrawTextAlpha(normalFont,_x+easyCenter(textWidth(normalFont,_passedLines[i]),_boxWidth),_y+currentTextHeight*i,_passedLines[i],r,g,b,a);
 	}
 }
+char issecondaryutf8(unsigned char c){
+	return (c & 192)==128;
+}
+// _c starts out on the primary utf8 char
+int nextutf8(char* _stringStart, int i){
+	while(1){
+		if (!issecondaryutf8(_stringStart[++i])){
+			return i;
+		}
+	}
+}
+int prevutf8(char* _stringStart, int i){
+	while(i>0){
+		if (!issecondaryutf8(_stringStart[--i])){
+			return i;
+		}
+	}
+	return -1;
+}
 void freeWrappedText(int _numLines, char** _passedLines){
 	int i;
 	for (i=0;i<_numLines;++i){
@@ -2227,10 +2245,11 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 	int _lastPropSet=-1; // only set properties if at index greater than this one
 	int _lastNewline = -1; // Index
 	int32_t _curProp=0;
+	int _lastCharLen = _cachedStrlen-prevutf8(_workable,_cachedStrlen);
 	int i;
-	for (i=0;i<_cachedStrlen;++i){
+	for (i=0;i<=_cachedStrlen-_lastCharLen;){
 		char _isBreakChar = (_workable[i]=='\n' || _workable[i]==' ');
-		if (_isBreakChar || i==_cachedStrlen-1){
+		if (_isBreakChar || i>=_cachedStrlen-_lastCharLen){
 			char _didChop=0;
 			char _oldChar;
 			if (_isBreakChar){
@@ -2241,61 +2260,54 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 			if (textWidth(normalFont,&(_workable[_lastNewline+1]))>_maxWidth){ // If at this spot the string is too long for the screen
 				// Find last word before we went off screen
 				int j;
-				for (j=i-1;j>_lastNewline;--j){
+				for (j=prevutf8(_workable,i);j>_lastNewline;j=prevutf8(_workable,j)){
 					if (_workable[j]==' '){
 						break;
 					}
 				}
 				if (j==_lastNewline){ // Didn't find a stopping point, the line is likely one giant word
+					char _didBreak=0;
 					// Force a stopping point
-					for (j=i-1;j>_lastNewline;--j){
+					for (j=prevutf8(_workable,i);j>_lastNewline;j=prevutf8(_workable,j)){
 						char _cacheChar = _workable[j];
 						_workable[j]='\0';
 						char _canSplit = (textWidth(normalFont,&(_workable[_lastNewline+1]))<=_maxWidth);
 						_workable[j]=_cacheChar;
 						if (_canSplit){
-							if (j==i-1){ // if we're about to put the line break right before the space, don't. the space is already a null byte. just use that.
-								_lastNewline=i;
-							}else{
-								// TODO - isn't this dumb? shouldn't i break at index j, not after it?
-								// The character we're at right now, that's where the split needs to be because it's acting as the null terminator right now
-								// In this code, j will represent the last real character from the string
-								char* _newBuffer = malloc(_cachedStrlen+2);
-								memcpy(_newBuffer,_workable,j+1);
-								_newBuffer[j+1]='\0';
-								_lastNewline=j+1;
-								memcpy(&(_newBuffer[j+2]),&(_workable[j+1]),_cachedStrlen-(j)); // Should also copy null
-								free(_workable);
-								_workable = _newBuffer;
-								// also realloc properties
-								if (_propBuff!=NULL){
-									int32_t* _newProps = malloc((_cachedStrlen+1)*sizeof(int32_t));
-									memcpy(_newProps,_propBuff,(j+1)*sizeof(int32_t));
-									memcpy(&(_newProps[j+2]),&(_propBuff[j+1]),(_cachedStrlen-j-1)*sizeof(int32_t));
-									free(_propBuff);
-									_propBuff=_newProps;
-								}
-								// Account for new byte
-								_cachedStrlen++;
-								i++;
+							// The character we're at right now, that's where the split needs to be because it's acting as the null terminator right now
+							char* _newBuffer = malloc(_cachedStrlen+2);
+							memcpy(_newBuffer,_workable,j);
+							_newBuffer[j]='\0';
+							_lastNewline=j;
+							memcpy(&(_newBuffer[j+1]),&(_workable[j]),_cachedStrlen-(j)+1); // Should also copy null
+							free(_workable);
+							_workable = _newBuffer;
+							// also realloc properties
+							if (_propBuff!=NULL){
+								int32_t* _newProps = malloc((_cachedStrlen+1)*sizeof(int32_t));
+								memcpy(_newProps,_propBuff,j*sizeof(int32_t));
+								memcpy(&(_newProps[j+1]),&(_propBuff[j]),(_cachedStrlen-j)*sizeof(int32_t));
+								free(_propBuff);
+								_propBuff=_newProps;
 							}
+							// Account for new byte
+							_cachedStrlen++;
+							i++;
+							_didBreak=1;
 							break;
 						}
 					}
 					// Odd, no part between last new line and here less than _maxWidth. This should not happen, but just in case, put some code to at least do something.
-					if (j==_lastNewline){
+					if (!_didBreak){
+						printf("odd\n");
 						_workable[i]='\0';
 					}
 				}else{ // Normal, found what we're looking for, just chop at the end of the last word
 					_workable[j]='\0';
-					if (_workable[i]=='\0'){ // Fix chop if happened
-						_workable[i]=' ';
-					}
 					_lastNewline=j;
 				}
-				// if we were doing this stuff at an explicit line break spot, put the line break back if we didn't use it
-				if (_didChop && _oldChar=='\n' && _lastNewline!=i){
-					_workable[i]='\n';
+				if (_didChop && _lastNewline!=i){ // Fix chop if happened
+					_workable[i]=_oldChar;
 				}
 				// No matter what we did, we'll still need to start our check from the last new line
 				// _lastPropSet keeps properties from being overwritten
@@ -2395,7 +2407,6 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 						if (j<MAXIMAGECHAR){
 							// if we put the image char at this spot, redo this spot as a space.
 							--i;
-							continue;
 						}
 					}
 				}
@@ -2443,9 +2454,15 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 				}
 			}
 		}
+		/////
 		if (_propBuff && i>_lastPropSet){
-			_lastPropSet=i;
-			_propBuff[i]=_curProp;
+			int _destIndex = nextutf8(_workable,i);
+			for (;i<_destIndex;++i){
+				_propBuff[i]=_curProp;
+			}
+			_lastPropSet=i-1;
+		}else{
+			i=nextutf8(_workable,i);
 		}
 	}
 	*_passedMessage = _workable;
