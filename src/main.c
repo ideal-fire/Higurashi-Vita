@@ -6815,156 +6815,124 @@ int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _op
 	}
 	return showMenuAdvanced(_defaultChoice,_title,_numOptions,_options,NULL,NULL,NULL,NULL,_menuProps,NULL);
 }
+char* _bottomString;
+int _titleScreenDraw(int _choice){
+	int _y = screenHeight-5-currentTextHeight;
+	drawText(5,_y,_bottomString);
+	gbDrawText(normalFont,(screenWidth-5)-textWidth(normalFont,VERSIONSTRING VERSIONSTRINGSUFFIX),_y,VERSIONSTRING VERSIONSTRINGSUFFIX,VERSIONCOLOR);
+	return 0;
+}
 void TitleScreen(){
-	signed char _choice=0;
-	int _versionStringWidth = textWidth(normalFont,VERSIONSTRING VERSIONSTRINGSUFFIX);
-	char _bottomConfigurationString[13+strlen(SYSTEMSTRING)];
-	strcpy(_bottomConfigurationString,SYSTEMSTRING);
-	if (isGameFolderMode){
-		strcat(_bottomConfigurationString,";Games");
-	}else{
-		strcat(_bottomConfigurationString,";Presets");
-	}
-	#if GBPLAT != GB_3DS
-		if (isActuallyUsingUma0){
-			strcat(_bottomConfigurationString,";uma0");
-		}else{
-			strcat(_bottomConfigurationString,";ux0");
-		}
-	#endif
+	_bottomString=easyCombineStrings(3,SYSTEMSTRING,isGameFolderMode ? ";Games" : ";Presets",GBPLAT!=GB_3DS ? (isActuallyUsingUma0 ? ";uma0" : ";ux0") : (""));
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		controlsStart();
-		_choice = menuControls(_choice, 0, isGameFolderMode ? 3 : 4);
-		if (wasJustPressed(BUTTON_A)){
-			if (_choice==0){
-				PlayMenuSound(); 
-				if (currentPresetFilename==NULL){
-					currentPresetChapter=0;
-					controlsEnd();
-					if (isGameFolderMode){
-						currentGameStatus=GAMESTATUS_GAMEFOLDERSELECTION;
-					}else{
-						currentGameStatus=GAMESTATUS_PRESETSELECTION;
-					}
-				}
-				break;
-			}else if (_choice==1){
-				PlayMenuSound();
+		char* _options[5]={"Load game","Manual mode","Basic settings","Exit","Upgrade to Game Folder Mode"};
+		char _showMap[5];
+		memset(_showMap,1,4);
+		_showMap[4]=!isGameFolderMode;
+		int _choice=showMenuAdvanced(0,"Main Menu",5,_options,NULL,_showMap,NULL,NULL,MENUPROP_CANPAGEUPDOWN, _titleScreenDraw);
+		if (_choice==0){
+			PlayMenuSound(); 
+			if (currentPresetFilename==NULL){
+				currentPresetChapter=0;
 				controlsEnd();
 				if (isGameFolderMode){
-					char* _chosenGameFolder;
-					if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a game")==2 || _chosenGameFolder==NULL){
-						continue;
-					}
-					char _tempNewStreamingAssetsPathbuffer[strlen(gamesFolder)+strlen(_chosenGameFolder)+1];
-					strcpy(_tempNewStreamingAssetsPathbuffer,gamesFolder);
-					strcat(_tempNewStreamingAssetsPathbuffer,_chosenGameFolder);
-					GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer,0);
-					free(_chosenGameFolder);
-				}
-				if (!directoryExists(scriptFolder)){
-					controlsEnd();
-					char* _tempChosenFile;
-					if (FileSelector(presetFolder,&_tempChosenFile,(char*)"Select a preset to choose StreamingAssets folder")==2){
-						easyMessagef(1,"%s does not exist and no files in %s. Do you have any files?",scriptFolder,presetFolder);
-						continue;
-					}else{
-						if (_tempChosenFile==NULL){
-							continue;
-						}
-						UpdatePresetStreamingAssetsDir(_tempChosenFile);
-						free(_tempChosenFile);
-					}
-				}
-				controlsEnd();
-				char* _tempManualFileSelectionResult;
-				FileSelector(scriptFolder,&_tempManualFileSelectionResult,(char*)"Select a script");
-				controlsReset();
-				if (_tempManualFileSelectionResult!=NULL){
-					if (strlen(_tempManualFileSelectionResult)>4 && strcmp(&(_tempManualFileSelectionResult[strlen(_tempManualFileSelectionResult)-4]),".scr")==0){
-						currentGameStatus=GAMESTATUS_MAINGAME;
-						initializeNathanScript();
-
-						activateVNDSSettings();
-
-						char _tempFilepathBuffer[strlen(scriptFolder)+strlen(_tempManualFileSelectionResult)+1];
-						strcpy(_tempFilepathBuffer,scriptFolder);
-						strcat(_tempFilepathBuffer,_tempManualFileSelectionResult);
-
-						changeMallocString(&currentScriptFilename,_tempManualFileSelectionResult);
-						nathanscriptDoScript(_tempFilepathBuffer,0,inBetweenVNDSLines);
-
-						free(_tempManualFileSelectionResult);
-						currentGameStatus=GAMESTATUS_TITLE;
-					}else{
-						currentGameStatus=GAMESTATUS_MAINGAME;
-						activateHigurashiSettings();
-						RunScript(scriptFolder,_tempManualFileSelectionResult,0);
-						free(_tempManualFileSelectionResult);
-						currentGameStatus=GAMESTATUS_TITLE;
-					}
-				}
-				if (presetsAreInStreamingAssets==0){ // If the presets are not specific to a StreamingAssets folder, that means that the user could be using a different StreamingAssets folder. Reset paths just in case.
-					GenerateStreamingAssetsPaths("StreamingAssets",1);
-				}
-			}else if (_choice==2){ // Go to setting menu
-				controlsEnd();
-				SettingsMenu(0,0,0,0,1,0,0,0,0);
-				controlsEnd();
-				break;
-			}else if (_choice==3){ // Quit button
-				currentGameStatus=GAMESTATUS_QUIT;
-				break;
-			}else if (_choice==4){
-				if (isGameFolderMode){
-					easyMessagef(1,"You really shouldn't be here. You haven't escaped, you know? You're not even going the right way.");
+					currentGameStatus=GAMESTATUS_GAMEFOLDERSELECTION;
 				}else{
-					ClearMessageArray(0);
-					controlsReset();
-					OutputLine("This process will convert your legacy preset & StreamingAssets setup to the new game folder setup. It makes everything easier, so you should do it.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
-					while (!wasJustPressed(BUTTON_A)){
-						controlsEnd();
-						startDrawing();
-						DrawMessageText(255,-1,-1);
-						endDrawing();
-						controlsStart();
+					currentGameStatus=GAMESTATUS_PRESETSELECTION;
+				}
+			}
+			break;
+		}else if (_choice==1){
+			PlayMenuSound();
+			controlsEnd();
+			if (isGameFolderMode){
+				char* _chosenGameFolder;
+				if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a game")==2 || _chosenGameFolder==NULL){
+					continue;
+				}
+				char _tempNewStreamingAssetsPathbuffer[strlen(gamesFolder)+strlen(_chosenGameFolder)+1];
+				strcpy(_tempNewStreamingAssetsPathbuffer,gamesFolder);
+				strcat(_tempNewStreamingAssetsPathbuffer,_chosenGameFolder);
+				GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer,0);
+				free(_chosenGameFolder);
+			}
+			if (!directoryExists(scriptFolder)){
+				controlsEnd();
+				char* _tempChosenFile;
+				if (FileSelector(presetFolder,&_tempChosenFile,(char*)"Select a preset to choose StreamingAssets folder")==2){
+					easyMessagef(1,"%s does not exist and no files in %s. Do you have any files?",scriptFolder,presetFolder);
+					continue;
+				}else{
+					if (_tempChosenFile==NULL){
+						continue;
 					}
-					if (LazyChoicef("Upgrade to game folder mode?")){
-						if (upgradeToGameFolder()){
-							currentGameStatus=GAMESTATUS_QUIT;
-							break;
-						}
+					UpdatePresetStreamingAssetsDir(_tempChosenFile);
+					free(_tempChosenFile);
+				}
+			}
+			controlsEnd();
+			char* _tempManualFileSelectionResult;
+			FileSelector(scriptFolder,&_tempManualFileSelectionResult,(char*)"Select a script");
+			controlsReset();
+			if (_tempManualFileSelectionResult!=NULL){
+				if (strlen(_tempManualFileSelectionResult)>4 && strcmp(&(_tempManualFileSelectionResult[strlen(_tempManualFileSelectionResult)-4]),".scr")==0){
+					currentGameStatus=GAMESTATUS_MAINGAME;
+					initializeNathanScript();
+
+					activateVNDSSettings();
+
+					char _tempFilepathBuffer[strlen(scriptFolder)+strlen(_tempManualFileSelectionResult)+1];
+					strcpy(_tempFilepathBuffer,scriptFolder);
+					strcat(_tempFilepathBuffer,_tempManualFileSelectionResult);
+
+					changeMallocString(&currentScriptFilename,_tempManualFileSelectionResult);
+					nathanscriptDoScript(_tempFilepathBuffer,0,inBetweenVNDSLines);
+
+					free(_tempManualFileSelectionResult);
+					currentGameStatus=GAMESTATUS_TITLE;
+				}else{
+					currentGameStatus=GAMESTATUS_MAINGAME;
+					activateHigurashiSettings();
+					RunScript(scriptFolder,_tempManualFileSelectionResult,0);
+					free(_tempManualFileSelectionResult);
+					currentGameStatus=GAMESTATUS_TITLE;
+				}
+			}
+			if (presetsAreInStreamingAssets==0){ // If the presets are not specific to a StreamingAssets folder, that means that the user could be using a different StreamingAssets folder. Reset paths just in case.
+				GenerateStreamingAssetsPaths("StreamingAssets",1);
+			}
+		}else if (_choice==2){ // Go to setting menu
+			controlsEnd();
+			SettingsMenu(0,0,0,0,1,0,0,0,0);
+			controlsEnd();
+			break;
+		}else if (_choice==3){ // Quit button
+			currentGameStatus=GAMESTATUS_QUIT;
+			break;
+		}else if (_choice==4){
+			if (isGameFolderMode){
+				easyMessagef(1,"You really shouldn't be here. You haven't escaped, you know? You're not even going the right way.");
+			}else{
+				ClearMessageArray(0);
+				controlsReset();
+				OutputLine("This process will convert your legacy preset & StreamingAssets setup to the new game folder setup. It makes everything easier, so you should do it.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
+				while (!wasJustPressed(BUTTON_A)){
+					controlsEnd();
+					startDrawing();
+					DrawMessageText(255,-1,-1);
+					endDrawing();
+					controlsStart();
+				}
+				if (LazyChoicef("Upgrade to game folder mode?")){
+					if (upgradeToGameFolder()){
+						currentGameStatus=GAMESTATUS_QUIT;
+						break;
 					}
 				}
-			}else{
-				_choice=0;
 			}
+		}else{
+			_choice=0;
 		}
-		startDrawing();
-
-		drawText(MENUOPTIONOFFSET,5,"Main Menu");
-
-		// Menu options
-		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load game");
-		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Manual mode");
-		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"Basic Settings");
-		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit");
-		if (!isGameFolderMode){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(4+2),"Upgrade to game folder mode",0,255,0);
-		}
-
-		// Extra bottom data
-		gbDrawText(normalFont,(screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING VERSIONSTRINGSUFFIX,VERSIONCOLOR);
-		drawText(5,screenHeight-5-currentTextHeight,_bottomConfigurationString);
-
-		// Cursor
-		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
-
-		#if GBPLAT == GB_3DS
-			startDrawingBottom();
-		#endif
-		endDrawing();
-		controlsEnd();
 	}
 }
 void TipMenu(){
