@@ -10,6 +10,20 @@
 #define GAMESTATUS_LOADGAMEFOLDER 7
 #define GAMESTATUS_QUIT 99
 
+// bitmap of option propterties for showMenuAdvanced
+// use the optionProp type for these
+#define OPTIONPROP_LEFTRIGHT 1
+#define OPTIONPROP_GOODCOLOR 2
+#define OPTIONPROP_BADCOLOR	 4
+//
+#define MENUPROP_CANQUIT 1
+#define MENUPROP_CANPAGEUPDOWN 2
+// return bitmap of _returnInfo from showMenuAdvanced
+// if the user pressed right to select this option
+#define MENURET_RIGHT 1
+// if the user held L when pressing the button
+#define MENURET_LBUTTON 2
+
 #define wasJustPressed(x) ((currentGameStatus!=GAMESTATUS_MAINGAME || inputValidity || isSkipping) && wasJustPressed(x))
 #define isDown(x) ((currentGameStatus!=GAMESTATUS_MAINGAME || inputValidity || isSkipping) && isDown(x))
 
@@ -19,7 +33,10 @@ extern char* scriptFolder;
 extern int screenWidth;
 extern int screenHeight;
 extern crossFont* normalFont;
+extern int currentTextHeight;
 //extern signed char currentGameStatus;
+
+typedef int(*inttakeretfunc)(int);
 
 void startDrawing();
 void Draw(char _shouldDrawMessageBox);
@@ -49,7 +66,6 @@ int vndsSaveSelector(char _isSave);
 void drawHallowRect(int _x, int _y, int _w, int _h, int _thick, int _r, int _g, int _b, int _a);
 void safeVNDSSaveMenu();
 int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _options, char _canQuit);
-int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp);
 char* newShowMap(int _numElements);
 void setADVName(char* _newName);
 void saveGlobalVNDSVars();
@@ -65,6 +81,8 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt);
 double partMoveFillsCapped(u64 _curTicks, u64 _startTime, int _totalDifference, double _max);
 int easyCenter(int _smallSize, int _bigSize);
 void PlayMenuSound();
+int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, inttakeretfunc _drawHook);
+
 typedef struct{
 	char** theArray;
 	unsigned char length;

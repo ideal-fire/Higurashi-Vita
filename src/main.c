@@ -158,19 +158,6 @@ char* vitaAppId="HIGURASHI";
 // ratio of screen width that the text will scroll in one second
 #define TEXTSCROLLPERSECOND .25
 #define TEXTSCROLLDELAYTIME 300
-// bitmap of option propterties for showMenuAdvanced
-// use the optionProp type for these
-#define OPTIONPROP_LEFTRIGHT 1
-#define OPTIONPROP_GOODCOLOR 2
-#define OPTIONPROP_BADCOLOR	 4
-//
-#define MENUPROP_CANQUIT 1
-#define MENUPROP_CANPAGEUPDOWN 2
-// return bitmap of _returnInfo from showMenuAdvanced
-// if the user pressed right to select this option
-#define MENURET_RIGHT 1
-// if the user held L when pressing the button
-#define MENURET_LBUTTON 2
 
 #define PREFER_DIR_BGM 0
 #define PREFER_DIR_SE 1
@@ -347,7 +334,7 @@ bgload - First remove bustB from bust cache and then do the same as before.
 cachedImage bustCache[MAXBUSTCACHE];
 bust* Busts;
 
-char playerLanguage=0;
+char playerLanguage=1;
 
 // used in the enlargeScreen function
 double extraGameScaleX=1;
@@ -6213,7 +6200,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			_settingsProp[SETTING_BOXALPHA]|=OPTIONPROP_BADCOLOR;
 		}
 		char _selectionInfo;
-		_choice=showMenuAdvanced(_choice,"Settings",SETTINGS_MAX,_settings,_values,_settingsOn,_settingsProp,&_selectionInfo,0);
+		_choice=showMenuAdvanced(_choice,"Settings",SETTINGS_MAX,_settings,_values,_settingsOn,_settingsProp,&_selectionInfo,0,NULL);
 		signed char _directionMultiplier = (_selectionInfo & MENURET_RIGHT) ? 1 : -1;
 		char _didHoldL = (_selectionInfo & MENURET_LBUTTON);
 		switch(_choice){
@@ -6426,7 +6413,7 @@ void wrapOption(int _realIndex, char** _options, char** _optionValues, int _fake
 #define TOUCHOPTIONCOLORB 75,75,75
 #define TOUCHARROWCOLOR 255,0,255
 // will be bad if option number zero is a left right option
-int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, int _passedOptionXOff, int _passedOptionYOff, int _menuW, int _menuH){
+int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, int _passedOptionXOff, int _passedOptionYOff, int _menuW, int _menuH, inttakeretfunc _drawHook){
 	int _ret=_choice;
 	int _changeArrowW = _menuW*(1/(double)6);
 	//
@@ -6604,6 +6591,9 @@ recalcPositions:
 		gbSetDrawOffX(0);
 		gbSetDrawOffY(0);
 		disableClipping();
+		if (_drawHook && _drawHook(menuIndexToReal(_choice,_showMap))){
+			break;
+		}
 		endDrawing();
 	}
 	if (_ret!=-1){
@@ -6620,16 +6610,15 @@ recalcPositions:
 	free(_optionY);
 	return _ret;
 }
-int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
+int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, inttakeretfunc _drawHook){
 	controlsReset();
 	if (_returnInfo){
 		*_returnInfo=0;
 	}
-	int i;
 	// convert the passed _choice from real index in _options to fake index
 	if (_showMap){
 		int _realIndex=_choice;
-		for (i=0;i<_realIndex;++i){
+		for (int i=0;i<_realIndex;++i){
 			if (!_showMap[i]){
 				--_choice;
 			}
@@ -6639,7 +6628,7 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 	int _numOptions = getNumShownOptions(_showMap,_mapSize);
 	if (_showMap){
 		_numOptions=0;
-		for (i=0;i<_mapSize;++i){
+		for (int i=0;i<_mapSize;++i){
 			if (_showMap[i]){
 				++_numOptions;
 			}
@@ -6668,7 +6657,7 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 		if (_scrollOffset==-1){ // queued menu info update
 			// Find horizontal scroll info
 			_curRealIndex = -1;
-			for (i=0;i<=_choice;++i){
+			for (int i=0;i<=_choice;++i){
 				_curRealIndex = getNextEnabled(_showMap,_curRealIndex+1);
 			}
 			int _curWidth = textWidth(normalFont,_options[_curRealIndex]);
@@ -6759,11 +6748,11 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 		// Draw the menu options
 		int _lastDrawn=-1;
 		// First, fast forward to the correct starting index according to scroll
-		for (i=0;i<_scrollOffset;++i){
+		for (int i=0;i<_scrollOffset;++i){
 			_lastDrawn = getNextEnabled(_showMap,_lastDrawn+1);
 		}
 		// Draw the entries currently on screen
-		for (i=0;i<_optionsOnScreen;++i){
+		for (int i=0;i<_optionsOnScreen;++i){
 			_lastDrawn  = getNextEnabled(_showMap,_lastDrawn+1);
 			if (i==_choice-_scrollOffset && _maxHScroll!=0){
 				continue;
@@ -6793,6 +6782,9 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 			drawText(MENUOPTIONOFFSET,currentTextHeight*_optionsOnScreen,"\\/\\/\\/\\/");
 		}
 		gbSetDrawOffY(0);
+		if (_drawHook && _drawHook(menuIndexToReal(_choice,_showMap))){
+			break;
+		}
 		endDrawing();
 	}
 	controlsEnd();
@@ -6801,15 +6793,15 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 // returns -1 if user quit, otherwise returns chosen index
 // pass the real _choice index
 // does not support horizontal scrolling for options with _optionValues
-int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
-	return gbHasButtons()==GBPREFERRED ? showMenuAdvancedButton(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp) : showMenuAdvancedTouch(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp,0,0,screenWidth,screenHeight);
+int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, inttakeretfunc _drawHook){
+	return gbHasButtons()==GBPREFERRED ? showMenuAdvancedButton(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp,_drawHook) : showMenuAdvancedTouch(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp,0,0,screenWidth,screenHeight,_drawHook);
 }
 int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _options, char _canQuit){
 	char _menuProps=MENUPROP_CANPAGEUPDOWN;
 	if (_canQuit){
 		_menuProps|=MENUPROP_CANQUIT;
 	}
-	return showMenuAdvanced(_defaultChoice,_title,_numOptions,_options,NULL,NULL,NULL,NULL,_menuProps);
+	return showMenuAdvanced(_defaultChoice,_title,_numOptions,_options,NULL,NULL,NULL,NULL,_menuProps,NULL);
 }
 void TitleScreen(){
 	signed char _choice=0;
@@ -7068,7 +7060,7 @@ void NavigationMenu(){
 	}
 	int _choice=0;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
-		_choice = showMenuAdvanced(_choice,_menuTitle,4,_menuOptions,NULL,_optionOn,NULL,NULL,0);
+		_choice = showMenuAdvanced(_choice,_menuTitle,4,_menuOptions,NULL,_optionOn,NULL,NULL,0,NULL);
 		if (_choice==0){
 			printf("Go to next chapter\n");
 			if (currentPresetChapter+1==currentPresetFileList.length){
