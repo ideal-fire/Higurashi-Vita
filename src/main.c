@@ -7687,7 +7687,6 @@ int main(int argc, char *argv[]){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
 
-	#include "secrettest.h"
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
 			case GAMESTATUS_TITLE:
