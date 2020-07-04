@@ -25,7 +25,6 @@
 					_nextChapterExist=1;
 					_codeProgress=0;
 				}
-	TODO - add veritcal das to showMenu
 	TODO - textbox alpha should change with background alpha
 	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
@@ -6610,6 +6609,8 @@ recalcPositions:
 	free(_optionY);
 	return _ret;
 }
+#define SHOWMENUBUTTONDELAY 300
+#define SHOWMENUAUTOSHIFT 30
 int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, inttakeretfunc _drawHook){
 	controlsReset();
 	if (_returnInfo){
@@ -6649,10 +6650,21 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 	u64 _startHScroll;
 	int _scrollTime;
 	int _curRealIndex;
+	u64 _nextDASShift=0;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
 		if (menuControlsLow(&_choice,1,1,0,(_menuProp & MENUPROP_CANPAGEUPDOWN) ? _optionsOnScreen : 0,0,_numOptions-1)){
 			_scrollOffset=-1;
+		}
+		if (wasJustPressed(BUTTON_DOWN) || wasJustPressed(BUTTON_UP)){
+			_nextDASShift=getMilli()+SHOWMENUBUTTONDELAY;
+		}else if (isDown(BUTTON_DOWN) || isDown(BUTTON_UP)){
+			u64 _curTime = getMilli();
+			if (_curTime>=_nextDASShift){
+				_nextDASShift=getMilli()+SHOWMENUAUTOSHIFT;
+				_choice=wrapNum(_choice+(isDown(BUTTON_DOWN) ? 1 : -1),0,_numOptions-1);
+				_scrollOffset=-1;
+			}
 		}
 		if (_scrollOffset==-1){ // queued menu info update
 			// Find horizontal scroll info
