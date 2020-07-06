@@ -26,7 +26,6 @@
 					_codeProgress=0;
 				}
 	TODO - textbox alpha should change with background alpha
-	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
 	TODO - don't show "save game" option in toucb bar if save not supported. oops. looks like the function should just be passed a map of which ones to enable
 	TODO - textboxWidth bug
@@ -152,6 +151,7 @@ char* vitaAppId="HIGURASHI";
 #define SAVEMENUPAGESIZE (SAVEMENUPAGEW*SAVEMENUPAGEH)
 #define MAXSAVESLOT 258 // Divisible by 6
 #define VNDSSAVESELSLOTPREFIX "Slot "
+#define PRESETFRAGNAME "/\\fragments"
 
 // showMenu
 // ratio of screen width that the text will scroll in one second
@@ -6775,9 +6775,15 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 			int _b = DEFAULTFONTCOLORB;
 			if (_optionProp!=NULL){
 				if (_optionProp[_lastDrawn] & OPTIONPROP_GOODCOLOR){
-					_r=0;
-					_g=255;
-					_b=0;
+					if (_optionProp[_lastDrawn] & OPTIONPROP_BADCOLOR){
+						_r=255;
+						_g=127;
+						_b=0;
+					}else{
+						_r=0;
+						_g=255;
+						_b=0;
+					}
 				}else if (_optionProp[_lastDrawn] & OPTIONPROP_BADCOLOR){
 					_r=255;
 					_g=0;
@@ -7028,9 +7034,10 @@ void NavigationMenu(){
 		"Next",
 		"Chapter Jump",
 		"View TIPS",
+		"Fragments",
 		"Exit",
 	};
-	char* _optionOn = newShowMap(4);
+	char* _optionOn = newShowMap(5);
 	// if tips disabled or no tips unlocked
 	if (!gameHasTips || currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
 		_optionOn[2]=0;
@@ -7038,9 +7045,20 @@ void NavigationMenu(){
 	if (currentPresetChapter+1>=currentPresetFileList.length){
 		_optionOn[0]=0;
 	}
+	if (_optionOn[0] && (strcmp(currentPresetFileList.theArray[currentPresetChapter+1],PRESETFRAGNAME)==0)){
+		_optionOn[3]=1;
+		_optionOn[0]=0;
+		if (!fragmentInfo){ // initial fragment info load
+			char* _fullPath = easyCombineStrings(2,streamingAssets,"Data/fragmentdata.txt");
+			parseFragmentFile(_fullPath);
+			free(_fullPath);
+		}
+	}else{
+		_optionOn[3]=0;
+	}
 	int _choice=0;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
-		_choice = showMenuAdvanced(_choice,_menuTitle,4,_menuOptions,NULL,_optionOn,NULL,NULL,0,NULL);
+		_choice = showMenuAdvanced(_choice,_menuTitle,5,_menuOptions,NULL,_optionOn,NULL,NULL,0,NULL);
 		if (_choice==0){
 			printf("Go to next chapter\n");
 			if (currentPresetChapter+1==currentPresetFileList.length){
@@ -7058,6 +7076,8 @@ void NavigationMenu(){
 			#endif
 			TipMenu();
 		}else if (_choice==3){
+			fragmentMenu();
+		}else if (_choice==4){
 			currentGameStatus=GAMESTATUS_QUIT;
 		}
 	}
@@ -7683,6 +7703,8 @@ signed char init(int argc, char** argv){
 #endif
 int main(int argc, char *argv[]){
 	/* code */
+	/* playerLanguage=0; */
+	/* printf("WARNING: forcing language to %d\n",playerLanguage); */
 	if (init(argc,argv)==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
