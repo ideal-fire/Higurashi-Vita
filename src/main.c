@@ -25,13 +25,10 @@
 					_nextChapterExist=1;
 					_codeProgress=0;
 				}
-	TODO - add veritcal das to showMenu
 	TODO - textbox alpha should change with background alpha
-	TODO - is it possible to reused showmenu for the title screen by cachign all info in a struct and passing that to a draw function?
 	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
 	TODO - don't show "save game" option in toucb bar if save not supported. oops. looks like the function should just be passed a map of which ones to enable
 	TODO - textboxWidth bug
-	TODO - force line break at wrong index? see TODO in the wraptextadvanced function
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -81,6 +78,7 @@
 #endif
 #include "insensitiveFileFinder.h"
 #include "legarchive.h"
+#include "fragmentMenu.h"
 
 #define LOCATION_UNDEFINED 0
 #define LOCATION_CG 1
@@ -153,24 +151,12 @@ char* vitaAppId="HIGURASHI";
 #define SAVEMENUPAGESIZE (SAVEMENUPAGEW*SAVEMENUPAGEH)
 #define MAXSAVESLOT 258 // Divisible by 6
 #define VNDSSAVESELSLOTPREFIX "Slot "
+#define PRESETFRAGNAME "/\\fragments"
 
 // showMenu
 // ratio of screen width that the text will scroll in one second
 #define TEXTSCROLLPERSECOND .25
 #define TEXTSCROLLDELAYTIME 300
-// bitmap of option propterties for showMenuAdvanced
-// use the optionProp type for these
-#define OPTIONPROP_LEFTRIGHT 1
-#define OPTIONPROP_GOODCOLOR 2
-#define OPTIONPROP_BADCOLOR	 4
-//
-#define MENUPROP_CANQUIT 1
-#define MENUPROP_CANPAGEUPDOWN 2
-// return bitmap of _returnInfo from showMenuAdvanced
-// if the user pressed right to select this option
-#define MENURET_RIGHT 1
-// if the user held L when pressing the button
-#define MENURET_LBUTTON 2
 
 #define PREFER_DIR_BGM 0
 #define PREFER_DIR_SE 1
@@ -347,6 +333,8 @@ bgload - First remove bustB from bust cache and then do the same as before.
 cachedImage bustCache[MAXBUSTCACHE];
 bust* Busts;
 
+char playerLanguage=1;
+
 // used in the enlargeScreen function
 double extraGameScaleX=1;
 double extraGameScaleY=1;
@@ -437,14 +425,6 @@ char* currentPresetFilename=NULL;
 // This may not be set because the user can choose to use the legacy preset folder mode.
 char* currentGameFolderName=NULL;
 
-#define GAMESTATUS_TITLE 0
-#define GAMESTATUS_LOADPRESET 1
-#define GAMESTATUS_PRESETSELECTION 2
-#define GAMESTATUS_MAINGAME 3
-#define GAMESTATUS_NAVIGATIONMENU 4
-#define GAMESTATUS_GAMEFOLDERSELECTION 6
-#define GAMESTATUS_LOADGAMEFOLDER 7
-#define GAMESTATUS_QUIT 99
 signed char currentGameStatus=GAMESTATUS_TITLE;
 
 signed char tipNamesLoaded=0;
@@ -1133,10 +1113,10 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 	}
 	char _oldFinalChar;
 	if (_finalLineMaxChar!=-1){
-		if (_finalLineMaxChar<strlen(currentMessages[_maxDrawLine])){ // Bounds check
+		if (_finalLineMaxChar<=strlen(currentMessages[_maxDrawLine])){ // Bounds check
 			// Temporarily trim the string
-			_oldFinalChar = currentMessages[_maxDrawLine][_finalLineMaxChar+1];
-			currentMessages[_maxDrawLine][_finalLineMaxChar+1]='\0';
+			_oldFinalChar = currentMessages[_maxDrawLine][_finalLineMaxChar];
+			currentMessages[_maxDrawLine][_finalLineMaxChar]='\0';
 		}else{
 			_finalLineMaxChar=-1;
 		}
@@ -1176,7 +1156,7 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 	drawImageChars(_alpha,_maxDrawLine,_finalLineMaxChar!=-1 ? _finalLineMaxChar : INT_MAX);
 	// Fix string if we trimmed it for _finalLineMaxChar
 	if (_finalLineMaxChar!=-1){
-		currentMessages[_maxDrawLine][_finalLineMaxChar+1]=_oldFinalChar;
+		currentMessages[_maxDrawLine][_finalLineMaxChar]=_oldFinalChar;
 	}
 }
 void DrawMessageBox(char _textmodeToDraw, unsigned char _targetAlpha){
@@ -2118,7 +2098,10 @@ void moveFilePointerPastNewline(crossFile* fp){
 char* easygetline(crossFile* fp){
 	char* _tempReadLine=NULL;
 	size_t _readLength=0;
-	crossgetline(&_tempReadLine,&_readLength,fp);
+	if (crossgetline(&_tempReadLine,&_readLength,fp)==-1){
+		free(_tempReadLine);
+		return NULL;
+	}
 	removeNewline(_tempReadLine);
 	return _tempReadLine;
 }
@@ -2206,6 +2189,25 @@ void drawWrappedTextCentered(int _x, int _y, char** _passedLines, int _numLines,
 		gbDrawTextAlpha(normalFont,_x+easyCenter(textWidth(normalFont,_passedLines[i]),_boxWidth),_y+currentTextHeight*i,_passedLines[i],r,g,b,a);
 	}
 }
+char issecondaryutf8(unsigned char c){
+	return (c & 192)==128;
+}
+// _c starts out on the primary utf8 char
+int nextutf8(char* _stringStart, int i){
+	while(1){
+		if (!issecondaryutf8(_stringStart[++i])){
+			return i;
+		}
+	}
+}
+int prevutf8(char* _stringStart, int i){
+	while(i>0){
+		if (!issecondaryutf8(_stringStart[--i])){
+			return i;
+		}
+	}
+	return -1;
+}
 void freeWrappedText(int _numLines, char** _passedLines){
 	int i;
 	for (i=0;i<_numLines;++i){
@@ -2229,12 +2231,14 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 	int _lastPropSet=-1; // only set properties if at index greater than this one
 	int _lastNewline = -1; // Index
 	int32_t _curProp=0;
+	int _lastCharLen = _cachedStrlen-prevutf8(_workable,_cachedStrlen);
 	int i;
-	for (i=0;i<_cachedStrlen;++i){
-		if (_workable[i]=='\n' || _workable[i]==' ' || i==_cachedStrlen-1){
+	for (i=0;i<=_cachedStrlen-_lastCharLen;){
+		char _isBreakChar = (_workable[i]=='\n' || _workable[i]==' ');
+		if (_isBreakChar || i>=_cachedStrlen-_lastCharLen){
 			char _didChop=0;
 			char _oldChar;
-			if (i!=_cachedStrlen-1){
+			if (_isBreakChar){
 				_didChop=1;
 				_oldChar = _workable[i];
 				_workable[i]='\0'; // Chop the string for textWidth function
@@ -2242,61 +2246,54 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 			if (textWidth(normalFont,&(_workable[_lastNewline+1]))>_maxWidth){ // If at this spot the string is too long for the screen
 				// Find last word before we went off screen
 				int j;
-				for (j=i-1;j>_lastNewline;--j){
+				for (j=prevutf8(_workable,i);j>_lastNewline;j=prevutf8(_workable,j)){
 					if (_workable[j]==' '){
 						break;
 					}
 				}
 				if (j==_lastNewline){ // Didn't find a stopping point, the line is likely one giant word
+					char _didBreak=0;
 					// Force a stopping point
-					for (j=i-1;j>_lastNewline;--j){
+					for (j=prevutf8(_workable,i);j>_lastNewline;j=prevutf8(_workable,j)){
 						char _cacheChar = _workable[j];
 						_workable[j]='\0';
 						char _canSplit = (textWidth(normalFont,&(_workable[_lastNewline+1]))<=_maxWidth);
 						_workable[j]=_cacheChar;
 						if (_canSplit){
-							if (j==i-1){ // if we're about to put the line break right before the space, don't. the space is already a null byte. just use that.
-								_lastNewline=i;
-							}else{
-								// TODO - isn't this dumb? shouldn't i break at index j, not after it?
-								// The character we're at right now, that's where the split needs to be because it's acting as the null terminator right now
-								// In this code, j will represent the last real character from the string
-								char* _newBuffer = malloc(_cachedStrlen+2);
-								memcpy(_newBuffer,_workable,j+1);
-								_newBuffer[j+1]='\0';
-								_lastNewline=j+1;
-								memcpy(&(_newBuffer[j+2]),&(_workable[j+1]),_cachedStrlen-(j)); // Should also copy null
-								free(_workable);
-								_workable = _newBuffer;
-								// also realloc properties
-								if (_propBuff!=NULL){
-									int32_t* _newProps = malloc((_cachedStrlen+1)*sizeof(int32_t));
-									memcpy(_newProps,_propBuff,(j+1)*sizeof(int32_t));
-									memcpy(&(_newProps[j+2]),&(_propBuff[j+1]),(_cachedStrlen-j-1)*sizeof(int32_t));
-									free(_propBuff);
-									_propBuff=_newProps;
-								}
-								// Account for new byte
-								_cachedStrlen++;
-								i++;
+							// The character we're at right now, that's where the split needs to be because it's acting as the null terminator right now
+							char* _newBuffer = malloc(_cachedStrlen+2);
+							memcpy(_newBuffer,_workable,j);
+							_newBuffer[j]='\0';
+							_lastNewline=j;
+							memcpy(&(_newBuffer[j+1]),&(_workable[j]),_cachedStrlen-(j)+1); // Should also copy null
+							free(_workable);
+							_workable = _newBuffer;
+							// also realloc properties
+							if (_propBuff!=NULL){
+								int32_t* _newProps = malloc((_cachedStrlen+1)*sizeof(int32_t));
+								memcpy(_newProps,_propBuff,j*sizeof(int32_t));
+								memcpy(&(_newProps[j+1]),&(_propBuff[j]),(_cachedStrlen-j)*sizeof(int32_t));
+								free(_propBuff);
+								_propBuff=_newProps;
 							}
+							// Account for new byte
+							_cachedStrlen++;
+							i++;
+							_didBreak=1;
 							break;
 						}
 					}
 					// Odd, no part between last new line and here less than _maxWidth. This should not happen, but just in case, put some code to at least do something.
-					if (j==_lastNewline){
+					if (!_didBreak){
+						printf("odd\n");
 						_workable[i]='\0';
 					}
 				}else{ // Normal, found what we're looking for, just chop at the end of the last word
 					_workable[j]='\0';
-					if (_workable[i]=='\0'){ // Fix chop if happened
-						_workable[i]=' ';
-					}
 					_lastNewline=j;
 				}
-				// if we were doing this stuff at an explicit line break spot, put the line break back if we didn't use it
-				if (_didChop && _oldChar=='\n' && _lastNewline!=i){
-					_workable[i]='\n';
+				if (_didChop && _lastNewline!=i){ // Fix chop if happened
+					_workable[i]=_oldChar;
 				}
 				// No matter what we did, we'll still need to start our check from the last new line
 				// _lastPropSet keeps properties from being overwritten
@@ -2396,7 +2393,6 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 						if (j<MAXIMAGECHAR){
 							// if we put the image char at this spot, redo this spot as a space.
 							--i;
-							continue;
 						}
 					}
 				}
@@ -2444,9 +2440,15 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 				}
 			}
 		}
+		/////
 		if (_propBuff && i>_lastPropSet){
-			_lastPropSet=i;
-			_propBuff[i]=_curProp;
+			int _destIndex = nextutf8(_workable,i);
+			for (;i<_destIndex;++i){
+				_propBuff[i]=_curProp;
+			}
+			_lastPropSet=i-1;
+		}else{
+			i=nextutf8(_workable,i);
 		}
 	}
 	*_passedMessage = _workable;
@@ -3525,13 +3527,10 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (!MessageBoxEnabled){
 		showTextbox();
 	}
-	int _currentDrawChar;
+	int _currentDrawChar; // exclusive
 	char* message;
 	if (currentLine<maxLines && currentMessages[currentLine]!=NULL){ // if required, prepend what was already on the line
-		_currentDrawChar=strlen(currentMessages[currentLine])-1;
-		if (_currentDrawChar<0){
-			_currentDrawChar=0;
-		}
+		_currentDrawChar=strlen(currentMessages[currentLine]);
 		message = malloc(strlen(_tempMsg)+strlen(currentMessages[currentLine])+1);
 		strcpy(message,currentMessages[currentLine]);
 		strcat(message,_tempMsg);
@@ -3635,23 +3634,7 @@ transferMoreLines:
 			_slowTextSpeed=0;
 			int i;
 			for (i=0;i<(textSpeed>0 ? textSpeed : 1);i++){
-				if (currentMessages[_currentDrawLine][_currentDrawChar]!='\0'){ // only increment _currentDrawChar if there's still space. this is a fix for zero length lines only. the regular null termination detection is below.
-					// move to next char
-					_currentDrawChar++;
-				}
-				// if it's not ASCII, skip to end of UTF-8 character
-				if ((unsigned char)(currentMessages[_currentDrawLine][_currentDrawChar])>0x7F){ // this is same as checking if last bit is on
-					// https://tools.ietf.org/html/rfc3629
-					// the number of bits on the left set to 1 determintes number of bytes
-					unsigned char _firstByte = currentMessages[_currentDrawLine][_currentDrawChar];
-					if ((_firstByte & 0xF0) == 0xF0){
-						_currentDrawChar+=3;
-					}else if ((_firstByte & 0xE0) == 0xE0){
-						_currentDrawChar+=2;
-					}else if ((_firstByte & 0xC0) == 0xC0){
-						_currentDrawChar++;
-					}
-				}else if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){ // If the next char we're about to display is the end of the line
+				if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){ // If the next char we're about to display is the end of the line
 					_currentDrawLine++;
 					// If we just passed the line we'll be writing to next time then we're done
 					if (_currentDrawLine==currentLine+1 || _currentDrawLine==maxLines){
@@ -3660,6 +3643,21 @@ transferMoreLines:
 					}else{ // Otherwise, start displaying at the start of the next line
 						_currentDrawChar=0;
 					}
+				}else{
+					// if it's not ASCII, skip to end of UTF-8 character
+					if ((unsigned char)(currentMessages[_currentDrawLine][_currentDrawChar])>0x7F){ // this is same as checking if last bit is on
+						// https://tools.ietf.org/html/rfc3629
+						// the number of bits on the left set to 1 determintes number of bytes
+						unsigned char _firstByte = currentMessages[_currentDrawLine][_currentDrawChar];
+						if ((_firstByte & 0xF0) == 0xF0){
+							_currentDrawChar+=3;
+						}else if ((_firstByte & 0xE0) == 0xE0){
+							_currentDrawChar+=2;
+						}else if ((_firstByte & 0xC0) == 0xC0){
+							_currentDrawChar++;
+						}
+					}
+					_currentDrawChar++;
 				}
 			}
 		}
@@ -4796,10 +4794,11 @@ void scriptClearMessage(nathanscriptVariable* _passedArguments, int _numArgument
 	ClearMessageArray(1);
 }
 void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	if (_passedArguments[2].variableType==NATHAN_TYPE_STRING){ // If an English adv name was passed
-		setADVName(nathanvariableToString(&_passedArguments[2]));
-	}else if (_passedArguments[2].variableType==NATHAN_TYPE_FLOAT){
-		int _desireIndex = nathanvariableToInt(&_passedArguments[2]);
+	int _nameIndex=playerLanguage ? 2 : 0;
+	if (_passedArguments[_nameIndex].variableType==NATHAN_TYPE_STRING){ // If an English adv name was passed
+		setADVName(nathanvariableToString(&_passedArguments[_nameIndex]));
+	}else if (_passedArguments[_nameIndex].variableType==NATHAN_TYPE_FLOAT){
+		int _desireIndex = nathanvariableToInt(&_passedArguments[_nameIndex]);
 		if (_desireIndex<advImageNameCount){
 			currentADVNameIm=_desireIndex;
 		}else if (shouldShowWarnings()){
@@ -4808,11 +4807,12 @@ void scriptOutputLine(nathanscriptVariable* _passedArguments, int _numArguments,
 	}else if (shouldShowADVNames() && advNamesPersist==0){
 		setADVName(NULL);
 	}
-	if (_passedArguments[3].variableType!=NATHAN_TYPE_NULL){
-		if (strcmp(nathanvariableToString(&_passedArguments[3]),"0")==0){
+	int _textIndex=playerLanguage ? 3 : 1;
+	if (_passedArguments[_textIndex].variableType!=NATHAN_TYPE_NULL){
+		if (strcmp(nathanvariableToString(&_passedArguments[_textIndex]),"0")==0){
 			return;
 		}
-		OutputLine((unsigned const char*)nathanvariableToString(&_passedArguments[3]),nathanvariableToInt(&_passedArguments[4]),0);
+		OutputLine((unsigned const char*)nathanvariableToString(&_passedArguments[_textIndex]),nathanvariableToInt(&_passedArguments[4]),0);
 		outputLineWait();
 	}
 }
@@ -6199,7 +6199,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			_settingsProp[SETTING_BOXALPHA]|=OPTIONPROP_BADCOLOR;
 		}
 		char _selectionInfo;
-		_choice=showMenuAdvanced(_choice,"Settings",SETTINGS_MAX,_settings,_values,_settingsOn,_settingsProp,&_selectionInfo,0);
+		_choice=showMenuAdvanced(_choice,"Settings",SETTINGS_MAX,_settings,_values,_settingsOn,_settingsProp,&_selectionInfo,0,NULL);
 		signed char _directionMultiplier = (_selectionInfo & MENURET_RIGHT) ? 1 : -1;
 		char _didHoldL = (_selectionInfo & MENURET_LBUTTON);
 		switch(_choice){
@@ -6412,7 +6412,7 @@ void wrapOption(int _realIndex, char** _options, char** _optionValues, int _fake
 #define TOUCHOPTIONCOLORB 75,75,75
 #define TOUCHARROWCOLOR 255,0,255
 // will be bad if option number zero is a left right option
-int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, int _passedOptionXOff, int _passedOptionYOff, int _menuW, int _menuH){
+int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, int _passedOptionXOff, int _passedOptionYOff, int _menuW, int _menuH, inttakeretfunc _drawHook){
 	int _ret=_choice;
 	int _changeArrowW = _menuW*(1/(double)6);
 	//
@@ -6590,6 +6590,9 @@ recalcPositions:
 		gbSetDrawOffX(0);
 		gbSetDrawOffY(0);
 		disableClipping();
+		if (_drawHook && _drawHook(menuIndexToReal(_choice,_showMap))){
+			break;
+		}
 		endDrawing();
 	}
 	if (_ret!=-1){
@@ -6606,16 +6609,17 @@ recalcPositions:
 	free(_optionY);
 	return _ret;
 }
-int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
+#define SHOWMENUBUTTONDELAY 300
+#define SHOWMENUAUTOSHIFT 30
+int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, inttakeretfunc _drawHook){
 	controlsReset();
 	if (_returnInfo){
 		*_returnInfo=0;
 	}
-	int i;
 	// convert the passed _choice from real index in _options to fake index
 	if (_showMap){
 		int _realIndex=_choice;
-		for (i=0;i<_realIndex;++i){
+		for (int i=0;i<_realIndex;++i){
 			if (!_showMap[i]){
 				--_choice;
 			}
@@ -6625,7 +6629,7 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 	int _numOptions = getNumShownOptions(_showMap,_mapSize);
 	if (_showMap){
 		_numOptions=0;
-		for (i=0;i<_mapSize;++i){
+		for (int i=0;i<_mapSize;++i){
 			if (_showMap[i]){
 				++_numOptions;
 			}
@@ -6646,15 +6650,26 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 	u64 _startHScroll;
 	int _scrollTime;
 	int _curRealIndex;
+	u64 _nextDASShift=0;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
 		if (menuControlsLow(&_choice,1,1,0,(_menuProp & MENUPROP_CANPAGEUPDOWN) ? _optionsOnScreen : 0,0,_numOptions-1)){
 			_scrollOffset=-1;
 		}
+		if (wasJustPressed(BUTTON_DOWN) || wasJustPressed(BUTTON_UP)){
+			_nextDASShift=getMilli()+SHOWMENUBUTTONDELAY;
+		}else if (isDown(BUTTON_DOWN) || isDown(BUTTON_UP)){
+			u64 _curTime = getMilli();
+			if (_curTime>=_nextDASShift){
+				_nextDASShift=getMilli()+SHOWMENUAUTOSHIFT;
+				_choice=wrapNum(_choice+(isDown(BUTTON_DOWN) ? 1 : -1),0,_numOptions-1);
+				_scrollOffset=-1;
+			}
+		}
 		if (_scrollOffset==-1){ // queued menu info update
 			// Find horizontal scroll info
 			_curRealIndex = -1;
-			for (i=0;i<=_choice;++i){
+			for (int i=0;i<=_choice;++i){
 				_curRealIndex = getNextEnabled(_showMap,_curRealIndex+1);
 			}
 			int _curWidth = textWidth(normalFont,_options[_curRealIndex]);
@@ -6745,11 +6760,11 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 		// Draw the menu options
 		int _lastDrawn=-1;
 		// First, fast forward to the correct starting index according to scroll
-		for (i=0;i<_scrollOffset;++i){
+		for (int i=0;i<_scrollOffset;++i){
 			_lastDrawn = getNextEnabled(_showMap,_lastDrawn+1);
 		}
 		// Draw the entries currently on screen
-		for (i=0;i<_optionsOnScreen;++i){
+		for (int i=0;i<_optionsOnScreen;++i){
 			_lastDrawn  = getNextEnabled(_showMap,_lastDrawn+1);
 			if (i==_choice-_scrollOffset && _maxHScroll!=0){
 				continue;
@@ -6760,9 +6775,15 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 			int _b = DEFAULTFONTCOLORB;
 			if (_optionProp!=NULL){
 				if (_optionProp[_lastDrawn] & OPTIONPROP_GOODCOLOR){
-					_r=0;
-					_g=255;
-					_b=0;
+					if (_optionProp[_lastDrawn] & OPTIONPROP_BADCOLOR){
+						_r=255;
+						_g=127;
+						_b=0;
+					}else{
+						_r=0;
+						_g=255;
+						_b=0;
+					}
 				}else if (_optionProp[_lastDrawn] & OPTIONPROP_BADCOLOR){
 					_r=255;
 					_g=0;
@@ -6779,6 +6800,9 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 			drawText(MENUOPTIONOFFSET,currentTextHeight*_optionsOnScreen,"\\/\\/\\/\\/");
 		}
 		gbSetDrawOffY(0);
+		if (_drawHook && _drawHook(menuIndexToReal(_choice,_showMap))){
+			break;
+		}
 		endDrawing();
 	}
 	controlsEnd();
@@ -6787,166 +6811,134 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 // returns -1 if user quit, otherwise returns chosen index
 // pass the real _choice index
 // does not support horizontal scrolling for options with _optionValues
-int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp){
-	return gbHasButtons()==GBPREFERRED ? showMenuAdvancedButton(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp) : showMenuAdvancedTouch(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp,0,0,screenWidth,screenHeight);
+int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, inttakeretfunc _drawHook){
+	return gbHasButtons()==GBPREFERRED ? showMenuAdvancedButton(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp,_drawHook) : showMenuAdvancedTouch(_choice,_title,_mapSize,_options,_optionValues,_showMap,_optionProp,_returnInfo,_menuProp,0,0,screenWidth,screenHeight,_drawHook);
 }
 int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _options, char _canQuit){
 	char _menuProps=MENUPROP_CANPAGEUPDOWN;
 	if (_canQuit){
 		_menuProps|=MENUPROP_CANQUIT;
 	}
-	return showMenuAdvanced(_defaultChoice,_title,_numOptions,_options,NULL,NULL,NULL,NULL,_menuProps);
+	return showMenuAdvanced(_defaultChoice,_title,_numOptions,_options,NULL,NULL,NULL,NULL,_menuProps,NULL);
+}
+char* _bottomString;
+int _titleScreenDraw(int _choice){
+	int _y = screenHeight-5-currentTextHeight;
+	drawText(5,_y,_bottomString);
+	gbDrawText(normalFont,(screenWidth-5)-textWidth(normalFont,VERSIONSTRING VERSIONSTRINGSUFFIX),_y,VERSIONSTRING VERSIONSTRINGSUFFIX,VERSIONCOLOR);
+	return 0;
 }
 void TitleScreen(){
-	signed char _choice=0;
-	int _versionStringWidth = textWidth(normalFont,VERSIONSTRING VERSIONSTRINGSUFFIX);
-	char _bottomConfigurationString[13+strlen(SYSTEMSTRING)];
-	strcpy(_bottomConfigurationString,SYSTEMSTRING);
-	if (isGameFolderMode){
-		strcat(_bottomConfigurationString,";Games");
-	}else{
-		strcat(_bottomConfigurationString,";Presets");
-	}
-	#if GBPLAT != GB_3DS
-		if (isActuallyUsingUma0){
-			strcat(_bottomConfigurationString,";uma0");
-		}else{
-			strcat(_bottomConfigurationString,";ux0");
-		}
-	#endif
+	_bottomString=easyCombineStrings(3,SYSTEMSTRING,isGameFolderMode ? ";Games" : ";Presets",GBPLAT!=GB_3DS ? (isActuallyUsingUma0 ? ";uma0" : ";ux0") : (""));
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		controlsStart();
-		_choice = menuControls(_choice, 0, isGameFolderMode ? 3 : 4);
-		if (wasJustPressed(BUTTON_A)){
-			if (_choice==0){
-				PlayMenuSound(); 
-				if (currentPresetFilename==NULL){
-					currentPresetChapter=0;
-					controlsEnd();
-					if (isGameFolderMode){
-						currentGameStatus=GAMESTATUS_GAMEFOLDERSELECTION;
-					}else{
-						currentGameStatus=GAMESTATUS_PRESETSELECTION;
-					}
-				}
-				break;
-			}else if (_choice==1){
-				PlayMenuSound();
+		char* _options[5]={"Load game","Manual mode","Basic settings","Exit","Upgrade to Game Folder Mode"};
+		char _showMap[5];
+		memset(_showMap,1,4);
+		_showMap[4]=!isGameFolderMode;
+		int _choice=showMenuAdvanced(0,"Main Menu",5,_options,NULL,_showMap,NULL,NULL,MENUPROP_CANPAGEUPDOWN, _titleScreenDraw);
+		if (_choice==0){
+			PlayMenuSound(); 
+			if (currentPresetFilename==NULL){
+				currentPresetChapter=0;
 				controlsEnd();
 				if (isGameFolderMode){
-					char* _chosenGameFolder;
-					if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a game")==2 || _chosenGameFolder==NULL){
-						continue;
-					}
-					char _tempNewStreamingAssetsPathbuffer[strlen(gamesFolder)+strlen(_chosenGameFolder)+1];
-					strcpy(_tempNewStreamingAssetsPathbuffer,gamesFolder);
-					strcat(_tempNewStreamingAssetsPathbuffer,_chosenGameFolder);
-					GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer,0);
-					free(_chosenGameFolder);
-				}
-				if (!directoryExists(scriptFolder)){
-					controlsEnd();
-					char* _tempChosenFile;
-					if (FileSelector(presetFolder,&_tempChosenFile,(char*)"Select a preset to choose StreamingAssets folder")==2){
-						easyMessagef(1,"%s does not exist and no files in %s. Do you have any files?",scriptFolder,presetFolder);
-						continue;
-					}else{
-						if (_tempChosenFile==NULL){
-							continue;
-						}
-						UpdatePresetStreamingAssetsDir(_tempChosenFile);
-						free(_tempChosenFile);
-					}
-				}
-				controlsEnd();
-				char* _tempManualFileSelectionResult;
-				FileSelector(scriptFolder,&_tempManualFileSelectionResult,(char*)"Select a script");
-				controlsReset();
-				if (_tempManualFileSelectionResult!=NULL){
-					if (strlen(_tempManualFileSelectionResult)>4 && strcmp(&(_tempManualFileSelectionResult[strlen(_tempManualFileSelectionResult)-4]),".scr")==0){
-						currentGameStatus=GAMESTATUS_MAINGAME;
-						initializeNathanScript();
-
-						activateVNDSSettings();
-
-						char _tempFilepathBuffer[strlen(scriptFolder)+strlen(_tempManualFileSelectionResult)+1];
-						strcpy(_tempFilepathBuffer,scriptFolder);
-						strcat(_tempFilepathBuffer,_tempManualFileSelectionResult);
-
-						changeMallocString(&currentScriptFilename,_tempManualFileSelectionResult);
-						nathanscriptDoScript(_tempFilepathBuffer,0,inBetweenVNDSLines);
-
-						free(_tempManualFileSelectionResult);
-						currentGameStatus=GAMESTATUS_TITLE;
-					}else{
-						currentGameStatus=GAMESTATUS_MAINGAME;
-						activateHigurashiSettings();
-						RunScript(scriptFolder,_tempManualFileSelectionResult,0);
-						free(_tempManualFileSelectionResult);
-						currentGameStatus=GAMESTATUS_TITLE;
-					}
-				}
-				if (presetsAreInStreamingAssets==0){ // If the presets are not specific to a StreamingAssets folder, that means that the user could be using a different StreamingAssets folder. Reset paths just in case.
-					GenerateStreamingAssetsPaths("StreamingAssets",1);
-				}
-			}else if (_choice==2){ // Go to setting menu
-				controlsEnd();
-				SettingsMenu(0,0,0,0,1,0,0,0,0);
-				controlsEnd();
-				break;
-			}else if (_choice==3){ // Quit button
-				currentGameStatus=GAMESTATUS_QUIT;
-				break;
-			}else if (_choice==4){
-				if (isGameFolderMode){
-					easyMessagef(1,"You really shouldn't be here. You haven't escaped, you know? You're not even going the right way.");
+					currentGameStatus=GAMESTATUS_GAMEFOLDERSELECTION;
 				}else{
-					ClearMessageArray(0);
-					controlsReset();
-					OutputLine("This process will convert your legacy preset & StreamingAssets setup to the new game folder setup. It makes everything easier, so you should do it.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
-					while (!wasJustPressed(BUTTON_A)){
-						controlsEnd();
-						startDrawing();
-						DrawMessageText(255,-1,-1);
-						endDrawing();
-						controlsStart();
+					currentGameStatus=GAMESTATUS_PRESETSELECTION;
+				}
+			}
+			break;
+		}else if (_choice==1){
+			PlayMenuSound();
+			controlsEnd();
+			if (isGameFolderMode){
+				char* _chosenGameFolder;
+				if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a game")==2 || _chosenGameFolder==NULL){
+					continue;
+				}
+				char _tempNewStreamingAssetsPathbuffer[strlen(gamesFolder)+strlen(_chosenGameFolder)+1];
+				strcpy(_tempNewStreamingAssetsPathbuffer,gamesFolder);
+				strcat(_tempNewStreamingAssetsPathbuffer,_chosenGameFolder);
+				GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer,0);
+				free(_chosenGameFolder);
+			}
+			if (!directoryExists(scriptFolder)){
+				controlsEnd();
+				char* _tempChosenFile;
+				if (FileSelector(presetFolder,&_tempChosenFile,(char*)"Select a preset to choose StreamingAssets folder")==2){
+					easyMessagef(1,"%s does not exist and no files in %s. Do you have any files?",scriptFolder,presetFolder);
+					continue;
+				}else{
+					if (_tempChosenFile==NULL){
+						continue;
 					}
-					if (LazyChoicef("Upgrade to game folder mode?")){
-						if (upgradeToGameFolder()){
-							currentGameStatus=GAMESTATUS_QUIT;
-							break;
-						}
+					UpdatePresetStreamingAssetsDir(_tempChosenFile);
+					free(_tempChosenFile);
+				}
+			}
+			controlsEnd();
+			char* _tempManualFileSelectionResult;
+			FileSelector(scriptFolder,&_tempManualFileSelectionResult,(char*)"Select a script");
+			controlsReset();
+			if (_tempManualFileSelectionResult!=NULL){
+				if (strlen(_tempManualFileSelectionResult)>4 && strcmp(&(_tempManualFileSelectionResult[strlen(_tempManualFileSelectionResult)-4]),".scr")==0){
+					currentGameStatus=GAMESTATUS_MAINGAME;
+					initializeNathanScript();
+
+					activateVNDSSettings();
+
+					char _tempFilepathBuffer[strlen(scriptFolder)+strlen(_tempManualFileSelectionResult)+1];
+					strcpy(_tempFilepathBuffer,scriptFolder);
+					strcat(_tempFilepathBuffer,_tempManualFileSelectionResult);
+
+					changeMallocString(&currentScriptFilename,_tempManualFileSelectionResult);
+					nathanscriptDoScript(_tempFilepathBuffer,0,inBetweenVNDSLines);
+
+					free(_tempManualFileSelectionResult);
+					currentGameStatus=GAMESTATUS_TITLE;
+				}else{
+					currentGameStatus=GAMESTATUS_MAINGAME;
+					activateHigurashiSettings();
+					RunScript(scriptFolder,_tempManualFileSelectionResult,0);
+					free(_tempManualFileSelectionResult);
+					currentGameStatus=GAMESTATUS_TITLE;
+				}
+			}
+			if (presetsAreInStreamingAssets==0){ // If the presets are not specific to a StreamingAssets folder, that means that the user could be using a different StreamingAssets folder. Reset paths just in case.
+				GenerateStreamingAssetsPaths("StreamingAssets",1);
+			}
+		}else if (_choice==2){ // Go to setting menu
+			controlsEnd();
+			SettingsMenu(0,0,0,0,1,0,0,0,0);
+			controlsEnd();
+			break;
+		}else if (_choice==3){ // Quit button
+			currentGameStatus=GAMESTATUS_QUIT;
+			break;
+		}else if (_choice==4){
+			if (isGameFolderMode){
+				easyMessagef(1,"You really shouldn't be here. You haven't escaped, you know? You're not even going the right way.");
+			}else{
+				ClearMessageArray(0);
+				controlsReset();
+				OutputLine("This process will convert your legacy preset & StreamingAssets setup to the new game folder setup. It makes everything easier, so you should do it.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
+				while (!wasJustPressed(BUTTON_A)){
+					controlsEnd();
+					startDrawing();
+					DrawMessageText(255,-1,-1);
+					endDrawing();
+					controlsStart();
+				}
+				if (LazyChoicef("Upgrade to game folder mode?")){
+					if (upgradeToGameFolder()){
+						currentGameStatus=GAMESTATUS_QUIT;
+						break;
 					}
 				}
-			}else{
-				_choice=0;
 			}
+		}else{
+			_choice=0;
 		}
-		startDrawing();
-
-		drawText(MENUOPTIONOFFSET,5,"Main Menu");
-
-		// Menu options
-		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(0+2),"Load game");
-		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(1+2),"Manual mode");
-		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(2+2),"Basic Settings");
-		drawText(MENUOPTIONOFFSET,5+currentTextHeight*(3+2),"Exit");
-		if (!isGameFolderMode){
-			gbDrawText(normalFont,MENUOPTIONOFFSET,5+currentTextHeight*(4+2),"Upgrade to game folder mode",0,255,0);
-		}
-
-		// Extra bottom data
-		gbDrawText(normalFont,(screenWidth-5)-_versionStringWidth,screenHeight-5-currentTextHeight,VERSIONSTRING VERSIONSTRINGSUFFIX,VERSIONCOLOR);
-		drawText(5,screenHeight-5-currentTextHeight,_bottomConfigurationString);
-
-		// Cursor
-		drawText(5,5+currentTextHeight*(_choice+2),MENUCURSOR);
-
-		#if GBPLAT == GB_3DS
-			startDrawingBottom();
-		#endif
-		endDrawing();
-		controlsEnd();
 	}
 }
 void TipMenu(){
@@ -7042,9 +7034,10 @@ void NavigationMenu(){
 		"Next",
 		"Chapter Jump",
 		"View TIPS",
+		"Fragments",
 		"Exit",
 	};
-	char* _optionOn = newShowMap(4);
+	char* _optionOn = newShowMap(5);
 	// if tips disabled or no tips unlocked
 	if (!gameHasTips || currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
 		_optionOn[2]=0;
@@ -7052,9 +7045,20 @@ void NavigationMenu(){
 	if (currentPresetChapter+1>=currentPresetFileList.length){
 		_optionOn[0]=0;
 	}
+	if (_optionOn[0] && (strcmp(currentPresetFileList.theArray[currentPresetChapter+1],PRESETFRAGNAME)==0)){
+		_optionOn[3]=1;
+		_optionOn[0]=0;
+		if (!fragmentInfo){ // initial fragment info load
+			char* _fullPath = easyCombineStrings(2,streamingAssets,"Data/fragmentdata.txt");
+			parseFragmentFile(_fullPath);
+			free(_fullPath);
+		}
+	}else{
+		_optionOn[3]=0;
+	}
 	int _choice=0;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
-		_choice = showMenuAdvanced(_choice,_menuTitle,4,_menuOptions,NULL,_optionOn,NULL,NULL,0);
+		_choice = showMenuAdvanced(_choice,_menuTitle,5,_menuOptions,NULL,_optionOn,NULL,NULL,0,NULL);
 		if (_choice==0){
 			printf("Go to next chapter\n");
 			if (currentPresetChapter+1==currentPresetFileList.length){
@@ -7072,6 +7076,8 @@ void NavigationMenu(){
 			#endif
 			TipMenu();
 		}else if (_choice==3){
+			fragmentMenu();
+		}else if (_choice==4){
 			currentGameStatus=GAMESTATUS_QUIT;
 		}
 	}
@@ -7598,12 +7604,17 @@ void _initImageChars(){
 	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
 	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("assets/star.png");
 }
+#define TESTJPFONT "/usr/share/fonts/OTF/ipag.ttf"
 void hVitaInitFont(){
 	// Load default font
 	if (fontSize<0){
 		fontSize = getResonableFontSize(GBTXT);
 	}
-	currentFontFilename = fixPathAlloc(DEFAULTEMBEDDEDFONT,TYPE_EMBEDDED);
+	if (GBPLAT == GB_LINUX && playerLanguage==0 && checkFileExist(TESTJPFONT)){
+		currentFontFilename = strdup(TESTJPFONT);
+	}else{
+		currentFontFilename = fixPathAlloc(DEFAULTEMBEDDEDFONT,TYPE_EMBEDDED);
+	}
 	reloadFont(fontSize,1);
 	_initImageChars();
 }
@@ -7692,9 +7703,12 @@ signed char init(int argc, char** argv){
 #endif
 int main(int argc, char *argv[]){
 	/* code */
+	/* playerLanguage=0; */
+	/* printf("WARNING: forcing language to %d\n",playerLanguage); */
 	if (init(argc,argv)==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
+
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
 			case GAMESTATUS_TITLE:
