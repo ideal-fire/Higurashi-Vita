@@ -4,9 +4,12 @@
 // arrays: int*
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
+#include <ctype.h>
 #include <goodbrew/config.h>
 #include <goodbrew/base.h>
 #include <goodbrew/useful.h>
+#include <goodbrew/text.h>
 #include "main.h"
 #include "jsonParser.h"
 static char isValidAtoiString(char* _in){
