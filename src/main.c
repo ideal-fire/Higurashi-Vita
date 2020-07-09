@@ -221,7 +221,8 @@ char* vitaAppId="HIGURASHI";
 #define VNDSGLOBALSSAVEFORMAT 1
 
 // 2 is start
-#define HIGUSAVEFORMAT 2
+// 3 adds localFlags
+#define HIGUSAVEFORMAT 3
 
 //#define LUAREGISTER(x,y) DebugLuaReg(y);
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
@@ -2539,17 +2540,55 @@ void easyMessagef(char _doWait, const char* _formatString, ...){
 	freeWrappedText(_numLines,_wrappedLines);
 	free(_completeString);
 }
-void LoadHiguGame(){
+void writeStringNumTable(FILE* fp, const char* _name){	
+	lua_getglobal(L,_name);
+	lua_pushnil(L); // first key
+	while (lua_next(L,-2)!=0){
+		// key is at -2, value at -1
+		if (lua_type(L,-2)!=LUA_TSTRING){
+			fprintf(stderr,"error, is not string type index.\n");
+		}
+		if (lua_type(L,-1)!=LUA_TNUMBER){
+			fprintf(stderr,"error, is not number type value.\n");
+		}
+		writeLengthStringToFile(fp,lua_tostring(L,-2));
+		int _value = lua_tonumber(L,-1);
+		fwrite(&_value,1,sizeof(int),fp);
+		// pop this, but we need to keep the key
+		lua_pop(L, 1);
+	}
+	writeLengthStringToFile(fp,NULL);
+}
+void loadStringNumTable(FILE* fp, const char* _name){
+	lua_getglobal(L,_name);
+	while (1){
+		char* _curName = readLengthStringFromFile(fp);
+		if (_curName[0]=='\0'){
+			free(_curName);
+			break;
+		}
+		int _readVal;
+		fread(&_readVal,1,sizeof(int),fp);
+		lua_pushnumber(L,_readVal);
+		lua_setfield(L,-2,_curName);
+		free(_curName);
+	}
+	lua_pop(L,1);
+}
+void loadHiguGame(){
 	currentPresetChapter=-1;
 	char* _specificName = getHiguSavePath();
 	if (checkFileExist(_specificName)){
 		FILE* fp = fopen(_specificName,"rb");
 		int _v = fgetc(fp);
-		if (_v!=HIGUSAVEFORMAT){
+		if (!(_v>=2 && _v<=HIGUSAVEFORMAT)){
 			easyMessagef(1,"expected version %d but got %d\n",HIGUSAVEFORMAT,_v);
 			goto err;
 		}
 		fread(&currentPresetChapter,2,1,fp);
+		if (_v>=3){
+			loadStringNumTable(fp,"localFlags");
+		}
 	err:
 		fclose(fp);
 	}else{
@@ -2562,12 +2601,13 @@ void LoadHiguGame(){
 		free(_savefileLocation);
 	}
 }
-void SaveHiguGame(){
+void saveHiguGame(){
 	char* _specificPath = getHiguSavePath();
 	FILE *fp;
 	fp = fopen(_specificPath, "wb");
 	fputc(HIGUSAVEFORMAT,fp);
 	fwrite(&currentPresetChapter,2,1,fp);
+	writeStringNumTable(fp,"localFlags");
 	fclose(fp);
 	free(_specificPath);
 }
@@ -4238,7 +4278,7 @@ void activateHigurashiSettings(){
 	}
 #endif
 #include "NathanDoubleScripting.h"
-void writeLengthStringToFile(FILE* fp, char* _stringToWrite){
+void writeLengthStringToFile(FILE* fp, const char* _stringToWrite){
 	if (_stringToWrite==NULL){
 		short _tempHoldWriteData=0;
 		fwrite(&_tempHoldWriteData,sizeof(short),1,fp);
@@ -5293,7 +5333,6 @@ void scriptLoadValueFromLocalWork(nathanscriptVariable* _passedArguments, int _n
 // Calls a function that was made in a script
 void scriptCallSection(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	char* buf = easyCombineStrings(2,nathanvariableToString(&_passedArguments[0]),"()");
-	printf("%s\n",buf);
 	if (luaL_loadstring(L,buf)){
 		easyMessagef(1,"luaL_loadstring failed: %s",buf);
 	}else{
@@ -7019,7 +7058,7 @@ void SaveGameEditor(){
 		controlsStart();
 		currentPresetChapter = retMenuControlsLow(currentPresetChapter,0,0,1,1,0,currentPresetFileList.length-1);
 		if (wasJustPressed(BUTTON_A)){
-			SaveHiguGame();
+			saveHiguGame();
 			controlsEnd();
 			break;
 		}
@@ -7484,6 +7523,11 @@ char initializeLua(){
 		char* _fixedPath = fixPathAlloc("assets/happy.lua",TYPE_EMBEDDED);
 		char _didFailLoad = SafeLuaDoFile(L,_fixedPath);
 		free(_fixedPath);
+		//
+		lua_getglobal(L,"globalFlags");
+		lua_pushnumber(L,playerLanguage);
+		lua_setfield(L,-2,"GLanguage");
+		//
 		lua_sethook(L, incrementScriptLineVariable, LUA_MASKLINE, 5);
 		return _didFailLoad ? 2 : 0;
 	}
@@ -7744,7 +7788,7 @@ int main(int argc, char *argv[]){
 				LoadPreset(_presentFullPath);
 				free(_presentFullPath);
 				// Does not load the savefile, I promise.
-				LoadHiguGame();
+				loadHiguGame();
 				// If there is no save game, start a new one at chapter 0
 				// Otherwise, go to the navigation menu
 				if (currentPresetChapter==-1){
@@ -7787,7 +7831,7 @@ int main(int argc, char *argv[]){
 							currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 						}
 					}else{
-						SaveHiguGame();
+						saveHiguGame();
 					}
 					if (currentGameStatus!=GAMESTATUS_QUIT){
 						currentGameStatus=GAMESTATUS_NAVIGATIONMENU;

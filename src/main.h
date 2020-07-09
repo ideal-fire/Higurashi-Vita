@@ -84,6 +84,8 @@ void PlayMenuSound();
 int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, inttakeretfunc _drawHook);
 char* getHiguSavePath();
 char* oldHiguSavePath(const char* _passedPreset);
+void writeLengthStringToFile(FILE* fp, const char* _stringToWrite);
+char* readLengthStringFromFile(FILE* fp);
 typedef struct{
 	char** theArray;
 	unsigned char length;

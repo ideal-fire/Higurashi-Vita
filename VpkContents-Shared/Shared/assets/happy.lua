@@ -13,6 +13,8 @@ TRUE=true;
 globalFlags = {};
 globalFlags["GLanguage"]=1;
 
+localFlags = {};
+
 // You see, Im lazy. When doing text wrap for text, I use OutputLine to make the text array for me. I call this function on the tip menu so I dont have to do a lot for string creation
 function EasyOutputLine(line)
 	OutputLine(nil, nil, nil, line, Line_ContinueAfterTyping);
@@ -30,25 +32,33 @@ function FreeTrash()
 end
 
 
-// Sets a global flag for future data stuff
 // If you pass false or true then it will be changed to 0 or 1 
-function SetGlobalFlag(flag, val)
+function flagValueFilter(val)
 	if (val==false) then
-		val=0;
+	   return 0;
 	elseif (val==true) then
-		val=1;
+		return 1;
 	end
-	globalFlags[flag]=val;
-	//print(flag .. " is now " .. val)
+	return val;
 end
-
-// Gets a global flag that was set with SetGlobalFlag
+function SetGlobalFlag(flag, val)
+	globalFlags[flag]=flagValueFilter(val);
+end
+function SetLocalFlag(flag, val)
+	localFlags[flag]=flagValueFilter(val);
+end
 // Returns 0 if it is an unknown flag
 function GetGlobalFlag(flag)
 	if (globalFlags[flag]==nil) then
 		return 0;
 	end
 	return globalFlags[flag];
+end
+function GetLocalFlag(flag)
+	if (localFlags[flag]==nil) then
+		return 0;
+	end
+	return localFlags[flag];
 end
 
 // wrappers
@@ -136,7 +146,6 @@ FadeOutSE=pu;
 FadeScene=pu;
 FadeSceneWithMask=pu;
 FadeSpriteWithFiltering=pu;
-GetLocalFlag=pu;
 GetPositionOfSprite=pu;
 HideGallery=pu;
 JumpScript=pu;
@@ -147,7 +156,6 @@ Return=pu;
 RevealGallery=pu;
 SavePoint=pu;
 SetGuiPosition=pu;
-SetLocalFlag=pu;
 SetSkipAll=pu;
 SetTextFade=pu;
 SetValidityOfFilmToFace=pu;
@@ -170,10 +178,12 @@ FragmentListScreen=wu
 FragmentViewChapterScreen=wu
 JumpScriptSection=wu
 SetWindowBackground=wu
+// based programmer left an explanation for this command in the script. "ShiftSection move sections without updating call stack or current scope" from "ShiftSection("FragmentChapterDisplay");" So we don't need it.
 ShiftSection=wu
 ShowChapterPreview=wu
 ShowChapterScreen=wu
 ShowExtras=wu
 ShowTips=wu
 StopFragment=wu
+// another note from the programmers: "//start the queued move without waiting for it"
 Update=wu
