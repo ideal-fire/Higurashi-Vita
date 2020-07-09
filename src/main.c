@@ -29,6 +29,7 @@
 	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
 	TODO - don't show "save game" option in toucb bar if save not supported. oops. looks like the function should just be passed a map of which ones to enable
 	TODO - textboxWidth bug
+	TODO - restore default game functionality
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -218,6 +219,9 @@ char* vitaAppId="HIGURASHI";
 #define validVNDSSaveFormat(a) (a==1 || a==2)
 
 #define VNDSGLOBALSSAVEFORMAT 1
+
+// 2 is start
+#define HIGUSAVEFORMAT 2
 
 //#define LUAREGISTER(x,y) DebugLuaReg(y);
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
@@ -2535,26 +2539,37 @@ void easyMessagef(char _doWait, const char* _formatString, ...){
 	freeWrappedText(_numLines,_wrappedLines);
 	free(_completeString);
 }
-char* getSavefileName(const char* _passedPreset){
-	return easyCombineStrings(2,saveFolder,_passedPreset);
-}
-void LoadGame(){
-	char* _savefileLocation = getSavefileName(currentPresetFilename);
+void LoadHiguGame(){
 	currentPresetChapter=-1;
-	if (checkFileExist((char*)_savefileLocation)==1){
-		FILE *fp;
-		fp = fopen((const char*)_savefileLocation, "rb");
+	char* _specificName = getHiguSavePath();
+	if (checkFileExist(_specificName)){
+		FILE* fp = fopen(_specificName,"rb");
+		int _v = fgetc(fp);
+		if (_v!=HIGUSAVEFORMAT){
+			easyMessagef(1,"expected version %d but got %d\n",HIGUSAVEFORMAT,_v);
+			goto err;
+		}
 		fread(&currentPresetChapter,2,1,fp);
+	err:
 		fclose(fp);
+	}else{
+		char* _savefileLocation = oldHiguSavePath(currentPresetFilename);
+		if (checkFileExist(_savefileLocation)){
+			FILE* fp = fopen(_savefileLocation, "rb");
+			fread(&currentPresetChapter,2,1,fp);
+			fclose(fp);
+		}
+		free(_savefileLocation);
 	}
-	free(_savefileLocation);
 }
-void SaveGame(){
-	char* _savefileLocation = getSavefileName(currentPresetFilename);
+void SaveHiguGame(){
+	char* _specificPath = getHiguSavePath();
 	FILE *fp;
-	fp = fopen((const char*)_savefileLocation, "wb");
+	fp = fopen(_specificPath, "wb");
+	fputc(HIGUSAVEFORMAT,fp);
 	fwrite(&currentPresetChapter,2,1,fp);
 	fclose(fp);
+	free(_specificPath);
 }
 void TryLoadMenuSoundEffect(const char* _passedPathIdea){
 	#if MENUSFXON == 1
@@ -4299,6 +4314,12 @@ char* easyVNDSSaveName(int _slot){
 	}else{
 		return easySprintf("%s%s%d",streamingAssets,"sav",_slot);
 	}
+}
+char* getHiguSavePath(){
+	return easyVNDSSaveName(999);
+}
+char* oldHiguSavePath(const char* _passedPreset){
+	return easyCombineStrings(2,saveFolder,_passedPreset);
 }
 // unsigned char - format version
 // script filename relative to script folder
@@ -6998,7 +7019,7 @@ void SaveGameEditor(){
 		controlsStart();
 		currentPresetChapter = retMenuControlsLow(currentPresetChapter,0,0,1,1,0,currentPresetFileList.length-1);
 		if (wasJustPressed(BUTTON_A)){
-			SaveGame();
+			SaveHiguGame();
 			controlsEnd();
 			break;
 		}
@@ -7723,7 +7744,7 @@ int main(int argc, char *argv[]){
 				LoadPreset(_presentFullPath);
 				free(_presentFullPath);
 				// Does not load the savefile, I promise.
-				LoadGame();
+				LoadHiguGame();
 				// If there is no save game, start a new one at chapter 0
 				// Otherwise, go to the navigation menu
 				if (currentPresetChapter==-1){
@@ -7766,7 +7787,7 @@ int main(int argc, char *argv[]){
 							currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
 						}
 					}else{
-						SaveGame();
+						SaveHiguGame();
 					}
 					if (currentGameStatus!=GAMESTATUS_QUIT){
 						currentGameStatus=GAMESTATUS_NAVIGATIONMENU;

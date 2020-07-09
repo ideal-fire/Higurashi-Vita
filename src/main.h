@@ -82,7 +82,8 @@ double partMoveFillsCapped(u64 _curTicks, u64 _startTime, int _totalDifference, 
 int easyCenter(int _smallSize, int _bigSize);
 void PlayMenuSound();
 int showMenuAdvanced(int _choice, const char* _title, int _mapSize, char** _options, char** _optionValues, char* _showMap, optionProp* _optionProp, char* _returnInfo, char _menuProp, inttakeretfunc _drawHook);
-
+char* getHiguSavePath();
+char* oldHiguSavePath(const char* _passedPreset);
 typedef struct{
 	char** theArray;
 	unsigned char length;
