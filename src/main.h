@@ -86,6 +86,8 @@ char* getHiguSavePath();
 char* oldHiguSavePath(const char* _passedPreset);
 void writeLengthStringToFile(FILE* fp, const char* _stringToWrite);
 char* readLengthStringFromFile(FILE* fp);
+char getLocalFlag(const char* _varName, int* _retVal);
+void saveHiguGame();
 typedef struct{
 	char** theArray;
 	unsigned char length;

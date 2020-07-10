@@ -1,3 +1,4 @@
+// https://github.com/MyLegGuy/Higurashi-Vita/issues/20
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -164,7 +165,12 @@ void connectFragmentMenu(){
 	}
 	int _choice=0;
 	while(1){
-		// color the options
+		{
+			int _fragLoopOn;
+			if (getLocalFlag("LFragmentLoop",&_fragLoopOn) && !_fragLoopOn){
+				break;
+			}
+		}
 		_realHeight = screenHeight;
 		screenHeight=screenHeight-currentTextHeight*3-DRAWDESCRIPTIONPADDING(screenHeight)*4;
 		_choice = showMenuAdvanced(_choice, "Fragment list", numFragments, _optionNames, NULL, _showMap, _props, NULL, MENUPROP_CANPAGEUPDOWN | MENUPROP_CANQUIT, _drawDescription);
@@ -186,6 +192,7 @@ void connectFragmentMenu(){
 				}
 				regenOptionProps(_props,_indexById,_cachedCompletions);
 			}
+			saveHiguGame();
 		}else{
 			break;
 		}
@@ -217,6 +224,7 @@ void startResetConnections(){
 	playedFrags=0;
 	fragPlayOrder=NULL;
 	PlayMenuSound();
+	saveHiguGame();
 }
 void fragmentMenu(){
 	int _choice=0;

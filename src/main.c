@@ -224,7 +224,8 @@ char* vitaAppId="HIGURASHI";
 
 // 2 is start
 // 3 adds localFlags
-#define HIGUSAVEFORMAT 3
+// 4 adds fragment info
+#define HIGUSAVEFORMAT 4
 
 //#define LUAREGISTER(x,y) DebugLuaReg(y);
 #define LUAREGISTER(x,y) lua_pushcfunction(L,x);\
@@ -2607,6 +2608,17 @@ void loadHiguGame(){
 		if (_v>=3){
 			loadStringNumTable(fp,"localFlags");
 		}
+		if (_v>=4){
+			// load fragment progress
+			if (fragPlayOrder){
+				free(fragPlayOrder);
+			}
+			fread(&playedFrags,1,sizeof(int),fp);
+			fragPlayOrder = malloc(playedFrags*sizeof(int));
+			for (int i=0;i<playedFrags;++i){
+				fread(fragPlayOrder+i,1,sizeof(int),fp);
+			}
+		}
 	err:
 		fclose(fp);
 	}else{
@@ -2626,6 +2638,13 @@ void saveHiguGame(){
 	fputc(HIGUSAVEFORMAT,fp);
 	fwrite(&currentPresetChapter,2,1,fp);
 	writeStringNumTable(fp,"localFlags");
+	{
+		// write fragment progress
+		fwrite(&playedFrags,1,sizeof(int),fp);
+		for (int i=0;i<playedFrags;++i){
+			fwrite(fragPlayOrder+i,1,sizeof(int),fp);
+		}
+	}
 	fclose(fp);
 	free(_specificPath);
 }
