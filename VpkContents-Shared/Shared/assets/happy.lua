@@ -31,7 +31,6 @@ function FreeTrash()
 	collectgarbage()
 end
 
-
 // If you pass false or true then it will be changed to 0 or 1 
 function flagValueFilter(val)
 	if (val==false) then
@@ -59,6 +58,11 @@ function GetLocalFlag(flag)
 		return 0;
 	end
 	return localFlags[flag];
+end
+//
+function Return()
+   // see FAKELUAERRORMSG definition
+   error("higuvitafakeerr");
 end
 
 // wrappers
@@ -152,7 +156,6 @@ JumpScript=pu;
 LanguagePrompt=pu;
 MoveSpriteEx=pu;
 PreloadBitmap=pu;
-Return=pu;
 RevealGallery=pu;
 SavePoint=pu;
 SetGuiPosition=pu;
