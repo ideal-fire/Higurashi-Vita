@@ -26,7 +26,14 @@ int numFragments;
 //
 int* fragPlayOrder;
 int playedFrags;
+// hardcoded config. these are by ID
+int lockedUntilPrereq=51; // all it's requirements must be at least orange.
+int bonusNoErrFrag=52; // you unlock it if all are green
 //
+char fragmentsModeOn(){
+	int _fragLoopOn;
+	return (getLocalFlag("LFragmentLoop",&_fragLoopOn) && _fragLoopOn);
+}
 void setFragPlayed(int _id){
 	fragPlayOrder = realloc(fragPlayOrder,sizeof(int)*(++playedFrags));
 	fragPlayOrder[playedFrags-1]=_id;
@@ -147,11 +154,23 @@ void regenOptionProps(optionProp* _ret, int* _indexById, int* _cachedCompletions
 		}
 	}
 }
+// all but the last one
+char didPerfect(optionProp* _in){
+	if (playedFrags==numFragments-1){
+		for (int i=0;i<playedFrags;++i){
+			if (_in[i]!=OPTIONPROP_GOODCOLOR){
+				return 0;
+			}
+		}
+		return 1;
+	}else{
+		return 0;
+	}
+}
 void connectFragmentMenu(){
 	char* _optionNames[numFragments];
 	char _showMap[numFragments];
 	memset(_showMap,1,numFragments);
-	// TODO - hide the last 3 or whatever
 
 	int* _indexById;
 	int* _cachedCompletions;
@@ -159,17 +178,26 @@ void connectFragmentMenu(){
 	optionProp* _props = malloc(numFragments*sizeof(optionProp));
 	memset(_props,0,numFragments*sizeof(optionProp));
 	regenOptionProps(_props,_indexById,_cachedCompletions);
+	_showMap[bonusNoErrFrag-1]=didPerfect(_props);
 	
 	for (int i=0;i<numFragments;++i){
 		_optionNames[i]=playerLanguage ? fragmentInfo[i]->title : fragmentInfo[i]->titlejp;
 	}
 	int _choice=0;
 	while(1){
+		if (!fragmentsModeOn()){
+			break;
+		}
 		{
-			int _fragLoopOn;
-			if (getLocalFlag("LFragmentLoop",&_fragLoopOn) && !_fragLoopOn){
-				break;
+			// unlock this fragment if its requirements are all met and theirs too.
+			struct fragmentJson* j = fragmentInfo[lockedUntilPrereq-1];
+			int i;
+			for (i=1;i<=j->prereqs[0];++i){
+				if (!(_props[j->prereqs[i]-1] & OPTIONPROP_GOODCOLOR)){
+					break;
+				}
 			}
+			_showMap[lockedUntilPrereq-1]=(i>j->prereqs[0]);
 		}
 		_realHeight = screenHeight;
 		screenHeight=screenHeight-currentTextHeight*3-DRAWDESCRIPTIONPADDING(screenHeight)*4;
@@ -191,6 +219,7 @@ void connectFragmentMenu(){
 					}
 				}
 				regenOptionProps(_props,_indexById,_cachedCompletions);
+				_showMap[bonusNoErrFrag-1]=didPerfect(_props);
 			}
 			saveHiguGame();
 		}else{
@@ -229,6 +258,9 @@ void startResetConnections(){
 void fragmentMenu(){
 	int _choice=0;
 	while(1){
+		if (!fragmentsModeOn()){
+			break;
+		}
 		char* _options[] = {
 			"Fragment list",
 			"Reset my connections",

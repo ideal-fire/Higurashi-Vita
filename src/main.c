@@ -7100,6 +7100,7 @@ void ChapterJump(){
 		}
 	}
 	free(_options);
+	free(_showMap);
 }
 void SaveGameEditor(){
 	controlsEnd();
@@ -7139,7 +7140,7 @@ void NavigationMenu(){
 		if (strcmp(_goodName,HIDDENCHAPTERTITLE)!=0){
 			_menuTitle=easySprintf("End of script: %s",_goodName);
 		}else{
-			_menuTitle="---"; // we still want a title because it'll keep the menu a familiar distance from the top of the screen
+			_menuTitle=strdup("---"); // we still want a title because it'll keep the menu a familiar distance from the top of the screen
 		}
 	}else{
 		_menuTitle=easySprintf("End of script: %d",currentPresetChapter);
@@ -7158,8 +7159,7 @@ void NavigationMenu(){
 		_optionOn[2]=(gameHasTips && currentPresetTipUnlockList.theArray[currentPresetChapter]>0);
 		_optionOn[0]=(currentPresetChapter+1<currentPresetFileList.length);
 		{
-			int _fragLoopOn;
-			_optionOn[3]=(getLocalFlag("LFragmentLoop",&_fragLoopOn) && _fragLoopOn);
+			_optionOn[3]=fragmentsModeOn();
 			if (_optionOn[3]){
 				_optionOn[0]=0;
 				if (!fragmentInfo){ // initial fragment info load
