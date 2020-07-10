@@ -94,6 +94,16 @@ int _drawDescription(int i){
 	drawRectangle(_padding,_rectStart,screenWidth-_padding*2,_rectH-_padding*2,0,0,0,255);
 	_rectStart+=_padding;
 	drawWrappedText(_padding*2,_rectStart,_descriptionLines,_descLinesCount,255,255,255,255);
+
+	{ // debug draw
+		int _x = screenWidth-textWidth(normalFont,"aaaaaaaaaaa");
+		gbDrawTextf(normalFont,_x,screenHeight/3,255,255,255,255,"DEBUG",fragmentInfo[i]->id);
+		gbDrawTextf(normalFont,_x,screenHeight/3+currentTextHeight,255,255,255,255,"ID: %d",fragmentInfo[i]->id);
+		gbDrawTextf(normalFont,_x,screenHeight/3+currentTextHeight*2,255,255,255,255,"prereqs:");
+		for (int k=1;k<=fragmentInfo[i]->prereqs[0];++k){
+			gbDrawTextf(normalFont,_x,screenHeight/3+(currentTextHeight)*(k+2),255,255,255,255,"%d",fragmentInfo[i]->prereqs[k]);
+		}
+	}
 	return 0;
 }
 // returns the 1-based index of when it was fully completed.
@@ -156,7 +166,7 @@ void regenOptionProps(optionProp* _ret, int* _indexById, int* _cachedCompletions
 }
 // all but the last one
 char didPerfect(optionProp* _in){
-	if (playedFrags==numFragments-1){
+	if (playedFrags>=numFragments-1){
 		for (int i=0;i<playedFrags;++i){
 			if (_in[i]!=OPTIONPROP_GOODCOLOR){
 				return 0;
@@ -208,7 +218,7 @@ void connectFragmentMenu(){
 			freeWrappedText(_descLinesCount,_descriptionLines);
 		}
 		if (_choice>=0){
-			//RunScript(scriptFolder,fragmentInfo[_choice]->script,1);
+			RunScript(scriptFolder,fragmentInfo[_choice]->script,1);
 			if (_indexById[fragmentInfo[_choice]->id-1]==0){
 				setFragPlayed(fragmentInfo[_choice]->id);
 				// update information for requirement checking

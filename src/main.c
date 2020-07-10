@@ -2559,7 +2559,7 @@ void easyMessagef(char _doWait, const char* _formatString, ...){
 	freeWrappedText(_numLines,_wrappedLines);
 	free(_completeString);
 }
-void writeStringNumTable(FILE* fp, const char* _name){	
+void writeStringNumTable(FILE* fp, const char* _name){
 	lua_getglobal(L,_name);
 	lua_pushnil(L); // first key
 	while (lua_next(L,-2)!=0){
@@ -2576,6 +2576,7 @@ void writeStringNumTable(FILE* fp, const char* _name){
 		// pop this, but we need to keep the key
 		lua_pop(L, 1);
 	}
+	lua_pop(L,1);
 	writeLengthStringToFile(fp,NULL);
 }
 void loadStringNumTable(FILE* fp, const char* _name){
