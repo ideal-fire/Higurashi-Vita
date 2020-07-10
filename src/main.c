@@ -152,7 +152,9 @@ char* vitaAppId="HIGURASHI";
 #define SAVEMENUPAGESIZE (SAVEMENUPAGEW*SAVEMENUPAGEH)
 #define MAXSAVESLOT 258 // Divisible by 6
 #define VNDSSAVESELSLOTPREFIX "Slot "
-#define PRESETFRAGNAME "/\\fragments"
+
+#define FAKELUAERRORMSG "higuvitafakeerr"
+#define HIDDENCHAPTERTITLE ".\\/hidden"
 
 // showMenu
 // ratio of screen width that the text will scroll in one second
@@ -878,6 +880,16 @@ void freeDoneShake(struct shakeInfo** s, u64 _sTime){
 		*s=NULL;
 		safeFreeShakeInfo(_hold);
 	}
+}
+char getLocalFlag(const char* _varName, int* _retVal){
+	char _did=0;
+	lua_getglobal(L,"localFlags");
+	if (lua_getfield(L,-1,_varName)==LUA_TNUMBER){
+		_did=1;
+		*_retVal=lua_tonumber(L,-1);
+	}
+	lua_pop(L,2);
+	return _did;
 }
 crossTexture* safeLoadImage(const char* path){
 	crossTexture* _tempTex = loadImage((char*)path);
@@ -1669,7 +1681,13 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	// Call funciton. Removes function from stack.
 	_pcallResult = lua_pcall(L, 0, 0, 0);
 	if (_pcallResult!=LUA_OK){
-		DisplaypcallError(_pcallResult,"This is the second lua_pcall in RunScript.");
+		const char* _message = lua_tostring(L,-1);
+		int _len = strlen(_message);
+		int _checkLen = strlen(FAKELUAERRORMSG);
+		if (!(_len>=_checkLen && strcmp(_message+(_len-_checkLen),FAKELUAERRORMSG)==0)){
+			DisplaypcallError(_pcallResult,"This is the second lua_pcall in RunScript.");
+		}
+		lua_pop(L,1);
 	}
 	return 1;
 }
@@ -7035,13 +7053,25 @@ void TipMenu(){
 }
 void ChapterJump(){
 	char** _options = malloc(sizeof(char*)*(currentPresetChapter+1));
+	char* _showMap = NULL;
 	int i;
 	for (i=0;i<=currentPresetChapter;++i){
-		_options[i]=chapterNamesLoaded ? currentPresetFileFriendlyList.theArray[i] : currentPresetFileList.theArray[i];
+		if (chapterNamesLoaded){
+			char* _goodName = currentPresetFileFriendlyList.theArray[i];
+			_options[i]=_goodName;
+			if (strcmp(_goodName,HIDDENCHAPTERTITLE)==0){
+				if (!_showMap){
+					_showMap = newShowMap(currentPresetChapter+1);
+				}
+				_showMap[i]=0;
+			}
+		}else{
+			_options[i]=currentPresetFileList.theArray[i];
+		}
 	}
 	int _chosenIndex=0;
 	while(1){
-		_chosenIndex = showMenu(_chosenIndex,"Chapter Jump",currentPresetChapter+1,_options,1);
+		_chosenIndex=showMenuAdvanced(_chosenIndex,"Chapter Jump",currentPresetChapter+1,_options,NULL,_showMap,NULL,NULL,MENUPROP_CANPAGEUPDOWN|MENUPROP_CANQUIT,NULL);
 		if (_chosenIndex==-1){
 			break;
 		}else{
@@ -7086,7 +7116,12 @@ void controls_setDefaultGame(){
 void NavigationMenu(){
 	char* _menuTitle;
 	if (chapterNamesLoaded){
-		_menuTitle=easySprintf("End of script: %s",currentPresetFileFriendlyList.theArray[currentPresetChapter]);
+		char* _goodName=currentPresetFileFriendlyList.theArray[currentPresetChapter];
+		if (strcmp(_goodName,HIDDENCHAPTERTITLE)!=0){
+			_menuTitle=easySprintf("End of script: %s",_goodName);
+		}else{
+			_menuTitle="---"; // we still want a title because it'll keep the menu a familiar distance from the top of the screen
+		}
 	}else{
 		_menuTitle=easySprintf("End of script: %d",currentPresetChapter);
 	}
@@ -7098,26 +7133,24 @@ void NavigationMenu(){
 		"Exit",
 	};
 	char* _optionOn = newShowMap(5);
-	// if tips disabled or no tips unlocked
-	if (!gameHasTips || currentPresetTipUnlockList.theArray[currentPresetChapter]==0){
-		_optionOn[2]=0;
-	}
-	if (currentPresetChapter+1>=currentPresetFileList.length){
-		_optionOn[0]=0;
-	}
-	if (_optionOn[0] && (strcmp(currentPresetFileList.theArray[currentPresetChapter+1],PRESETFRAGNAME)==0)){
-		_optionOn[3]=1;
-		_optionOn[0]=0;
-		if (!fragmentInfo){ // initial fragment info load
-			char* _fullPath = easyCombineStrings(2,streamingAssets,"Data/fragmentdata.txt");
-			parseFragmentFile(_fullPath);
-			free(_fullPath);
-		}
-	}else{
-		_optionOn[3]=0;
-	}
 	int _choice=0;
 	while(currentGameStatus!=GAMESTATUS_QUIT){
+		//
+		_optionOn[2]=(gameHasTips && currentPresetTipUnlockList.theArray[currentPresetChapter]>0);
+		_optionOn[0]=(currentPresetChapter+1<currentPresetFileList.length);
+		{
+			int _fragLoopOn;
+			_optionOn[3]=(getLocalFlag("LFragmentLoop",&_fragLoopOn) && _fragLoopOn);
+			if (_optionOn[3]){
+				_optionOn[0]=0;
+				if (!fragmentInfo){ // initial fragment info load
+					char* _fullPath = easyCombineStrings(2,streamingAssets,"Data/fragmentdata.txt");
+					parseFragmentFile(_fullPath);
+					free(_fullPath);
+				}
+			}
+		}
+		//
 		_choice = showMenuAdvanced(_choice,_menuTitle,5,_menuOptions,NULL,_optionOn,NULL,NULL,0,NULL);
 		if (_choice==0){
 			printf("Go to next chapter\n");
