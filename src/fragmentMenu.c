@@ -209,16 +209,18 @@ void connectFragmentMenu(){
 			}
 			_showMap[lockedUntilPrereq-1]=(i>j->prereqs[0]);
 		}
-		_realHeight = screenHeight;
-		screenHeight=screenHeight-currentTextHeight*3-DRAWDESCRIPTIONPADDING(screenHeight)*4;
-		_choice = showMenuAdvanced(_choice, "Fragment list", numFragments, _optionNames, NULL, _showMap, _props, NULL, MENUPROP_CANPAGEUPDOWN | MENUPROP_CANQUIT, _drawDescription);
-		screenHeight=_realHeight;
+		char _retClickInfo;
+		{
+			_realHeight = screenHeight;
+			screenHeight=screenHeight-currentTextHeight*3-DRAWDESCRIPTIONPADDING(screenHeight)*4;
+			_choice = showMenuAdvanced(_choice, "Fragment list", numFragments, _optionNames, NULL, _showMap, _props, &_retClickInfo, MENUPROP_CANPAGEUPDOWN | MENUPROP_CANQUIT, _drawDescription);
+			screenHeight=_realHeight;
+		}
 		if (_lastDescriptionIndex!=-1){
 			_lastDescriptionIndex=-1;
 			freeWrappedText(_descLinesCount,_descriptionLines);
 		}
 		if (_choice>=0){
-			RunScript(scriptFolder,fragmentInfo[_choice]->script,1);
 			if (_indexById[fragmentInfo[_choice]->id-1]==0){
 				setFragPlayed(fragmentInfo[_choice]->id);
 				// update information for requirement checking
@@ -229,7 +231,12 @@ void connectFragmentMenu(){
 					}
 				}
 				regenOptionProps(_props,_indexById,_cachedCompletions);
+			}
+			if (_props[_choice] & OPTIONPROP_GOODCOLOR){
 				_showMap[bonusNoErrFrag-1]=didPerfect(_props);
+				if (!(_retClickInfo & MENURET_LBUTTON)){
+					RunScript(scriptFolder,fragmentInfo[_choice]->script,1);
+				}
 			}
 			saveHiguGame();
 		}else{
