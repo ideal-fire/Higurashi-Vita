@@ -31,8 +31,6 @@
 	TODO - textboxWidth bug
 	TODO - restore default game functionality
 	TODO - use showmenu for scriptselect
-	TODO - onik_tips_14 uses ・
-	TODO - test this on the vita and see the weird break: OutputLine(NULL, "　どーせ「だってかぁいいんだもん☆」しか言わないだろうけどさ。」",NULL, "", Line_Normal);
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -2481,6 +2479,7 @@ void loadHiguGame(){
 		}
 		free(_savefileLocation);
 	}
+	free(_specificName);
 }
 void saveHiguGame(){
 	char* _specificPath = getHiguSavePath();
