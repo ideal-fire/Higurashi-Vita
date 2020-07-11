@@ -89,7 +89,6 @@
 #define LOCATION_CGALT 2
 /////////////////////////////////////
 #define MAXBUSTCACHE 8
-#define MAXIMAGECHAR 20
 #define MAXFILES 50
 #define MAXFILELENGTH 51
 #define MAXMESSAGEHISTORY 40
@@ -440,21 +439,6 @@ signed char currentGameStatus=GAMESTATUS_TITLE;
 signed char tipNamesLoaded=0;
 signed char chapterNamesLoaded=0;
 unsigned char lastSelectionAnswer=0;
-
-// The x position on screen of this image character
-signed short imageCharX[MAXIMAGECHAR] = {0};
-signed short imageCharY[MAXIMAGECHAR] = {0};
-// The character that the image character is. The values in here are one of the IMAGECHAR constants
-signed char imageCharType[MAXIMAGECHAR] = {0};
-// The line number the image chars are at. This is used when displaying the message in OutputLine
-unsigned short imageCharLines[MAXIMAGECHAR] = {0};
-// The character positions within the lines they're at. This is used when displayng the message in OutputLine. Image characters are 3 spaces in the message. This will refer to the first spot. 
-unsigned short imageCharCharPositions[MAXIMAGECHAR] = {0};
-
-#define IMAGECHARSTAR 1
-#define IMAGECHARNOTE 2
-#define IMAGECHARUNKNOWN 0
-crossTexture* imageCharImages[3]; // PLEASE DON'T FORGET TO CHANGE THIS IF ANOTHER IMAGE CHAR IS ADDED
 
 #define FILTERTYPE_INACTIVE 0 // This one is different from Higurashi, in Higurashi it defaults to FILTERTYPE_EFFECTCOLORMIX
 #define FILTERTYPE_EFFECTCOLORMIX 1
@@ -974,9 +958,6 @@ void drawPropertyGameText(int _x, int _y, char* _message, int32_t* _props, unsig
 	}
 	drawPropertyStreakText(_x,_y,&_message[_lastStrEnd],_curProps,_alpha);
 }
-int imageCharW(signed char _type){
-	return getOtherScaled(getTextureHeight(imageCharImages[_type]),currentTextHeight,getTextureWidth(imageCharImages[_type]));
-}
 double GetXOffsetScale(){
 	if (overrideXOffScale!=0){
 		return overrideXOffScale;
@@ -1066,16 +1047,6 @@ void turnOffEnlarge(){
 	extraGameScaleY=1;
 	extraGameOffX=0;
 	extraGameOffY=0;
-}
-void drawImageChars(unsigned char _alpha, int _maxDrawLine, int _maxDrawLineChar){
-	int i;
-	for (i=0;i<MAXIMAGECHAR;++i){
-		if (imageCharType[i]!=-1){
-			if ((imageCharLines[i]<_maxDrawLine) || (imageCharLines[i]==_maxDrawLine && imageCharCharPositions[i]<=_maxDrawLineChar)){
-				drawTextureSizedAlpha(imageCharImages[imageCharType[i]],imageCharX[i],imageCharY[i],imageCharW(imageCharType[i]),currentTextHeight,_alpha);
-			}
-		}
-	}
 }
 void changeMaxLines(int _newMax){
 	if (_newMax==maxLines || _newMax<=0){
@@ -1177,7 +1148,6 @@ void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxCh
 			drawPropertyGameText(_totalTextXOff,_totalTextYOff+i*currentTextHeight,currentMessages[i],messageProps[i],_alpha);
 		}
 	}
-	drawImageChars(_alpha,_maxDrawLine,_finalLineMaxChar!=-1 ? _finalLineMaxChar : INT_MAX);
 	// Fix string if we trimmed it for _finalLineMaxChar
 	if (_finalLineMaxChar!=-1){
 		currentMessages[_maxDrawLine][_finalLineMaxChar]=_oldFinalChar;
@@ -1426,45 +1396,6 @@ void clearHistory(){
 		}
 	}
 }
-// make it so all the free space is at the end
-void shiftImageCharArr(){
-	int _shiftSpot=-1;
-	int i;
-	for (i=0;i<MAXIMAGECHAR;i++){
-		if (imageCharType[i]==-1){
-			if (_shiftSpot==-1){
-				_shiftSpot=i;
-			}
-		}else{
-			if (_shiftSpot!=-1){
-				imageCharX[_shiftSpot]=imageCharX[i];
-				imageCharY[_shiftSpot]=imageCharY[i];
-				imageCharType[_shiftSpot]=imageCharType[i];
-				imageCharLines[_shiftSpot]=imageCharLines[i];
-				imageCharCharPositions[_shiftSpot]=imageCharCharPositions[i];
-				imageCharType[i]=-1;
-				++_shiftSpot;
-			}
-		}
-	}
-}
-void upshiftImageChars(int _numLinesUp){
-	char _deletedAnImageChar=0;
-	int i;
-	for (i=0;i<MAXIMAGECHAR;i++){
-		if (imageCharType[i]!=-1){
-			imageCharY[i]-=currentTextHeight*_numLinesUp;
-			imageCharLines[i]-=_numLinesUp;
-			if (imageCharLines[i]<0){
-				imageCharType[i]=-1;
-				_deletedAnImageChar=1;
-			}
-		}
-	}
-	if (_deletedAnImageChar){
-		shiftImageCharArr();
-	}
-}
 void ClearMessageArray(char _doFadeTransition){
 	if (textSpeed==TEXTSPEED_INSTANT){
 		_doFadeTransition=0;
@@ -1497,7 +1428,6 @@ void ClearMessageArray(char _doFadeTransition){
 		}
 	}
 	//
-	upshiftImageChars(maxLines);
 	if (advNamesPersist!=2){
 		setADVName(NULL);
 	}
@@ -1707,8 +1637,6 @@ void upshiftText(int _numDelLines){
 	for (i=_numLeftLines;i<maxLines;++i){
 		currentMessages[i]=NULL;		
 	}
-	// shift image chars up
-	upshiftImageChars(_numDelLines);
 }
 void updateBust(bust* _target, u64 _curTime){
 	freeDoneShake(&_target->curShake,_curTime);
@@ -2250,7 +2178,6 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 		}
 		return;
 	}
-	int _firstAddedImageChar=-1;
 	int _lastPropSet=-1; // only set properties if at index greater than this one
 	int _lastNewline = -1; // Index
 	int32_t _curProp=0;
@@ -2331,136 +2258,80 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 				}
 			}
 		}else if (_propBuff!=NULL){
-			// Don't do special checks if it is a normal English ASCII character
-			// Here we have special checks for stuff like image characters and new lines.
-			if (_workable[i]<65 || _workable[i]>122){
-				if (_workable[i]=='<'){
-					char _foundMarkup=0;
-					if (strncmp(&_workable[i],COLORMARKUPSTART,strlen(COLORMARKUPSTART))==0){
-						int _startI=i;
-						i+=strlen(COLORMARKUPSTART);
-						if (i+6+strlen(COLORMARKUPEND)<_cachedStrlen){
-							_curProp=0;
-							readRGBString(&_workable[i],(char*)&_curProp,((char*)&_curProp)+1,((char*)&_curProp)+2);
-							i+=6;
-							if (_workable[i]!='>'){
-								puts("parsing color markup failed");
-								i-=6;
-								_curProp=0;
-							}else{
-								setPropBit(&_curProp,TEXTPROP_COLORED);
-								_foundMarkup=1;
-								memset(&_workable[_startI],1,strlen(COLORMARKUPSTART)+6+1);
-								i=_startI;
-							}
-						}
-					}else if (strncmp(&_workable[i],COLORMARKUPEND,strlen(COLORMARKUPEND))==0){
-						memset(&_workable[i],1,strlen(COLORMARKUPEND));
+			if (_workable[i]=='<'){
+				char _foundMarkup=0;
+				if (strncmp(&_workable[i],COLORMARKUPSTART,strlen(COLORMARKUPSTART))==0){
+					int _startI=i;
+					i+=strlen(COLORMARKUPSTART);
+					if (i+6+strlen(COLORMARKUPEND)<_cachedStrlen){
 						_curProp=0;
-						_foundMarkup=1;
-					}
-					//_propBuff
-					if (!_foundMarkup){
-						char* _endPos = strchr(&(_workable[i]),'>');
-						if (_endPos!=NULL){
-							int _deltaChars = (_endPos-(char*)&(_workable[i]));
-							memset(&(_workable[i]),1,_deltaChars+1); // Because this starts at i, k being 11 with i as 10 would just write 1 byte, therefor missing the end '>'. THe fix is to add one.
+						readRGBString(&_workable[i],(char*)&_curProp,((char*)&_curProp)+1,((char*)&_curProp)+2);
+						i+=6;
+						if (_workable[i]!='>'){
+							puts("parsing color markup failed");
+							i-=6;
+							_curProp=0;
+						}else{
+							setPropBit(&_curProp,TEXTPROP_COLORED);
+							_foundMarkup=1;
+							memset(&_workable[_startI],1,strlen(COLORMARKUPSTART)+6+1);
+							i=_startI;
 						}
 					}
-				}else if (_workable[i]==226 && _workable[i+1]==128 && _workable[i+2]==148){ // Weird hyphen replace
-					_workable[i]='-'; // Replace it with a normal hyphen
-					memset(&(_workable[i+1]),1,2); // Replace these with value 1
-				}else if (_workable[i]==226){ // COde for special image character
-					unsigned char _imagechartype;
-					if (_workable[i+1]==153 && _workable[i+2]==170){ // ♪
-						_imagechartype = IMAGECHARNOTE;
-					}else if (_workable[i+1]==152 && _workable[i+2]==134){ // ☆
-						_imagechartype = IMAGECHARSTAR;
-					}else{
-						printf("Unknown image char at %d! %d;%d\n",i,_workable[i+1],_workable[i+2]);
-						_imagechartype = IMAGECHARUNKNOWN;
+				}else if (strncmp(&_workable[i],COLORMARKUPEND,strlen(COLORMARKUPEND))==0){
+					memset(&_workable[i],1,strlen(COLORMARKUPEND));
+					_curProp=0;
+					_foundMarkup=1;
+				}
+				//_propBuff
+				if (!_foundMarkup){
+					char* _endPos = strchr(&(_workable[i]),'>');
+					if (_endPos!=NULL){
+						int _deltaChars = (_endPos-(char*)&(_workable[i]));
+						memset(&(_workable[i]),1,_deltaChars+1); // Because this starts at i, k being 11 with i as 10 would just write 1 byte, therefor missing the end '>'. THe fix is to add one.
 					}
-					if (_imagechartype != IMAGECHARUNKNOWN){
-						// find open image char slot
-						int j;
-						for (j=0;j<MAXIMAGECHAR;j++){
-							if (imageCharType[j]==-1){
-								if (_firstAddedImageChar==-1){
-									_firstAddedImageChar=j;
-								}
-								// replace the character with spaces
-								int _cachedW = imageCharW(_imagechartype);
-								int _numSpaces = ceil(_cachedW/(double)singleSpaceWidth);
-								// store some info in these variables for later. these values are used for finalizing their positions and stuff
-								imageCharX[j] = i;
-								imageCharY[j]=_numSpaces;
-								imageCharType[j] = _imagechartype;
-								// set all these 3 image char bytes to be skipped
-								memset(&(_workable[i]),1,3);
-								if (_numSpaces>3){ // realloc for extra space for spaces
-									int _numAdded = (_numSpaces-3);
-									_cachedStrlen+=_numAdded;
-									_workable = realloc(_workable,_cachedStrlen+1);
-									_propBuff = realloc(_propBuff,(_cachedStrlen+1)*sizeof(int32_t));
-									memmove(&_workable[i+_numAdded],&_workable[i],_cachedStrlen-i-_numAdded+1); // move the null char also	
-								}
-								// put the number of spaces we need
-								int k;
-								for (k=0;k<_numSpaces;++k){
-									_workable[i+k]=' ';
-									_propBuff[i+k]=_curProp;
-								}
+				}
+			}else if (_workable[i]=='\\' || _workable[i]=='x'){ // I saw that Umineko VNDS doesn't use a backslash before
+				//http://jafrog.com/2013/11/23/colors-in-terminal.html
+				if (_cachedStrlen-i>=strlen("x1b[0m")+(_workable[i]=='\\')){
+					if (strncmp(&(_workable[i+(_workable[i]=='\\')]),"x1b[",strlen("x1b["))==0){
+						int _oldIndex=i;
+						// Advance to the x character if we chose to use backslash
+						if (_workable[i]=='\\'){
+							i++;
+						}
+						i+=4; // We're now in the parameters
+						int _mSearchIndex;
+						for (_mSearchIndex=i;_mSearchIndex<_cachedStrlen;++_mSearchIndex){
+							if (_workable[_mSearchIndex]=='m'){
 								break;
 							}
 						}
-						if (j<MAXIMAGECHAR){
-							// if we put the image char at this spot, redo this spot as a space.
-							--i;
-						}
-					}
-				}
-			}else{
-				//http://jafrog.com/2013/11/23/colors-in-terminal.html
-				if (_workable[i]=='\\' || _workable[i]=='x'){ // I saw that Umineko VNDS doesn't use a backslash before
-					if (_cachedStrlen-i>=strlen("x1b[0m")+(_workable[i]=='\\')){
-						if (strncmp(&(_workable[i+(_workable[i]=='\\')]),"x1b[",strlen("x1b["))==0){
-							int _oldIndex=i;
-							// Advance to the x character if we chose to use backslash
-							if (_workable[i]=='\\'){
-								i++;
-							}
-							i+=4; // We're now in the parameters
-							int _mSearchIndex;
-							for (_mSearchIndex=i;_mSearchIndex<_cachedStrlen;++_mSearchIndex){
-								if (_workable[_mSearchIndex]=='m'){
-									break;
-								}
-							}
-							// If found the ending
-							if (_workable[_mSearchIndex]=='m'){
-								// TODO - Do stuff with the found color code
-								if (_workable[i]=='0'){ // If we're resetting the color
+						// If found the ending
+						if (_workable[_mSearchIndex]=='m'){
+							// TODO - Do stuff with the found color code
+							if (_workable[i]=='0'){ // If we're resetting the color
 	
-								}else{
-									int _semiColonSearchIndex;
-									for (_semiColonSearchIndex=i;_semiColonSearchIndex<_mSearchIndex;++_semiColonSearchIndex){
-										if (_workable[_semiColonSearchIndex]==';'){
-											break;
-										}
-									}
-									_workable[_semiColonSearchIndex]=0;
-									printf("the number is %s\n",&(_workable[i]));
-									_workable[_semiColonSearchIndex]=';';
-								}
-								i=_oldIndex;
-								memset(&(_workable[i]),1,_mSearchIndex-i+1);
 							}else{
-								printf("Failed to parse color markup");
-								i=_oldIndex; // Must be invalid otherwise
+								int _semiColonSearchIndex;
+								for (_semiColonSearchIndex=i;_semiColonSearchIndex<_mSearchIndex;++_semiColonSearchIndex){
+									if (_workable[_semiColonSearchIndex]==';'){
+										break;
+									}
+								}
+								_workable[_semiColonSearchIndex]=0;
+								printf("the number is %s\n",&(_workable[i]));
+								_workable[_semiColonSearchIndex]=';';
 							}
+							i=_oldIndex;
+							memset(&(_workable[i]),1,_mSearchIndex-i+1);
+						}else{
+							printf("Failed to parse color markup");
+							i=_oldIndex; // Must be invalid otherwise
 						}
 					}
 				}
+				
 			}
 		}
 		/////
@@ -2492,30 +2363,6 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 	}
 	if (_propRet){
 		*_propRet=_propBuff;
-		// finalize the image chars
-		if (_firstAddedImageChar!=-1){
-			int _loopLine=0;
-			int _curMsgIndex=0;
-			int _nextMsgIndex=strlen(_workable)+1;
-			int i;
-			for (i=_firstAddedImageChar;i<MAXIMAGECHAR && imageCharType[i]!=-1;++i){
-				// imageCharX[i] stores the position of the image char in the line passed to this message. it's like a global index or something.
-				int _charIndex = imageCharX[i];
-				// fast forward to the start of the line with this image char on it
-				while(_nextMsgIndex<_charIndex){
-					_curMsgIndex=_nextMsgIndex;
-					_nextMsgIndex=_curMsgIndex+strlen(&(_workable[_curMsgIndex]))+1;
-					++_loopLine;
-				}
-				_workable[_charIndex]='\0'; // so we can use textWidth
-				int _cachedW = imageCharW(imageCharType[i]);
-				imageCharX[i] = totalTextXOff()+textWidth(normalFont,&_workable[_curMsgIndex])+easyCenter(_cachedW,imageCharY[i]*singleSpaceWidth);
-				imageCharLines[i] = currentLine+_loopLine;
-				imageCharY[i] = totalTextYOff()+imageCharLines[i]*currentTextHeight;
-				imageCharCharPositions[i] = strlenNO1(&_workable[_curMsgIndex]);
-				_workable[_charIndex]=' ';
-			}
-		}
 	}
 }
 void wrapText(const char* _passedMessage, int* _numLines, char*** _realLines, int _maxWidth){
@@ -7509,7 +7356,7 @@ void hVitaCrutialInit(int argc, char** argv){
 }
 // verify install
 void hVitaCheckVpk(){
-	char* _embeddedCheckPath = fixPathAlloc("assets/star.png",TYPE_EMBEDDED);
+	char* _embeddedCheckPath = fixPathAlloc("assets/happy.lua",TYPE_EMBEDDED);
 	if (!checkFileExist(_embeddedCheckPath)){
 		while(1){
 			controlsReset();
@@ -7560,12 +7407,6 @@ void hVitaInitSettings(){
 	}
 	free(_fixedPath);
 }
-void _initImageChars(){
-	// Needed for any advanced message display
-	imageCharImages[IMAGECHARUNKNOWN] = LoadEmbeddedPNG("assets/unknown.png");
-	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
-	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("assets/star.png");
-}
 void hVitaInitFont(){
 	// Load default font
 	if (fontSize<0){
@@ -7573,7 +7414,6 @@ void hVitaInitFont(){
 	}
 	currentFontFilename = fixPathAlloc(DEFAULTEMBEDDEDFONT,TYPE_EMBEDDED);
 	reloadFont(fontSize,1);
-	_initImageChars();
 }
 // relies on font for error messages
 void hVitaInitSound(){
@@ -7607,9 +7447,6 @@ void hVitaInitMisc(){
 	int i;
 	changeMaxLines(15);
 	increaseBustArraysSize(0,maxBusts);	
-	for (i=0;i<MAXIMAGECHAR;i++){
-		imageCharType[i]=-1;
-	}
 	ClearMessageArray(0);
 	for (i=0;i<maxBusts;i++){
 		ResetBustStruct(&(Busts[i]),0);
