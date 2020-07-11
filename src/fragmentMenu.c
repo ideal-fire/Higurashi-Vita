@@ -1,4 +1,3 @@
-// https://github.com/MyLegGuy/Higurashi-Vita/issues/20
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -36,7 +35,6 @@ int bonusNoErrFrag=52; // you unlock it if none are broken
 //
 void setFragPlayedFlag(int _id, char _isPlayed){
 	char* _name = easySprintf("FragmentRead%02d",_id);
-	printf("%s\n",_name);
 	setLocalFlag(_name,_isPlayed);
 	free(_name);
 }

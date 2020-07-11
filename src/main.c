@@ -31,6 +31,8 @@
 	TODO - textboxWidth bug
 	TODO - restore default game functionality
 	TODO - use showmenu for scriptselect
+	TODO - onik_tips_14 uses ・
+	TODO - test this on the vita and see the weird break: OutputLine(NULL, "　どーせ「だってかぁいいんだもん☆」しか言わないだろうけどさ。」",NULL, "", Line_Normal);
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -264,7 +266,6 @@ char* vitaAppId="HIGURASHI";
 //////////////
 // The streamingAssets variable is only used for images and sound
 char* streamingAssets;
-char* presetFolder;
 char* scriptFolder;
 char* saveFolder;
 char* gamesFolder;
@@ -432,7 +433,6 @@ goodu8MallocArray currentPresetTipUnlockList;
 int16_t currentPresetChapter=0;
 // Both of these are made with malloc
 char* currentPresetFilename=NULL;
-// This may not be set because the user can choose to use the legacy preset folder mode.
 char* currentGameFolderName=NULL;
 
 signed char currentGameStatus=GAMESTATUS_TITLE;
@@ -527,7 +527,6 @@ char textOnlyOverBackground=1;
 // This is a constant value between 0 and 127 that means that the text should be instantly displayed
 #define TEXTSPEED_INSTANT 100
 signed char textSpeed=1;
-char isGameFolderMode=1;
 char isEmbedMode;
 int menuCursorSpaceWidth;
 char canChangeBoxAlpha=1;
@@ -1511,13 +1510,6 @@ void SetAllMusicVolume(int _passedFixedVolume){
 		}
 	}
 }
-int Password(int val, int _shouldHave){
-	if (val==_shouldHave){
-		return val+1;
-	}else{
-		return 0;
-	}
-}
 void WriteIntToDebugFile(int a){
 	char _tempCompleteNumberBuffer[11];
 	sprintf(_tempCompleteNumberBuffer,"%d",a);
@@ -2388,7 +2380,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 						printf("Unknown image char at %d! %d;%d\n",i,_workable[i+1],_workable[i+2]);
 						_imagechartype = IMAGECHARUNKNOWN;
 					}
-					if (_imagechartype != IMAGECHARUNKNOWN){
+					if (0){
 						// find open image char slot
 						int j;
 						for (j=0;j<MAXIMAGECHAR;j++){
@@ -4032,7 +4024,6 @@ void historyMenu(){
 void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName, char _isRelativeToData){
 	free(streamingAssets);
 	free(scriptFolder);
-	free(presetFolder);
 
 	streamingAssets = malloc(strlen(gbDataFolder)+strlen(_streamingAssetsFolderName)+2);
 	scriptFolder = malloc(strlen(gbDataFolder)+strlen(_streamingAssetsFolderName)+strlen("/Scripts/")+1);
@@ -4048,33 +4039,6 @@ void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName, char _isRela
 	//
 	strcat(scriptFolder,_streamingAssetsFolderName);
 	strcat(scriptFolder,"/Scripts/");
-
-	presetFolder = malloc(strlen(gbDataFolder)+strlen(_streamingAssetsFolderName)+strlen("/Presets/")+1);
-	strcpy(presetFolder,gbDataFolder);
-	strcat(presetFolder,"Presets/");
-	if (!directoryExists(presetFolder)){ // If the normal preset folder doesn't exist
-		presetFolder[0]='\0';
-		if (_isRelativeToData){
-			strcat(presetFolder,gbDataFolder);
-		}
-		strcat(presetFolder,_streamingAssetsFolderName); // Look 4 lines above for why this is okay
-		strcat(presetFolder,"/Presets/");
-		presetsAreInStreamingAssets=1;
-	}else{
-		presetsAreInStreamingAssets=0;
-	}
-}
-void UpdatePresetStreamingAssetsDir(char* filename){
-	char _tempNewStreamingAssetsPathbuffer[strlen(gbDataFolder)+strlen("StreamingAssets_")+strlen(filename)+1];
-	strcpy(_tempNewStreamingAssetsPathbuffer,gbDataFolder);
-	strcat(_tempNewStreamingAssetsPathbuffer,"StreamingAssets_");
-	strcat(_tempNewStreamingAssetsPathbuffer,filename);
-	if (directoryExists(_tempNewStreamingAssetsPathbuffer)){
-		// The directory does exist. Construct the string for the new StreamingAssets folder and regenerate the path strings
-		strcpy(_tempNewStreamingAssetsPathbuffer,"StreamingAssets_");
-		strcat(_tempNewStreamingAssetsPathbuffer,filename);
-		GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer,1);
-	}
 }
 void RunGameSpecificLua(){
 	char _completedSpecificLuaPath[strlen(scriptFolder)+strlen("_GameSpecific.lua")+1];
@@ -4146,50 +4110,54 @@ void createRequiredDirectories(){
 	createDirectory(gbDataFolder);
 	createDirectory(saveFolder);
 }
-void startLoadPresetSpecifiedInFile(char* _presetFilenameFile){
-	FILE* fp;
-	char _tempReadPresetFilename[50];
-	fp = fopen (_presetFilenameFile, "r");
-	_tempReadPresetFilename[0]='\0';
-	fgets (_tempReadPresetFilename, 50, fp);
-	fclose (fp);
-
-	removeNewline(_tempReadPresetFilename);
-	currentPresetFilename = malloc(strlen(_tempReadPresetFilename)+1);
-	strcpy(currentPresetFilename,_tempReadPresetFilename);
-
-	currentGameStatus = GAMESTATUS_LOADPRESET;
-}
-// Also starts loading the preset file
-// returns 1 if okay to keep going
-char startLoadingGameFolder(char* _chosenGameFolder){
-	char _fileWithPresetFilenamePath[strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/includedPreset.txt")+1];
-	strcpy(_fileWithPresetFilenamePath,gamesFolder);
-	strcat(_fileWithPresetFilenamePath,_chosenGameFolder);
-	strcat(_fileWithPresetFilenamePath,"/includedPreset.txt");
-
+char loadHiguGameFolder(char* _chosenGameFolder){
+	char* _fileWithPresetFilenamePath = easyCombineStrings(3,gamesFolder,_chosenGameFolder,"/includedPreset.txt");
 	if (!checkFileExist(_fileWithPresetFilenamePath)){
 		easyMessagef(1,"Invalid game folder. I know this because the includedPreset.txt does not exist. Did you remember to convert this folder before moving it?");
+		free(_fileWithPresetFilenamePath);
 		return 0;
 	}
-	startLoadPresetSpecifiedInFile(_fileWithPresetFilenamePath);
-
-	free(presetFolder);
-	presetFolder = malloc(strlen(gamesFolder)+strlen(_chosenGameFolder)+strlen("/")+1);
-	strcpy(presetFolder,gamesFolder);
-	strcat(presetFolder,_chosenGameFolder);
-	strcat(presetFolder,"/");
-	 
+	activateHigurashiSettings();
 	free(streamingAssets);
-	streamingAssets = malloc(strlen(presetFolder)+1);
-	strcpy(streamingAssets,presetFolder);
-	
+	streamingAssets = easyCombineStrings(3,gamesFolder,_chosenGameFolder,"/");
 	free(scriptFolder);
-	scriptFolder = malloc(strlen(streamingAssets)+strlen("Scripts/")+1);
-	strcpy(scriptFolder,streamingAssets);
-	strcat(scriptFolder,"Scripts/");
+	scriptFolder = easyCombineStrings(2,streamingAssets,"Scripts/");
+	{ // read the preset filename
+		crossFile* fp = crossfopen(_fileWithPresetFilenamePath,"rb");
+		currentPresetFilename = easygetline(fp);
+		crossfclose(fp);
+		free(_fileWithPresetFilenamePath);
+	}
+	LoadGameSpecificStupidity();
+	{ // load the preset
+		char* _presentFullPath = easyCombineStrings(2,streamingAssets,currentPresetFilename);
+		LoadPreset(_presentFullPath);
+		free(_presentFullPath);
+		// Does not load the savefile, I promise.
+		loadHiguGame();
+		// If there is no save game, start a new one at chapter 0
+		// Otherwise, go to the navigation menu
+		if (currentPresetChapter==-1){
+			char* _options[]={"Start from beginning","Savegame Editor"};
+			char _choice=showMenu(0,"NEW GAME",2,_options,0);
+			if (_choice==1){
+				currentPresetChapter=0;
+				SaveGameEditor();
+			}
+			if (currentPresetChapter==-1){
+				controlsEnd();
+				currentPresetChapter=0;
+				currentGameStatus=GAMESTATUS_MAINGAME;
+			}else{
+				currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
+			}
+		}else{
+			currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
+		}
+	}
 	return 1;
 }
+
 void setDefaultGame(char* _defaultGameFolderName){
 	char _defaultGameSaveFilenameBuffer[strlen(saveFolder)+strlen("_defaultGame")+1];
 	strcpy(_defaultGameSaveFilenameBuffer,saveFolder);
@@ -4748,42 +4716,6 @@ void removeNegative(int _actionTime, signed char _waitforcompletion){
 		applyNegative(_actionTime,_waitforcompletion);
 	#endif
 	currentFilterType=FILTERTYPE_INACTIVE;
-}
-void addGamePresetToLegacyFolder(char* _streamingAssetsRoot, char* _presetFilenameRelative){
-	if (!directoryExists(_streamingAssetsRoot)){
-		easyMessagef(1,"%s does not exist. This means you probably don't have to worry about %s",_streamingAssetsRoot,_presetFilenameRelative);
-		return;
-	}
-
-	char _presetFilenameAbsolute[strlen(presetFolder)+strlen(_presetFilenameRelative)+1];
-	strcpy(_presetFilenameAbsolute,presetFolder);
-	strcat(_presetFilenameAbsolute,_presetFilenameRelative);
-
-	char _includedPresetTxtLocation[strlen(_streamingAssetsRoot)+strlen("includedPreset.txt")+1];
-	strcpy(_includedPresetTxtLocation,_streamingAssetsRoot);
-	strcat(_includedPresetTxtLocation,"includedPreset.txt");
-
-	char _newStreamingAssetsPresetFilenameAbsolute[strlen(_streamingAssetsRoot)+strlen(_presetFilenameRelative)+1];
-	strcpy(_newStreamingAssetsPresetFilenameAbsolute,_streamingAssetsRoot);
-	strcat(_newStreamingAssetsPresetFilenameAbsolute,_presetFilenameRelative);
-
-	// Make includedPreset.txt
-	FILE* fp = fopen(_includedPresetTxtLocation,"wb");
-	fwrite(_presetFilenameRelative,strlen(_presetFilenameRelative),1,fp);
-	fclose(fp);
-
-	// Copy preset
-	FILE* fpr = fopen(_presetFilenameAbsolute,"rb");
-	FILE* fpw = fopen(_newStreamingAssetsPresetFilenameAbsolute,"wb");
-	while (1){
-		char _lastReadByte;
-		if (fread(&_lastReadByte,1,1,fpr)!=1){
-			break;
-		}
-		fwrite(&_lastReadByte,1,1,fpw);
-	}
-	fclose(fpr);
-	fclose(fpw);
 }
 char* readSpecificIniLine(FILE* fp, char* _prefix){
 	char _tempReadLine[256];
@@ -5872,48 +5804,6 @@ void drawAdvanced(char _shouldDrawBackground, char _shouldDrawLowBusts, char _sh
 void Draw(char _shouldDrawMessageBox){
 	drawAdvanced(1,1,1,_shouldDrawMessageBox,1,_shouldDrawMessageBox);
 }
-char upgradeToGameFolder(){
-	controlsEnd();
-	char* _tempChosenFile;
-	char _didUpgradeOne=0;
-	while (1){
-		if (FileSelector(presetFolder,&_tempChosenFile,(char*)"Select the preset to use or press circle to be done.")==2){
-			easyMessagef(1,"What? No preset files? %s is empty.",presetFolder);
-			return 0;
-		}else{
-			if (_tempChosenFile==NULL){
-				break;
-			}
-			UpdatePresetStreamingAssetsDir(_tempChosenFile);
-			if (LazyChoicef("Add the preset file %s to %s ?",_tempChosenFile,streamingAssets)){
-				addGamePresetToLegacyFolder(streamingAssets,_tempChosenFile);\
-				_didUpgradeOne=1;
-				if (!LazyChoicef("Done. Upgrade another folder?")){
-					free(_tempChosenFile);
-					break;
-				}
-			}
-			free(_tempChosenFile);
-		}
-	}
-	if (_didUpgradeOne){
-		ClearMessageArray(0);
-		controlsReset();
-		char* _bigMessageBuffer = easySprintf("Now that you've upgraded one or more of your StreamingAssets folders to include the preset file, you need to move all your StreamingAssets folder(s) using VitaShell or MolecularShell to\n%s\nYou will need to create that games folder first. After you create that game folder, you won't be able to use preset mode anymore, so make sure you've upgraded all of your StreamingAssets folders before.",gamesFolder);
-		OutputLine(_bigMessageBuffer,Line_WaitForInput,0);
-		while (!wasJustPressed(BUTTON_A)){
-			controlsEnd();
-			startDrawing();
-			DrawMessageText(255,-1,-1);
-			endDrawing();
-			controlsStart();
-		}
-		free(_bigMessageBuffer);
-	}else{
-		easyMessagef(1,"You did not upgrade any folders.");
-	}
-	return _didUpgradeOne;
-}
 int qsortStringComparer(const void* a, const void* b){
 	return strcmp(*(char**)a,*(char**)b);
 }
@@ -6942,53 +6832,37 @@ int _titleScreenDraw(int _choice){
 	return 0;
 }
 void TitleScreen(){
-	_bottomString=easyCombineStrings(3,SYSTEMSTRING,isGameFolderMode ? ";Games" : ";Presets",GBPLAT!=GB_3DS ? (isActuallyUsingUma0 ? ";uma0" : ";ux0") : (""));
+	_bottomString=easyCombineStrings(2,SYSTEMSTRING,GBPLAT!=GB_3DS ? (isActuallyUsingUma0 ? ";uma0" : ";ux0") : (""));
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		char* _options[6]={"Load game","Manual mode","Basic settings",NULL,"Exit","Upgrade to Game Folder Mode"};
+		char* _options[5]={"Load game","Manual mode","Basic settings",NULL,"Exit"};
 		_options[3]=(playerLanguage ? "JP" : "EN");
-		char _showMap[6];
-		memset(_showMap,1,6);
-		_showMap[5]=!isGameFolderMode;
+		char _showMap[5];
+		memset(_showMap,1,sizeof(_showMap));
 		int _choice=showMenuAdvanced(0,"Main Menu",sizeof(_options)/sizeof(char*),_options,NULL,_showMap,NULL,NULL,MENUPROP_CANPAGEUPDOWN, _titleScreenDraw);
 		if (_choice==0){
 			PlayMenuSound(); 
 			if (currentPresetFilename==NULL){
 				currentPresetChapter=0;
 				controlsEnd();
-				if (isGameFolderMode){
-					currentGameStatus=GAMESTATUS_GAMEFOLDERSELECTION;
-				}else{
-					currentGameStatus=GAMESTATUS_PRESETSELECTION;
-				}
+				currentGameStatus=GAMESTATUS_GAMEFOLDERSELECTION;
 			}
 			break;
 		}else if (_choice==1){
 			PlayMenuSound();
 			controlsEnd();
-			if (isGameFolderMode){
-				char* _chosenGameFolder;
-				if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a game")==2 || _chosenGameFolder==NULL){
-					continue;
-				}
-				char _tempNewStreamingAssetsPathbuffer[strlen(gamesFolder)+strlen(_chosenGameFolder)+1];
-				strcpy(_tempNewStreamingAssetsPathbuffer,gamesFolder);
-				strcat(_tempNewStreamingAssetsPathbuffer,_chosenGameFolder);
-				GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer,0);
-				free(_chosenGameFolder);
+			char* _chosenGameFolder;
+			if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a game")==2 || _chosenGameFolder==NULL){
+				continue;
 			}
+			char _tempNewStreamingAssetsPathbuffer[strlen(gamesFolder)+strlen(_chosenGameFolder)+1];
+			strcpy(_tempNewStreamingAssetsPathbuffer,gamesFolder);
+			strcat(_tempNewStreamingAssetsPathbuffer,_chosenGameFolder);
+			GenerateStreamingAssetsPaths(_tempNewStreamingAssetsPathbuffer,0);
+			free(_chosenGameFolder);
 			if (!directoryExists(scriptFolder)){
 				controlsEnd();
-				char* _tempChosenFile;
-				if (FileSelector(presetFolder,&_tempChosenFile,(char*)"Select a preset to choose StreamingAssets folder")==2){
-					easyMessagef(1,"%s does not exist and no files in %s. Do you have any files?",scriptFolder,presetFolder);
-					continue;
-				}else{
-					if (_tempChosenFile==NULL){
-						continue;
-					}
-					UpdatePresetStreamingAssetsDir(_tempChosenFile);
-					free(_tempChosenFile);
-				}
+				easyMessagef(1,"%s does not exist.",scriptFolder);
+				continue;
 			}
 			controlsEnd();
 			char* _tempManualFileSelectionResult;
@@ -7018,9 +6892,6 @@ void TitleScreen(){
 					currentGameStatus=GAMESTATUS_TITLE;
 				}
 			}
-			if (presetsAreInStreamingAssets==0){ // If the presets are not specific to a StreamingAssets folder, that means that the user could be using a different StreamingAssets folder. Reset paths just in case.
-				GenerateStreamingAssetsPaths("StreamingAssets",1);
-			}
 		}else if (_choice==2){ // Go to setting menu
 			controlsEnd();
 			SettingsMenu(0,0,0,0,1,0,0,0,0);
@@ -7034,27 +6905,6 @@ void TitleScreen(){
 		}else if (_choice==4){ // Quit button
 			currentGameStatus=GAMESTATUS_QUIT;
 			break;
-		}else if (_choice==5){
-			if (isGameFolderMode){
-				easyMessagef(1,"You really shouldn't be here. You haven't escaped, you know? You're not even going the right way.");
-			}else{
-				ClearMessageArray(0);
-				controlsReset();
-				OutputLine("This process will convert your legacy preset & StreamingAssets setup to the new game folder setup. It makes everything easier, so you should do it.\n\nHere's how this will work:\n1) Select a preset file\n2) That preset file will be put in the SteamingAssets folder for you. If you already upgraded the StreamingAssets folder, the preset file just overwrite the old one.\n3) Repeat for all of your games.\n4) You must manually move the StreamingAssets folder(s) using VitaShell or MolecularShell to the games folder.\n\nIf it sounds too hard for you, there's also a video tutorial on the Wololo thread.",Line_WaitForInput,0);
-				while (!wasJustPressed(BUTTON_A)){
-					controlsEnd();
-					startDrawing();
-					DrawMessageText(255,-1,-1);
-					endDrawing();
-					controlsStart();
-				}
-				if (LazyChoicef("Upgrade to game folder mode?")){
-					if (upgradeToGameFolder()){
-						currentGameStatus=GAMESTATUS_QUIT;
-						break;
-					}
-				}
-			}
 		}else{
 			_choice=0;
 		}
@@ -7149,7 +6999,7 @@ void SaveGameEditor(){
 }
 void controls_setDefaultGame(){
 	if (wasJustPressed(BUTTON_X)){
-		if (isGameFolderMode && !isEmbedMode && LazyChoicef(defaultGameIsSet ? "Unset this game as the default?" : "Set this game as the default game?")){
+		if (!isEmbedMode && LazyChoicef(defaultGameIsSet ? "Unset this game as the default?" : "Set this game as the default game?")){
 			defaultGameIsSet = !defaultGameIsSet;
 			setDefaultGame(defaultGameIsSet ? currentGameFolderName : "NONE");
 		}
@@ -7218,14 +7068,6 @@ void NavigationMenu(){
 	free(_optionOn);
 	free(_menuTitle);
 	controlsEnd();
-}
-void NewGameMenu(){
-	char* _options[]={"Start from beginning","Savegame Editor"};
-	char _choice=showMenu(0,"NEW GAME",2,_options,0);
-	if (_choice==1){
-		currentPresetChapter=0;
-		SaveGameEditor();
-	}
 }
 // Returns selected slot or -1
 int vndsSaveSelector(char _isSave){
@@ -7726,16 +7568,6 @@ void hVitaInitSettings(){
 		controlsEnd();
 	}
 	free(_fixedPath);
-	// Check if games folder mode or present files mode
-	_fixedPath = fixPathAlloc("Games/",TYPE_DATA);
-	if (directoryExists(_fixedPath)){
-		isGameFolderMode=1;
-	}else{ // Only allow present mode if games folder doesn't exist
-		free(_fixedPath);
-		_fixedPath=fixPathAlloc("Presets/",TYPE_DATA);
-		isGameFolderMode = !(directoryExists(_fixedPath));
-	}
-	free(_fixedPath);
 }
 void _initImageChars(){
 	// Needed for any advanced message display
@@ -7857,43 +7689,7 @@ int main(int argc, char *argv[]){
 				TitleScreen();
 				break;
 			case GAMESTATUS_LOADPRESET: // Still needed because presets are loaded internally
-				// Next, we can try to switch the StreamingAssets directory to ux0:data/HIGURASHI/StreamingAssets_FILENAME/ if that directory exists
-				UpdatePresetStreamingAssetsDir(currentPresetFilename);
-				LoadGameSpecificStupidity();
-				// Create the string for the full path of the preset file and load it
-				char* _presentFullPath = easyCombineStrings(2,presetFolder,currentPresetFilename);
-				LoadPreset(_presentFullPath);
-				free(_presentFullPath);
-				// Does not load the savefile, I promise.
-				loadHiguGame();
-				// If there is no save game, start a new one at chapter 0
-				// Otherwise, go to the navigation menu
-				if (currentPresetChapter==-1){
-					controlsEnd();
-					NewGameMenu();
-					controlsEnd();
-					if (currentPresetChapter==-1){
-						controlsEnd();
-						currentPresetChapter=0;
-						currentGameStatus=GAMESTATUS_MAINGAME;
-					}else{
-						currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
-					}
-				}else{
-					currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
-				}
-				break;
-			case GAMESTATUS_PRESETSELECTION:
-				if (FileSelector(presetFolder,&currentPresetFilename,(char*)"Select a preset")==2){
-					easyMessagef(1,"No presets found. If you ran the converter, you should've gotten some. You can manually put presets in: %s",presetFolder);
-					break;
-				}
-				controlsEnd();
-				if (currentPresetFilename==NULL){
-					currentGameStatus=GAMESTATUS_TITLE;
-				}else{
-					currentGameStatus=GAMESTATUS_LOADPRESET;
-				}
+				
 				break;
 			case GAMESTATUS_MAINGAME:
 			{
@@ -7955,17 +7751,7 @@ int main(int argc, char *argv[]){
 					LoadGameSpecificStupidity();
 					VNDSNavigationMenu();
 				}else{
-					activateHigurashiSettings();
-					if (strcmp(currentGameFolderName,"PLACEHOLDER.txt")==0){
-						strcpy(_possibleVNDSStatusFile,gamesFolder);
-						strcat(_possibleVNDSStatusFile,currentGameFolderName);
-						remove(_possibleVNDSStatusFile);
-						free(currentGameFolderName);
-						break;
-					}
-					if (startLoadingGameFolder(currentGameFolderName)){
-						currentGameStatus=GAMESTATUS_LOADPRESET;
-					}else{
+					if (!loadHiguGameFolder(currentGameFolderName)){
 						currentGameStatus=GAMESTATUS_TITLE;
 						if (defaultGameIsSet){
 							setDefaultGame("NONE"); // Prevent this message every time on startup if it's because of default game setting
