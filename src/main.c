@@ -2611,13 +2611,17 @@ void loadHiguGame(){
 		}
 		if (_v>=4){
 			// load fragment progress
-			if (fragPlayOrder){
-				free(fragPlayOrder);
+			if (fragStatus){
+				free(fragStatus);
+				fragStatus=NULL;
 			}
-			fread(&playedFrags,1,sizeof(int),fp);
-			fragPlayOrder = malloc(playedFrags*sizeof(int));
-			for (int i=0;i<playedFrags;++i){
-				fread(fragPlayOrder+i,1,sizeof(int),fp);
+			int _readFrags;
+			fread(&_readFrags,1,sizeof(int),fp);
+			if (_readFrags!=0){
+				fragStatus=malloc(_readFrags);
+				for (int i=0;i<_readFrags;++i){
+					fragStatus[i]=fgetc(fp);
+				}
 			}
 		}
 	err:
@@ -2641,9 +2645,9 @@ void saveHiguGame(){
 	writeStringNumTable(fp,"localFlags");
 	{
 		// write fragment progress
-		fwrite(&playedFrags,1,sizeof(int),fp);
-		for (int i=0;i<playedFrags;++i){
-			fwrite(fragPlayOrder+i,1,sizeof(int),fp);
+		fwrite(&numFragments,1,sizeof(int),fp);
+		for (int i=0;i<numFragments;++i){
+			fputc(fragStatus[i],fp);
 		}
 	}
 	fclose(fp);
@@ -6756,7 +6760,7 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 		}
 		if (wasJustPressed(BUTTON_DOWN) || wasJustPressed(BUTTON_UP)){
 			_nextDASShift=getMilli()+SHOWMENUBUTTONDELAY;
-		}else if (isDown(BUTTON_DOWN) || isDown(BUTTON_UP)){
+		}else if ((isDown(BUTTON_DOWN) || isDown(BUTTON_UP)) && _nextDASShift!=0){
 			u64 _curTime = getMilli();
 			if (_curTime>=_nextDASShift){
 				_nextDASShift=getMilli()+SHOWMENUAUTOSHIFT;
