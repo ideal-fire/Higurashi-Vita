@@ -105,6 +105,19 @@ PlaceViewTip2=pi;
 PlusStandgraphic1=pi;
 PlusStandgraphic2=pi;
 PlusStandgraphic3=pi;
+// the programmers say: \"//start the queued move without waiting for it\"
+// so we probably dont need it because this engine starts things immediately if not wait for completion
+Update=pi
+// things only  in flow.txt:
+// \"ShiftSection move sections without updating call stack or current scope\" is programmer note from ShiftSection(\"FragmentChapterDisplay\");
+// Used only in flow.txt, we dont need it
+ShiftSection=pi
+FragmentListScreen=pi
+FragmentViewChapterScreen=pi
+ShowChapterPreview=pi
+ShowChapterScreen=pi
+ShowExtras=pi
+ShowTips=pi
 
 // print unimplemented
 function pu()
@@ -177,16 +190,5 @@ function wu()
 DebugFlash();
 Debugfile(debug.getinfo(1, "n").name);
 end
-FragmentListScreen=wu
-FragmentViewChapterScreen=wu
-JumpScriptSection=wu
 SetWindowBackground=wu
-// based programmer left an explanation for this command in the script. "ShiftSection move sections without updating call stack or current scope" from "ShiftSection("FragmentChapterDisplay");" So we don't need it.
-ShiftSection=wu
-ShowChapterPreview=wu
-ShowChapterScreen=wu
-ShowExtras=wu
-ShowTips=wu
-StopFragment=wu
-// another note from the programmers: "//start the queued move without waiting for it"
-Update=wu
+StopFragment=wu // hmmmm

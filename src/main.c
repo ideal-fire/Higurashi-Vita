@@ -2380,7 +2380,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 						printf("Unknown image char at %d! %d;%d\n",i,_workable[i+1],_workable[i+2]);
 						_imagechartype = IMAGECHARUNKNOWN;
 					}
-					if (0){
+					if (_imagechartype != IMAGECHARUNKNOWN){
 						// find open image char slot
 						int j;
 						for (j=0;j<MAXIMAGECHAR;j++){
@@ -7329,15 +7329,6 @@ void VNDSNavigationMenu(){
 		fclose(fp);
 	}
 	//
-	if (!isDown(BUTTON_L) && !isDown(BUTTON_R)){
-		easyMessagef(0,"Loading font");
-		_possibleThunbnailPath[strlen(streamingAssets)]=0;
-		strcat(_possibleThunbnailPath,"/default.ttf");
-		if (checkFileExist(_possibleThunbnailPath)){
-			globalLoadFont(_possibleThunbnailPath);
-		}
-	}
-	//
 	_possibleThunbnailPath[strlen(streamingAssets)]=0;
 	strcat(_possibleThunbnailPath,"/SEArchive.legArchive");
 	if (checkFileExist(_possibleThunbnailPath)){
@@ -7688,9 +7679,6 @@ int main(int argc, char *argv[]){
 			case GAMESTATUS_TITLE:
 				TitleScreen();
 				break;
-			case GAMESTATUS_LOADPRESET: // Still needed because presets are loaded internally
-				
-				break;
 			case GAMESTATUS_MAINGAME:
 			{
 				char _didWork = RunScript(scriptFolder, currentPresetFileList.theArray[currentPresetChapter], 1);
@@ -7719,7 +7707,7 @@ int main(int argc, char *argv[]){
 				NavigationMenu();
 				break;
 			case GAMESTATUS_GAMEFOLDERSELECTION: // Sets game folder selection folder name to currentGameFolderName
-				;
+			{
 				char* _chosenGameFolder;
 				if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a game")==2){
 					easyMessagef(1,"No folders found. After running the script converter you should've put the converted files in %s",gamesFolder);
@@ -7733,19 +7721,28 @@ int main(int argc, char *argv[]){
 				currentGameFolderName = _chosenGameFolder; // Do not free _chosenGameFolder
 				currentGameStatus = GAMESTATUS_LOADGAMEFOLDER;
 				break;
+			}
 			case GAMESTATUS_LOADGAMEFOLDER: // Can load both Higurashi and VNDS games
-				;
-				char _possibleVNDSStatusFile[strlen(gamesFolder)+strlen(currentGameFolderName)+strlen("/Scripts/main.scr")+1];
-				strcpy(_possibleVNDSStatusFile,gamesFolder);
-				strcat(_possibleVNDSStatusFile,currentGameFolderName);
-				strcat(_possibleVNDSStatusFile,"/isvnds");
-				if (checkFileExist(_possibleVNDSStatusFile)){
+			{
+				char _filePath[strlen(gamesFolder)+strlen(currentGameFolderName)+strlen("/Scripts/main.scr")+1];
+				strcpy(_filePath,gamesFolder);
+				strcat(_filePath,currentGameFolderName);
+				char* _filenamePart=&(_filePath[0])+strlen(gamesFolder)+strlen(currentGameFolderName);
+				if (!isDown(BUTTON_L) && !isDown(BUTTON_R)){
+					strcpy(_filenamePart,"/default.ttf");
+					if (checkFileExist(_filePath)){
+						easyMessagef(0,"Loading font");
+						globalLoadFont(_filePath);
+					}
+				}
+				strcpy(_filenamePart,"/isvnds");
+				if (checkFileExist(_filePath)){
 					initializeNathanScript();
 					// Special settings for vnds
 					activateVNDSSettings();
 					// Setup StreamingAssets path
-					_possibleVNDSStatusFile[strlen(gamesFolder)+strlen(currentGameFolderName)]=0;
-					GenerateStreamingAssetsPaths(_possibleVNDSStatusFile,0);
+					*_filenamePart='\0';
+					GenerateStreamingAssetsPaths(_filePath,0);
 					currentGameStatus = GAMESTATUS_NAVIGATIONMENU;
 					// VNDS games also support game specific lua
 					LoadGameSpecificStupidity();
@@ -7760,6 +7757,7 @@ int main(int argc, char *argv[]){
 					}
 				}
 				break;
+			}
 		}
 	}
 	printf("ENDGAME\n");
