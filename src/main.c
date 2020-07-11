@@ -139,7 +139,7 @@ char* vitaAppId="HIGURASHI";
 #if GBTXT==GBTXT_BITMAP
 	#define DEFAULTEMBEDDEDFONT "assets/Bitmap-LiberationSans-Regular"
 #else
-	#define DEFAULTEMBEDDEDFONT "assets/LiberationSans-Regular.ttf"
+	#define DEFAULTEMBEDDEDFONT "assets/ume-pgo4.ttf"
 #endif //loadFont("sa0:data/font/pvf/ltn4.pvf");
 
 #define MAXMUSICARRAY 10
@@ -7566,22 +7566,12 @@ void _initImageChars(){
 	imageCharImages[IMAGECHARNOTE] = LoadEmbeddedPNG("assets/note.png");
 	imageCharImages[IMAGECHARSTAR] = LoadEmbeddedPNG("assets/star.png");
 }
-#define TESTJPFONT "/usr/share/fonts/OTF/ipag.ttf"
 void hVitaInitFont(){
 	// Load default font
 	if (fontSize<0){
 		fontSize = getResonableFontSize(GBTXT);
 	}
-	if (playerLanguage==0){ // load jp font
-		if (GBPLAT==GB_LINUX && checkFileExist(TESTJPFONT)){
-			currentFontFilename=strdup(TESTJPFONT);
-		}else if (GBPLAT==GB_VITA && GBTXT==GBTXT_VITA2D){
-			currentFontFilename=strdup("sa0:data/font/pvf/jpn0.pvf");
-		}
-	}
-	if (!currentFontFilename){
-		currentFontFilename = fixPathAlloc(DEFAULTEMBEDDEDFONT,TYPE_EMBEDDED);
-	}
+	currentFontFilename = fixPathAlloc(DEFAULTEMBEDDEDFONT,TYPE_EMBEDDED);
 	reloadFont(fontSize,1);
 	_initImageChars();
 }
