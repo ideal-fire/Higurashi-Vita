@@ -88,6 +88,7 @@ void writeLengthStringToFile(FILE* fp, const char* _stringToWrite);
 char* readLengthStringFromFile(FILE* fp);
 char getLocalFlag(const char* _varName, int* _retVal);
 void saveHiguGame();
+void setLocalFlag(const char* _varName, int _val);
 typedef struct{
 	char** theArray;
 	unsigned char length;

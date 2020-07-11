@@ -34,6 +34,12 @@ char* fragStatus; // by index
 int lockedUntilPrereq=51; // all it's requirements must be played
 int bonusNoErrFrag=52; // you unlock it if none are broken
 //
+void setFragPlayedFlag(int _id, char _isPlayed){
+	char* _name = easySprintf("FragmentRead%02d",_id);
+	printf("%s\n",_name);
+	setLocalFlag(_name,_isPlayed);
+	free(_name);
+}
 char fragmentsModeOn(){
 	int _fragLoopOn;
 	return (getLocalFlag("LFragmentLoop",&_fragLoopOn) && _fragLoopOn);
@@ -180,8 +186,11 @@ void connectFragmentMenu(){
 				_showMap[bonusNoErrFrag-1]=didPerfect();
 				regenOptionProps(_props);
 			}
-			if ((fragStatus[_choice] &FSTATUS_PLAYED) && !(_retClickInfo & MENURET_LBUTTON)){
-				RunScript(scriptFolder,fragmentInfo[_choice]->script,1);
+			if (fragStatus[_choice]&FSTATUS_PLAYED){
+				if (!(_retClickInfo & MENURET_LBUTTON)){
+					RunScript(scriptFolder,fragmentInfo[_choice]->script,1);
+				}
+				setFragPlayedFlag(fragmentInfo[_choice]->id,1);
 			}
 			saveHiguGame();
 		}else{
@@ -210,6 +219,9 @@ void startResetConnections(){
 		controlsEnd();
 	}
 	memset(fragStatus,0,numFragments);
+	for (int i=0;i<numFragments;++i){
+		setFragPlayedFlag(fragmentInfo[i]->id,0);
+	}
 	PlayMenuSound();
 	saveHiguGame();
 }

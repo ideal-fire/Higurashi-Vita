@@ -892,6 +892,11 @@ char getLocalFlag(const char* _varName, int* _retVal){
 	lua_pop(L,2);
 	return _did;
 }
+void setLocalFlag(const char* _varName, int _val){
+	lua_getglobal(L,"localFlags");
+	lua_pushnumber(L,_val);
+	lua_setfield(L,-2,_varName);
+}
 crossTexture* safeLoadImage(const char* path){
 	crossTexture* _tempTex = loadImage((char*)path);
 	if (_tempTex==NULL){
