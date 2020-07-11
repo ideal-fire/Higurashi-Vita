@@ -95,11 +95,12 @@ int _drawDescription(int i){
 
 	{ // debug draw
 		int _x = screenWidth-textWidth(normalFont,"aaaaaaaaaaa");
-		gbDrawTextf(normalFont,_x,screenHeight/3,255,255,255,255,"DEBUG",fragmentInfo[i]->id);
-		gbDrawTextf(normalFont,_x,screenHeight/3+currentTextHeight,255,255,255,255,"ID: %d",fragmentInfo[i]->id);
-		gbDrawTextf(normalFont,_x,screenHeight/3+currentTextHeight*2,255,255,255,255,"prereqs:");
+		int _y = currentTextHeight*2;
+		gbDrawTextf(normalFont,_x,_y,255,255,255,255,"DEBUG",fragmentInfo[i]->id);
+		gbDrawTextf(normalFont,_x,(_y=_y+currentTextHeight),255,255,255,255,"ID: %d",fragmentInfo[i]->id);
+		gbDrawTextf(normalFont,_x,(_y=_y+currentTextHeight),255,255,255,255,"prereqs:");
 		for (int k=1;k<=fragmentInfo[i]->prereqs[0];++k){
-			gbDrawTextf(normalFont,_x,screenHeight/3+(currentTextHeight)*(k+2),255,255,255,255,"%d",fragmentInfo[i]->prereqs[k]);
+			gbDrawTextf(normalFont,_x,(_y=_y+currentTextHeight),255,255,255,255,"%d",fragmentInfo[i]->prereqs[k]);
 		}
 	}
 	return 0;

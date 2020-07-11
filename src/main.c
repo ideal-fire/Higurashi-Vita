@@ -30,6 +30,7 @@
 	TODO - don't show "save game" option in toucb bar if save not supported. oops. looks like the function should just be passed a map of which ones to enable
 	TODO - textboxWidth bug
 	TODO - restore default game functionality
+	TODO - use showmenu for scriptselect
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -213,7 +214,8 @@ char* vitaAppId="HIGURASHI";
 // 13 adds dropshadowOn
 // 14 adds fontSize
 // 15 adds prefersADVNames
-#define OPTIONSFILEFORMAT 15
+// 16 adds playerLanguage
+#define OPTIONSFILEFORMAT 16
 
 // 1 is end
 // 2 adds currentADVName
@@ -3899,6 +3901,7 @@ void SaveSettings(){
 	fwrite(&dropshadowOn,sizeof(signed char),1,fp);
 	fwrite(&fontSize,sizeof(double),1,fp);
 	fwrite(&prefersADVNames,sizeof(signed char),1,fp);
+	fwrite(&playerLanguage,sizeof(signed char),1,fp);
 
 	#ifdef CUSTOM_SAVED_SETTINGS
 		customSettingsSave(fp);
@@ -3969,6 +3972,9 @@ void LoadSettings(){
 		}
 		if (_tempOptionsFormat>=15){
 			fread(&prefersADVNames,sizeof(signed char),1,fp);
+		}
+		if (_tempOptionsFormat>=16){
+			fread(&playerLanguage,1,1,fp);
 		}
 		#ifdef CUSTOM_SAVED_SETTINGS
 			customSettingsLoad(fp);
@@ -6938,11 +6944,12 @@ int _titleScreenDraw(int _choice){
 void TitleScreen(){
 	_bottomString=easyCombineStrings(3,SYSTEMSTRING,isGameFolderMode ? ";Games" : ";Presets",GBPLAT!=GB_3DS ? (isActuallyUsingUma0 ? ";uma0" : ";ux0") : (""));
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		char* _options[5]={"Load game","Manual mode","Basic settings","Exit","Upgrade to Game Folder Mode"};
-		char _showMap[5];
-		memset(_showMap,1,4);
-		_showMap[4]=!isGameFolderMode;
-		int _choice=showMenuAdvanced(0,"Main Menu",5,_options,NULL,_showMap,NULL,NULL,MENUPROP_CANPAGEUPDOWN, _titleScreenDraw);
+		char* _options[6]={"Load game","Manual mode","Basic settings",NULL,"Exit","Upgrade to Game Folder Mode"};
+		_options[3]=(playerLanguage ? "JP" : "EN");
+		char _showMap[6];
+		memset(_showMap,1,6);
+		_showMap[5]=!isGameFolderMode;
+		int _choice=showMenuAdvanced(0,"Main Menu",sizeof(_options)/sizeof(char*),_options,NULL,_showMap,NULL,NULL,MENUPROP_CANPAGEUPDOWN, _titleScreenDraw);
 		if (_choice==0){
 			PlayMenuSound(); 
 			if (currentPresetFilename==NULL){
@@ -7019,10 +7026,15 @@ void TitleScreen(){
 			SettingsMenu(0,0,0,0,1,0,0,0,0);
 			controlsEnd();
 			break;
-		}else if (_choice==3){ // Quit button
+		}else if (_choice==3){
+			playerLanguage=!playerLanguage;
+			SaveSettings();
 			currentGameStatus=GAMESTATUS_QUIT;
 			break;
-		}else if (_choice==4){
+		}else if (_choice==4){ // Quit button
+			currentGameStatus=GAMESTATUS_QUIT;
+			break;
+		}else if (_choice==5){
 			if (isGameFolderMode){
 				easyMessagef(1,"You really shouldn't be here. You haven't escaped, you know? You're not even going the right way.");
 			}else{
@@ -7737,9 +7749,14 @@ void hVitaInitFont(){
 	if (fontSize<0){
 		fontSize = getResonableFontSize(GBTXT);
 	}
-	if (GBPLAT == GB_LINUX && playerLanguage==0 && checkFileExist(TESTJPFONT)){
-		currentFontFilename = strdup(TESTJPFONT);
-	}else{
+	if (playerLanguage==0){ // load jp font
+		if (GBPLAT==GB_LINUX && checkFileExist(TESTJPFONT)){
+			currentFontFilename=strdup(TESTJPFONT);
+		}else if (GBPLAT==GB_VITA && GBTXT==GBTXT_VITA2D){
+			currentFontFilename=strdup("sa0:data/font/pvf/jpn0.pvf");
+		}
+	}
+	if (!currentFontFilename){
 		currentFontFilename = fixPathAlloc(DEFAULTEMBEDDEDFONT,TYPE_EMBEDDED);
 	}
 	reloadFont(fontSize,1);
@@ -7830,8 +7847,6 @@ signed char init(int argc, char** argv){
 #endif
 int main(int argc, char *argv[]){
 	/* code */
-	/* playerLanguage=0; */
-	/* printf("WARNING: forcing language to %d\n",playerLanguage); */
 	if (init(argc,argv)==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
