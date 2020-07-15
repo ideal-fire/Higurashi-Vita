@@ -30,7 +30,7 @@
 	TODO - don't show "save game" option in toucb bar if save not supported. oops. looks like the function should just be passed a map of which ones to enable
 	TODO - textboxWidth bug
 	TODO - restore default game functionality
-	TODO - use showmenu for scriptselect
+	TODO - use showmenu for scriptselect (this is tough because we can't open the in-game menu from showmenu)
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -2583,19 +2583,11 @@ void applyTextboxChanges(char _doRecalcMaxLines){
 }
 // Returns the folder for CG or CGAlt depending on the user's settings
 char* getUserPreferredImageDirectory(char _folderPreference){
-	if (_folderPreference==LOCATION_CGALT){
-		return locationStrings[LOCATION_CGALT];
-	}else{
-		return locationStrings[LOCATION_CG];
-	}
+	return _folderPreference==LOCATION_CGALT ? locationStrings[LOCATION_CGALT] : locationStrings[LOCATION_CG];
 }
 // Returns the image folder the user didn't choose.
 char* getUserPreferredImageDirectoryFallback(char _folderPreference){
-	if (_folderPreference==LOCATION_CGALT){
-		return locationStrings[LOCATION_CG];
-	}else{
-		return locationStrings[LOCATION_CGALT];
-	}
+	return _folderPreference==LOCATION_CGALT ? locationStrings[LOCATION_CG] : locationStrings[LOCATION_CGALT];
 }
 // Location string fallback with a specific image format
 char* _locationStringFallbackFormat(const char* filename, char _folderPreference, char* _fileFormat){
@@ -4721,11 +4713,23 @@ void scriptOutputLineAll(nathanscriptVariable* _passedArguments, int _numArgumen
 }
 //
 void scriptWait(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	startDrawing();
-	Draw(MessageBoxEnabled);
-	endDrawing();
-	if (isSkipping!=1){
-		wait(nathanvariableToInt(&_passedArguments[0]));
+	if (isSkipping){
+		startDrawing();
+		Draw(MessageBoxEnabled);
+		endDrawing();
+	}else{
+		u64 _endTime=getMilli()+nathanvariableToInt(&_passedArguments[0]);
+		while(_endTime>getMilli()){
+			controlsStart();
+			if(proceedPressed()){
+				_endTime=getMilli();
+			}
+			Update();
+			controlsEnd();
+			startDrawing();
+			Draw(MessageBoxEnabled);
+			endDrawing();
+		}
 	}
 }
 // filename, filter, unknown, unknown, time
@@ -5056,8 +5060,7 @@ void scriptSelect(nathanscriptVariable* _passedArguments, int _numArguments, nat
 	char* noobOptions[_totalOptions];
 	int i;
 	for (i=0;i<_totalOptions;i++){
-		noobOptions[i] = malloc(strlen(nathanvariableGetArray(&_passedArguments[1],i))+1);
-		strcpy(noobOptions[i],nathanvariableGetArray(&_passedArguments[1],i));
+		noobOptions[i] = strdup(nathanvariableGetArray(&_passedArguments[1],i));
 	}
 
 	if (currentlyVNDSGame){
