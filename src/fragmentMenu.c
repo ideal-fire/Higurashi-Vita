@@ -7,6 +7,10 @@
 #include <goodbrew/controls.h>
 #include <goodbrew/text.h>
 #include <goodbrew/useful.h>
+#include <Lua/lua.h>
+#include <Lua/lualib.h>
+#include <Lua/lauxlib.h>
+extern lua_State* L;
 #include "jsonParser.h"
 #include "main.h"
 #undef wasJustPressed
@@ -122,17 +126,31 @@ char didPerfect(){
 	return 1;
 }
 void regenOptionProps(optionProp* _props){
+	int _prefixLen=strlen("FragmentStatus");
+	char _varName[_prefixLen+3];
+	strcpy(_varName,"FragmentStatus");
 	for (int i=0;i<numFragments;++i){
-		if (fragStatus[i] & FSTATUS_PLAYED){
-			_props[i]=OPTIONPROP_GOODCOLOR;
-		}else{
-			if (fragStatus[i] & FSTATUS_BROKEN){
-				_props[i]=OPTIONPROP_BADCOLOR;
-				if (fragPlayable(i)){
-					_props[i]|=OPTIONPROP_GOODCOLOR;
-				}
+		sprintf(&_varName[_prefixLen],"%02d",i+1);
+		int _curStatus;
+		if (getLocalFlag(_varName,&_curStatus)){
+			if (_curStatus==2){
+				_props[i]=OPTIONPROP_THIRDCOLOR;
 			}else{
-				_props[i]=0;
+				goto ret;
+			}
+		}else{
+		ret:
+			if (fragStatus[i] & FSTATUS_PLAYED){
+				_props[i]=OPTIONPROP_GOODCOLOR;
+			}else{
+				if (fragStatus[i] & FSTATUS_BROKEN){
+					_props[i]=OPTIONPROP_BADCOLOR;
+					if (fragPlayable(i)){
+						_props[i]|=OPTIONPROP_GOODCOLOR;
+					}
+				}else{
+					_props[i]=0;
+				}
 			}
 		}
 	}
@@ -156,10 +174,7 @@ void connectFragmentMenu(){
 		}
 	}
 	int _choice=0;
-	while(1){
-		if (!fragmentsModeOn()){
-			break;
-		}
+	while(fragmentsModeOn()){
 		_showMap[lockedUntilPrereq-1]=fragPlayable(lockedUntilPrereq-1);
 		char _retClickInfo;
 		{
@@ -173,6 +188,7 @@ void connectFragmentMenu(){
 			freeWrappedText(_descLinesCount,_descriptionLines);
 		}
 		if (_choice>=0){
+			char _shouldRegenProps=0;
 			if (!(fragStatus[_choice] & FSTATUS_PLAYED)){
 				if (fragPlayable(_choice)){
 					fragStatus[_choice]|=FSTATUS_PLAYED;
@@ -182,14 +198,17 @@ void connectFragmentMenu(){
 					_optionNames[_choice]=easyCombineStrings(2,(playerLanguage ? fragmentInfo[_choice]->title : fragmentInfo[_choice]->titlejp),BROKENSUFFIX);
 					fragStatus[_choice]|=FSTATUS_BROKEN;
 				}
-				_showMap[bonusNoErrFrag-1]=didPerfect();
-				regenOptionProps(_props);
+				_shouldRegenProps=1;
 			}
 			if (fragStatus[_choice]&FSTATUS_PLAYED){
 				if (!(_retClickInfo & MENURET_LBUTTON)){
 					RunScript(scriptFolder,fragmentInfo[_choice]->script,1);
 				}
 				setFragPlayedFlag(fragmentInfo[_choice]->id,1);
+			}
+			if (_shouldRegenProps){
+				_showMap[bonusNoErrFrag-1]=didPerfect();
+				regenOptionProps(_props);
 			}
 			saveHiguGame();
 		}else{
@@ -220,6 +239,15 @@ void startResetConnections(){
 	memset(fragStatus,0,numFragments);
 	for (int i=0;i<numFragments;++i){
 		setFragPlayedFlag(fragmentInfo[i]->id,0);
+	}
+	if (luaL_dostring(L," \
+					local _target=\"FragmentStatus\"; \
+					for k, v in pairs(localFlags) do \
+						if (k:sub(1,#_target)==_target) then \
+							localFlags[k]=nil; \
+					  end \
+					end")){
+		easyMessagef(1,"error resetting FragmentStatus flags: %s\n",lua_tostring(L,-1));
 	}
 	PlayMenuSound();
 	saveHiguGame();

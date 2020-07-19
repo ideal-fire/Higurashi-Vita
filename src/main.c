@@ -876,9 +876,12 @@ char getLocalFlag(const char* _varName, int* _retVal){
 	return _did;
 }
 void setLocalFlag(const char* _varName, int _val){
-	lua_getglobal(L,"localFlags");
+	if (lua_getglobal(L,"localFlags")==LUA_TNIL){
+		fprintf(stderr,"could not find global\n");
+	}
 	lua_pushnumber(L,_val);
 	lua_setfield(L,-2,_varName);
+	lua_pop(L,1);
 }
 crossTexture* safeLoadImage(const char* path){
 	crossTexture* _tempTex = loadImage((char*)path);
@@ -6626,7 +6629,11 @@ int showMenuAdvancedButton(int _choice, const char* _title, int _mapSize, char**
 			int _g = DEFAULTFONTCOLORG;
 			int _b = DEFAULTFONTCOLORB;
 			if (_optionProp!=NULL){
-				if (_optionProp[_lastDrawn] & OPTIONPROP_GOODCOLOR){
+				if (_optionProp[_lastDrawn] & OPTIONPROP_THIRDCOLOR){
+					_r=255;
+					_g=127;
+					_b=255;
+				}else if (_optionProp[_lastDrawn] & OPTIONPROP_GOODCOLOR){
 					if (_optionProp[_lastDrawn] & OPTIONPROP_BADCOLOR){
 						_r=255;
 						_g=127;
