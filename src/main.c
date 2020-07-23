@@ -816,10 +816,9 @@ void freeBustShakeInfo(int _slot){
 		safeFreeShakeInfo(s);
 	}
 }
-// uses new speed formula
-struct shakeInfo* makeShakeInfo(int speed, int range, int drag, int direction, int loops, u64 _startTime){
+struct shakeInfo* makeShakeInfoManualSpeed(double speed, int range, int drag, int direction, int loops, u64 _startTime){
 	struct shakeInfo* _ret = malloc(sizeof(struct shakeInfo));
-	_ret->timePerPeak=((256-speed)*5)/(double)1000;
+	_ret->timePerPeak=speed;
 	_ret->dragMultiplier=1-drag/(double)100;
 	if (direction==0){
 		_ret->direction=1;
@@ -832,6 +831,11 @@ struct shakeInfo* makeShakeInfo(int speed, int range, int drag, int direction, i
 	_ret->startTime=_startTime;
 	_ret->endTime=_ret->startTime+loops*_ret->timePerPeak*1000;
 	return _ret;
+}
+// uses new speed formula to convert speed for oyu
+struct shakeInfo* makeShakeInfo(int speed, int range, int drag, int direction, int loops, u64 _startTime){
+	double _doubleSpeed=((256-speed)*5)/(double)1000;
+	return makeShakeInfoManualSpeed(_doubleSpeed,range,drag,direction,loops,_startTime);
 }
 void waitForShakeEnd(struct shakeInfo** s){
 	while(*s){

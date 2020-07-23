@@ -75,6 +75,13 @@ end
 function MoveBustshot(_slot, _unkString, _x, _y, _z, _ignoredOne, _time, _waitForCompletion)
    MoveSprite(_slot,_x,_y,_z,0,256,0,_time,_waitForCompletion)
 end
+function ShakeScreenSx(_direction,_range)
+   // we cant do subpixel movements.
+   if (_range==1) then
+	  _range=2;
+   end
+   StartShakingOfAllObjects(56,_range,5,_direction,30,true);
+end
 TerminateShakingOfSprite=TerminateShakingOfSprite; // these two not implemented in real game?
 StartShakingOfSprite=StartShakingOfBustshot
 
@@ -136,7 +143,6 @@ SetFontOfMessage=pu;
 ActivateScreenEffectForcedly=pu;
 SetValidityOfUserEffectSpeed=pu;
 ShakeScreen=pu;
-ShakeScreenSx=pu;
 //
 BlurOffOn=pu;
 Break=pu;
