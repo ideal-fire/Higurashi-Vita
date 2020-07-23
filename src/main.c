@@ -3838,7 +3838,7 @@ void LoadSettings(){
 void historyMenu(){
 	controlsReset();
 	int _maxScroll = MAXMESSAGEHISTORY-HISTORYONONESCREEN;
-	int _scrollOffset=_maxScroll;
+	int _scrollOffset=_maxScroll>0 ? _maxScroll : 0;
 	while (1){
 		controlsStart();
 		menuControlsLow(&_scrollOffset,0,HISTORYSCROLLRATE,0,HISTORYSCROLLRATE*2,0,_maxScroll);
@@ -3851,7 +3851,7 @@ void historyMenu(){
 		Draw(0);
 		drawRectangle(textboxXOffset,0,textboxWidth,screenHeight,0,0,0,150);
 		int i;
-		for (i=0;i<HISTORYONONESCREEN;i++){
+		for (i=0;i<(_maxScroll>0 ? HISTORYONONESCREEN : MAXMESSAGEHISTORY);i++){
 			int _arrIndex = FixHistoryOldSub(i+_scrollOffset,oldestMessage);
 			if (messageHistory[_arrIndex]){
 				gbDrawText(normalFont,textboxXOffset,textHeight(normalFont)+i*currentTextHeight,messageHistory[_arrIndex],255,255,255);
