@@ -63,6 +63,7 @@ void parseFragmentFile(const char* _filename){
 	for (int i=0;i<numFragments;++i){
 		fragmentInfo[i]=_arr[i];
 	}
+	free(_arr);
 	if (!fragStatus){
 		fragStatus = malloc(numFragments);
 		memset(fragStatus,0,numFragments);
@@ -214,6 +215,9 @@ void connectFragmentMenu(){
 		}else{
 			break;
 		}
+	}
+	for (int i=0;i<numFragments;++i){
+		free(_optionNames[i]);
 	}
 	free(_props);
 }
