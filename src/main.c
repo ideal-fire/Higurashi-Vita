@@ -13,7 +13,6 @@
 				Change the actual text box X and text box Y and use the input arg as a percentage of the screen?
 			Actually, the command is removed in ADV mode.
 		TODO - Allow VNDS sound command to stop all sounds
-		TODO - SetSpeedOfMessage
 	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 	TODO - is entire font in memory nonsense still needed
 	TODO - Fix this text speed setting nonsense
@@ -341,7 +340,7 @@ bgload - First remove bustB from bust cache and then do the same as before.
 cachedImage bustCache[MAXBUSTCACHE];
 bust* Busts;
 
-char playerLanguage=1;
+char playerLanguage=0;
 
 // used in the enlargeScreen function
 double extraGameScaleX=1;
@@ -509,6 +508,7 @@ char textOnlyOverBackground=1;
 // This is a constant value between 0 and 127 that means that the text should be instantly displayed
 #define TEXTSPEED_INSTANT 100
 signed char textSpeed=1;
+int overrideTimePerChar=-1;
 char isEmbedMode;
 int menuCursorSpaceWidth;
 char canChangeBoxAlpha=1;
@@ -1560,9 +1560,10 @@ void refreshGameState(){
 	nextTextR=DEFAULTFONTCOLORR;
 	nextTextG=DEFAULTFONTCOLORG;
 	nextTextB=DEFAULTFONTCOLORB;
+	overrideTimePerChar=-1;
 }
 // Returns 1 if it worked
-char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
+char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){	
 	// Hopefully, nobody tries to call a script from a script and wants to keep the current message display.
 	ClearMessageArray(0);
 	currentScriptLine=0;
@@ -3462,7 +3463,7 @@ void OutputLine(const unsigned char* _tempMsg, char _endtypetemp, char _autoskip
 	if (strlen(_tempMsg)==0){
 		return;
 	}
-	if (isSkipping || textSpeed==TEXTSPEED_INSTANT){
+	if (isSkipping || textSpeed==TEXTSPEED_INSTANT || overrideTimePerChar==0){
 		_autoskip=1;
 	}
 	if (!MessageBoxEnabled){
@@ -3549,56 +3550,75 @@ transferMoreLines:
 		strcpyNO1WithProps(currentMessages[currentLine],&(message[_nextCopyIndex]),messageProps[currentLine],&(_wrappedProps[_nextCopyIndex]));
 		_nextCopyIndex += 1+strlen(&(message[_nextCopyIndex]));
 	}
-	char _isDone=_autoskip;
-	char _slowTextSpeed=0;
-	while(!_isDone){
-		controlsStart();
-		Update();
-		if (proceedPressed()){
-			_isDone=1;
-		}
-		updateControlsGeneral();
-		controlsEnd();
+	{
+		char _isDone=_autoskip;
+		char _slowTextSpeed=0;
+		char _isTimedTextSpeed=(overrideTimePerChar!=-1);
+		u64 _lastCharTime=getMilli();
+		while(!_isDone){
+			controlsStart();
+			Update();
+			if (proceedPressed()){
+				_isDone=1;
+			}
+			updateControlsGeneral();
+			controlsEnd();
 		
-		startDrawing();
-		drawAdvanced(1,1,1,MessageBoxEnabled,1,0);
-		#if GBPLAT == GB_3DS
+			startDrawing();
+			drawAdvanced(1,1,1,MessageBoxEnabled,1,0);
+			#if GBPLAT == GB_3DS
 			if (textIsBottomScreen==1){
 				startDrawingBottom();
 			}
-		#endif
-		if (MessageBoxEnabled){
-			DrawMessageText(255,_currentDrawLine,_currentDrawChar);
-		}
-		endDrawing();
-		if (_isDone==0 && ( (textSpeed>0) || (_slowTextSpeed++ == abs(textSpeed)) )){
-			_slowTextSpeed=0;
-			int i;
-			for (i=0;i<(textSpeed>0 ? textSpeed : 1);i++){
-				if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){ // If the next char we're about to display is the end of the line
-					_currentDrawLine++;
-					// If we just passed the line we'll be writing to next time then we're done
-					if (_currentDrawLine==currentLine+1 || _currentDrawLine==maxLines){
-						_isDone=1;
-						break;
-					}else{ // Otherwise, start displaying at the start of the next line
-						_currentDrawChar=0;
+			#endif
+			if (MessageBoxEnabled){
+				DrawMessageText(255,_currentDrawLine,_currentDrawChar);
+			}
+			endDrawing();
+			if (_isDone==0){
+				int _dispNewChars=0;
+				if (_isTimedTextSpeed){
+					u64 _curTime=getMilli();
+					int _timeDiff=_curTime-_lastCharTime;
+					if (_timeDiff>=overrideTimePerChar){
+						_dispNewChars=_timeDiff/overrideTimePerChar;
+						_lastCharTime=_curTime-(_timeDiff%overrideTimePerChar); // the leftover milliseconds
 					}
 				}else{
-					// if it's not ASCII, skip to end of UTF-8 character
-					if ((unsigned char)(currentMessages[_currentDrawLine][_currentDrawChar])>0x7F){ // this is same as checking if last bit is on
-						// https://tools.ietf.org/html/rfc3629
-						// the number of bits on the left set to 1 determintes number of bytes
-						unsigned char _firstByte = currentMessages[_currentDrawLine][_currentDrawChar];
-						if ((_firstByte & 0xF0) == 0xF0){
-							_currentDrawChar+=3;
-						}else if ((_firstByte & 0xE0) == 0xE0){
-							_currentDrawChar+=2;
-						}else if ((_firstByte & 0xC0) == 0xC0){
-							_currentDrawChar++;
-						}
+					if (textSpeed>0){
+						_dispNewChars=textSpeed;
+					}else if (_slowTextSpeed++ == abs(textSpeed)){
+						_dispNewChars=1;
+						_slowTextSpeed=0;
 					}
-					_currentDrawChar++;
+				}
+				int i;
+				for (i=0;i<_dispNewChars;i++){
+					if (currentMessages[_currentDrawLine][_currentDrawChar]=='\0'){ // If the next char we're about to display is the end of the line
+						_currentDrawLine++;
+						// If we just passed the line we'll be writing to next time then we're done
+						if (_currentDrawLine==currentLine+1 || _currentDrawLine==maxLines){
+							_isDone=1;
+							break;
+						}else{ // Otherwise, start displaying at the start of the next line
+							_currentDrawChar=0;
+						}
+					}else{
+						// if it's not ASCII, skip to end of UTF-8 character
+						if ((unsigned char)(currentMessages[_currentDrawLine][_currentDrawChar])>0x7F){ // this is same as checking if last bit is on
+							// https://tools.ietf.org/html/rfc3629
+							// the number of bits on the left set to 1 determintes number of bytes
+							unsigned char _firstByte = currentMessages[_currentDrawLine][_currentDrawChar];
+							if ((_firstByte & 0xF0) == 0xF0){
+								_currentDrawChar+=3;
+							}else if ((_firstByte & 0xE0) == 0xE0){
+								_currentDrawChar+=2;
+							}else if ((_firstByte & 0xC0) == 0xC0){
+								_currentDrawChar++;
+							}
+						}
+						_currentDrawChar++;
+					}
 				}
 			}
 		}
@@ -5262,14 +5282,27 @@ void scriptSetAllTextColor(nathanscriptVariable* _passedArguments, int _numArgum
 }
 // intended behavior in the original game: generate a whole number from [0,<passed number>-1]
 // actual behavior in the original game: generate a whole number from [0,<passedNumber>-2] with a near-zero chance of generating <passedNumber>-1
-// my behavior: intended behavior plus additional skew because lazy.
+// my behavior: depends on ORIGENGINEBUGS
 void scriptHigurashiGetRandomNumber(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	int _passed = nathanvariableToInt(&_passedArguments[0]);
 	int _ret;
+	int _passed = nathanvariableToInt(&_passedArguments[0]);
 	if (_passed<=1){ // invalid
 		_ret=0;
 	}else{
+		#ifdef ORIGENGINEBUGS
+		int _randomGenerated = rand();
+		if (_randomGenerated==RAND_MAX){ // the super small chance of getting the passed value
+			_ret=_passed-1;
+		}else{
+			if (_passed>2){
+				_ret=rand() % (_passed-1);
+			}else{
+				_ret=0;
+			}
+		}	
+		#else // still a bit skewed because of rand
 		_ret=(rand() % _passed);
+		#endif
 	}
 	makeNewReturnArray(_returnedReturnArray,_returnArraySize,1);
 	nathanvariableArraySetFloat(*_returnedReturnArray,0,_ret);
@@ -5329,6 +5362,27 @@ void scriptStartShakingOfAllObjects(nathanscriptVariable* _passedArguments, int 
 	curBackgroundShake=s;
 	if (nathanvariableToBool(&_passedArguments[5])){
 		waitForShakeEnd(&curBackgroundShake);
+	}
+}
+// last arg is ignored?
+void scriptSetSpeedOfMessage(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
+	if (nathanvariableToBool(&_passedArguments[0])==0){
+		overrideTimePerChar=-1;
+	}else{
+		int _inSpeed=nathanvariableToInt(&_passedArguments[1]);
+		// change _inSpeed/100 to _inSpeed/(double)100 to correct bug from official engine
+		#ifdef ORIGENGINEBUGS
+		double _buggyValue=(_inSpeed/100);
+		#else
+		double _buggyValue=(_inSpeed/(double)100);
+		#endif
+		overrideTimePerChar=25*((100-(50*_buggyValue))/(double)100)*2;
+		if (playerLanguage==0){
+			overrideTimePerChar*=2;
+		}
+		if (overrideTimePerChar<0){
+			overrideTimePerChar=0;
+		}
 	}
 }
 //

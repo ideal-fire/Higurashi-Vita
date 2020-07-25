@@ -131,7 +131,6 @@ function pu()
 	print("unimplemented: " .. debug.getinfo(1, "n").name);
 end
 //
-SetSpeedOfMessage=pu;
 SetDrawingPointOfMessage=pu;
 SetStyleOfMessageSwinging=pu;
 SetValidityOfWindowDisablingWhenGraphicsControl=pu;
