@@ -3223,7 +3223,7 @@ Sint64 legsdlrwseek(SDL_RWops* r, Sint64 offset, int whence){
 	if (whence==RW_SEEK_CUR){
 		offset+=f->internalPosition;
 	}else if (whence==RW_SEEK_END){
-		offset=f->internalPosition+f->totalLength-offset;
+		offset+=f->totalLength;
 	}
 	if (offset>f->totalLength){
 		offset=f->totalLength;

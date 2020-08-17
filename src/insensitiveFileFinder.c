@@ -54,7 +54,7 @@ static char scanNewDir(const char* _path, int _destIndex){
 	DIR* _curDir = opendir(_path);
 	if (!_curDir){
 		perror("opendir");
-		fprintf("%s\n",stderr,_path);
+		fprintf(stderr,"%s\n",_path);
 		return 1;
 	}
 	char** _nameList = NULL;
