@@ -273,8 +273,16 @@ char* gamesFolder;
 #define BUST_STATUS_SPRITE_MOVE 4 // var 1 is x per frame, var 2 is y per frame
 #define BUST_STATUS_TRANSFORM_FADEIN 5 // The bust is fading into an already used slot. image is what the new texture is going to be thats fading in, transformTexture is the old texture that is fading out. var 1 is alpha per frame. added to image, subtracted from transformTexture.
 
-#if GBPLAT == GB_VITA
-	NathanAudio* _mlgsnd_loadAudioFILE(legArchiveFile _passedFile, char _passedFileFormat, char _passedShouldLoop, char _passedShouldStream);
+#if GBSND == GBSND_VITA || GBSND == GBSND_SDL
+	#define CANLEGARCHIVEAUDIO
+	// _passedShouldLoop must be 1 for music and 0 for SE
+	crossMusic* _mlgsnd_loadAudioFILE(legArchiveFile _passedFile, char _passedFileFormat, char _passedShouldLoop, char _passedShouldStream);
+	#ifndef FILE_FORMAT_OGG
+		#define FILE_FORMAT_NONE 0
+		#define FILE_FORMAT_OGG 1
+		#define FILE_FORMAT_MP3 2
+		#define FILE_FORMAT_WAV 3
+	#endif
 #endif
 signed char touchProceed=1;
 
@@ -3204,6 +3212,83 @@ int drawBustshotAdvanced(unsigned char passedSlot, const char* _filename, int _x
 int DrawBustshot(unsigned char passedSlot, const char* _filename, int _xoffset, int _yoffset, int _layer, int _fadeintime, int _waitforfadein, int _destAlpha){
 	return drawBustshotAdvanced(passedSlot, _filename, _xoffset, _yoffset, _layer, _fadeintime, _waitforfadein, _destAlpha, -1, -1, bustsStartInMiddle);
 }
+#if GBSND == GBSND_SDL
+Sint64 legsdlrwsize(SDL_RWops* r){
+	return ((legArchiveFile*)r->hidden.unknown.data1)->totalLength;
+}
+Sint64 legsdlrwseek(SDL_RWops* r, Sint64 offset, int whence){
+	legArchiveFile* f = (legArchiveFile*)r->hidden.unknown.data1;
+	if (whence==RW_SEEK_CUR){
+		offset+=f->internalPosition;
+	}else if (whence==RW_SEEK_END){
+		offset=f->internalPosition+f->totalLength-offset;
+	}
+	if (offset>f->totalLength){
+		offset=f->totalLength;
+	}
+	if (fseek(f->fp,offset+f->startPosition,SEEK_SET)==-1){
+		return -1;
+	}
+	return (f->internalPosition=offset);
+}
+size_t legsdlrwread(SDL_RWops* r, void* ptr, size_t size, size_t nmemb){
+	legArchiveFile* f = (legArchiveFile*)r->hidden.unknown.data1;
+	int _bytesLeft=f->totalLength-f->internalPosition;
+	if ((nmemb*size)>_bytesLeft){
+		if (_bytesLeft==0){
+			return 0;
+		}
+		nmemb=_bytesLeft/size;
+	}
+	size_t _ret=fread(ptr,size,nmemb,f->fp);
+	f->internalPosition+=_ret*size;
+	return _ret;
+}
+int legsdlrwclose(SDL_RWops* r){
+	legArchiveFile* _file = r->hidden.unknown.data1;
+	int _ret = fclose(_file->fp);
+	if (_file->filename){
+		free(_file->filename);
+	}
+	free(_file);
+	SDL_FreeRW(r);
+	return _ret;
+}
+SDL_RWops* legsdlrwopen(legArchiveFile* _filePtr){
+	SDL_RWops* _ret = SDL_AllocRW();
+	_ret->hidden.unknown.data1 = _filePtr;
+	_ret->close=legsdlrwclose;
+	_ret->seek=legsdlrwseek;
+	_ret->size=legsdlrwsize;
+	_ret->write=NULL;
+	_ret->read=legsdlrwread;
+	_ret->type=SDL_RWOPS_UNKNOWN;
+	return _ret;
+}
+crossMusic* _mlgsnd_loadAudioFILE(legArchiveFile _passedFile, char _passedFileFormat, char _isMusic, char _passedShouldStream){
+	legArchiveFile* _asPtr = malloc(sizeof(legArchiveFile));
+	*_asPtr=_passedFile;
+	legsdlrwopen(_asPtr);
+	SDL_RWops* _rw=legsdlrwopen(_asPtr);
+	if (_isMusic){
+		Mix_MusicType t;
+		switch(_passedFileFormat){
+			case FILE_FORMAT_OGG:
+				t=MUS_OGG;
+				break;
+			case FILE_FORMAT_MP3:
+				t=MUS_MP3;
+				break;
+			case FILE_FORMAT_WAV:
+				t=MUS_WAV;
+				break;
+		}
+		return Mix_LoadMUSType_RW(_rw,t,1);
+	}else{
+		return (crossMusic*)Mix_LoadWAV_RW(_rw,1);
+	}
+}
+#endif
 char* getSpecificPossibleSoundFilename(const char* _filename, char* _folderName){
 	char* _ret=NULL;
 	char* tempstringconcat = malloc(strlen(streamingAssets)+strlen(_folderName)+strlen(_filename)+1+4);
@@ -3253,38 +3338,21 @@ foundret:
 	free(tempstringconcat);
 	return _ret;
 }
-#if GBSND == GBSND_VITA
-	char getProbableSoundFormat(const char* _passedFilename){
-		if (strlen(_passedFilename)>=4){
-			// Copy file extension to another buffer so we can modify it
-			char _copiedExtension[5];
-			strcpy(_copiedExtension,&(_passedFilename[strlen(_passedFilename)-4]));
-
-			// Convert the extension to lower case
-			char i;
-			for (i=0;i<4;++i){
-				if (_copiedExtension[i]<='Z' && _copiedExtension[i]>='A'){
-					_copiedExtension[i]+=32;
-				}
-			}
-			// Do
-			if (strcmp(_copiedExtension,".mp3")==0){
-				return FILE_FORMAT_MP3;
-			}/*else if (strcmp(_copiedExtension,".wav")==0){
-				return FILE_FORMAT_WAV;
-			}*/else if (strcmp(_copiedExtension,".ogg")==0){
-				return FILE_FORMAT_OGG;
-			}
+char getProbableSoundFormat(const char* _passedFilename){
+	int _cachedLen=strlen(_passedFilename);
+	if (_cachedLen>=4){
+		const char* _extStart=_passedFilename+_cachedLen-4;
+		if (strcasecmp(_extStart,".mp3")==0){
+			return FILE_FORMAT_MP3;
+		}else if (strcasecmp(_extStart,".wav")==0){
+			return FILE_FORMAT_WAV;
+		}else if (strcasecmp(_extStart,".ogg")==0){
+			return FILE_FORMAT_OGG;
 		}
-		easyMessagef(1,"File format not found, %s",_passedFilename);
-		return FILE_FORMAT_NONE;
 	}
-#else
-	char getProbableSoundFormat(const char* _passedFilename){
-		easyMessagef(1,"Error with getProbableSoundFormat being the wrong version. Contact MyLegGuy.\n%s",_passedFilename);
-		return 0;
-	}
-#endif
+	easyMessagef(1,"File format not found, %s",_passedFilename);
+	return FILE_FORMAT_NONE;
+}
 legArchiveFile soundArchiveGetFilename(const char* _filename, char* _foundFormat){
 	legArchiveFile _possibleResult;
 	*_foundFormat=0;
@@ -3390,7 +3458,7 @@ void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 	free(tempstringconcat);
 	// If we didn't find the file in the folders and we can use the sound archive, try that
 	if (_tempHoldSlot==NULL && useSoundArchive){
-		#if GBSND == GBSND_VITA
+		#ifdef CANLEGARCHIVEAUDIO
 			char _foundFormat=0;
 			legArchiveFile _foundArchiveFile = soundArchiveGetFilename(_filename,&_foundFormat);
 			if (_foundArchiveFile.fp==NULL){
@@ -3399,9 +3467,7 @@ void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 				_tempHoldSlot = _mlgsnd_loadAudioFILE(_foundArchiveFile, _foundFormat, !_isSE, 1);
 			}
 		#else
-			#if GBPLAT != GB_LINUX
-				easyMessagef(1,"sound archive not supported.");
-			#endif
+			easyMessagef(1,"sound archive not supported.");
 		#endif
 	}
 	if (_tempHoldSlot==NULL){
