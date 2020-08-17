@@ -53,7 +53,8 @@ static void* maybeExpandArray(void* _arrStart, int* _curSize, int _curUsed, int 
 static char scanNewDir(const char* _path, int _destIndex){
 	DIR* _curDir = opendir(_path);
 	if (!_curDir){
-		perror(NULL);
+		perror("opendir");
+		fprintf("%s\n",stderr,_path);
 		return 1;
 	}
 	char** _nameList = NULL;
@@ -73,7 +74,7 @@ static char scanNewDir(const char* _path, int _destIndex){
 		_nameList[_nameListUsed++]=strdup(_curEntry->d_name);
 	}
 	if (closedir(_curDir)){
-		perror(NULL);
+		perror("closedir");
 	}
 	qsort(_nameList,_nameListUsed,sizeof(char*),compareStringsInsensitive);
 	{
