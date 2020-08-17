@@ -1438,6 +1438,7 @@ void ClearMessageArray(char _doFadeTransition){
 			addToMessageHistoryOwned(currentMessages[i]);
 			currentMessages[i]=NULL;
 			free(messageProps[i]);
+			messageProps[i]=NULL;
 		}
 	}
 	//
@@ -1649,7 +1650,8 @@ void upshiftText(int _numDelLines){
 	memmove(messageProps,&messageProps[_numDelLines],sizeof(int32_t*)*_numLeftLines);
 	// initialize the freed spaces
 	for (i=_numLeftLines;i<maxLines;++i){
-		currentMessages[i]=NULL;		
+		currentMessages[i]=NULL;
+		messageProps[i]=NULL;
 	}
 }
 void updateBust(bust* _target, u64 _curTime){
