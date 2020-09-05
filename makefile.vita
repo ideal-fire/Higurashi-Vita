@@ -42,7 +42,7 @@ ASFLAGS = $(CFLAGS)
 all: $(TARGET).vpk
 
 %.vpk: eboot.bin
-	vita-mksfoex -s TITLE_ID=$(TITLE_ID) "Higurashi When They Cry Hou" param.sfo
+	vita-mksfoex -s TITLE_ID=$(TITLE_ID) "Higurashi When They Cry" param.sfo
 	vita-pack-vpk -s param.sfo -b eboot.bin \
 	Higurashi.vpk
 
