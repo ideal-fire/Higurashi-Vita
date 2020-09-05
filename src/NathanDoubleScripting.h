@@ -1052,6 +1052,7 @@ int fpeekchar(crossFile* stream){
 	return c;
 }
 
+#warning todo - this is a bad way to do it if on the second line of the file. relies on fseek error.
 void nathanscriptBackLine(){
 	// We're now on the previous line's newline character
 	if (crossfseek(nathanscriptCurrentOpenFile,-1,CROSSFILE_CUR)!=0){

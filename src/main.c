@@ -91,9 +91,9 @@
 #define MAXMESSAGEHISTORY 40
 #define DEFAULTVERSION "forgotversionnumber"
 #define VERSIONSTRING DEFAULTVERSION // This
-#define VERSIONNUMBER 8 // This
+#define VERSIONNUMBER 9 // This
 #define VERSIONSTRINGSUFFIX ""
-#define VERSIONCOLOR 255,135,53 // It's Rena colored!
+#define VERSIONCOLOR 254,227,136 // It's Satoko colored!
 // Specific constants
 #if GBPLAT != GB_3DS
 	#if GBPLAT == GB_ANDROID
@@ -7615,6 +7615,10 @@ void hVitaInitMisc(){
 	ClearDebugFile();
 }
 signed char init(int argc, char** argv){
+	if (sizeof(short)!=2 || sizeof(int)!=4 || sizeof(long int)!=4){
+		// on my pc, long int is 8.
+		fprintf(stderr,"warning: vita saves not compatible due to differing integer sizes.");
+	}
 	#ifdef OVERRIDE_INIT
 		return customInit();
 	#endif
@@ -7635,7 +7639,6 @@ int main(int argc, char *argv[]){
 	if (init(argc,argv)==2){
 		currentGameStatus = GAMESTATUS_QUIT;
 	}
-
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		switch (currentGameStatus){
 			case GAMESTATUS_TITLE:
