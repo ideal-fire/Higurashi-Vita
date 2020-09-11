@@ -174,6 +174,8 @@ char* vitaAppId="HIGURASHI";
 	#define SYSTEMSTRING "VITA"
 #elif _3DS
 	#define SYSTEMSTRING "3DS"
+#elif __SWITCH__
+	#define SYSTEMSTRING "SWITCH"
 #else
 	#warning please make platform string
 	#define SYSTEMSTRING "UNKNOWN"
@@ -277,12 +279,12 @@ char* gamesFolder;
 	#define CANLEGARCHIVEAUDIO
 	// _passedShouldLoop must be 1 for music and 0 for SE
 	crossMusic* _mlgsnd_loadAudioFILE(legArchiveFile _passedFile, char _passedFileFormat, char _passedShouldLoop, char _passedShouldStream);
-	#ifndef FILE_FORMAT_OGG
-		#define FILE_FORMAT_NONE 0
-		#define FILE_FORMAT_OGG 1
-		#define FILE_FORMAT_MP3 2
-		#define FILE_FORMAT_WAV 3
-	#endif
+#endif
+#ifndef FILE_FORMAT_OGG
+	#define FILE_FORMAT_NONE 0
+	#define FILE_FORMAT_OGG 1
+	#define FILE_FORMAT_MP3 2
+	#define FILE_FORMAT_WAV 3
 #endif
 signed char touchProceed=1;
 
@@ -348,7 +350,7 @@ bgload - First remove bustB from bust cache and then do the same as before.
 cachedImage bustCache[MAXBUSTCACHE];
 bust* Busts;
 
-char playerLanguage=0;
+char playerLanguage=1;
 
 // used in the enlargeScreen function
 double extraGameScaleX=1;
@@ -4215,7 +4217,7 @@ void activateHigurashiSettings(){
 #endif
 #if GBPLAT == GB_3DS
 	char getIsCiaBuild(){
-		return checkFileExist("romfs:/assets/star.png");
+		return checkFileExist("romfs:/assets/happy.lua");
 	}
 	void soundUpdateThread(void *arg){
 		int i;
