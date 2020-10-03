@@ -850,7 +850,7 @@ struct shakeInfo* makeShakeInfo(int speed, int range, int drag, int direction, i
 void waitForShakeEnd(struct shakeInfo** s){
 	while(*s){
 		controlsStart();
-		if(proceedPressed()){
+		if(proceedPressed() || isSkipping){
 			(*s)->endTime=(*s)->startTime+1;
 		}
 		Update();
@@ -1755,7 +1755,7 @@ void updateControlsGeneral(){
 		isSkipping=1;
 		endType=Line_ContinueAfterTyping;
 	}
-	if (isSkipping){		
+	if (isSkipping){
 		if (!((isTouchSkipHold && getTouchedBarOption()==3) || isDown(BUTTON_Y))){
 			isTouchSkipHold=0;
 			isSkipping=0;
@@ -7619,7 +7619,7 @@ void hVitaInitMisc(){
 signed char init(int argc, char** argv){
 	if (sizeof(short)!=2 || sizeof(int)!=4 || sizeof(long int)!=4){
 		// on my pc, long int is 8.
-		fprintf(stderr,"warning: vita saves not compatible due to differing integer sizes.");
+		fprintf(stderr,"warning: vita saves not compatible due to differing integer sizes.\n");
 	}
 	#ifdef OVERRIDE_INIT
 		return customInit();

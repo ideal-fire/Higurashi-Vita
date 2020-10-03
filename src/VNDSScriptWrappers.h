@@ -23,12 +23,21 @@ signed int* pastSetImgX;
 signed int* pastSetImgY;
 signed int* currentSetImgX;
 signed int* currentSetImgY;
+
+int _vndsBustInfoArrCurSize;
 void increaseVNDSBustInfoArraysSize(int _oldMaxBusts, int _newMaxBusts){
 	pastSetImgX = recalloc(pastSetImgX, _newMaxBusts * sizeof(signed int), _oldMaxBusts * sizeof(signed int));
 	pastSetImgY = recalloc(pastSetImgY, _newMaxBusts * sizeof(signed int), _oldMaxBusts * sizeof(signed int));
 
 	currentSetImgX = recalloc(currentSetImgX, _newMaxBusts * sizeof(signed int), _oldMaxBusts * sizeof(signed int));
 	currentSetImgY= recalloc(currentSetImgY, _newMaxBusts * sizeof(signed int), _oldMaxBusts * sizeof(signed int));
+
+	_vndsBustInfoArrCurSize=_newMaxBusts;
+}
+void syncVNDSBustInfoArraySize(){
+	if (maxBusts>_vndsBustInfoArrCurSize){
+		increaseVNDSBustInfoArraysSize(_vndsBustInfoArrCurSize,maxBusts);
+	}
 }
 
 char isNear(int _unknownSpot, int _originalSpot , int _leeway){
@@ -129,7 +138,7 @@ int inBetweenVNDSLines(int _aboutToCommandIndex){
 			// Shift busts back to their lowest possible slots
 			for (i=1;i<maxBusts;++i){
 				int _foundNewIndex = getEmptyBustshotSlot();
-				if (_foundNewIndex!=i){
+				if (_foundNewIndex<i){
 					MoveBustSlot(i,_foundNewIndex);
 				}
 			}
@@ -296,6 +305,8 @@ void vndswrapper_setimg(nathanscriptVariable* _passedArguments, int _numArgument
 	if (!isSpecialBustChange){
 		if (nextVndsBustshotSlot>=maxBusts){
 			increaseVNDSBustInfoArraysSize(maxBusts,nextVndsBustshotSlot+1); // No need to change maxBusts variable here, it will be changed in DrawBustshot call
+		}else{
+			syncVNDSBustInfoArraySize();
 		}
 		currentSetImgX[nextVndsBustshotSlot]=nathanvariableToInt(&_passedArguments[1]);
 		currentSetImgY[nextVndsBustshotSlot]=nathanvariableToInt(&_passedArguments[2]);
