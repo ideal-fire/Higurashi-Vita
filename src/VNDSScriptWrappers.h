@@ -19,6 +19,9 @@ bustQueue currentBustQueue[MAXBUSTQUEUE] = {NULL};
 signed char nextBustQueueSlot=0;
 char isSpecialBustChange=0;
 
+int imageStreakContinueRangeMax; // if the command ID is less than this, we can continue image streak
+int imageStreakContinueCommands[4]; // if the command ID is one of these, we can continue image streak
+
 signed int* pastSetImgX;
 signed int* pastSetImgY;
 signed int* currentSetImgX;
@@ -58,42 +61,62 @@ int getEmptyBustshotSlot(){
 int getVNDSImgFade(){
 	return vndsSpritesFade ? VNDS_IMPLIED_SETIMG_FADE : 0;
 }
+int canContinueImageStreak(int _commandId){
+	if (_commandId<=imageStreakContinueRangeMax){
+		return 1;
+	}
+	for (int i=0;i<sizeof(imageStreakContinueCommands)/sizeof(int);++i){
+		if (_commandId==imageStreakContinueCommands[i]){
+			return 1;
+		}
+	}
+	return 0;
+}
 // Called in between VNDS command executions. Return < 0 if you don't want to execute the passed command.
 int inBetweenVNDSLines(int _aboutToCommandIndex){
 	if (isSpecialBustChange){
-		if (_aboutToCommandIndex!=foundSetImgIndex){
+		if (!canContinueImageStreak(_aboutToCommandIndex)){
 			isSpecialBustChange=0;
-
 			// Fadeout all bustshots that we definitely don't need anymore because they don't overlap any new ones
 			signed int i, j;
-			for (i=0;i<maxBusts;++i){
-				if (Busts[i].isActive){
-					char _bustIsSaved=0;
-					for (j=0;j<nextBustQueueSlot;++j){
-						//printf("%d x (%d and %d) y (%d and %d)\n",i,currentBustQueue[j].x,Busts[i].xOffset,currentBustQueue[j].y,Busts[i].yOffset);
-						if (isNear(currentBustQueue[j].x,Busts[i].xOffset,20) && isNear(currentBustQueue[j].y,Busts[i].yOffset,20)){
-							//printf("confirmed.\n");
-							_bustIsSaved=1;
-							break;
+			{
+				// which queued busts have already been used to save a bust that was already here.
+				// these busts already have partners.
+				char _takenSaviors[nextBustQueueSlot];
+				memset(_takenSaviors,0,nextBustQueueSlot);
+				for (i=0;i<maxBusts;++i){
+					if (Busts[i].isActive){
+						for (j=0;j<nextBustQueueSlot;++j){
+							//printf("%d x (%d and %d) y (%d and %d)\n",i,currentBustQueue[j].x,Busts[i].xOffset,currentBustQueue[j].y,Busts[i].yOffset);
+							if (isNear(currentBustQueue[j].x,Busts[i].xOffset,20) && isNear(currentBustQueue[j].y,Busts[i].yOffset,20)){
+								if (!_takenSaviors[j]){
+									_takenSaviors[j]=1;
+									//printf("confirmed.\n");
+									break;
+								}
+							}
 						}
-					}
-					if (_bustIsSaved==0){
-						//printf("Remove unreplaced character %d\n",i);
-						FadeBustshot(i,getVNDSImgFade(),0);
+						if (j==nextBustQueueSlot){
+							//printf("Remove unreplaced character %d\n",i);
+							FadeBustshot(i,getVNDSImgFade(),0);
+						}
 					}
 				}
 			}
-			
+
+			char _safeBusts[maxBusts]; // busts which we can't overwrite
+			memset(_safeBusts,0,maxBusts);
 			// Forget about all the duplicates
 			for (j=0;j<nextBustQueueSlot;++j){
 				for (i=0;i<maxBusts;++i){
 					if (Busts[i].isActive){
 						if (isNear(currentBustQueue[j].x,Busts[i].xOffset,20) && isNear(currentBustQueue[j].y,Busts[i].yOffset,20)){
 							//printf("%s;%s;%d;%d\n",currentBustQueue[j].filename,Busts[i].relativeFilename,strlen(currentBustQueue[j].filename),strlen(Busts[i].relativeFilename));
-							if (strcmp(currentBustQueue[j].filename,Busts[i].relativeFilename)==0){
+							if (strcmp(currentBustQueue[j].filename,Busts[i].relativeFilename)==0 && !_safeBusts[i]){
 								//printf("%d is a duplicate.",i);
 								free(currentBustQueue[j].filename);
 								currentBustQueue[j].filename=NULL;
+								_safeBusts[i]=1;
 								//MoveBustSlot(i,nextVndsBustshotSlot);
 								//++nextVndsBustshotSlot;
 								break;
@@ -103,22 +126,27 @@ int inBetweenVNDSLines(int _aboutToCommandIndex){
 				}
 			}
 
+			int _originalMaxBusts=maxBusts;
 			// Show our new stuff
 			for (j=0;j<nextBustQueueSlot;++j){
 				// Don't do removed duplicates
 				if (currentBustQueue[j].filename!=NULL){
 					// If this is an expression change, instantly delete the old bust and show the new one
 					char _didDeleteAParent=0;
-					for (i=0;i<maxBusts;++i){
-						if (Busts[i].isActive && Busts[i].bustStatus == BUST_STATUS_NORMAL){
+					int _newSlot;
+					for (i=0;i<_originalMaxBusts;++i){
+						if (!_safeBusts[i] && Busts[i].isActive && Busts[i].bustStatus == BUST_STATUS_NORMAL){
 							if (isNear(currentBustQueue[j].x,Busts[i].xOffset,20) && isNear(currentBustQueue[j].y,Busts[i].yOffset,20)){
 								int _cachedAlpha = Busts[i].destAlpha;
 								if (VNDSDOESFADEREPLACE){
 									DrawBustshot(i, currentBustQueue[j].filename, currentBustQueue[j].x, currentBustQueue[j].y, i, getVNDSImgFade(), 0, _cachedAlpha);
+									_newSlot=i;
 								}else{
 									//printf("Remove %d because it's too close.",i);
 									FadeBustshot(i,0,0);
-									DrawBustshot(getEmptyBustshotSlot(), currentBustQueue[j].filename, currentBustQueue[j].x, currentBustQueue[j].y, getEmptyBustshotSlot(), 0, 0, _cachedAlpha);
+									_safeBusts[i]=1;
+									_newSlot=getEmptyBustshotSlot();
+									DrawBustshot(_newSlot, currentBustQueue[j].filename, currentBustQueue[j].x, currentBustQueue[j].y, _newSlot, 0, 0, _cachedAlpha);
 								}
 								_didDeleteAParent=1;
 								break;
@@ -128,7 +156,11 @@ int inBetweenVNDSLines(int _aboutToCommandIndex){
 					// If it's a brand new bust, fade it in.
 					if (_didDeleteAParent==0){
 						//printf("will fadein %d\n",getEmptyBustshotSlot());
-						DrawBustshot(getEmptyBustshotSlot(), currentBustQueue[j].filename, currentBustQueue[j].x, currentBustQueue[j].y, getEmptyBustshotSlot(), getVNDSImgFade(), 0, 255);
+						_newSlot=getEmptyBustshotSlot();
+						DrawBustshot(_newSlot, currentBustQueue[j].filename, currentBustQueue[j].x, currentBustQueue[j].y, _newSlot, getVNDSImgFade(), 0, 255);
+					}
+					if (_newSlot<maxBusts){
+						_safeBusts[_newSlot]=1;
 					}
 					free(currentBustQueue[j].filename);
 				}

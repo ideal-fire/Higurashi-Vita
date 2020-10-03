@@ -30,6 +30,7 @@
 	TODO - textboxWidth bug
 	TODO - restore default game functionality
 	TODO - use showmenu for scriptselect (this is tough because we can't open the in-game menu from showmenu)
+	TODO - my bust transitions look worse than real vnds.
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -581,7 +582,6 @@ legArchive soundArchive;
 signed char lastVoiceSlot=-1;
 // only valid of lastVoiceSlot is not -1
 crossPlayHandle lastVoiceHandle;
-int foundSetImgIndex = -1;
 signed char vndsSpritesFade=1;
 char textDisplayModeOverriden=0; // If the text display mode has been changed manually by the script
 //
@@ -1696,7 +1696,7 @@ void updateBust(bust* _target, u64 _curTime){
 }
 // Update what bustshots are doing depending on their bustStatus
 void Update(){
-	u64 _curTime=getMilli();	
+	u64 _curTime=getMilli();
 	int i;
 	for (i=0;i<maxBusts;i++){
 		updateBust(&(Busts[i]),_curTime);
@@ -5124,21 +5124,21 @@ void scriptDrawSpriteFixedSize(nathanscriptVariable* _passedArguments, int _numA
 	int _h = nathanvariableToInt(&_passedArguments[9]);
 
 	//int _angle = nathanvariableToInt(&_passedArguments[10]);
-	
+
 	// the higher the alpha, he more invisible. also it's on a 256 scale.
 	int _alpha = (256-nathanvariableToInt(&_passedArguments[14]));
 	if (_alpha!=256){
 		_alpha=(_alpha/(double)256)*255;
 	}
 	_alpha=limitNum(_alpha,0,255);
-	
+
 	int _layer = nathanvariableToInt(&_passedArguments[15]);
 	int _time = nathanvariableToInt(&_passedArguments[16]);
 	char _waitForCompletion = nathanvariableToBool(&_passedArguments[17]);
-	
+
 	adjustForOriginPos(&_destX,&_destY,_originX,_originY);
 	fixScriptSpritePos(&_destX,&_destY);
-	
+
 	drawBustshotAdvanced(_slot,_filename,_destX,_destY,_layer,_time,_waitForCompletion,_alpha,_w,_h,0);
 	Busts[_slot].originXForAdjust=_originX;
 	Busts[_slot].originYForAdjust=_originY;
@@ -7430,6 +7430,7 @@ void initializeNathanScript(){
 	if (!nathanscriptIsInit){
 		nathanscriptIsInit=1;
 		nathanscriptInit();
+			imageStreakContinueRangeMax=nathanCurrentRegisteredFunctions-1;
 		nathanscriptIncreaseMaxFunctions(nathanCurrentMaxFunctions+14);
 		nathanscriptAddFunction(vndswrapper_text,nathanscriptMakeConfigByte(1,0),"text");
 		nathanscriptAddFunction(vndswrapper_sound,nathanscriptMakeConfigByte(0,1),"sound");
@@ -7438,14 +7439,17 @@ void initializeNathanScript(){
 		nathanscriptAddFunction(vndswrapper_cleartext,0,"cleartext");
 		nathanscriptAddFunction(vndswrapper_bgload,0,"bgload");
 		nathanscriptAddFunction(vndswrapper_setimg,0,"setimg");
-			foundSetImgIndex = nathanCurrentRegisteredFunctions-1;
+			imageStreakContinueCommands[0]=nathanCurrentRegisteredFunctions-1;
 		nathanscriptAddFunction(vndswrapper_jump,0,"jump");
+			imageStreakContinueCommands[1]=nathanCurrentRegisteredFunctions-1;
 		nathanscriptAddFunction(vndswrapper_music,0,"music");
 		nathanscriptAddFunction(vndswrapper_gsetvar,nathanscriptMakeConfigByte(0,1),"gsetvar");
+			imageStreakContinueCommands[2]=nathanCurrentRegisteredFunctions-1;
 		nathanscriptAddFunction(scriptImageChoice,0,"imagechoice");
 		nathanscriptAddFunction(vndswrapper_ENDOF,0,"ENDSCRIPT");
 		nathanscriptAddFunction(vndswrapper_ENDOF,0,"END_OF_FILE");
 		nathanscriptAddFunction(vndswrapper_advname,0,"advname");
+			imageStreakContinueCommands[3]=nathanCurrentRegisteredFunctions-1;
 		nathanscriptAddFunction(vndswrapper_advnameim,0,"advnameim");
 
 		// Load global variables
