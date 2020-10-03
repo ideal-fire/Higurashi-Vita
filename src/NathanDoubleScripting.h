@@ -443,7 +443,7 @@ void replaceIfIsVariable(char** _possibleVariableString){
 						_targetVariableArray = nathanscriptGlobalvarList;
 						_foundVariableIndex = searchVariableArray(nathanscriptGlobalvarList,nathanscriptTotalGlobalvar,&((*_possibleVariableString)[i+1]));
 					}
-					
+
 					if (_foundVariableIndex!=-1){
 						char* _newStringBuffer;
 
@@ -715,7 +715,7 @@ void genericSetVar(char* _passedVariableName, char* _passedModifier, char* _pass
 		strcpy(_modifiedNewValue,_passedNewValue);
 	}else{ // check if it's a variable. If it's not, make it 0 as a float.
 		int _foundSecondVariableIndex = searchVariableArray(nathanscriptGamevarList, nathanscriptTotalGamevar, _passedNewValue);
-		char _foundSecondVariableList = 0; // 
+		char _foundSecondVariableList = 0; //
 		// If it's not in the local variable list, search the global variable list.
 		if (_foundSecondVariableIndex==-1){
 			_foundSecondVariableIndex = searchVariableArray(nathanscriptGlobalvarList, nathanscriptTotalGlobalvar, _passedNewValue);
@@ -822,7 +822,7 @@ void genericSetVarCommand(nathanscriptVariable* _argumentList, int _totalArgumen
 		return;
 	}
 	char* _passedModifier = nathanvariableToString(&_argumentList[1]);
-	
+
 	// The new value argument will be all the arguments after the equals, even if there are spaces
 	int j;
 	int _totalBufferSize=1+strlen(nathanvariableToString(&_argumentList[2]));
@@ -842,7 +842,7 @@ void genericSetVarCommand(nathanscriptVariable* _argumentList, int _totalArgumen
 // Compare variables using all the wierd rules.
 char variableCompare(nathanscriptVariable* varOne, nathanscriptVariable* varTwo, char* comparisonSymbol/*, char _nullToNullTrue*/){
 	if (varOne->variableType==NATHAN_TYPE_FLOAT && varTwo->variableType==NATHAN_TYPE_FLOAT){
-		return humanFloatCompare(nathanscriptVariableAsFloat(varOne),nathanscriptVariableAsFloat(varTwo),comparisonSymbol);	
+		return humanFloatCompare(nathanscriptVariableAsFloat(varOne),nathanscriptVariableAsFloat(varTwo),comparisonSymbol);
 	}else{
 		char* _firstAsString = nathanscriptVariableAsString(varOne);
 		char* _secondAsString = nathanscriptVariableAsString(varTwo);
@@ -872,7 +872,7 @@ char variableCompare(nathanscriptVariable* varOne, nathanscriptVariable* varTwo,
 	}
 }
 
-// if *_isTemporaryPointer is 1, dispose the variable when you're done. Otherwise don't because it's needed elsewhere. 
+// if *_isTemporaryPointer is 1, dispose the variable when you're done. Otherwise don't because it's needed elsewhere.
 // Given a string, make a variable from it. Give it a number and it'll return a variable with a number in it. Give it a quotation mark string, it'll return a string variable. Give it a variable name, it'll return that variable.
 nathanscriptVariable* variableFromString(char* _passedString, char* _isTemporaryPointer){
 	nathanscriptGameVariable* _possibleVariable = nathanscriptGetGameOrGlboalVariable(_passedString);
@@ -895,7 +895,7 @@ nathanscriptVariable* variableFromString(char* _passedString, char* _isTemporary
 			*((float*)_returnVariable->value) = atof(_passedString);
 		}else{ // It's an undefined variable, give it the default value
 			*((float*)_returnVariable->value) = 0;
-		}	
+		}
 	}
 	return _returnVariable;
 }
@@ -933,7 +933,7 @@ void scriptSetVar(nathanscriptVariable* _argumentList, int _totalArguments, nath
 // Uninitialized compared to a string is false
 // if some_variable == constant
 /*
-// Variables can actually start with quotation marks. 
+// Variables can actually start with quotation marks.
 // Uninitialized variable compared to a string is false.
 // Uninitialized variable compared acts as 0 for a number comparison
 // Comparing an uninitialized variable to a number variable works
@@ -963,7 +963,7 @@ void scriptIfStatement(nathanscriptVariable* _argumentList, int _totalArguments,
 		// Not enough args, assumes false because that's what real VNDS does
 		_ifStatementResult=0;
 	}
-	
+
 	if (_ifStatementResult==0){
 		int _neededFi=1;
 		while (!crossfeof(nathanscriptCurrentOpenFile)){

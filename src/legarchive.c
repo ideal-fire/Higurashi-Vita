@@ -120,7 +120,7 @@ char* readLowerNullString(FILE* fp){
 legArchive loadLegArchive(const char* _filename){
 	legArchive _returnArchive;
 	FILE* fp = fopen(_filename,"rb");
-	
+
 	fseek(fp,-8,SEEK_END);
 	int64_t _tableStartPosition;
 	fread(&_tableStartPosition,8,1,fp);
@@ -135,7 +135,7 @@ legArchive loadLegArchive(const char* _filename){
 	}else{
 		_returnArchive.filename = malloc(strlen(_filename)+1);
 		strcpy(_returnArchive.filename,_filename);
-		
+
 		int32_t _readTotalFiles;
 		fread(&_readTotalFiles,4,1,fp);
 

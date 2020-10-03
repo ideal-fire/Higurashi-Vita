@@ -65,15 +65,15 @@ void parseJson(const char* _jsonFilename, struct jsonTarget* _targets, int _numT
 		}
 		if (!_inObj){
 			fprintf(stderr,"thingie found while not in object\n");
-		}		
+		}
 		char* _otherQuote = strchr(_quotePos+1,'"');
 		if (_otherQuote==NULL){
 			fprintf(stderr,"error in line %s\n",_curLine);
 			goto next;
 		}
 		*_otherQuote='\0';
-		
-		void* _dest=NULL;		
+
+		void* _dest=NULL;
 		char* _elementName = _quotePos+1;
 		for (int i=0;i<_numTargets;++i){
 			if (strcmp(_targets[i].name,_elementName)==0){

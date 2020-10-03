@@ -165,7 +165,7 @@ void connectFragmentMenu(){
 	memset(_props,0,numFragments*sizeof(optionProp));
 	regenOptionProps(_props);
 	_showMap[bonusNoErrFrag-1]=didPerfect();
-	
+
 	for (int i=0;i<numFragments;++i){
 		char* _baseStr=(playerLanguage ? fragmentInfo[i]->title : fragmentInfo[i]->titlejp);
 		if (fragStatus[i] & FSTATUS_BROKEN){

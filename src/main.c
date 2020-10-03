@@ -70,7 +70,7 @@
 //
 #if GBPLAT == GB_VITA
 	#include <libvita2dplusbloat/vita2d.h>
-	#include <psp2/kernel/processmgr.h> 
+	#include <psp2/kernel/processmgr.h>
 	#include <psp2/display.h> // used with thumbnail creation
 	#include <psp2/power.h> // overclock
 	#include <psp2/ctrl.h> // sound protect thread
@@ -513,7 +513,7 @@ int messageInBoxXOffset=10;
 int messageInBoxYOffset=0;
 int textboxTopPad=12; // formerly STUPIDTEXTYOFF
 int textboxBottomPad=0;
-// 1 by default to retain compatibility with games converted before game specific Lua 
+// 1 by default to retain compatibility with games converted before game specific Lua
 char gameHasTips=1;
 char textOnlyOverBackground=1;
 // This is a constant value between 0 and 127 that means that the text should be instantly displayed
@@ -949,7 +949,7 @@ void drawPropertyStreakText(int _x, int _y, char* _message, int32_t _prop, unsig
 		g=DEFAULTFONTCOLORG;
 		b=DEFAULTFONTCOLORB;
 	}
-	drawTextGame(_x,_y,_message,r,g,b,_alpha);	
+	drawTextGame(_x,_y,_message,r,g,b,_alpha);
 }
 // _message must be writeable
 void drawPropertyGameText(int _x, int _y, char* _message, int32_t* _props, unsigned char _alpha){
@@ -1022,7 +1022,7 @@ void convertPosition(char _inDoesReferToMiddle, int* x, int* y, crossTexture* _t
 
 	int _freeX = (_startX-_usualStartX)/GetXOffsetScale();
 	int _freeY = (_startY-_usualStartY)/GetYOffsetScale();
-	
+
 	if (!_inDoesReferToMiddle){ // convert from coords we can draw at to coords that refer to the middle
 		_freeX*=-1;
 		_freeY*=-1;
@@ -1116,7 +1116,7 @@ void recalculateMaxLines(){
 	changeMaxLines(_usableHeight/currentTextHeight);
 }
 // Number of lines to draw is not zero based
-// _finalLineMaxChar is the last char on the last line to draw. Must be a position inside the string, 
+// _finalLineMaxChar is the last char on the last line to draw. Must be a position inside the string,
 void DrawMessageText(unsigned char _alpha, int _maxDrawLine, int _finalLineMaxChar){
 	if (_maxDrawLine==-1){
 		_maxDrawLine=maxLines-1;
@@ -1183,7 +1183,7 @@ void DrawMessageBox(char _textmodeToDraw, unsigned char _targetAlpha){
 void DrawCurrentFilter(){
 	if (currentFilterType==FILTERTYPE_EFFECTCOLORMIX){
 		drawRectangle(textboxXOffset,0,textboxWidth-textboxXOffset*2,outputLineScreenHeight,filterR,filterG,filterB,filterA);
-	}	
+	}
 }
 u64 waitwithCodeTarget;
 void WaitWithCodeStart(int amount){
@@ -1574,7 +1574,7 @@ void refreshGameState(){
 	overrideTimePerChar=-1;
 }
 // Returns 1 if it worked
-char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){	
+char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 	// Hopefully, nobody tries to call a script from a script and wants to keep the current message display.
 	ClearMessageArray(0);
 	currentScriptLine=0;
@@ -1614,7 +1614,7 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 		currentGameStatus=GAMESTATUS_TITLE;
 		return 0;
 	}
-	
+
 	changeMallocString(&currentScriptFilename,tempstringconcat);
 	int _pcallResult = lua_pcall(L, 0, LUA_MULTRET, 0);
 	if (_pcallResult!=LUA_OK){
@@ -1864,7 +1864,7 @@ void outputLineWait(){
 				}
 			}
 		}
-		
+
 		// draw the touch options
 		if (_backPressLevel==1){
 			#ifdef CUSTOM_TOUCH_BAR_DRAW
@@ -2329,7 +2329,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 						if (_workable[_mSearchIndex]=='m'){
 							// TODO - Do stuff with the found color code
 							if (_workable[i]=='0'){ // If we're resetting the color
-	
+
 							}else{
 								int _semiColonSearchIndex;
 								for (_semiColonSearchIndex=i;_semiColonSearchIndex<_mSearchIndex;++_semiColonSearchIndex){
@@ -2349,7 +2349,7 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 						}
 					}
 				}
-				
+
 			}
 		}
 		/////
@@ -2824,7 +2824,7 @@ void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
 			if (currentMessages[i]){
 				_newAdvBoxHeight=i+2; // Last non-empty line. Adding 1 is for one-based number, adding the other 1 is for safety line
 			}
-		}		
+		}
 		_newAdvBoxHeight*=currentTextHeight;
 	}else{
 		_newAdvBoxHeight = _overrideNewHeight*currentTextHeight;
@@ -2861,7 +2861,7 @@ void FadeBustshot(int passedSlot,int _time,char _wait){
 	}
 	//int passedSlot = nathanvariableToInt(&_passedArguments[1)-1;
 	//Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
-	//Busts[passedSlot].statusVariable = 
+	//Busts[passedSlot].statusVariable =
 	Busts[passedSlot].bustStatus = BUST_STATUS_FADEOUT;
 	if (_time!=0){
 		Busts[passedSlot].curAlpha=Busts[passedSlot].destAlpha;
@@ -3005,7 +3005,7 @@ void DrawScene(const char* _filename, int time){
 				extraGameOffY=_oldOffY;
 				drawAdvanced(0,0,1,MessageBoxEnabled,0,MessageBoxEnabled);
 				endDrawing();
-	
+
 				controlsStart();
 				if (proceedPressed()){
 					controlsEnd();
@@ -3091,7 +3091,7 @@ void enlargeScreenManual(int _destOffX, int _destOffY, double _destScaleX, doubl
 void enlargeScreen(int _x, int _y, int _w, int _h, int _time, char _waitForCompletion){
 	double _destScaleX=scriptScreenWidth/(double)_w;
 	double _destScaleY=scriptScreenHeight/(double)_h;
-	
+
 	int _destOffX=(_x/(double)scriptScreenWidth)*actualBackgroundWidth*graphicsScale*((scriptScreenWidth-_w)/(double)scriptScreenWidth)*_destScaleX*-1;
 	int _destOffY=(_y/(double)scriptScreenHeight)*actualBackgroundHeight*graphicsScale*((scriptScreenHeight-_h)/(double)scriptScreenHeight)*_destScaleY*-1;
 
@@ -3184,7 +3184,7 @@ int drawBustshotAdvanced(unsigned char passedSlot, const char* _filename, int _x
 			Busts[passedSlot].bustStatus = BUST_STATUS_FADEIN;
 			Busts[passedSlot].fadeStartTime=_curTime+_fadeintime/2; // Normal fadein wastes half the time for no reason
 		}
-		Busts[passedSlot].fadeEndTime=_curTime+_fadeintime;		
+		Busts[passedSlot].fadeEndTime=_curTime+_fadeintime;
 	}else{
 		Busts[passedSlot].bustStatus = BUST_STATUS_NORMAL;
 		Busts[passedSlot].curAlpha=_destAlpha;
@@ -3366,7 +3366,7 @@ legArchiveFile soundArchiveGetFilename(const char* _filename, char* _foundFormat
 		if (_possibleResult.fp!=NULL){
 			*_foundFormat = getProbableSoundFormat(_filename);
 			return _possibleResult;
-		}	
+		}
 	}
 	//
 	char* tempstringconcat = malloc(strlen(_filename)+4+1);
@@ -3446,7 +3446,7 @@ char* getSoundFilename(const char* _filename, char _preferedDirectory){
 // Cast returned pointer
 void* loadGameAudio(const char* _filename, char _preferedDirectory, char _isSE){
 	void* _tempHoldSlot=NULL;
-	
+
 	// First try and find the file in the folders
 	char* tempstringconcat = getSoundFilename(_filename,_preferedDirectory);
 	if (tempstringconcat!=NULL && checkFileExist(tempstringconcat)){
@@ -3633,7 +3633,7 @@ transferMoreLines:
 			}
 			updateControlsGeneral();
 			controlsEnd();
-		
+
 			startDrawing();
 			drawAdvanced(1,1,1,MessageBoxEnabled,1,0);
 			#if GBPLAT == GB_3DS
@@ -3833,7 +3833,7 @@ void SaveSettings(){
 	#ifdef CUSTOM_SAVED_SETTINGS
 		customSettingsSave(fp);
 	#endif
-	
+
 	fclose(fp);
 	printf("SAved settings file.\n");
 }
@@ -3965,8 +3965,8 @@ void GenerateStreamingAssetsPaths(char* _streamingAssetsFolderName, char _isRela
 	streamingAssets[0]='\0';
 	scriptFolder[0]='\0';
 	if (_isRelativeToData){
-		strcat(streamingAssets,gbDataFolder); 
-		strcat(scriptFolder,gbDataFolder); 
+		strcat(streamingAssets,gbDataFolder);
+		strcat(scriptFolder,gbDataFolder);
 	}
 	//
 	strcat(streamingAssets,_streamingAssetsFolderName);
@@ -4384,20 +4384,20 @@ char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 		strcpy(_thumbFilename,_filename);
 		strcat(_thumbFilename,".thumb");
 		// Renderer specific code for saving thumbnails
-		#if GBPLAT == GB_VITA	
+		#if GBPLAT == GB_VITA
 			int _destWidth = THUMBWIDTH;
 			int _destHeight = THUMBHEIGHT;
 			vita2d_texture* _smallTexture = vita2d_create_empty_texture_rendertarget(_destWidth,_destHeight,SCE_GXM_TEXTURE_FORMAT_A8B8G8R8);
-	
+
 			vita2d_pool_reset();
 			vita2d_start_drawing_advanced(_smallTexture,0);
 			Draw(0);
 			vita2d_end_drawing();
-	
+
 			vita2d_wait_rendering_done();
 			sceDisplayWaitVblankStart();
-	
-			// 
+
+			//
 			BMP* testimg = BMP_Create(_destWidth,_destHeight,24);
 			// Pixels stored in uint32_t
 			void* _currentImageData = vita2d_texture_get_datap(_smallTexture);
@@ -4411,7 +4411,7 @@ char vndsNormalSave(char* _filename, char _saveSpot, char _saveThumb){
 			}
 			BMP_WriteFile(testimg,_thumbFilename);
 			BMP_Free(testimg);
-			
+
 			freeTexture(_smallTexture);
 		#elif GBREND==GBREND_SDL
 			// Draw the game a few times to ensure that SDL_RenderReadPixels gets the right screen
@@ -4744,7 +4744,7 @@ void setADVName(char* _newName){
 						readRGBString(&_newName[i],&advNameR,&advNameG,&advNameB);
 						i+=6;
 						char* _endPos = strstr(_newName,COLORMARKUPEND);
-						if (_newName[i]=='>' && _endPos!=NULL){ 
+						if (_newName[i]=='>' && _endPos!=NULL){
 							_endPos[0]='\0';
 							strcat(_actualNameBuff,&(_newName[++i]));
 							for (;_newName[i];++i); // Bring loop variable to the null char that we just set
@@ -4962,7 +4962,7 @@ void scriptDrawBustshot(nathanscriptVariable* _passedArguments, int _numArgument
 	DrawBustshot(nathanvariableToInt(&_passedArguments[0]), nathanvariableToString(&_passedArguments[1]), nathanvariableToInt(&_passedArguments[2]), nathanvariableToInt(&_passedArguments[3]), nathanvariableToInt(&_passedArguments[13]), nathanvariableToInt(&_passedArguments[14]), nathanvariableToBool(&_passedArguments[15]), nathanvariableToInt(&_passedArguments[12]) ? 0 : 255);
 }
 // slot, filename, time, waitforcompletion
-void scriptChangeBustshot(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){	
+void scriptChangeBustshot(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	int _slot = nathanvariableToInt(&_passedArguments[0]);
 	if (_slot>=maxBusts){
 		fprintf(stderr,"%d is greater than max busts. calling ChangeBustshot on nonexistent bustshot?",_slot);
@@ -4992,7 +4992,7 @@ void scriptChangeBustshot(nathanscriptVariable* _passedArguments, int _numArgume
 	}
 }
 void scriptSetValidityOfInput(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	inputValidity=(nathanvariableToBool(&_passedArguments[0])==1);	
+	inputValidity=(nathanvariableToBool(&_passedArguments[0])==1);
 }
 // Fadeout time
 // Wait for completely fadeout
@@ -5071,7 +5071,7 @@ void scriptMoveSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 
 	adjustForOriginPos(&_xDest,&_yDest,Busts[_passedSlot].originXForAdjust,Busts[_passedSlot].originYForAdjust);
 	fixScriptSpritePos(&_xDest,&_yDest);
-	
+
 	if (_totalTime!=0){
 		int _xTengoQue = _xDest-Busts[_passedSlot].xOffset;
 		int _yTengoQue = _yDest-Busts[_passedSlot].yOffset;
@@ -5107,7 +5107,7 @@ void scriptMoveSprite(nathanscriptVariable* _passedArguments, int _numArguments,
 //FadeSprite(slot, time, waitfrocompletion)
 		// FadeSprite(5,700,FALSE)
 void scriptFadeSprite(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	FadeBustshot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]),nathanvariableToBool(&_passedArguments[2]));	
+	FadeBustshot(nathanvariableToInt(&_passedArguments[0]),nathanvariableToInt(&_passedArguments[1]),nathanvariableToBool(&_passedArguments[2]));
 	return;
 }
 // DrawSpriteFixedSize(slot,filename,???,x,y,z(bigger->smaller)(ignoredbyme),originx,originy,destw,desth,angle(ignoredbyme),ignored,ignored,style(???.ignored),alpha(0isopaque),layer,time,waitForCompletion)
@@ -5369,7 +5369,7 @@ void scriptHigurashiGetRandomNumber(nathanscriptVariable* _passedArguments, int 
 			}else{
 				_ret=0;
 			}
-		}	
+		}
 		#else // still a bit skewed because of rand
 		_ret=(rand() % _passed);
 		#endif
@@ -5512,7 +5512,7 @@ EASYLUAINTSETFUNCTIONPOSTCALL(setTextboxBottomPad,textboxBottomPad,applyTextboxC
 EASYLUAINTSETFUNCTIONPOSTCALL(setADVNameImageHeight,advNameImHeight,applyTextboxChanges(1);)
 // get
 EASYLUAINTGETFUNCTION(getTextDisplayMode,gameTextDisplayMode)
-	
+
 #define MAXIMAGECHOICEW (screenWidth*.85)
 #define PREFERREDIMAGECHOICESONSCREEN 7
 #define MAXIMAGECHOICEH (screenHeight*(1/(double)PREFERREDIMAGECHOICESONSCREEN))
@@ -5589,7 +5589,7 @@ void scriptImageChoice(nathanscriptVariable* _passedArguments, int _numArguments
 			_lastTouchX=_tx;
 			_lastTouchY=_ty;
 		}
-		
+
 		if (wasJustPressed(BUTTON_TOUCH)){
 			_startTouchX=_tx;
 			_startTouchY=_ty;
@@ -5912,7 +5912,7 @@ void fontSizeSetupButton(){
 		}
 		controlsEnd();
 		startDrawing();
-		
+
 		gbDrawTextf(normalFont,MENUOPTIONOFFSET,currentTextHeight,255,255,255,255,"Font Size: %f",fontSize);
 		drawText(MENUOPTIONOFFSET,currentTextHeight*2,"Test");
 		drawText(MENUOPTIONOFFSET,currentTextHeight*3,"Done");
@@ -6034,7 +6034,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	char _tempItoaHoldTextSpeed[8] = {'\0'}; // Needs to be big enough to hold "instant"
 	char _tempAutoModeString[10] = {'\0'};
 	char _tempAutoModeVoiceString[10] = {'\0'};
-	
+
 	char* _settings[] = {
 		NULL, // back
 		"=Save Game=",
@@ -6430,7 +6430,7 @@ int showMenuAdvancedTouch(int _choice, const char* _title, int _mapSize, char** 
 	char*** _wrappedOptions = malloc(sizeof(char**)*_numOptions);
 	int* _wrappedLen = malloc(sizeof(int)*_numOptions);
 	int* _optionY = malloc(sizeof(int)*_numOptions);
-	// Wrap	
+	// Wrap
 	int _loopRealIndex=-1;
 	for (i=0;i<_numOptions;++i){
 		_loopRealIndex=getNextEnabled(_showMap,_loopRealIndex+1);
@@ -6824,7 +6824,7 @@ void TitleScreen(){
 		memset(_showMap,1,sizeof(_showMap));
 		int _choice=showMenuAdvanced(0,"Main Menu",sizeof(_options)/sizeof(char*),_options,NULL,_showMap,NULL,NULL,MENUPROP_CANPAGEUPDOWN, _titleScreenDraw);
 		if (_choice==0){
-			PlayMenuSound(); 
+			PlayMenuSound();
 			if (currentPresetFilename==NULL){
 				currentPresetChapter=0;
 				controlsEnd();
@@ -6908,7 +6908,7 @@ void TipMenu(){
 	}
 	int _chosenIndex=0;
 	while(1){
-		_chosenIndex = showMenu(_chosenIndex,"TIP Menu",currentPresetTipUnlockList.theArray[currentPresetChapter],_options,1);		
+		_chosenIndex = showMenu(_chosenIndex,"TIP Menu",currentPresetTipUnlockList.theArray[currentPresetChapter],_options,1);
 		if (_chosenIndex==-1){
 			#if PLAYTIPMUSIC == 1
 				StopBGM();
@@ -6924,7 +6924,7 @@ void TipMenu(){
 			continue;
 		}
 	}
-	free(_options);		
+	free(_options);
 }
 void ChapterJump(){
 	char** _options = malloc(sizeof(char*)*(currentPresetChapter+1));
@@ -7236,7 +7236,7 @@ int vndsSaveSelector(char _isSave){
 				drawHallowRect(j*_slotWidth,i*_slotHeight,_slotWidth,_slotHeight,SAVESELECTORRECTTHICK,_r,_g,_b,255);
 			}
 		}
-		
+
 		endDrawing();
 	}
 	return _ret;
@@ -7321,7 +7321,7 @@ void VNDSNavigationMenu(){
 		useSoundArchive=1;
 	}
 	easyMessagef(0,"Body is ready.");
-	
+
 	controlsEnd();
 	while (currentGameStatus!=GAMESTATUS_QUIT){
 		controlsStart();
@@ -7409,7 +7409,7 @@ char initializeLua(){
 
 		lua_pushnumber(L,GBPLAT);
 		lua_setglobal(L,"GBPLAT");
-		
+
 		// happy.lua contains functions that both Higurashi script files use and my C code
 		char* _fixedPath = fixPathAlloc("assets/happy.lua",TYPE_EMBEDDED);
 		char _didFailLoad = SafeLuaDoFile(L,_fixedPath);
@@ -7564,7 +7564,7 @@ void hVitaInitSound(){
 		#else
 			easyMessagef(1,"audio init failed. isn't supposed to be possible...");
 		#endif
-	}	
+	}
 	// Load the menu sound effect if it's present
 	char* _fixedPath = fixPathAlloc("assets/wa_038.ogg",TYPE_EMBEDDED);
 	TryLoadMenuSoundEffect(_fixedPath);
@@ -7587,7 +7587,7 @@ void hVitaInitSound(){
 void hVitaInitMisc(){
 	int i;
 	changeMaxLines(15);
-	increaseBustArraysSize(0,maxBusts);	
+	increaseBustArraysSize(0,maxBusts);
 	ClearMessageArray(0);
 	for (i=0;i<maxBusts;i++){
 		ResetBustStruct(&(Busts[i]),0);
