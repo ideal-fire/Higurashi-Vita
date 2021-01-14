@@ -21,6 +21,7 @@ LIBS = -lgoodbrewvita \
 	-lSceCommonDialog_stub \
 	-lSceAudio_stub \
 	-lSceTouch_stub \
+	-lSceAppUtil_stub \
 	-lfreetype \
 	-lpng \
 	-ljpeg \
