@@ -90,6 +90,7 @@ char* readLengthStringFromFile(FILE* fp);
 char getLocalFlag(const char* _varName, int* _retVal);
 void saveHiguGame();
 void setLocalFlag(const char* _varName, int _val);
+int getLastUsedLineIndexOrZero();
 typedef struct{
 	char** theArray;
 	unsigned char length;

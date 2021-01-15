@@ -31,6 +31,8 @@
 	TODO - restore default game functionality
 	TODO - use showmenu for scriptselect (this is tough because we can't open the in-game menu from showmenu)
 	TODO - my bust transitions look worse than real vnds.
+	TODO - greatly increasing the font size will cause an upshifttext call with more lines requested than maxLines.
+		hotfix clears the screen, but this isn't correct.
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -1070,13 +1072,22 @@ void changeMaxLines(int _newMax){
 	char** _newCurrentMessages = malloc(sizeof(char*)*_newMax);
 	int32_t** _newMessageProps = malloc(sizeof(int32_t*)*_newMax);
 	if (_newMax<maxLines){
-		int _diff = maxLines-_newMax;
+		int _startCopyPos=getLastUsedLineIndexOrZero()+1-_newMax;
+		if (_startCopyPos<0){ // our new box will be partially empty
+			_startCopyPos=0;
+		}
 		// Copy the latest lines that can fit
-		memcpy(_newCurrentMessages,&currentMessages[_diff],_newMax*sizeof(char*));
-		memcpy(_newMessageProps,&messageProps[_diff],_newMax*sizeof(int32_t*));
+		memcpy(_newCurrentMessages,&currentMessages[_startCopyPos],_newMax*sizeof(char*));
+		memcpy(_newMessageProps,&messageProps[_startCopyPos],_newMax*sizeof(int32_t*));
 		// free the lines that are gone
 		int i;
-		for (i=0;i<_diff;++i){
+		for (i=0;i<_startCopyPos;++i){
+			if (currentMessages[i]){
+				free(currentMessages[i]);
+				free(messageProps[i]);
+			}
+		}
+		for (i=_startCopyPos+_newMax;i<maxLines;++i){
 			if (currentMessages[i]){
 				free(currentMessages[i]);
 				free(messageProps[i]);
@@ -1641,6 +1652,9 @@ char RunScript(const char* _scriptfolderlocation,char* filename, char addTxt){
 // _desiredLines is some 0 based index for the line you want to draw on
 // returns 0 based line index for where you can use
 void upshiftText(int _numDelLines){
+	if (_numDelLines>maxLines){ // Temp fix
+		_numDelLines=maxLines;
+	}
 	int i;
 	int _numLeftLines = maxLines-_numDelLines;
 	// delete old lines to make room
@@ -2809,6 +2823,15 @@ void smoothADVBoxHeightTransition(int _oldHeight, int _newHeight, int _maxDrawLi
 	advboxHeight=_newHeight;
 	applyTextboxChanges(1);
 }
+int getLastUsedLineIndexOrZero(){
+	int ret=0;
+	for (int i=0;i<maxLines;++i){
+		if (currentMessages[i]){
+			ret=i;
+		}
+	}
+	return ret;
+}
 // _overrideNewHeight is in lines
 // pass a negative number other than -1 to not do fancy transition
 void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
@@ -2817,15 +2840,7 @@ void updateDynamicADVBox(int _maxDrawLine, int _overrideNewHeight){
 	}
 	int _newAdvBoxHeight;
 	if (_overrideNewHeight==-1){
-		// find the number of used lines
-		_newAdvBoxHeight=1; // By default one
-		int i;
-		for (i=0;i<maxLines;++i){
-			if (currentMessages[i]){
-				_newAdvBoxHeight=i+2; // Last non-empty line. Adding 1 is for one-based number, adding the other 1 is for safety line
-			}
-		}
-		_newAdvBoxHeight*=currentTextHeight;
+		_newAdvBoxHeight=(getLastUsedLineIndexOrZero()+1)*currentTextHeight; // Last non-empty line. Adding 1 is for one-based number.
 	}else{
 		_newAdvBoxHeight = _overrideNewHeight*currentTextHeight;
 	}
@@ -3598,6 +3613,9 @@ transferMoreLines:
 			int _delLines = _destCurLine-maxLines+1;
 			upshiftText(_delLines);
 			currentLine-=_delLines;
+			if (currentLine<0){
+				currentLine=0;
+			}
 		}
 	}
 	// free the first line first because we're redoing it
@@ -3801,6 +3819,9 @@ void SaveSettings(){
 	char* _fixedFilename = fixPathAlloc("settings.noob",TYPE_DATA);
 	FILE* fp=fopen(_fixedFilename, "wb");
 	free(_fixedFilename);
+	if (!fp){
+		return;
+	}
 
 	unsigned char _bgmTemp = floor(bgmVolume*4);
 	unsigned char _seTemp = floor(seVolume*4);
@@ -4017,7 +4038,6 @@ void loadADVBox(){
 	}else{
 		_loadDefaultADVBox();
 	}
-	applyTextboxChanges(1);
 }
 void LoadGameSpecificStupidity(){
 	TryLoadMenuSoundEffect(NULL);
@@ -5480,6 +5500,7 @@ void scriptOptionsSetTextMode(nathanscriptVariable* _passedArguments, int _numAr
 }
 void scriptLoadADVBox(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	loadADVBox();
+	applyTextboxChanges(1);
 }
 void scriptOptionsSetTips(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
 	gameHasTips=nathanvariableToBool(&_passedArguments[0]);
