@@ -512,7 +512,7 @@ int outputLineScreenHeight;
 int messageInBoxXOffset=10;
 int messageInBoxYOffset=0;
 int textboxTopPad=12; // formerly STUPIDTEXTYOFF
-int textboxBottomPad=0;
+int textboxBottomPad=12;
 // 1 by default to retain compatibility with games converted before game specific Lua
 char gameHasTips=1;
 char textOnlyOverBackground=1;
@@ -7657,7 +7657,7 @@ int main(int argc, char *argv[]){
 					if (_didWork==0){ // If the script didn't run, don't advance the game
 						currentPresetChapter--; // Go back a script
 						if (currentPresetChapter<0 || currentPresetChapter==255){ // o, no, we've gone back too far!
-							easyMessagef(1,"So... the first script failed to launch. You now have the info on why, so go try and fix it. Pressing "SELECTBUTTONNAME" will close the application.");
+							easyMessagef(1,"The first script failed to launch. You may have the info on why, so go try and fix it. Pressing "SELECTBUTTONNAME" will close the application.");
 							currentGameStatus=GAMESTATUS_QUIT;
 						}else{
 							currentGameStatus=GAMESTATUS_NAVIGATIONMENU;
