@@ -1,21 +1,51 @@
+PREFIX = /usr/local
+datarootdir = $(PREFIX)/share
+
+LOCALLUADIR = ./stolenCode/modifiedlua
+HBUILDDIR = build
+
 src = $(wildcard ./src/*.c)
 obj = $(src:.c=.o)
 
-LDFLAGS = -lgoodbrew -lSDLFontCache -lm -lpthread -lSDL2_image -lSDL2_ttf -lSDL2_mixer `sdl2-config --cflags --libs` -Llib -lluaLinux -ldl
-CFLAGS = -g -Wall -Wno-pointer-sign -Wno-char-subscripts -IInclude -Llib
-OUTNAME = build/a.exe
+LDFLAGS = -lgoodbrew -lSDLFontCache -lm -lpthread -lSDL2_image -lSDL2_ttf -lSDL2_mixer `pkg-config --libs sdl2 SDL2_image SDL2_mixer SDL2_ttf` -L$(LOCALLUADIR) -llua -ldl
+CFLAGS = -g -Wall -Wno-deprecated-declarations -Wno-pointer-sign -Wno-char-subscripts -I$(LOCALLUADIR) `pkg-config --cflags sdl2 SDL2_image SDL2_mixer SDL2_ttf`
+OUTNAME = $(HBUILDDIR)/higurashivita
 
-$(OUTNAME): $(obj)
+all: $(OUTNAME)
+
+ifeq ($(OS),Windows_NT)
+$(LOCALLUADIR)/liblua.a:
+	cd $(LOCALLUADIR) && $(MAKE) generic
+else
+$(LOCALLUADIR)/liblua.a:
+	cd $(LOCALLUADIR) && $(MAKE) posix
+endif
+
+$(OUTNAME): $(obj) $(LOCALLUADIR)/liblua.a
+	mkdir -p $(HBUILDDIR)
 	$(CC) -o $(OUTNAME) $^ $(CFLAGS) $(LDFLAGS)
 
 .PHONY: clean
 clean:
 	rm -f $(obj) $(OUTNAME)
+	cd $(LOCALLUADIR) && $(MAKE) clean
 
 .PHONY: depend
 depend:
 	makedepend -Y $(src) -fmakefile.general
 
+install: $(OUTNAME)
+	mkdir -p $(DESTDIR)$(PREFIX)/bin/
+	cp $(OUTNAME) $(DESTDIR)$(PREFIX)/bin/
+	mkdir -p $(DESTDIR)$(datarootdir)/HIGURASHI/
+	cp -r ./VpkContents-Shared/Shared/* ./VpkContents-Shared/Vita/* ./VpkContents-Primary/Vita/* $(DESTDIR)$(datarootdir)/HIGURASHI/
+	@echo installed
+
 # DO NOT DELETE
 
-./src/main.o: ./src/main.h ./src/insensitiveFileFinder.h ./src/legarchive.h ./src/NathanDoubleScripting.h ./src/LuaWrapperDefinitions.h ./src/VNDSScriptWrappers.h
+./src/fragmentMenu.o: ./src/jsonParser.h ./src/main.h
+./src/jsonParser.o: ./src/main.h ./src/jsonParser.h
+./src/main.o: ./src/main.h ./src/insensitiveFileFinder.h ./src/legarchive.h
+./src/main.o: ./src/fragmentMenu.h ./stolenCode/qdbmp.h
+./src/main.o: ./src/NathanDoubleScripting.h ./src/LuaWrapperDefinitions.h
+./src/main.o: ./src/VNDSScriptWrappers.h

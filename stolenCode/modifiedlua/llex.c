@@ -35,7 +35,7 @@ THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLI
 #include "ltable.h"
 #include "lzio.h"
 
-
+int thisisthehigurashivitalua;
 
 #define next(ls) (ls->current = zgetc(ls->z))
 

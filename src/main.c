@@ -51,9 +51,9 @@
 #include <stdarg.h>
 #include <limits.h>
 //
-#include <Lua/lua.h>
-#include <Lua/lualib.h>
-#include <Lua/lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
 //
 #include <goodbrew/config.h>
 #if GBVERSION < 7
@@ -376,6 +376,8 @@ struct enlargeAnimInfo{
 struct shakeInfo* curBackgroundShake;
 struct shakeInfo* curUIShake;
 
+// ensure we're linked with the modified lua
+extern int thisisthehigurashivitalua;
 lua_State* L = NULL;
 /*
 	Line_ContinueAfterTyping=0; (No wait after text display, go right to next script line)
@@ -3820,6 +3822,7 @@ void SaveSettings(){
 	FILE* fp=fopen(_fixedFilename, "wb");
 	free(_fixedFilename);
 	if (!fp){
+		perror(NULL);
 		return;
 	}
 
@@ -7492,6 +7495,7 @@ void initializeNathanScript(){
 }
 // All init after this assumes this is avalible
 void hVitaCrutialInit(int argc, char** argv){
+	thisisthehigurashivitalua=1;
 	srand(time(NULL));
 	generalGoodInit();
 	{
@@ -7510,7 +7514,7 @@ void hVitaCrutialInit(int argc, char** argv){
 	screenHeight = getScreenHeight();
 	initImages();
 	setClearColor(0,0,0);
-	isActuallyUsingUma0=initGoodBrewDataDir();
+	isActuallyUsingUma0=(strstr(getFixPathString(TYPE_DATA),"uma0:")!=NULL);
 	controlsInit();
 	#if GBPLAT == GB_3DS
 		osSetSpeedupEnable(1);

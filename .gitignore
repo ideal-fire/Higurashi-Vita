@@ -96,3 +96,7 @@ cmake_install.cmake
 lib/libSDLFontCacheLinux.a
 lib/libGeneralGoodLinux.a
 lib/libluaLinux.a
+
+liblua.a
+lua
+luac

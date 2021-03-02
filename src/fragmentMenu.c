@@ -7,9 +7,9 @@
 #include <goodbrew/controls.h>
 #include <goodbrew/text.h>
 #include <goodbrew/useful.h>
-#include <Lua/lua.h>
-#include <Lua/lualib.h>
-#include <Lua/lauxlib.h>
+#include <lua.h>
+#include <lualib.h>
+#include <lauxlib.h>
 extern lua_State* L;
 #include "jsonParser.h"
 #include "main.h"

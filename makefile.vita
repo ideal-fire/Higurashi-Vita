@@ -1,7 +1,15 @@
 PSVITAIP=$(VITAIP)
 
+LOCALLUADIR = ./stolenCode/modifiedlua
+
+ifeq ($(VNDSCLONE),1)
+TITLE_ID = VNDSCLONE
+TARGET   = VNDSCLONE
+else
 TITLE_ID = HIGURASHI
 TARGET   = Higurashi
+endif
+
 _src     = $(wildcard ./src/*.c)
 OBJS     = $(_src:.c=.o) ./stolenCode/qdbmp.o
 
@@ -28,14 +36,14 @@ LIBS = -lgoodbrewvita \
 	-lz \
 	-lm \
 	-lc \
-	-lluaVita \
+	-llua \
 	-lm \
 	-lmpg123
 
 PREFIX  = arm-vita-eabi
 CC      = $(PREFIX)-gcc
 CXX = $(PREFIX)-g++
-CFLAGS  = -Wl,-q -O3 -g -Wall -Wno-pointer-sign -Wno-char-subscripts -Wno-maybe-uninitialized -IInclude -Llib
+CFLAGS  = -Wl,-q -O3 -g -Wall -Wno-pointer-sign -Wno-char-subscripts -Wno-maybe-uninitialized -I$(LOCALLUADIR) -L$(LOCALLUADIR)
 
 CXXFLAGS = $(CFLAGS)
 ASFLAGS = $(CFLAGS)
@@ -43,9 +51,12 @@ ASFLAGS = $(CFLAGS)
 all: $(TARGET).vpk
 
 %.vpk: eboot.bin
+ifeq ($(VNDSCLONE),1)
+	vita-mksfoex -s TITLE_ID=$(TITLE_ID) "VNDS" param.sfo
+else
 	vita-mksfoex -s TITLE_ID=$(TITLE_ID) "Higurashi When They Cry" param.sfo
-	vita-pack-vpk -s param.sfo -b eboot.bin \
-	Higurashi.vpk
+endif
+	vita-pack-vpk -s param.sfo -b eboot.bin $(TARGET).vpk
 
 eboot.bin: $(TARGET).velf
 	vita-make-fself -s $< $@
@@ -53,15 +64,15 @@ eboot.bin: $(TARGET).velf
 %.velf: %.elf
 	vita-elf-create $< $@
 
-$(TARGET).elf: $(OBJS)
+$(TARGET).elf: $(OBJS) $(LOCALLUADIR)/liblua.a
 	$(CC) $(CFLAGS) $^ $(LIBS) -o $@
 
 %.o: %.png
 	$(PREFIX)-ld -r -b binary -o $@ $^
 
 clean:
-	@rm -rf $(TARGET).vpk $(TARGET).velf $(TARGET).elf $(OBJS) \
-		eboot.bin param.sfo
+	@rm -rf $(TARGET).vpk $(TARGET).velf $(TARGET).elf $(OBJS) eboot.bin param.sfo
+	cd $(LOCALLUADIR) && $(MAKE) clean
 
 vpksend: $(TARGET).vpk
 	curl -T $(TARGET).vpk ftp://$(PSVITAIP):1337/ux0:/_stuffz/
@@ -71,8 +82,17 @@ send: eboot.bin
 	curl -T eboot.bin ftp://192.168.1.229:1337/ux0:/app/$(TITLE_ID)/
 	@echo "Sent."
 
+ifeq ($(VNDSCLONE),1)
+stuffvpk:
+	@7z a VNDSCLONE.vpk ./VpkContents-Shared/Shared/*
+	@7z a VNDSCLONE.vpk ./VpkContents-Shared/Vita/*
+	@7z a VNDSCLONE.vpk ./VpkContents-Alternate/Vita/*
+else
 stuffvpk:
 	@7z a Higurashi.vpk ./VpkContents-Shared/Shared/*
-	@7z a Higurashi.vpk ./VpkContents-Primary/Shared/*
 	@7z a Higurashi.vpk ./VpkContents-Shared/Vita/*
 	@7z a Higurashi.vpk ./VpkContents-Primary/Vita/*
+endif
+
+$(LOCALLUADIR)/liblua.a:
+	cd $(LOCALLUADIR) && $(MAKE) generic CC=$(CC)
