@@ -108,7 +108,7 @@ static time_t l_checktime (lua_State *L, int arg) {
 */
 #if !defined(lua_tmpnam)	/* { */
 
-#if defined(LUA_USE_POSIX)	/* { */
+#if defined(LUA_USE_POSIX) || !(defined(_WIN32) || defined(_WIN64))	/* { */
 
 #include <unistd.h>
 

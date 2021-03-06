@@ -100,3 +100,4 @@ lib/libluaLinux.a
 liblua.a
 lua
 luac
+*.exe

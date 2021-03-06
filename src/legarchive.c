@@ -85,7 +85,7 @@ legArchiveFile getAdvancedFile(legArchive _passedArchive, const char* _passedFil
 	for (i=0;i<_passedArchive.totalFiles;++i){
 		if (strcmp(_passedArchive.fileList[i].filename,_lowerString)==0){
 
-			_returnFile.fp = fopen(_passedArchive.filename,"r");
+			_returnFile.fp = fopen(_passedArchive.filename,"rb");
 			fseek(_returnFile.fp,_passedArchive.fileList[i].position,SEEK_SET);
 			_returnFile.internalPosition=0;
 			_returnFile.totalLength = _passedArchive.fileList[i].length;
@@ -96,7 +96,7 @@ legArchiveFile getAdvancedFile(legArchive _passedArchive, const char* _passedFil
 			return _returnFile;
 		}
 	}
-	printf("File not found.\n");
+	printf("%s not found.\n",_lowerString);
 	return _returnFile;
 }
 FILE* openArchiveFile(legArchive _passedArchive, const char* _passedFilename){

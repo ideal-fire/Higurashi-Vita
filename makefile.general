@@ -13,13 +13,8 @@ OUTNAME = $(HBUILDDIR)/higurashivita
 
 all: $(OUTNAME)
 
-ifeq ($(OS),Windows_NT)
 $(LOCALLUADIR)/liblua.a:
 	cd $(LOCALLUADIR) && $(MAKE) generic
-else
-$(LOCALLUADIR)/liblua.a:
-	cd $(LOCALLUADIR) && $(MAKE) posix
-endif
 
 $(OUTNAME): $(obj) $(LOCALLUADIR)/liblua.a
 	mkdir -p $(HBUILDDIR)

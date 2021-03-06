@@ -33,6 +33,7 @@
 	TODO - my bust transitions look worse than real vnds.
 	TODO - greatly increasing the font size will cause an upshifttext call with more lines requested than maxLines.
 		hotfix clears the screen, but this isn't correct.
+	TODO - dont automatically create saves folder
 
 	Colored text example:
 		text x1b[<colorID>;1m<restoftext>
@@ -50,6 +51,7 @@
 #include <ctype.h> // toupper
 #include <stdarg.h>
 #include <limits.h>
+#include <time.h>
 //
 #include <lua.h>
 #include <lualib.h>
@@ -482,8 +484,6 @@ unsigned char graphicsLocation = LOCATION_CGALT;
 
 char* messageHistory[MAXMESSAGEHISTORY] = {NULL};
 unsigned char oldestMessage=0;
-
-char presetsAreInStreamingAssets=1;
 
 float bgmVolume = 0.75;
 float seVolume = 1.0;
@@ -1480,7 +1480,7 @@ void ClearDebugFile(){
 	strcpy(_tempDebugFileLocationBuffer,gbDataFolder);
 	strcat(_tempDebugFileLocationBuffer,"log.txt");
 	FILE *fp;
-	fp = fopen(_tempDebugFileLocationBuffer, "w");
+	fp = fopen(_tempDebugFileLocationBuffer, "wb");
 	if (!fp){
 		easyMessagef(1,"Failed to open debug file, %s",_tempDebugFileLocationBuffer);
 		return;
@@ -1532,7 +1532,7 @@ int DidActuallyConvert(char* filepath){
 		easyMessagef(1,"I was going to check if you converted this file, but I can't find it! %s",filepath);
 		return 1;
 	}
-	FILE* file = fopen(filepath, "r");
+	FILE* file = fopen(filepath, "rb");
 	char line[256];
 
 	int _isConverted=0;
@@ -2118,7 +2118,7 @@ void LoadPreset(char* filename){
 	tipNamesLoaded=0;
 	chapterNamesLoaded=0;
 	crossFile* fp;
-	fp = crossfopen(filename, "r");
+	fp = crossfopen(filename, "rb");
 	currentPresetFileList.theArray = ReadFileStringList(fp,&currentPresetFileList.length);
 	if (gameHasTips==1){
 		currentPresetTipList.theArray = ReadFileStringList(fp,&currentPresetTipList.length);
@@ -4122,7 +4122,7 @@ void setDefaultGame(char* _defaultGameFolderName){
 	strcat(_defaultGameSaveFilenameBuffer,"_defaultGame");
 
 	FILE* fp;
-	fp = fopen(_defaultGameSaveFilenameBuffer, "w");
+	fp = fopen(_defaultGameSaveFilenameBuffer, "wb");
 	if (!fp){
 		easyMessagef(1,"Failed to open default game save file, %s",_defaultGameSaveFilenameBuffer);
 		return;
@@ -7309,7 +7309,7 @@ void VNDSNavigationMenu(){
 	strcat(_possibleThunbnailPath,"/info.txt");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(BUTTON_R)){
 		easyMessagef(0,"Loading info.txt");
-		FILE* fp = fopen(_possibleThunbnailPath,"r");
+		FILE* fp = fopen(_possibleThunbnailPath,"rb");
 		_loadedNovelName = readSpecificIniLine(fp,"title=");
 		fclose(fp);
 	}
@@ -7322,7 +7322,7 @@ void VNDSNavigationMenu(){
 	strcat(_possibleThunbnailPath,"/img.ini");
 	if (checkFileExist(_possibleThunbnailPath) && !isDown(BUTTON_R)){
 		easyMessagef(0,"Loading img.ini");
-		FILE* fp = fopen(_possibleThunbnailPath,"r");
+		FILE* fp = fopen(_possibleThunbnailPath,"rb");
 		char* _widthString = readSpecificIniLine(fp,"width=");
 		char* _heightString = readSpecificIniLine(fp,"height=");
 		if (_widthString!=NULL && _heightString!=NULL && isNumberString(_widthString) && isNumberString(_heightString)){
@@ -7556,7 +7556,7 @@ void hVitaInitSettings(){
 			strcat(_defaultGameSaveFilenameBuffer,"_defaultGame");
 			if (checkFileExist(_defaultGameSaveFilenameBuffer)){
 				FILE* fp;
-				fp = fopen(_defaultGameSaveFilenameBuffer,"r");
+				fp = fopen(_defaultGameSaveFilenameBuffer,"rb");
 				char _readGameFolderName[256];
 				_readGameFolderName[0]='\0';
 				fgets(_readGameFolderName,256,fp);
