@@ -35,9 +35,8 @@ git clone "https://github.com/MyLegGuy/Higurashi-Vita"
 # compile libgoodbrew (ps vita & pc graphics wrapper) and SDLFontCache
 cd libgoodbrew
 cd SDL
-./buildlinux
-sudo cp libSDLFontCacheLinux.a /usr/local/lib/libSDLFontCache.a
-sudo cp SDL_FontCache.h /usr/local/include/
+make
+sudo make install
 cd ..
 make
 sudo make install
@@ -49,18 +48,6 @@ make -f makefile.general
 # copy all assets
 cp -r ./VpkContents-Shared/Shared/* ./VpkContents-Shared/Vita/* ./VpkContents-Primary/Vita/* ./build/
 
-after this, the final executable is in Higurashi-Vita/build/higurashivita
-if running it from the terminal, you must use 'cd' to move to the 'build' folder first. otherwise you'll get a red F.
-the "Games" and "Saves" folders are placed next to the executable.
-
-arrow keys -> dpad
-x -> cross
-z -> circle
-a -> square
-s -> triangle
-escape or enter -> start
-e -> select
-b -> android back button
-l -> l
-r -> r
-mouse -> touch screen
+you may also choose to run `sudo make install`
+otherwise, the final executable is in Higurashi-Vita/build/higurashivita. if running it from the terminal, you must use 'cd' to move to the 'build' folder first. if you don't, you'll get a red F.
+see https://github.com/MyLegGuy/Higurashi-Vita/wiki/PC-and-Windows-tips for more information on running the engine on PC.
