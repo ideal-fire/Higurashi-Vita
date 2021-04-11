@@ -1,3 +1,4 @@
+// license for this file: public domain
 TEXTMODE_NVL = 0;
 TEXTMODE_ADV = 1;
 TEXTMODE_AVD = TEXTMODE_ADV; // Compatibility with old versions

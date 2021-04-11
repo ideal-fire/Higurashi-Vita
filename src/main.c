@@ -34,10 +34,6 @@
 	TODO - greatly increasing the font size will cause an upshifttext call with more lines requested than maxLines.
 		hotfix clears the screen, but this isn't correct.
 	TODO - dont automatically create saves folder
-
-	Colored text example:
-		text x1b[<colorID>;1m<restoftext>
-		text x1b[0m
 */
 #define PLAYTIPMUSIC 0
 
@@ -341,6 +337,18 @@ typedef struct{
 // first three bytes are color
 // lsat byte is a bitmap of the following properties:
 #define TEXTPROP_COLORED 1
+
+// sets of three bytes
+#define V15TO32(r) (unsigned char)((r/(double)31)*255)
+#define VRGB15(r,g,b) V15TO32(r), V15TO32(g), V15TO32(b)
+unsigned char vndscolors[] = {
+	//Regular colors
+	VRGB15( 0, 0, 0), VRGB15(15, 0, 0), VRGB15( 0,15, 0), VRGB15(15,15, 0),
+	VRGB15( 0, 0,15), VRGB15(15, 0,15), VRGB15( 0,15,15), VRGB15(24,24,24),
+	//Bright colors
+	VRGB15(15,15,15), VRGB15(31, 0, 0), VRGB15( 0,31, 0), VRGB15(31,31, 0),
+	VRGB15( 0, 0,31), VRGB15(31, 0,31), VRGB15( 0,31,31), VRGB15(31,31,31)
+};
 
 /*
 Can cache up to MAXBUSTCACHE busts
@@ -2325,47 +2333,48 @@ void wrapTextAdvanced(char** _passedMessage, int* _numLines, char*** _realLines,
 						memset(&(_workable[i]),1,_deltaChars+1); // Because this starts at i, k being 11 with i as 10 would just write 1 byte, therefor missing the end '>'. THe fix is to add one.
 					}
 				}
-			}else if (_workable[i]=='\\' || _workable[i]=='x'){ // I saw that Umineko VNDS doesn't use a backslash before
+			}else if (_workable[i]=='\\'){
 				//http://jafrog.com/2013/11/23/colors-in-terminal.html
-				if (_cachedStrlen-i>=strlen("x1b[0m")+(_workable[i]=='\\')){
-					if (strncmp(&(_workable[i+(_workable[i]=='\\')]),"x1b[",strlen("x1b["))==0){
+				// \x1b[31;1mTEXTGOESHERE\x1b[0m.
+				if (_cachedStrlen-i>=strlen("\\x1b[0m")){
+					if (strncasecmp(&(_workable[i]),"\\x1b[",strlen("\\x1b["))==0){
 						int _oldIndex=i;
-						// Advance to the x character if we chose to use backslash
-						if (_workable[i]=='\\'){
-							i++;
-						}
-						i+=4; // We're now in the parameters
-						int _mSearchIndex;
-						for (_mSearchIndex=i;_mSearchIndex<_cachedStrlen;++_mSearchIndex){
-							if (_workable[_mSearchIndex]=='m'){
-								break;
-							}
-						}
+						i+=5; // We're now in the parameters
+						unsigned char* _mpos=strchr(_workable+i,'m');
 						// If found the ending
-						if (_workable[_mSearchIndex]=='m'){
-							// TODO - Do stuff with the found color code
-							if (_workable[i]=='0'){ // If we're resetting the color
-
+						if (_mpos){
+							int c = 39;
+							int brightness = 0;
+							int _mindex=_mpos-_workable;
+							if ((_mindex-i)==1 && _workable[i]=='0'){ // If we're resetting the color
 							}else{
-								int _semiColonSearchIndex;
-								for (_semiColonSearchIndex=i;_semiColonSearchIndex<_mSearchIndex;++_semiColonSearchIndex){
-									if (_workable[_semiColonSearchIndex]==';'){
-										break;
-									}
+								unsigned char* semipos=strchr(_workable+i,';');
+								if (semipos!=_workable+i){
+									c=atoi(_workable+i);
 								}
-								_workable[_semiColonSearchIndex]=0;
-								printf("the number is %s\n",&(_workable[i]));
-								_workable[_semiColonSearchIndex]=';';
+								if (semipos){
+									i+=semipos-(_workable+i)+1;
+									brightness=atoi(_workable+i);
+								}
 							}
+							c-=30;
+							if (c>=0 && c<=7 && brightness>=0 && brightness<=1){
+								// set color property
+								_curProp=0;
+								setPropBit(&_curProp,TEXTPROP_COLORED);
+								memcpy(&_curProp,&vndscolors[(8*brightness+c)*3],3);
+							}else if (brightness==0 && c==9){
+								_curProp=0;
+							}
+							// hide markup
 							i=_oldIndex;
-							memset(&(_workable[i]),1,_mSearchIndex-i+1);
+							memset(&(_workable[i]),1,_mindex-i+1);
 						}else{
 							printf("Failed to parse color markup");
 							i=_oldIndex; // Must be invalid otherwise
 						}
 					}
 				}
-
 			}
 		}
 		/////
