@@ -48,7 +48,7 @@ void SaveSettings();
 void XOutFunction();
 void historyMenu();
 void SaveGameEditor();
-void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption, signed char _showVNDSFadeOption, signed char _showDebugButton);
+void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption, signed char _showVNDSFadeOption);
 char FileSelector(char* directorylocation, char** _chosenfile, char* promptMessage);
 void initializeNathanScript();
 void activateVNDSSettings();

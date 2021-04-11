@@ -169,6 +169,7 @@ char* vitaAppId="HIGURASHI";
 // System string
 #if __UNIX__ || __linux__ || __gnu_linux__
 	#define SYSTEMSTRING "LINUX"
+	#define TITLESYSTEMSTRING "GNULINUX"
 #elif __WIN32__
 	#define SYSTEMSTRING "WINDOWS"
 #elif __vita__
@@ -180,6 +181,9 @@ char* vitaAppId="HIGURASHI";
 #else
 	#warning please make platform string
 	#define SYSTEMSTRING "UNKNOWN"
+#endif
+#ifndef TITLESYSTEMSTRING
+#define TITLESYSTEMSTRING SYSTEMSTRING
 #endif
 
 #define PREFERREDMINMAXLINES 10 // if we have fewer than this maxLines and in NVL mode then discard NVL bottom padding
@@ -480,6 +484,11 @@ int autoModeWait=500;
 int autoModeVoicedWait=500;
 
 signed char cpuOverclocked=0;
+char isActuallyUsingUma0=0;
+// -1: undefined
+// 0: ux0
+// 1: uma0
+signed char userPreferredDataDir=-1;
 
 #define TEXTMODE_NVL 0
 #define TEXTMODE_ADV 1
@@ -514,7 +523,6 @@ unsigned char dropshadowB=0;
 	Thread _3dsSoundUpdateThread;
 	char _bgmIsLock=0;
 #endif
-char isActuallyUsingUma0=0;
 int maxBusts = 9;
 short textboxYOffset=0;
 short textboxXOffset=0;
@@ -648,6 +656,9 @@ void getInverseBGCol(unsigned char* r, unsigned char* g, unsigned char* b){
 	*r=255-*r;
 	*g=255-*g;
 	*b=255-*b;
+}
+char isdebugbuild(){
+	return (strcmp(VERSIONSTRING,DEFAULTVERSION)==0);
 }
 char proceedPressed(){
 	return wasJustPressed(BUTTON_A) || (touchProceed && wasJustPressed(BUTTON_TOUCH));
@@ -1772,7 +1783,7 @@ signed char getTouchedBarOption(){
 	return -1;
 }
 void openInGameSettingsMenu(){
-	SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && GBPLAT != GB_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame,(strcmp(VERSIONSTRING,DEFAULTVERSION)==0));
+	SettingsMenu(1,currentlyVNDSGame,currentlyVNDSGame,!isActuallyUsingUma0 && GBPLAT != GB_VITA,!currentlyVNDSGame,0,currentlyVNDSGame,currentlyVNDSGame);
 }
 void updateControlsGeneral(){
 	if (wasJustPressed(BUTTON_Y)){
@@ -3810,6 +3821,42 @@ void PlayBGM(const char* filename, int _volume, int _slot){
 	#endif
 	return;
 }
+#if GBPLAT == GB_VITA
+char* vitadirpreferpath(){
+	return easyCombineStrings(3,"ux0:data/",vitaAppId,"/dirpreference");
+}
+void vitadirpreferload(){
+	char* _path = vitadirpreferpath();
+	FILE* fp = fopen(_path,"rb");
+	if (fp){
+		int _read = fgetc(fp);
+		if (_read!=EOF){
+			userPreferredDataDir=_read-1;
+		}
+		fclose(fp);
+	}
+	free(_path);
+	if (userPreferredDataDir!=-1){
+		char* _desiredpath;
+		generateDefaultDataDirectory(&_desiredpath, userPreferredDataDir);
+		fixPathOverride(_desiredpath, TYPE_DATA);
+	}
+}
+void vitadirprefersave(){
+	char* _neededdir=easyCombineStrings(2,"ux0:data/",vitaAppId);
+	if (!directoryExists(_neededdir)){
+		createDirectory(_neededdir);
+	}
+	free(_neededdir);
+	char* _path = vitadirpreferpath();
+	FILE* fp = fopen(_path,"wb");
+	if (fp){
+		fputc(userPreferredDataDir+1,fp);
+		fclose(fp);
+	}
+	free(_path);
+}
+#endif
 // Settings file format:
 // OPTIONSFILEFORMAT, 1 byte
 // cpuOverclocked, 1 byte
@@ -6040,9 +6087,9 @@ typedef enum{
   Step 2 - Using your enum value as the array index, assign the _settings and (optional) _values strings.
   Step 3 - In the big switch statement, add a new case with your enum
 */
-void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption, signed char _showVNDSFadeOption, signed char _showDebugButton){
+void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettings, signed char _shouldShowVNDSSave, signed char _shouldShowRestartBGM, signed char _showArtLocationSlot, signed char _showScalingOption, signed char _showTextBoxModeOption, signed char _showVNDSFadeOption){
 	#ifdef OVERRIDE_SETTINGSMENU
-		customSettingsMenu(_shouldShowQuit,_shouldShowVNDSSettings,_shouldShowVNDSSave,_shouldShowRestartBGM,_showArtLocationSlot,_showScalingOption,_showTextBoxModeOption,_showVNDSFadeOption,_showDebugButton);
+		customSettingsMenu(_shouldShowQuit,_shouldShowVNDSSettings,_shouldShowVNDSSave,_shouldShowRestartBGM,_showArtLocationSlot,_showScalingOption,_showTextBoxModeOption,_showVNDSFadeOption,0);
 		return;
 	#endif
 	// Allow global overide for settings
@@ -6053,7 +6100,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	overrideIfSet(&_showArtLocationSlot,forceArtLocationSlot);
 	overrideIfSet(&_showTextBoxModeOption,forceTextBoxModeOption);
 	overrideIfSet(&_showVNDSFadeOption,forceVNDSFadeOption);
-	overrideIfSet(&_showDebugButton,forceDebugButton);
 
 	controlsReset();
 	PlayMenuSound();
@@ -6148,7 +6194,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	#if GBPLAT != GB_VITA
 		_settingsOn[SETTING_OVERCLOCK]=0;
 	#endif
-	_settingsOn[SETTING_DEBUG]=_showDebugButton;
+	_settingsOn[SETTING_DEBUG]=isdebugbuild();
 	_settingsOn[SETTING_DEFAULT]=forceResettingsButton;
 	//////////////////////////
 	int _choice=0;
@@ -6841,6 +6887,34 @@ int showMenu(int _defaultChoice, const char* _title, int _numOptions, char** _op
 	}
 	return showMenuAdvanced(_defaultChoice,_title,_numOptions,_options,NULL,NULL,NULL,NULL,_menuProps,NULL);
 }
+void rareSettingsMenu(){
+	char* _preferDirNames[3]={"Undefined","ux0","uma0"};
+	char* _settingNames[3]={"Back","Higurashi language: ","Data dir: "};
+	char* _settingValues[3];
+	_settingValues[0]=NULL;
+	char _restartRequired=0;
+	int _lastChoice=0;
+	while (1){
+		_settingValues[1]=(playerLanguage==0 ? "JP" : "EN");
+		_settingValues[2]=_preferDirNames[userPreferredDataDir+1];
+		_lastChoice=showMenuAdvanced(_lastChoice, "Other settings", sizeof(_settingNames)/sizeof(char*)-(GBPLAT!=GB_VITA && !isdebugbuild()), _settingNames, _settingValues, NULL,NULL,NULL, MENUPROP_CANQUIT, NULL);
+		if (_lastChoice<=0){
+			break;
+		}else if (_lastChoice==1){
+			playerLanguage=!playerLanguage;
+			SaveSettings();
+		}else if (_lastChoice==2){
+			userPreferredDataDir=wrapNum(userPreferredDataDir+1,-1,1);
+			#if GBPLAT == GB_VITA
+			vitadirprefersave();
+			#endif
+			_restartRequired=1;
+		}
+	}
+	if (_restartRequired){
+		currentGameStatus=GAMESTATUS_QUIT;
+	}
+}
 char* _bottomString;
 int _titleScreenDraw(int _choice){
 	int _y = screenHeight-5-currentTextHeight;
@@ -6849,10 +6923,9 @@ int _titleScreenDraw(int _choice){
 	return 0;
 }
 void TitleScreen(){
-	_bottomString=easyCombineStrings(2,SYSTEMSTRING,GBPLAT!=GB_3DS ? (isActuallyUsingUma0 ? ";uma0" : ";ux0") : (""));
+	_bottomString=easyCombineStrings(2,TITLESYSTEMSTRING,GBPLAT!=GB_3DS ? (isActuallyUsingUma0 ? ";uma0" : ";ux0") : (""));
 	while (currentGameStatus!=GAMESTATUS_QUIT){
-		char* _options[5]={"Load game","Manual mode","Basic settings",NULL,"Exit"};
-		_options[3]=(playerLanguage ? "JP" : "EN");
+		char* _options[5]={"Load game","Manual mode","Basic settings","Other settings","Exit"};
 		char _showMap[5];
 		memset(_showMap,1,sizeof(_showMap));
 		int _choice=showMenuAdvanced(0,"Main Menu",sizeof(_options)/sizeof(char*),_options,NULL,_showMap,NULL,NULL,MENUPROP_CANPAGEUPDOWN, _titleScreenDraw);
@@ -6911,13 +6984,11 @@ void TitleScreen(){
 			}
 		}else if (_choice==2){ // Go to setting menu
 			controlsEnd();
-			SettingsMenu(0,0,0,0,1,0,0,0,0);
+			SettingsMenu(0,0,0,0,1,0,0,0);
 			controlsEnd();
 			break;
 		}else if (_choice==3){
-			playerLanguage=!playerLanguage;
-			SaveSettings();
-			currentGameStatus=GAMESTATUS_QUIT;
+			rareSettingsMenu();
 			break;
 		}else if (_choice==4){ // Quit button
 			currentGameStatus=GAMESTATUS_QUIT;
@@ -7388,7 +7459,7 @@ void VNDSNavigationMenu(){
 					}
 				}
 			}else if (_choice==2){
-				SettingsMenu(0,1,0,0,0,0,1,1,0);
+				SettingsMenu(0,1,0,0,0,0,1,1);
 			}else if (_choice==3){
 				currentGameStatus = GAMESTATUS_QUIT;
 			}
@@ -7523,8 +7594,11 @@ void hVitaCrutialInit(int argc, char** argv){
 	screenHeight = getScreenHeight();
 	initImages();
 	setClearColor(0,0,0);
-	isActuallyUsingUma0=(strstr(getFixPathString(TYPE_DATA),"uma0:")!=NULL);
 	controlsInit();
+	#if GBPLAT == GB_VITA
+	vitadirpreferload();
+	#endif
+	isActuallyUsingUma0=(strstr(getFixPathString(TYPE_DATA),"uma0:")!=NULL);
 	#if GBPLAT == GB_3DS
 		osSetSpeedupEnable(1);
 	#endif
@@ -7716,6 +7790,9 @@ int main(int argc, char *argv[]){
 				char* _chosenGameFolder;
 				if (FileSelector(gamesFolder,&_chosenGameFolder,(char*)"Select a game")==2){
 					easyMessagef(1,"No folders found. After running the script converter you should've put the converted files in %s",gamesFolder);
+					if (userPreferredDataDir!=-1){
+						easyMessagef(1,"Note that you have data directory override enabled. Try changing it to \"undefined\" in the \"Other settings\" menu.");
+					}
 					currentGameStatus = GAMESTATUS_TITLE;
 					break;
 				}
