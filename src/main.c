@@ -13,9 +13,8 @@
 				Change the actual text box X and text box Y and use the input arg as a percentage of the screen?
 			Actually, the command is removed in ADV mode.
 		TODO - Allow VNDS sound command to stop all sounds
-	TODO - Mod libvita2d to not inlcude characters with value 1 when getting text width. (This should be easy to do. There's a for loop)
 	TODO - is entire font in memory nonsense still needed
-	TODO - Fix this text speed setting nonsense
+	TODO - Fix this text speed setting garbage
 	TODO - Game specific settings files
 	TODO - in manual mode, running _GameSpecific.lua first won't keep the settings from being reset before the next manual script you run.
 	TODO - i removed the secret save file editor code
@@ -27,7 +26,6 @@
 	TODO - textbox alpha should change with background alpha
 	TODO - outputLineScreenHeight variable name is a lie. it is just screenHeight
 	TODO - don't show "save game" option in toucb bar if save not supported. oops. looks like the function should just be passed a map of which ones to enable
-	TODO - textboxWidth bug
 	TODO - restore default game functionality
 	TODO - use showmenu for scriptselect (this is tough because we can't open the in-game menu from showmenu)
 	TODO - my bust transitions look worse than real vnds.
@@ -191,7 +189,7 @@ char* vitaAppId="HIGURASHI";
 #define totalTextXOff() (textboxXOffset+messageInBoxXOffset)
 #define shouldShowADVNames() (gameTextDisplayMode==TEXTMODE_ADV && (advNamesSupported==2 || (advNamesSupported && prefersADVNames)))
 #define shouldClearHitBottom() (currentlyVNDSGame && clearAtBottom)
-#define getOutputLineScreenWidth() (textboxWidth-textboxXOffset*2-messageInBoxXOffset*2)
+#define getOutputLineScreenWidth() (textboxWidth-messageInBoxXOffset*2)
 #define ADVNAMEOFFSET (currentTextHeight*1.5) // Space between top of ADV name and rest of the text. does not apply if adv name is an image
 #define IMADVNAMEPOSTPAD (textboxTopPad)
 
@@ -1214,7 +1212,7 @@ void DrawMessageBox(char _textmodeToDraw, unsigned char _targetAlpha){
 }
 void DrawCurrentFilter(){
 	if (currentFilterType==FILTERTYPE_EFFECTCOLORMIX){
-		drawRectangle(textboxXOffset,0,textboxWidth-textboxXOffset*2,outputLineScreenHeight,filterR,filterG,filterB,filterA);
+		drawRectangle(textboxXOffset,0,textboxWidth,outputLineScreenHeight,filterR,filterG,filterB,filterA);
 	}
 }
 u64 waitwithCodeTarget;
@@ -2599,12 +2597,7 @@ void updateTextPositions(){
 	}else{
 		textboxXOffset=0;
 	}
-	#if GBPLAT == GB_3DS
-		if (textIsBottomScreen==1){
-			textboxWidth=320;
-			outputLineScreenHeight=240;
-		}
-	#endif
+	textboxWidth=screenWidth-textboxXOffset*2;
 }
 // Using the global variables for background sizes, update the global graphics scale factor
 // Used for dynamic graphic scaling!
@@ -3992,10 +3985,6 @@ void LoadSettings(){
 			#if GBPLAT == GB_VITA
 				scePowerSetArmClockFrequency(444);
 			#endif
-			#if GBPLAT == GB_3DS
-				textboxWidth = 320;
-				outputLineScreenHeight = 240;
-			#endif
 		}
 		applyTextboxChanges(0); // max lines will be calculated later by the font loading
 		printf("Loaded settings file.\n");
@@ -4019,7 +4008,7 @@ void historyMenu(){
 		controlsEnd();
 		startDrawing();
 		Draw(0);
-		drawRectangle(textboxXOffset,0,textboxWidth,screenHeight,0,0,0,150);
+		drawRectangle(textboxXOffset,0,textboxWidth,screenHeight,0,67,18,200);
 		int i;
 		for (i=0;i<(_maxScroll>0 ? HISTORYONONESCREEN : MAXMESSAGEHISTORY);i++){
 			int _arrIndex = FixHistoryOldSub(i+_scrollOffset,oldestMessage);
@@ -6179,6 +6168,7 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 	_values[SETTING_SEVOL] = &(_tempItoaHoldSE[0]);
 	_values[SETTING_VOICEVOL] = &(_tempItoaHoldVoice[0]);
 	_settingsOn[SETTING_VOICEVOL]=hasOwnVoiceSetting;
+	_settingsOn[SETTING_TEXTSCREEN]=0;
 	_values[SETTING_TEXTSPEED] = &(_tempItoaHoldTextSpeed[0]);
 	_settingsOn[SETTING_DROPSHADOW]=forceDropshadowOption;
 	_settingsOn[SETTING_FONTSIZE]=forceFontSizeOption;
@@ -6205,8 +6195,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 		// text
 		#if GBPLAT == GB_3DS
 			_values[SETTING_TEXTSCREEN] = textIsBottomScreen ? "Bottom Screen" : "Top Screen";
-		#else
-			_settingsOn[SETTING_TEXTSCREEN]=0;
 		#endif
 		if (_settingsOn[SETTING_DROPSHADOW]){
 			_values[SETTING_DROPSHADOW] = charToSwitch(dropshadowOn);
@@ -6406,15 +6394,6 @@ void SettingsMenu(signed char _shouldShowQuit, signed char _shouldShowVNDSSettin
 			}
 		}
 	}
-	#if GBPLAT == GB_3DS
-		if (textIsBottomScreen==1){
-			textboxWidth = 320;
-			outputLineScreenHeight = 240;
-		}else{
-			textboxWidth = 400;
-			outputLineScreenHeight = 240;
-		}
-	#endif
 }
 // Starting at _startIndex, search _searchThis for the next slot that is 1
 // No overflow protection
