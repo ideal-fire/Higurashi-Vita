@@ -4878,11 +4878,10 @@ void scriptOutputLineAll(nathanscriptVariable* _passedArguments, int _numArgumen
 }
 //
 void scriptWait(nathanscriptVariable* _passedArguments, int _numArguments, nathanscriptVariable** _returnedReturnArray, int* _returnArraySize){
-	if (isSkipping){
-		startDrawing();
-		Draw(MessageBoxEnabled);
-		endDrawing();
-	}else{
+	startDrawing();
+	Draw(MessageBoxEnabled);
+	endDrawing();
+	if (!isSkipping){
 		u64 _endTime=getMilli()+nathanvariableToInt(&_passedArguments[0]);
 		while(_endTime>getMilli()){
 			controlsStart();
@@ -5427,20 +5426,7 @@ void scriptHigurashiGetRandomNumber(nathanscriptVariable* _passedArguments, int 
 	if (_passed<=1){ // invalid
 		_ret=0;
 	}else{
-		#ifdef ORIGENGINEBUGS
-		int _randomGenerated = rand();
-		if (_randomGenerated==RAND_MAX){ // the super small chance of getting the passed value
-			_ret=_passed-1;
-		}else{
-			if (_passed>2){
-				_ret=rand() % (_passed-1);
-			}else{
-				_ret=0;
-			}
-		}
-		#else // still a bit skewed because of rand
 		_ret=(rand() % _passed);
-		#endif
 	}
 	makeNewReturnArray(_returnedReturnArray,_returnArraySize,1);
 	nathanvariableArraySetFloat(*_returnedReturnArray,0,_ret);
